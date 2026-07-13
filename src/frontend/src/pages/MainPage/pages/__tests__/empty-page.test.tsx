@@ -38,7 +38,6 @@ jest.mock("react-i18next", () => ({
 
 jest.mock("react-icons/fa", () => ({
   FaGithub: () => <div data-testid="icon-github" />,
-  FaDiscord: () => <div data-testid="icon-discord" />,
 }));
 
 jest.mock("@/components/common/genericIconComponent", () => ({
@@ -80,9 +79,8 @@ jest.mock("@/stores/authStore", () => ({
 }));
 
 jest.mock("@/stores/darkStore", () => ({
-  useDarkStore: (
-    selector: (s: { stars: number; discordCount: number }) => unknown,
-  ) => selector({ stars: 149000, discordCount: 25000 }),
+  useDarkStore: (selector: (s: { stars: number }) => unknown) =>
+    selector({ stars: 149000 }),
 }));
 
 jest.mock("@/stores/foldersStore", () => ({
@@ -111,5 +109,8 @@ describe("EmptyPageCommunity - Create first flow behavior", () => {
     expect(startNewFlowMock).toHaveBeenCalledTimes(1);
     // It must NOT open the old TemplatesModal.
     expect(setOpenModal).not.toHaveBeenCalled();
+    expect(
+      screen.queryByTestId("empty_page_discord_button"),
+    ).not.toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-const SvgCometAPI = ({ isDark = false, ...props }) => (
+const SvgCometAPI = ({ "data-is-dark": isDark = false, ...props }) => (
   <svg
     width="24"
     height="24"

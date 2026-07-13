@@ -1,5 +1,5 @@
 const SvgPineconeLogo = (props) => {
-  const color = props.isDark ? "#fff" : "#000";
+  const color = props["data-is-dark"] ? "#fff" : "#000";
 
   return (
     <svg

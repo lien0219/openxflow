@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 
-const SvgDB2 = forwardRef(({ isDark, ...props }, ref) => (
+const SvgDB2 = forwardRef(({ "data-is-dark": isDark, ...props }, ref) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width="24"

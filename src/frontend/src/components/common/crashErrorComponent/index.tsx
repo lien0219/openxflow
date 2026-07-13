@@ -30,7 +30,7 @@ export default function CrashErrorComponent({
                 <p>
                   {t("crash.descriptionBefore")}{" "}
                   <a
-                    href="https://github.com/langflow-ai/langflow/issues"
+                    href="https://github.com/lien0219/openxflow/issues"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium hover:underline"
@@ -51,7 +51,7 @@ export default function CrashErrorComponent({
                 </Button>
 
                 <a
-                  href="https://github.com/langflow-ai/langflow/issues/new"
+                  href="https://github.com/lien0219/openxflow/issues/new"
                   target="_blank"
                   rel="noopener noreferrer"
                 >

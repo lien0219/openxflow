@@ -435,7 +435,7 @@ describe("MemoryDetailsHeader", () => {
     const link = screen.getByRole("link", { name: /read the docs/i });
     expect(link).toHaveAttribute(
       "href",
-      "https://docs.langflow.org/memory-bases",
+      "https://github.com/lien0219/openxflow#readme",
     );
     expect(link).toHaveAttribute("target", "_blank");
   });

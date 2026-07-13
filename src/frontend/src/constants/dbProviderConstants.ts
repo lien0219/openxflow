@@ -76,7 +76,7 @@ export const DB_PROVIDER_OPTIONS: DBProviderOption[] = [
     id: "chroma",
     label: "Chroma Local",
     description:
-      "Local vector storage bundled with Langflow. No additional configuration required.",
+      "Local vector storage bundled with OpenXFlow. No additional configuration required.",
     icon: "Chroma",
     status: "available",
     defaultEnabled: true,

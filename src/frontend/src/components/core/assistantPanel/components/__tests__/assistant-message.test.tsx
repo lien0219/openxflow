@@ -211,7 +211,7 @@ describe("AssistantMessageItem", () => {
   });
 
   describe("assistant messages", () => {
-    it("should render assistant label with Langflow icon", () => {
+    it("should render assistant label with OpenXFlow icon", () => {
       const message = createMessage({
         role: "assistant",
         content: "Here is your component",
@@ -220,8 +220,8 @@ describe("AssistantMessageItem", () => {
 
       render(<AssistantMessageItem message={message} />);
 
-      expect(screen.getByText("Langflow Assistant")).toBeInTheDocument();
-      expect(screen.getByAltText("Langflow Assistant")).toBeInTheDocument();
+      expect(screen.getByText("OpenXFlow Assistant")).toBeInTheDocument();
+      expect(screen.getByAltText("OpenXFlow Assistant")).toBeInTheDocument();
     });
   });
 

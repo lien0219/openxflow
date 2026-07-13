@@ -12,5 +12,5 @@ export function getHealthCheckUrl(): string {
 }
 
 export const LangflowButtonRedirectTarget = () => {
-  return "https://langflow.org";
+  return "https://github.com/lien0219/openxflow";
 };

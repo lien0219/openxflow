@@ -1,15 +1,14 @@
-# XiangFlow AI 二次开发与上游同步指南
+# OpenXFlow 二次开发与上游同步指南
 
-本文档用于帮助开发者理解翔域智流（XiangFlow AI）与 Langflow 官方仓库的关系，并统一二次开发、上游同步、版本升级、冲突处理和发布流程。
+本文档用于帮助开发者理解 OpenXFlow 与 Langflow 官方仓库的关系，并统一二次开发、上游同步、版本升级、冲突处理和发布流程。
 
-- **产品中文名：** 翔域智流
-- **产品英文名：** XiangFlow AI
-- **GitHub 仓库名：** `xiangflow-ai`
+- **项目名称：** OpenXFlow
+- **GitHub 仓库名：** `openxflow`
 - **上游项目：** [Langflow](https://github.com/langflow-ai/langflow)
 - **上游默认分支：** `upstream/main`
 
 > [!IMPORTANT]
-> 本文档描述 XiangFlow AI 的下游维护规范。Langflow 官方仓库自身的贡献与发布流程仍以 [CONTRIBUTING.md](./CONTRIBUTING.md)、[DEVELOPMENT.md](./DEVELOPMENT.md) 和 [RELEASE.md](./RELEASE.md) 为准。
+> 本文档描述 OpenXFlow 的下游维护规范。Langflow 官方仓库自身的贡献与发布流程仍以 [CONTRIBUTING.md](./CONTRIBUTING.md)、[DEVELOPMENT.md](./DEVELOPMENT.md) 和 [RELEASE.md](./RELEASE.md) 为准。
 
 ## 目录
 
@@ -32,13 +31,13 @@
 
 ## 1. 项目与上游关系
 
-XiangFlow AI 是基于 Langflow 官方开源仓库持续维护的二次开发项目。项目既需要吸收 Langflow 的功能、安全修复和架构改进，也需要稳定承载 XiangFlow AI 的品牌、业务和企业能力。
+OpenXFlow 是基于 Langflow 官方开源仓库持续维护的二次开发项目。项目既需要吸收 Langflow 的功能、安全修复和架构改进，也需要稳定承载 OpenXFlow 的品牌、业务和企业能力。
 
 长期维护遵循以下原则：
 
 - `official` 应尽可能与 `upstream/main` 保持一致，只用于保存官方代码的同步结果。
-- `official` 不得提交 XiangFlow AI 自定义业务代码。
-- `main` 和 `develop` 才允许存在 XiangFlow AI 二开代码。
+- `official` 不得提交 OpenXFlow 自定义业务代码。
+- `main` 和 `develop` 才允许存在 OpenXFlow 二开代码。
 - `main` 是稳定发布分支，不用于日常开发。
 - `develop` 是日常开发和升级结果的集成分支。
 - 上游更新不能直接推入或合入 `main`。
@@ -50,7 +49,7 @@ XiangFlow AI 是基于 Langflow 官方开源仓库持续维护的二次开发项
 
 | 名称 | 地址 | 用途 |
 | --- | --- | --- |
-| `origin` | XiangFlow AI 仓库 | 推送二开代码、分支和发布标签 |
+| `origin` | OpenXFlow 仓库 | 推送二开代码、分支和发布标签 |
 | `upstream` | Langflow 官方仓库 | 获取 Langflow 官方分支和版本标签 |
 
 检查当前远程配置：
@@ -62,8 +61,8 @@ git remote -v
 正确输出示例：
 
 ```text
-origin  git@github.com:lien0219/xiangflow-ai.git (fetch)
-origin  git@github.com:lien0219/xiangflow-ai.git (push)
+origin  git@github.com:lien0219/openxflow.git (fetch)
+origin  git@github.com:lien0219/openxflow.git (push)
 upstream  https://github.com/langflow-ai/langflow.git (fetch)
 upstream  https://github.com/langflow-ai/langflow.git (push)
 ```
@@ -75,7 +74,7 @@ upstream  https://github.com/langflow-ai/langflow.git (push)
 | 分支 | 来源分支 | 合并目标 | 允许直接提交 | 允许强制推送 | 主要用途 |
 | --- | --- | --- | --- | --- | --- |
 | `official` | `upstream/main` | `upgrade/*` 获取其更新 | 仅允许受控同步，不允许功能提交 | 仅该长期分支允许受控使用 `force-with-lease` | 镜像 Langflow 官方代码 |
-| `main` | 经验证的 `release/*` | 稳定发布分支，不作为日常合并来源 | 否 | 否 | 保存 XiangFlow AI 可发布的稳定代码 |
+| `main` | 经验证的 `release/*` | 稳定发布分支，不作为日常合并来源 | 否 | 否 | 保存 OpenXFlow 可发布的稳定代码 |
 | `develop` | `main` 或初始化时的 `official` | `release/*`，并接收功能、修复和升级 PR | 否，建议全部通过 Pull Request | 否 | 日常开发集成 |
 | `feature/*` | `develop` | `develop` | 是 | 否 | 开发新功能 |
 | `fix/*` | `develop` | `develop` | 是 | 否 | 修复普通缺陷 |
@@ -99,13 +98,13 @@ upstream  https://github.com/langflow-ai/langflow.git (push)
 
 ## 4. 首次初始化流程
 
-以下流程适用于从 Langflow 官方仓库首次建立 XiangFlow AI 仓库。执行前应确认目标目录不存在，且当前账号具备 XiangFlow AI 仓库的推送权限。
+以下流程适用于从 Langflow 官方仓库首次建立 OpenXFlow 仓库。执行前应确认目标目录不存在，且当前账号具备 OpenXFlow 仓库的推送权限。
 
 ```bash
-git clone https://github.com/langflow-ai/langflow.git xiangflow-ai
-cd xiangflow-ai
+git clone https://github.com/langflow-ai/langflow.git openxflow
+cd openxflow
 git remote rename origin upstream
-git remote add origin git@github.com:lien0219/xiangflow-ai.git
+git remote add origin git@github.com:lien0219/openxflow.git
 git branch -m official
 git branch --set-upstream-to=upstream/main official
 git push origin official
@@ -170,7 +169,7 @@ git push origin official --force-with-lease
 
 同步规则：
 
-- `official` 不允许保存任何 XiangFlow AI 自定义提交。
+- `official` 不允许保存任何 OpenXFlow 自定义提交。
 - `official` 应精确反映当前选定的 `upstream/main` 状态。
 - `official` 是唯一允许使用 `force-with-lease` 的长期分支。
 - 对 `official` 的强制更新必须由管理员或受控同步流程执行。
@@ -199,7 +198,7 @@ git merge --no-ff official
 7. 检查数据库迁移的顺序、依赖和兼容性。
 8. 检查新增、删除或语义变化的环境变量。
 9. 检查工作流数据结构和节点序列化格式变化。
-10. 检查 XiangFlow AI 自定义组件与官方组件基类的兼容性。
+10. 检查 OpenXFlow 自定义组件与官方组件基类的兼容性。
 11. 提交升级和冲突处理结果。
 12. 创建 Pull Request 合入 `develop`，完成代码审查和 CI 验证。
 
@@ -256,7 +255,7 @@ git show vX.Y.Z
 git log -1 vX.Y.Z
 ```
 
-确认标签属于 Langflow 官方发布且提交正确后，再继续冲突处理、测试和 Pull Request 流程。XiangFlow AI 自身发布标签与 Langflow 标签可能同名，因此长期维护时应在发布记录中同时保存上游版本和上游提交哈希，避免仅依赖标签名称判断基线。
+确认标签属于 Langflow 官方发布且提交正确后，再继续冲突处理、测试和 Pull Request 流程。OpenXFlow 自身发布标签与 Langflow 标签可能同名，因此长期维护时应在发布记录中同时保存上游版本和上游提交哈希，避免仅依赖标签名称判断基线。
 
 ## 9. 冲突处理规范
 
@@ -269,10 +268,10 @@ git status
 处理原则：
 
 - 先理解 Langflow 官方改动的目的、上下文和兼容性要求。
-- 再确认 XiangFlow AI 自定义改动的业务目的和不可丢失的行为。
+- 再确认 OpenXFlow 自定义改动的业务目的和不可丢失的行为。
 - 不允许在未理解双方改动的情况下直接选择 Accept Current 或 Accept Incoming。
 - 工作流核心执行引擎优先兼容官方实现，再通过扩展点恢复二开能力。
-- 品牌、Skills、MCP、租户和自定义业务模块应保留 XiangFlow AI 的二开实现，同时适配新的官方接口。
+- 品牌、Skills、MCP、租户和自定义业务模块应保留 OpenXFlow 的二开实现，同时适配新的官方接口。
 - 数据库迁移文件不能随意删除、覆盖、重排或复用版本标识。
 - `package-lock.json`、`uv.lock` 等依赖锁文件应重新生成，或严格按照项目现有依赖管理规范处理，不应手工拼接冲突内容。
 - 解决冲突后必须完成与改动范围匹配的格式化、静态检查、单元测试、构建和人工验证。
@@ -414,13 +413,13 @@ git push -u origin release/v0.1.0
 ```bash
 git switch main
 git pull origin main
-git tag -a v0.1.0 -m "XiangFlow AI v0.1.0"
+git tag -a v0.1.0 -m "OpenXFlow v0.1.0"
 git push origin v0.1.0
 ```
 
-每个 XiangFlow AI 版本必须分别记录自身版本和上游基线，例如：
+每个 OpenXFlow 版本必须分别记录自身版本和上游基线，例如：
 
-- **XiangFlow AI：** `v0.1.0`
+- **OpenXFlow：** `v0.1.0`
 - **Based on Langflow：** `vX.Y.Z`
 - **Upstream commit：** `<commit hash>`
 
@@ -451,7 +450,7 @@ git push origin v0.1.0
 - 禁止功能开发。
 - 只允许管理员或受控同步流程更新。
 - 允许受控的 `force-with-lease`。
-- 不接受任何 XiangFlow AI 二开功能 Pull Request。
+- 不接受任何 OpenXFlow 二开功能 Pull Request。
 - 建议限制可推送人员，并保留同步日志。
 
 ## 15. 禁止事项

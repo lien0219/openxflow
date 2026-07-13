@@ -5,6 +5,7 @@ import {
 } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/ui/loading";
+import { DOCS_URL } from "@/constants/constants";
 
 const Trans = TransComponent as unknown as React.FC<TransProps<string>>;
 
@@ -53,7 +54,7 @@ const NoInputView = ({
                 <a
                   className="underline underline-offset-4"
                   target="_blank"
-                  href="https://docs.langflow.org/components-io#chat-input"
+                  href={DOCS_URL}
                   rel="noopener noreferrer"
                 />
               ),

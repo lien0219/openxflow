@@ -147,7 +147,7 @@ describe("McpJsonContent", () => {
     const link = screen.getByText("setup guide").closest("a");
     expect(link).toHaveAttribute(
       "href",
-      expect.stringContaining("docs.langflow.org"),
+      "https://github.com/lien0219/openxflow#readme",
     );
   });
 

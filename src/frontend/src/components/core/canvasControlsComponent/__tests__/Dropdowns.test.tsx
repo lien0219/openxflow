@@ -1,25 +1,38 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import HelpDropdown from "../HelpDropdown";
 
 jest.mock("@/components/ui/button", () => ({
-  Button: ({ children, ...props }: any) => (
+  Button: ({
+    children,
+    ...props
+  }: ButtonHTMLAttributes<HTMLButtonElement> & { children?: ReactNode }) => (
     <button {...props}>{children}</button>
   ),
 }));
 
 jest.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children, ...props }: any) => (
+  DropdownMenu: ({
+    children,
+    ...props
+  }: HTMLAttributes<HTMLDivElement> & { children?: ReactNode }) => (
     <div data-testid="dropdown-menu" {...props}>
       {children}
     </div>
   ),
-  DropdownMenuTrigger: ({ children, ...props }: any) => (
+  DropdownMenuTrigger: ({
+    children,
+    ...props
+  }: HTMLAttributes<HTMLDivElement> & { children?: ReactNode }) => (
     <div data-testid="dropdown-trigger" {...props}>
       {children}
     </div>
   ),
-  DropdownMenuContent: ({ children, ...props }: any) => (
+  DropdownMenuContent: ({
+    children,
+    ...props
+  }: HTMLAttributes<HTMLDivElement> & { children?: ReactNode }) => (
     <div data-testid="dropdown-content" {...props}>
       {children}
     </div>
@@ -40,9 +53,9 @@ jest.mock("@/components/common/genericIconComponent", () => ({
 
 jest.mock("@/constants/constants", () => ({
   __esModule: true,
+  BUG_REPORT_URL: "https://github.com/lien0219/openxflow/issues",
   DATASTAX_DOCS_URL: "https://docs.datastax.com",
-  DOCS_URL: "https://docs.langflow.org",
-  DESKTOP_URL: "https://desktop.langflow.org",
+  DOCS_URL: "https://github.com/lien0219/openxflow#readme",
 }));
 
 jest.mock("@/customization/feature-flags", () => ({
@@ -50,7 +63,7 @@ jest.mock("@/customization/feature-flags", () => ({
 }));
 
 jest.mock("@/utils/utils", () => ({
-  cn: (...args: any[]) => args.filter(Boolean).join(" "),
+  cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
   getOS: () => "macos",
 }));
 
@@ -100,19 +113,11 @@ describe("HelpDropdown", () => {
 
     fireEvent.click(screen.getByTestId("canvas_controls_dropdown_docs"));
     expect(window.open).toHaveBeenCalledWith(
-      "https://docs.langflow.org",
+      "https://github.com/lien0219/openxflow#readme",
       "_blank",
     );
 
     fireEvent.click(screen.getByTestId("canvas_controls_dropdown_shortcuts"));
     expect(mockNavigate).toHaveBeenCalledWith("/settings/shortcuts");
-
-    fireEvent.click(
-      screen.getByTestId("canvas_controls_dropdown_get_langflow_desktop"),
-    );
-    expect(window.open).toHaveBeenCalledWith(
-      "https://desktop.langflow.org",
-      "_blank",
-    );
   });
 });

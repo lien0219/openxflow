@@ -25,10 +25,10 @@ describe("AssistantHeader", () => {
   });
 
   describe("rendering", () => {
-    it("should display 'Langflow Assistant' title", () => {
+    it("should display 'OpenXFlow Assistant' title", () => {
       render(<AssistantHeader {...defaultProps} />);
 
-      expect(screen.getByText("Langflow Assistant")).toBeInTheDocument();
+      expect(screen.getByText("OpenXFlow Assistant")).toBeInTheDocument();
     });
 
     it("should render New session button", () => {

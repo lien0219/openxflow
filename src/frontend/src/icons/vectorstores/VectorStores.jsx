@@ -1,6 +1,6 @@
 const SvgVectorStores = (props) => (
   <svg
-    fill={props.isDark ? "#ffffff" : "#0A0A0A"}
+    fill={props["data-is-dark"] ? "#ffffff" : "#0A0A0A"}
     fillRule="evenodd"
     style={{ flex: "none", lineHeight: 1 }}
     viewBox="0 0 32 32"

@@ -39,7 +39,7 @@ export const getKnowledgeBaseBackendTarget = (
   }
 
   if (backendType === "chroma") {
-    return "Stored locally in Langflow";
+    return "Stored locally in OpenXFlow";
   }
 
   if (backendType === "opensearch") {

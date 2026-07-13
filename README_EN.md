@@ -2,19 +2,19 @@
 
 <div align="center">
 
-# XiangFlow AI
+# OpenXFlow
 
-### Build intelligent AI workflows visually
+### Build AI workflows with greater simplicity, openness, and flexibility.
 
-A next-generation open-source AI workflow platform powered by Skills, MCP, agents, and visual orchestration.
+An open-source AI workflow platform for developers.
 
 [简体中文](./README.md) · [English](./README_EN.md)
 
-[![MIT License](https://img.shields.io/github/license/lien0219/xiangflow-ai?style=flat-square)](./LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/lien0219/xiangflow-ai?style=flat-square)](https://github.com/lien0219/xiangflow-ai/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/lien0219/xiangflow-ai?style=flat-square)](https://github.com/lien0219/xiangflow-ai/forks)
-[![GitHub Issues](https://img.shields.io/github/issues/lien0219/xiangflow-ai?style=flat-square)](https://github.com/lien0219/xiangflow-ai/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/lien0219/xiangflow-ai?style=flat-square)](https://github.com/lien0219/xiangflow-ai/pulls)
+[![MIT License](https://img.shields.io/github/license/lien0219/openxflow?style=flat-square)](./LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/lien0219/openxflow?style=flat-square)](https://github.com/lien0219/openxflow/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/lien0219/openxflow?style=flat-square)](https://github.com/lien0219/openxflow/forks)
+[![GitHub Issues](https://img.shields.io/github/issues/lien0219/openxflow?style=flat-square)](https://github.com/lien0219/openxflow/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/lien0219/openxflow?style=flat-square)](https://github.com/lien0219/openxflow/pulls)
 
 ![Python](https://img.shields.io/badge/Python-3.10--3.14-3776AB?style=flat-square&logo=python&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -23,15 +23,15 @@ A next-generation open-source AI workflow platform powered by Skills, MCP, agent
 ![MCP](https://img.shields.io/badge/MCP-Supported-5A67D8?style=flat-square)
 ![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-EA4AAA?style=flat-square)
 
-[Quick Start](#-quick-start) · [Core Capabilities](#-core-capabilities) · [Documentation](#-documentation) · [Contributing](#-contributing) · [GitHub Issues](https://github.com/lien0219/xiangflow-ai/issues)
+[Quick Start](#-quick-start) · [Core Capabilities](#-core-capabilities) · [Documentation](#-documentation) · [Contributing](#-contributing) · [GitHub Issues](https://github.com/lien0219/openxflow/issues)
 
 </div>
 
 ## Overview
 
-XiangFlow AI is an open-source AI workflow platform for developers and organizations. Its visual canvas connects large language models, agents, knowledge bases, data sources, APIs, and external tools, helping teams build, test, run, and integrate AI applications efficiently.
+OpenXFlow is an open-source AI workflow platform for building, testing, running, and integrating AI applications through a visual interface.
 
-The platform brings together visual workflows, agent orchestration, the Model Context Protocol, Skills-oriented capability composition, and retrieval-augmented generation. Complex AI systems can be assembled as modular, reusable, and extensible workflows.
+It enables developers to connect large language models, agents, knowledge bases, data sources, APIs, MCP servers, and external tools into reusable and extensible workflows.
 
 > Connect, orchestrate, and reuse every AI capability.
 
@@ -70,7 +70,7 @@ The platform brings together visual workflows, agent orchestration, the Model Co
 
 ### Skills
 
-Skills are XiangFlow AI's way of organizing reusable AI capabilities. Domain knowledge, task procedures, prompts, rules, tools, and resources can be composed through workflows and custom components, creating clear capability entry points that can be reused across applications.
+Skills are OpenXFlow's way of organizing reusable AI capabilities. Domain knowledge, task procedures, prompts, rules, tools, and resources can be composed through workflows and custom components, creating clear capability entry points that can be reused across applications.
 
 ### MCP
 
@@ -213,15 +213,15 @@ Windows users should use WSL or the included Dev Container.
 With SSH:
 
 ```bash
-git clone git@github.com:lien0219/xiangflow-ai.git
-cd xiangflow-ai
+git clone git@github.com:lien0219/openxflow.git
+cd openxflow
 ```
 
 Or with HTTPS:
 
 ```bash
-git clone https://github.com/lien0219/xiangflow-ai.git
-cd xiangflow-ai
+git clone https://github.com/lien0219/openxflow.git
+cd openxflow
 ```
 
 ### Run Locally
@@ -268,7 +268,7 @@ docker run --rm -p 7860:7860 langflow:1.10.2
 ## Project Structure
 
 ```text
-xiangflow-ai/
+openxflow/
 ├── .github/                 # GitHub workflows and repository configuration
 ├── deploy/                  # Deployment and observability configuration
 ├── docker/                  # Container builds and development configuration
@@ -303,17 +303,17 @@ xiangflow-ai/
 
 Community contributions are welcome. You can report bugs, suggest features, improve documentation, build components, fix issues, or open a pull request.
 
-- [Open an issue](https://github.com/lien0219/xiangflow-ai/issues)
-- [View pull requests](https://github.com/lien0219/xiangflow-ai/pulls)
+- [Open an issue](https://github.com/lien0219/openxflow/issues)
+- [View pull requests](https://github.com/lien0219/openxflow/pulls)
 - [Read the contribution guide](./CONTRIBUTING.md)
 
 ## 🙏 Acknowledgements
 
-XiangFlow AI is made possible by the open-source community.
+OpenXFlow is built upon the excellent open-source [Langflow](https://github.com/langflow-ai/langflow) project.
 
-Special thanks to the [Langflow](https://github.com/langflow-ai/langflow) team and its contributors for their outstanding work in visual AI workflow and agent development.
+Special thanks to the Langflow team and all community contributors for their work on visual AI workflows and agent development.
 
-We also appreciate LangChain, FastAPI, React, and the broader open-source ecosystem.
+We also thank LangChain, FastAPI, React, and the broader open-source community.
 
 ## 📄 License
 
