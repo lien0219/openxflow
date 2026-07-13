@@ -77,6 +77,16 @@ docker run -p 7860:7860 langflowai/langflow:latest
 Langflow is available at http://localhost:7860/.
 For configuration options, see the [Docker deployment guide](https://docs.langflow.org/deployment-docker).
 
+## XiangFlow AI Development
+
+XiangFlow AI is maintained as a downstream project of Langflow.
+
+For branch conventions, upstream synchronization, custom development and release procedures, see:
+
+- [Customization and upstream synchronization guide](./CUSTOMIZATION.md)
+
+有关二开分支、官方同步、冲突处理和发布流程，请阅读上述文档。
+
 ## 🛡️ Security
 
 For security information, see our [Security Policy](./SECURITY.md).
