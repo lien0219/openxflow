@@ -1,10 +1,12 @@
-<!-- markdownlint-disable MD033 MD041 -->
+<!-- markdownlint-disable MD001 MD033 MD041 -->
 
 <div align="center">
 
 # XiangFlow AI
 
-An open-source visual AI workflow platform powered by Skills, MCP, agents, and extensible components.
+### Build intelligent AI workflows visually
+
+A next-generation open-source AI workflow platform powered by Skills, MCP, agents, and visual orchestration.
 
 [简体中文](./README.md) · [English](./README_EN.md)
 
@@ -17,226 +19,232 @@ An open-source visual AI workflow platform powered by Skills, MCP, agents, and e
 ![Python](https://img.shields.io/badge/Python-3.10--3.14-3776AB?style=flat-square&logo=python&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.x-009688?style=flat-square&logo=fastapi&logoColor=white)
-![MCP](https://img.shields.io/badge/MCP-supported-5A67D8?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-Supported-5A67D8?style=flat-square)
+![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-EA4AAA?style=flat-square)
+
+[Quick Start](#-quick-start) · [Core Capabilities](#-core-capabilities) · [Documentation](#-documentation) · [Contributing](#-contributing) · [GitHub Issues](https://github.com/lien0219/xiangflow-ai/issues)
 
 </div>
 
-> [!IMPORTANT]
-> XiangFlow AI is an independently maintained downstream project based on [Langflow](https://github.com/langflow-ai/langflow). It is not an official Langflow distribution. The project preserves upstream copyright notices and remains subject to the repository's MIT License.
+## Overview
 
-## Table of Contents
+XiangFlow AI is an open-source AI workflow platform for developers and organizations. Its visual canvas connects large language models, agents, knowledge bases, data sources, APIs, and external tools, helping teams build, test, run, and integrate AI applications efficiently.
 
-- [Project Overview](#-project-overview)
-- [Why XiangFlow AI](#why-xiangflow-ai)
-- [Core Capabilities](#-core-capabilities)
-- [Architecture](#️-architecture)
-- [Technology Stack](#technology-stack)
-- [Quick Start](#-quick-start)
-- [Project Structure](#project-structure)
-- [Branching and Custom Development](#-branching-and-custom-development)
-- [Documentation](#documentation)
-- [Roadmap](#️-roadmap)
-- [Contributing](#-contributing)
-- [Upstream and Acknowledgements](#upstream-and-acknowledgements)
-- [License](#-license)
-- [Community](#community)
+The platform brings together visual workflows, agent orchestration, the Model Context Protocol, Skills-oriented capability composition, and retrieval-augmented generation. Complex AI systems can be assembled as modular, reusable, and extensible workflows.
 
-## ⚡ Project Overview
+> Connect, orchestrate, and reuse every AI capability.
 
-XiangFlow AI is an open-source AI workflow platform developed as a downstream project based on Langflow. It is designed for developers and enterprise teams building visual workflows, agents, Skills, MCP integrations, RAG pipelines, extensible components, and API-based AI services.
+## ✨ Highlights
 
-The project aims to provide:
-
-- Visual AI workflow orchestration
-- Agent development and execution
-- Reusable capability packaging through Skills
-- MCP tool integration and publishing
-- RAG and enterprise knowledge bases
-- Custom workflow components
-- Extensible model-provider integrations
-- Workflows exposed as API services
-- An extensible foundation for developers and organizations
-
-### Capabilities inherited today
-
-The current codebase inherits these capabilities from Langflow:
-
-- A visual canvas for node-based workflow composition
-- Agent and LLM workflows
-- REST APIs and workflow API serving
-- MCP Server, MCP Client, and workflow-as-tool capabilities
-- Custom components written in Python
-- Integrations with multiple model providers and vector databases
-- Workflow import, export, and JSON representation
-- A Python, FastAPI, React, and TypeScript technology stack
-
-### XiangFlow AI development direction
-
-The following items are planned or under development. They should not be interpreted as fully delivered features:
-
-- Skills Registry (planned)
-- Centralized MCP management (planned)
-- Workflow version management (planned)
-- Project-level rule management (planned)
-- Multi-tenancy and complete RBAC (planned; the repository currently provides a pluggable authorization foundation)
-- Audit-log management (in development; part of the authorization audit foundation already exists)
-- Usage analytics (planned)
-- Workflow template marketplace (planned)
-- Enterprise knowledge base (planned)
-- Multi-editor integration (planned)
-- Integration with developer tools such as Cursor, Codex, and Claude Code (planned)
-
-## Why XiangFlow AI
-
-| Capability | Description |
+| Capability | What it provides |
 | --- | --- |
-| Visual orchestration | Build, debug, and run AI workflows on a node-based canvas |
-| Skills | Package rules, processes, and domain expertise as reusable Skills (a key Roadmap area) |
-| MCP | Connect external tools, editors, and agent clients |
-| Agents | Combine tool use, knowledge retrieval, and task execution |
-| Extensible components | Add workflow nodes and integrations with Python |
-| API delivery | Expose workflows as APIs or tools |
-| Open downstream development | Maintain a clear process for upstream sync, isolated customization, and releases |
+| Visual workflows | Connect models, prompts, tools, knowledge bases, and business logic on a node-based canvas |
+| AI agents | Build agents that interpret tasks, select tools, and complete multi-step work |
+| Skills extensions | Package domain capabilities with reusable flows, prompts, rules, tools, and components |
+| MCP ecosystem | Connect external tools as an MCP client and expose project workflows as MCP tools |
+| RAG and knowledge bases | Combine document processing, embeddings, vector search, and contextual generation |
+| Multiple model providers | Use major cloud providers, local models, and API-compatible model services |
+| Custom components | Extend nodes, tools, data processing, and integrations with Python |
+| API services | Integrate workflows through REST APIs, webhooks, and MCP |
+| Open deployment | Run locally, build containers, deploy privately, and customize integrations |
 
-## ✨ Core Capabilities
+## 🧩 Core Capabilities
 
-### Visual workflows
+### Visual AI Workflows
 
-- Node orchestration and data flow
-- Conditional branches and flow control
-- Model and tool calls
-- Interactive debugging and execution
-- Workflow import and export
+- Build workflows by dragging, connecting, and configuring nodes
+- Combine models, prompts, data, tools, and flow-control components
+- Pass text, messages, data, and structured results between nodes
+- Test workflows interactively in the Playground and inspect execution results
+- Import, export, and reuse workflows as JSON
+- Run workflows through REST APIs, webhooks, or MCP
 
-### 🤖 Agents and language models
+### AI Agents
 
-- Agent workflows and task execution
-- Multiple model-provider integrations
-- Prompt configuration and context handling
-- Tool calling and knowledge retrieval
-- Structured output
+- Configure agents with models, instructions, and context on the visual canvas
+- Use built-in components, other agents, and MCP servers as callable tools
+- Select tools and execute multi-step tasks based on the request
+- Connect conversation memory, knowledge retrieval, and structured output components
+- Test agent behavior in the Playground or through APIs
 
-### 🧩 Skills
+### Skills
 
-Skills are a major XiangFlow AI development direction. The goal is to package project rules, standard operating procedures, and domain expertise into discoverable, reusable, and versioned capability units. The Skills Registry, import/export, and version-management experience remain Roadmap items rather than a completed management system.
+Skills are XiangFlow AI's way of organizing reusable AI capabilities. Domain knowledge, task procedures, prompts, rules, tools, and resources can be composed through workflows and custom components, creating clear capability entry points that can be reused across applications.
 
-### 🔗 MCP
+### MCP
 
-The inherited platform already contains MCP Server, MCP Client, and workflow-as-MCP-tool capabilities. XiangFlow AI will build on this foundation with service management, client connectivity, tool publishing, and governance. A unified MCP management center is still planned.
+- Connect external MCP servers through the MCP Tools component
+- Use STDIO, Streamable HTTP, and compatible SSE transports
+- Configure MCP servers from Settings or directly from the canvas sidebar
+- Expose project workflows as MCP tools for external clients
+- Connect MCP clients such as Cursor, Windsurf, and Claude Desktop
 
-### RAG and knowledge bases
+### RAG and Knowledge Bases
 
-Existing components can be composed for document loading and parsing, embeddings, vector storage, retrieval, and model generation. Available integrations include Chroma, Qdrant, Weaviate, Pinecone, Milvus, MongoDB Atlas, Astra DB, and other vector stores. Enterprise knowledge-base management, citation governance, and a complete administration experience remain development directions.
+- Upload and process documents with text extraction, chunking, and metadata
+- Generate vector representations with embedding models
+- Perform semantic retrieval through knowledge bases and vector stores
+- Add retrieved content to model context for knowledge-grounded answers
+- Connect files, databases, websites, and third-party data sources through components
 
-### Extension development
+### Model and Component Ecosystem
 
-- Build custom components in Python
-- Invoke and publish workflows through REST APIs
-- Extend model, vector-database, and external-tool integrations
-- Extend backend behavior through the LFX runtime and service plugin interfaces
+- Integrate multiple LLM providers, embedding models, and local model services
+- Use vector database, data processing, input/output, and tool components
+- Create custom Python components and add them to the visual canvas
+- Connect business systems through API requests, webhooks, and third-party integrations
+- Extend and execute workflows with the LFX runtime
+
+## 🔄 How It Works
+
+```mermaid
+flowchart LR
+    User[User request] --> Canvas[Visual workflow]
+    Canvas --> Agent[AI Agent]
+    Canvas --> Skills[Skills composition]
+    Canvas --> MCP[MCP Tools]
+    Canvas --> RAG[RAG and knowledge base]
+
+    Agent --> Models[Language models]
+    Skills --> Components[Flows and custom components]
+    MCP --> Services[External services]
+    RAG --> Data[(Documents and vectors)]
+
+    Models --> Result[AI application and API]
+    Components --> Result
+    Services --> Result
+    Data --> Result
+```
+
+Start with a user or business requirement, compose agents, reusable capabilities, MCP tools, and knowledge retrieval on the canvas, then run the workflow in the interface or integrate it through an API, webhook, or MCP.
+
+## 🎯 Use Cases
+
+| Use case | Description |
+| --- | --- |
+| Enterprise knowledge assistant | Connect organizational documents, data sources, and models to build retrieval-based question answering |
+| AI customer support | Combine agents, knowledge bases, tool calls, and business APIs into controlled support workflows |
+| Data analysis agents | Let agents query databases, call APIs, use analysis tools, and produce results |
+| Content generation | Orchestrate models, prompts, data processing, and output components into reusable content pipelines |
+| Developer tools | Connect coding tools, editors, and development workflows through MCP and reusable capabilities |
+| Business process automation | Combine enterprise systems, external APIs, and AI models to automate multi-step tasks |
 
 ## 🏗️ Architecture
 
 ```mermaid
 flowchart TB
-    User[Developers / Enterprise Users]
-    Web[XiangFlow AI Web]
-    API[API Service]
-    Runtime[Workflow Runtime]
-    Skills[Skills Registry]
-    MCP[MCP Gateway]
-    Agents[Agent Runtime]
-    RAG[RAG / Knowledge Base]
-    Models[LLM Providers]
-    Tools[External Tools]
-    Storage[(Database / Vector Store)]
+    subgraph Experience[Experience Layer]
+        Web[React visual canvas]
+        Playground[Playground]
+        Clients[API and MCP clients]
+    end
 
-    User --> Web
-    Web --> API
-    API --> Runtime
-    Runtime --> Skills
-    Runtime --> MCP
-    Runtime --> Agents
-    Runtime --> RAG
+    subgraph Application[Application Services]
+        FastAPI[FastAPI REST API]
+        MCPAPI[MCP Server]
+        Services[Auth, projects, files, and knowledge bases]
+    end
+
+    subgraph Runtime[Orchestration and Runtime]
+        Graph[Workflow graph engine]
+        LFX[LFX runtime]
+        Agents[Agents and tool calling]
+        Components[Built-in and custom components]
+    end
+
+    subgraph Integrations[Integration Layer]
+        Models[Model and embedding services]
+        MCPTools[External MCP servers]
+        APIs[External APIs and data sources]
+        Vectors[Vector stores]
+    end
+
+    Storage[(Application database and file storage)]
+
+    Web --> FastAPI
+    Playground --> FastAPI
+    Clients --> FastAPI
+    Clients --> MCPAPI
+    FastAPI --> Services
+    FastAPI --> Graph
+    MCPAPI --> Graph
+    Graph --> LFX
+    Graph --> Agents
+    Graph --> Components
     Agents --> Models
-    Agents --> Tools
-    RAG --> Models
-    RAG --> Storage
-    MCP --> Tools
+    Agents --> MCPTools
+    Components --> APIs
+    Components --> Vectors
+    Services --> Storage
 ```
 
-> This diagram shows the target architecture. XiangFlow AI extensions such as the Skills Registry, unified MCP Gateway, and enterprise knowledge base are still planned or under development. The current runtime foundation is primarily inherited from Langflow and LFX.
+- **Experience layer:** Visual canvas, Playground, and entry points for API and MCP clients.
+- **Application services:** FastAPI endpoints for workflows, projects, files, knowledge bases, authentication, and MCP.
+- **Orchestration and runtime:** The graph engine and LFX coordinate nodes, data flow, agents, and components.
+- **Integration layer:** Model services, MCP servers, business APIs, data sources, and vector stores.
 
 ## Technology Stack
 
-| Layer | Current technology |
+| Area | Technology |
 | --- | --- |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Zustand, and XYFlow |
-| Backend | Python 3.10–3.14, FastAPI, SQLModel / SQLAlchemy, and Alembic |
-| Workflow | Langflow and LFX |
-| Agents | The LangChain ecosystem and LangGraph Checkpoint |
-| Protocols | REST API and MCP |
-| Databases | SQLite with built-in async support and PostgreSQL as an optional dependency; component integrations also cover MongoDB, Redis, Elasticsearch, and others |
-| Vector databases | Chroma, Qdrant, Weaviate, Pinecone, Milvus, MongoDB Atlas, Astra DB, FAISS, Upstash Vector, and others |
-| Deployment | Docker / Podman, Docker Compose, and Dev Containers |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Zustand, XYFlow |
+| Backend | Python 3.10–3.14, FastAPI, SQLModel / SQLAlchemy, Alembic |
+| Workflow | Langflow graph execution engine, LFX |
+| Agents | LangChain ecosystem, tool calling, structured output |
+| Protocols | REST API, webhooks, MCP |
+| Data storage | SQLite, optional PostgreSQL, file storage |
+| Vector search | Components for Chroma, Qdrant, Weaviate, Pinecone, Milvus, FAISS, and more |
+| Deployment | Local source build, Docker / Podman, Docker Compose, Dev Containers |
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Requirements
 
-| Tool | Requirement |
-| --- | --- |
-| Python | `>=3.10,<3.15` |
-| Node.js | `>=20.19.0`; v22.12 LTS is recommended |
-| npm | v10.9+ |
-| uv | `>=0.4` |
-| make | Coordinates installation, builds, and local execution |
-| Docker / Podman | Optional, for containerized development or deployment |
+- Python `>=3.10,<3.15`
+- Node.js `>=20.19.0` (v22.12 LTS recommended) and npm v10.9+
+- `uv >=0.4`
+- GNU Make
 
-> Windows users should use WSL or the Dev Container included in this repository.
+Windows users should use WSL or the included Dev Container.
 
-### Clone XiangFlow AI
+### Clone the Repository
 
-SSH:
+With SSH:
 
 ```bash
 git clone git@github.com:lien0219/xiangflow-ai.git
 cd xiangflow-ai
 ```
 
-HTTPS:
+Or with HTTPS:
 
 ```bash
 git clone https://github.com/lien0219/xiangflow-ai.git
 cd xiangflow-ai
 ```
 
-### Build and run
+### Run Locally
 
-From the repository root, `make run_cli` installs dependencies, builds the frontend, and starts the application:
+Install dependencies, build the frontend, and start the application:
 
 ```bash
 make run_cli
 ```
 
-The default URL is <http://localhost:7860>.
-
-If you encounter stale frontend assets or build-cache problems, perform a clean build:
+Open <http://localhost:7860>. To clear the frontend build cache before restarting, run:
 
 ```bash
 make run_clic
 ```
 
-### Development mode
-
-Initialize the complete development environment:
+### Development Mode
 
 ```bash
 make init
 ```
 
-Then start the backend and frontend in separate terminals:
+Start the backend and frontend in separate terminals:
 
 ```bash
 make backend
@@ -246,150 +254,67 @@ make backend
 make frontend
 ```
 
-The backend runs at `http://localhost:7860` by default, while the frontend development server runs at `http://localhost:3000`.
+The backend listens on `http://localhost:7860`, and the frontend development server listens on `http://localhost:3000` by default. See the [complete development guide](./DEVELOPMENT.md) for environment setup, testing, and component development.
 
-See the [complete development guide](./DEVELOPMENT.md) for Dev Container setup, dynamic component loading, tests, and troubleshooting.
+### Build and Run a Container
+
+The repository includes a container build target for the current source:
+
+```bash
+make docker_build DOCKER=docker
+docker run --rm -p 7860:7860 langflow:1.10.2
+```
 
 ## Project Structure
 
 ```text
 xiangflow-ai/
-├── .github/            # GitHub workflows and repository configuration
-├── deploy/             # Deployment and observability configuration
-├── docker/             # Container builds and development configuration
-├── docker_example/     # Docker Compose example
-├── docs/               # Docusaurus documentation
-├── scripts/            # Build, test, and maintenance scripts
+├── .github/                 # GitHub workflows and repository configuration
+├── deploy/                  # Deployment and observability configuration
+├── docker/                  # Container builds and development configuration
+├── docker_example/          # Docker Compose example
+├── docs/                    # Docusaurus documentation
+├── scripts/                 # Build, test, and maintenance scripts
 ├── src/
-│   ├── backend/        # FastAPI backend and Langflow core
-│   ├── frontend/       # React / TypeScript frontend
-│   ├── lfx/            # Lightweight workflow executor
-│   └── sdk/            # SDK source
-├── README.md           # Simplified Chinese documentation
-├── README_EN.md        # English documentation
-├── CUSTOMIZATION.md    # Downstream development and upstream sync rules
-├── DEVELOPMENT.md      # Development environment guide
-└── CONTRIBUTING.md     # Contribution guide
+│   ├── backend/             # FastAPI APIs and application services
+│   ├── frontend/            # React / TypeScript web application
+│   ├── lfx/                 # Lightweight workflow executor
+│   ├── langflow-stepflow/   # Workflow step execution support
+│   ├── sdk/                 # Python SDK
+│   └── bundles/             # Optional component extension bundles
+├── README.md                # Simplified Chinese product overview
+├── README_EN.md             # English product overview
+├── DEVELOPMENT.md           # Development environment guide
+└── CONTRIBUTING.md          # Contribution guide
 ```
 
-## 🌿 Branching and Custom Development
+## 📚 Documentation
 
-```text
-upstream/main
-      ↓
-  official
-      ↓
-  upgrade/*
-      ↓
-   develop
-      ↓
-  release/*
-      ↓
-     main
-```
-
-- `official`: mirrors Langflow upstream and must not contain XiangFlow AI feature development.
-- `develop`: integration branch for day-to-day development, fixes, and validated upstream upgrades.
-- `main`: stable release branch.
-- `feature/*`: branches from `develop` and returns through a Pull Request to `develop`.
-- `fix/*`: branches from `develop` for regular bug fixes.
-- `upgrade/*`: branches from `develop` to merge and validate `official` or a selected upstream release.
-- `release/*`: branches from `develop` for release preparation and merges into `main`.
-
-See [CUSTOMIZATION.md](./CUSTOMIZATION.md) for the complete workflow, conflict-resolution rules, and upstream synchronization procedures.
-
-## Documentation
-
-| Document | Purpose |
+| Document | Description |
 | --- | --- |
-| [DEVELOPMENT.md](./DEVELOPMENT.md) | Local development, Dev Container, and environment setup |
-| [CUSTOMIZATION.md](./CUSTOMIZATION.md) | XiangFlow AI downstream conventions and upstream synchronization |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guidelines |
-| [SECURITY.md](./SECURITY.md) | Upstream security policy and vulnerability reporting |
+| [DEVELOPMENT.md](./DEVELOPMENT.md) | Local development, Dev Containers, and environment setup |
+| [CUSTOMIZATION.md](./CUSTOMIZATION.md) | Project maintenance and customization guide |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guide |
+| [SECURITY.md](./SECURITY.md) | Security policy and vulnerability reporting |
 | [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) | Community code of conduct |
-| [LICENSE](./LICENSE) | MIT License and copyright notice |
-
-## 🗺️ Roadmap
-
-The Roadmap communicates direction and is not a delivery commitment. Every item below is incomplete or under continuous development:
-
-### Phase 1: Branding and downstream foundations
-
-- [ ] XiangFlow AI brand migration
-- [ ] Bilingual documentation
-- [ ] Downstream branch conventions
-- [ ] Upstream synchronization workflow
-- [ ] Custom-component foundation
-
-### Phase 2: Skills and MCP
-
-- [ ] Skills Registry
-- [ ] Skill import and export
-- [ ] Skill version management
-- [ ] MCP Server management
-- [ ] MCP Client management
-- [ ] Publish workflows as MCP tools
-
-### Phase 3: Enterprise capabilities
-
-- [ ] Multi-tenancy
-- [ ] Complete RBAC
-- [ ] Audit-log management
-- [ ] Usage analytics
-- [ ] Enterprise knowledge base
-- [ ] Workflow version management
-
-### Phase 4: Ecosystem expansion
-
-- [ ] Template marketplace
-- [ ] Component marketplace
-- [ ] Skills marketplace
-- [ ] XiangFlow AI SDK
-- [ ] Client integration for Cursor, Codex, Claude Code, and similar tools
+| [LICENSE](./LICENSE) | MIT License and copyright notices |
 
 ## 🤝 Contributing
 
-Create a feature branch from the latest `develop`:
+Community contributions are welcome. You can report bugs, suggest features, improve documentation, build components, fix issues, or open a pull request.
 
-```bash
-git switch develop
-git pull origin develop
-git switch -c feature/your-feature
-```
+- [Open an issue](https://github.com/lien0219/xiangflow-ai/issues)
+- [View pull requests](https://github.com/lien0219/xiangflow-ai/pulls)
+- [Read the contribution guide](./CONTRIBUTING.md)
 
-After implementing and validating the change, push the branch and open a Pull Request:
+## 🙏 Acknowledgements
 
-```text
-feature/your-feature -> develop
-```
+XiangFlow AI is made possible by the open-source community.
 
-Commit messages should follow Conventional Commits. Read the [contribution guide](./CONTRIBUTING.md) and [downstream development guide](./CUSTOMIZATION.md) before starting.
+Special thanks to the [Langflow](https://github.com/langflow-ai/langflow) team and its contributors for their outstanding work in visual AI workflow and agent development.
 
-## Upstream and Acknowledgements
-
-XiangFlow AI is developed as a downstream project based on Langflow. We thank the Langflow team and every upstream contributor for the workflow engine, visual editor, component ecosystem, and ongoing maintenance.
-
-- [Langflow on GitHub](https://github.com/langflow-ai/langflow)
-- [Official Langflow documentation](https://docs.langflow.org/)
-- [XiangFlow AI `official` branch](https://github.com/lien0219/xiangflow-ai/tree/official)
-
-XiangFlow AI is independently maintained and is not an official Langflow distribution. Original Langflow copyright and license notices in this repository remain in effect.
+We also appreciate LangChain, FastAPI, React, and the broader open-source ecosystem.
 
 ## 📄 License
 
-This project remains subject to the MIT License in [LICENSE](./LICENSE). When using, modifying, or distributing the project:
-
-- Preserve the original copyright notice.
-- Preserve the MIT License.
-- Comply with the licenses of third-party dependencies.
-- Ensure new XiangFlow AI code follows project conventions and all applicable open-source license requirements.
-
-This README does not alter or replace any term in the `LICENSE` file.
-
-## Community
-
-Community collaboration currently takes place on GitHub:
-
-- [GitHub Issues](https://github.com/lien0219/xiangflow-ai/issues) — report bugs or propose improvements
-- [Pull Requests](https://github.com/lien0219/xiangflow-ai/pulls) — contribute code and documentation
-- [XiangFlow AI repository](https://github.com/lien0219/xiangflow-ai)
+This project is open source under the [MIT License](./LICENSE).
