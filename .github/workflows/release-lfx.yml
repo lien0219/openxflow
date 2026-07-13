@@ -334,7 +334,7 @@ jobs:
           EOF
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: lfx-v${{ github.event.inputs.version }}
           # Pin the minted tag to the commit this release was built from;
