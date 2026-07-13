@@ -88,7 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Fetch all history - required for tags (?)
       - name: Validate that input is a tag, not a branch
@@ -115,7 +115,7 @@ jobs:
     needs: [validate-tag]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -193,7 +193,7 @@ jobs:
 
       - name: Checkout code
         if: ${{ inputs.pre_release }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
 
@@ -341,7 +341,7 @@ jobs:
       skipped: ${{ steps.version.outputs.skipped }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
 
@@ -394,7 +394,7 @@ jobs:
       skipped: ${{ steps.version.outputs.skipped }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
 
@@ -443,7 +443,7 @@ jobs:
       skipped: ${{ steps.version.outputs.skipped }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
 
@@ -493,7 +493,7 @@ jobs:
       skipped: ${{ steps.version.outputs.skipped }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
 
@@ -570,7 +570,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
       - name: Setup Environment
@@ -639,7 +639,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
       - name: Setup Environment
@@ -749,7 +749,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
       - name: Setup Environment
@@ -896,7 +896,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
       - name: Setup Environment
@@ -1037,7 +1037,7 @@ jobs:
       bundles-found: ${{ steps.build.outputs.bundles-found }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
       - name: Setup Environment
@@ -1257,7 +1257,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag }}
       - name: Download SDK artifact

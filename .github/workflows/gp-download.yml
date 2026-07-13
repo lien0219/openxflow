@@ -32,7 +32,7 @@ jobs:
           echo "Using release branch: $BRANCH"
 
       - name: Checkout release branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.resolve-branch.outputs.branch }}
 
@@ -133,7 +133,7 @@ jobs:
           echo "Using release branch: $BRANCH"
 
       - name: Checkout release branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.resolve-branch.outputs.branch }}
 

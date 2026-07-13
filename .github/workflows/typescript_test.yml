@@ -82,7 +82,7 @@ jobs:
       test_grep: ${{ steps.set-matrix.outputs.test_grep }}
       suites: ${{ steps.set-matrix.outputs.suites }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
@@ -303,7 +303,7 @@ jobs:
       failed: ${{ steps.check-failure.outputs.failed }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || github.ref }}
 
@@ -439,7 +439,7 @@ jobs:
           fi
       - name: Checkout code
         if: ${{ steps.should_merge_reports.outputs.should_merge_reports == 'true' }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || github.ref }}
 

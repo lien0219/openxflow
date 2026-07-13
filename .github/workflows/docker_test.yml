@@ -17,7 +17,7 @@ jobs:
     runs-on: [self-hosted, linux, ARM64, langflow-ai-arm64-40gb-ephemeral]
     name: Test docker images
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set container runtime
         run: |
           if command -v docker &> /dev/null; then

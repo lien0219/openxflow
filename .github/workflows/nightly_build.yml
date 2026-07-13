@@ -88,7 +88,7 @@ jobs:
       sdk_tag: ${{ steps.generate_sdk_tag.outputs.sdk_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.resolve-release-branch.outputs.branch }}
           persist-credentials: true
@@ -190,7 +190,7 @@ jobs:
           # TODO: notify on failure
 
       - name: Checkout main nightly tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.generate_shared_tag.outputs.release_tag }}
           persist-credentials: true
