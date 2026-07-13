@@ -2,19 +2,19 @@
 
 <div align="center">
 
-# XiangFlow AI · 翔域智流
+# OpenXFlow
 
 ### 让 AI 工作流构建更简单、更开放、更智能
 
-基于 Skills、MCP、Agent 和可视化编排的新一代开源 AI 工作流平台。
+面向开发者的开源 AI 工作流平台。
 
 [简体中文](./README.md) · [English](./README_EN.md)
 
-[![MIT License](https://img.shields.io/github/license/lien0219/xiangflow-ai?style=flat-square)](./LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/lien0219/xiangflow-ai?style=flat-square)](https://github.com/lien0219/xiangflow-ai/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/lien0219/xiangflow-ai?style=flat-square)](https://github.com/lien0219/xiangflow-ai/forks)
-[![GitHub Issues](https://img.shields.io/github/issues/lien0219/xiangflow-ai?style=flat-square)](https://github.com/lien0219/xiangflow-ai/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/lien0219/xiangflow-ai?style=flat-square)](https://github.com/lien0219/xiangflow-ai/pulls)
+[![MIT License](https://img.shields.io/github/license/lien0219/openxflow?style=flat-square)](./LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/lien0219/openxflow?style=flat-square)](https://github.com/lien0219/openxflow/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/lien0219/openxflow?style=flat-square)](https://github.com/lien0219/openxflow/forks)
+[![GitHub Issues](https://img.shields.io/github/issues/lien0219/openxflow?style=flat-square)](https://github.com/lien0219/openxflow/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/lien0219/openxflow?style=flat-square)](https://github.com/lien0219/openxflow/pulls)
 
 ![Python](https://img.shields.io/badge/Python-3.10--3.14-3776AB?style=flat-square&logo=python&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -23,17 +23,17 @@
 ![MCP](https://img.shields.io/badge/MCP-Supported-5A67D8?style=flat-square)
 ![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-EA4AAA?style=flat-square)
 
-[快速开始](#-快速开始) · [核心能力](#-核心能力) · [开发文档](#-文档) · [参与贡献](#-参与贡献) · [GitHub Issues](https://github.com/lien0219/xiangflow-ai/issues)
+[快速开始](#-快速开始) · [核心能力](#-核心能力) · [开发文档](#-文档) · [参与贡献](#-参与贡献) · [GitHub Issues](https://github.com/lien0219/openxflow/issues)
 
 </div>
 
 ## 产品介绍
 
-翔域智流（XiangFlow AI）是一个面向开发者和企业的开源 AI 工作流平台。通过可视化画布，开发者可以连接大语言模型、Agent、知识库、数据源、API 和外部工具，快速构建、调试、运行和集成 AI 应用。
+OpenXFlow 是一个面向开发者的开源 AI 工作流平台。通过可视化画布，开发者可以连接大语言模型、Agent、知识库、数据源、API 和外部工具，快速构建、调试、运行和集成 AI 应用。
 
 平台融合可视化工作流、Agent 编排、MCP 工具协议、Skills 能力组织和 RAG 知识检索，让复杂 AI 应用能够以模块化、可复用、可扩展的方式构建。
 
-> 让每一个 AI 能力，都能被连接、编排和复用。
+> 让每一个 AI 能力，都能够被连接、编排和复用。
 
 ## ✨ 产品亮点
 
@@ -70,7 +70,7 @@
 
 ### Skills
 
-Skills 是 XiangFlow AI 组织可复用 AI 能力的方式。领域知识、任务步骤、提示词、规则、工具与资源可以通过工作流和自定义组件组合封装，形成清晰、可组合的能力入口，并在不同 AI 应用中复用。
+Skills 是 OpenXFlow 组织可复用 AI 能力的方式。领域知识、任务步骤、提示词、规则、工具与资源可以通过工作流和自定义组件组合封装，形成清晰、可组合的能力入口，并在不同 AI 应用中复用。
 
 ### MCP
 
@@ -213,15 +213,15 @@ Windows 用户建议使用 WSL 或仓库内置的 Dev Container。
 使用 SSH：
 
 ```bash
-git clone git@github.com:lien0219/xiangflow-ai.git
-cd xiangflow-ai
+git clone git@github.com:lien0219/openxflow.git
+cd openxflow
 ```
 
 或使用 HTTPS：
 
 ```bash
-git clone https://github.com/lien0219/xiangflow-ai.git
-cd xiangflow-ai
+git clone https://github.com/lien0219/openxflow.git
+cd openxflow
 ```
 
 ### 本地运行
@@ -268,7 +268,7 @@ docker run --rm -p 7860:7860 langflow:1.10.2
 ## 项目结构
 
 ```text
-xiangflow-ai/
+openxflow/
 ├── .github/                 # GitHub 工作流与仓库配置
 ├── deploy/                  # 部署与可观测性配置
 ├── docker/                  # 容器构建与开发配置
@@ -301,19 +301,19 @@ xiangflow-ai/
 
 ## 🤝 参与贡献
 
-欢迎社区开发者参与 XiangFlow AI。你可以提交 Bug、提出功能建议、改进文档、开发组件、修复问题或提交 Pull Request。
+欢迎社区开发者参与 OpenXFlow。你可以提交 Bug、提出功能建议、改进文档、开发组件、修复问题或提交 Pull Request。
 
-- [提交 Issue](https://github.com/lien0219/xiangflow-ai/issues)
-- [查看 Pull Requests](https://github.com/lien0219/xiangflow-ai/pulls)
+- [提交 Issue](https://github.com/lien0219/openxflow/issues)
+- [查看 Pull Requests](https://github.com/lien0219/openxflow/pulls)
 - [阅读贡献指南](./CONTRIBUTING.md)
 
 ## 🙏 致谢
 
-XiangFlow AI 的诞生离不开优秀的开源生态。
+OpenXFlow 基于优秀的开源项目 [Langflow](https://github.com/langflow-ai/langflow) 构建。
 
-特别感谢 [Langflow](https://github.com/langflow-ai/langflow) 团队及所有社区贡献者，为可视化 AI 工作流和 Agent 开发生态作出的卓越贡献。
+特别感谢 Langflow 团队及所有社区贡献者，为可视化 AI 工作流和 Agent 开发生态作出的贡献。
 
-同时感谢 LangChain、FastAPI、React 以及所有相关开源项目和贡献者。
+同时感谢 LangChain、FastAPI、React 及相关开源项目和贡献者。
 
 ## 📄 License
 

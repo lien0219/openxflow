@@ -1,5 +1,5 @@
 const SvgAnthropicBox = (props) => {
-  return props.isDark ? (
+  return props["data-is-dark"] ? (
     <svg
       width="38"
       height="38"

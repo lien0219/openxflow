@@ -31,7 +31,7 @@ export default function PlaygroundPage() {
     try {
       const flow = await getFlow({ id: id!, public: true });
       return flow;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       navigate("/");
     }
@@ -60,7 +60,7 @@ export default function PlaygroundPage() {
   }, []);
 
   useEffect(() => {
-    document.title = currentSavedFlow?.name || "Langflow";
+    document.title = currentSavedFlow?.name || "OpenXFlow";
     if (currentSavedFlow?.data) {
       const { inputs, outputs } = getInputsAndOutputs(
         currentSavedFlow?.data?.nodes || [],

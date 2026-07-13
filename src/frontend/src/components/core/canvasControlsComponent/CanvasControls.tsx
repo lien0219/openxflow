@@ -186,7 +186,7 @@ const CanvasControls = ({
                     the button reads as "active" alongside the open panel. */}
                 <img
                   src={langflowAssistantIdleIcon}
-                  alt="Langflow Assistant"
+                  alt="OpenXFlow Assistant"
                   className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ${
                     assistantSidebarOpen ? "opacity-0" : "group-hover:opacity-0"
                   }`}
@@ -239,7 +239,7 @@ const CanvasControls = ({
               <button
                 type="button"
                 data-testid="assistant-onboarding-open"
-                aria-label="Open Langflow Assistant"
+                aria-label="Launch OpenXFlow Assistant"
                 className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-foreground transition-colors hover:bg-muted-foreground/10"
                 onClick={handleAssistantClick}
               >

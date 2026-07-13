@@ -1,6 +1,6 @@
 import PropTypes from "prop-types";
 
-const SvgVLLM = ({ isDark = false, ...props }) => {
+const SvgVLLM = ({ "data-is-dark": isDark = false, ...props }) => {
   const color = isDark ? "#fff" : "#000";
   const bgColor = isDark ? "#1a1a1a" : "#f5f5f5";
 
@@ -150,7 +150,7 @@ const SvgVLLM = ({ isDark = false, ...props }) => {
 };
 
 SvgVLLM.propTypes = {
-  isDark: PropTypes.bool,
+  "data-is-dark": PropTypes.bool,
 };
 
 export default SvgVLLM;

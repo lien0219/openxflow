@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { DOCS_URL } from "@/constants/constants";
 import { cn } from "@/utils/utils";
 import BaseModal from "../baseModal";
 import { useCreateMemoryModal } from "./useCreateMemoryModal";
@@ -203,7 +204,7 @@ export default function CreateMemoryModal({
                       <span>
                         {t("memory.preprocessingInstructionsHint")}{" "}
                         <a
-                          href="https://docs.langflow.org/memory-bases#preprocessing-prompt-examples"
+                          href={DOCS_URL}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-0.5 text-tooltip-foreground underline opacity-80 hover:opacity-100"

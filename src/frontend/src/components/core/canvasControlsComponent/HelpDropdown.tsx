@@ -4,7 +4,6 @@ import { HelpDropdownView } from "@/components/core/canvasControlsComponent/Help
 import {
   BUG_REPORT_URL,
   DATASTAX_DOCS_URL,
-  DESKTOP_URL,
   DOCS_URL,
 } from "@/constants/constants";
 import { ENABLE_DATASTAX_LANGFLOW } from "@/customization/feature-flags";
@@ -44,7 +43,7 @@ const HelpDropdown = () => {
       onToggleInspectionPanel={onToggleInspectionPanel}
       navigateTo={(path) => navigate(path)}
       openLink={(url) => window.open(url, "_blank")}
-      urls={{ docs: docsUrl, bugReport: BUG_REPORT_URL, desktop: DESKTOP_URL }}
+      urls={{ docs: docsUrl, bugReport: BUG_REPORT_URL }}
     />
   );
 };

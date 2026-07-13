@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 
 import { ForwardedIconComponent } from "@/components/common/genericIconComponent";
 import { Button } from "@/components/ui/button";
+import { DOCS_URL } from "@/constants/constants";
 import type { MCPTransport } from "@/controllers/API/queries/mcp/use-patch-install-mcp";
 import { ENABLE_MCP_COMPOSER } from "@/customization/feature-flags";
 import { useCustomIsLocalConnection } from "@/customization/hooks/use-custom-is-local-connection";
@@ -76,7 +77,7 @@ const McpServerTab = ({ folderName }: { folderName: string }) => {
             {t("mcp.serverDescription")}
             <a
               className="text-accent-pink-foreground"
-              href="https://docs.langflow.org/mcp-server"
+              href={DOCS_URL}
               target="_blank"
               rel="noreferrer"
             >

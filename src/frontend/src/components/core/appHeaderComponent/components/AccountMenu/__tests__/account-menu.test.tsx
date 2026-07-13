@@ -4,7 +4,6 @@ import { useUtilityStore } from "@/stores/utilityStore";
 import { AccountMenu } from "../index";
 
 jest.mock("react-icons/fa", () => ({
-  FaDiscord: () => <span data-testid="discord-icon" />,
   FaGithub: () => <span data-testid="github-icon" />,
 }));
 
@@ -58,9 +57,13 @@ jest.mock("../../HeaderMenu/index", () => ({
     children: ReactNode;
     onClick?: () => void;
   }) => <button onClick={onClick}>{children}</button>,
-  HeaderMenuItemLink: ({ children }: { children: ReactNode }) => (
-    <a>{children}</a>
-  ),
+  HeaderMenuItemLink: ({
+    children,
+    href,
+  }: {
+    children: ReactNode;
+    href: string;
+  }) => <a href={href}>{children}</a>,
 }));
 
 jest.mock("../../ThemeButtons/index", () => ({
@@ -97,5 +100,19 @@ describe("AccountMenu", () => {
     expect(
       screen.queryByRole("button", { name: /logout/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows only OpenXFlow documentation and repository links", () => {
+    render(<AccountMenu />);
+
+    expect(screen.getByTestId("menu_docs_button").closest("a")).toHaveAttribute(
+      "href",
+      "https://github.com/lien0219/openxflow#readme",
+    );
+    expect(
+      screen.getByTestId("menu_github_button").closest("a"),
+    ).toHaveAttribute("href", "https://github.com/lien0219/openxflow");
+    expect(screen.queryByTestId("menu_discord_button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("menu_twitter_button")).not.toBeInTheDocument();
   });
 });

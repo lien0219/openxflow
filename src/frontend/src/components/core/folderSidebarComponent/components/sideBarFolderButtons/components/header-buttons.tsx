@@ -35,9 +35,6 @@ export const HeaderButtons = ({
   const [isGithubStarred, setIsGithubStarred] = useState(
     userData?.optins?.github_starred,
   );
-  const [isDiscordJoined, setIsDiscordJoined] = useState(
-    userData?.optins?.discord_clicked,
-  );
 
   const { mutate: updateUser } = useUpdateUser();
 
@@ -45,7 +42,6 @@ export const HeaderButtons = ({
     if (userData) {
       setIsDismissedDialog(userData.optins?.dialog_dismissed);
       setIsGithubStarred(userData.optins?.github_starred);
-      setIsDiscordJoined(userData.optins?.discord_clicked);
     }
   }, [userData]);
 
@@ -69,7 +65,6 @@ export const HeaderButtons = ({
           <CustomGetStartedProgress
             userData={userData!}
             isGithubStarred={isGithubStarred ?? false}
-            isDiscordJoined={isDiscordJoined ?? false}
             handleDismissDialog={handleDismissDialog}
           />
 

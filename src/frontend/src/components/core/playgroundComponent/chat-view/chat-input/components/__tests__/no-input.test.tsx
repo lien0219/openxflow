@@ -77,7 +77,7 @@ describe("NoInputView", () => {
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute(
       "href",
-      "https://docs.langflow.org/components-io#chat-input",
+      "https://github.com/lien0219/openxflow#readme",
     );
     expect(link).toHaveAttribute("target", "_blank");
   });

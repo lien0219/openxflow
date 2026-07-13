@@ -1,5 +1,5 @@
 name: "🚀 Feature Request"
-description: Submit a proposal/request for a new Langflow feature
+description: Submit a proposal/request for a new OpenXFlow feature
 labels: [ "enhancement" ]
 body:
   - type: textarea
@@ -25,4 +25,4 @@ body:
     attributes:
       label: Your Contribution
       description: |
-        Is there any way that you could help, e.g., by submitting a PR? Make sure to read the CONTRIBUTING.md guidelines for Langflow before proceeding.
+        Is there any way that you could help, e.g., by submitting a PR? Make sure to read the CONTRIBUTING.md guidelines for OpenXFlow before proceeding.

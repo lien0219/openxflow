@@ -17,6 +17,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DOCS_URL } from "@/constants/constants";
 import { cn } from "@/utils/utils";
 import { formatTimestamp } from "../helpers";
 import { KNOWLEDGE_BASE_SCROLL_THRESHOLD_PX } from "../MemoriesMainContent.constants";
@@ -57,7 +58,7 @@ export function MemoryKnowledgeBaseSection({
               <TooltipContent className="max-w-xs">
                 <p>{t("memory.memoryBaseTooltip")}</p>
                 <a
-                  href="https://docs.langflow.org/memory-bases"
+                  href={DOCS_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-1 flex items-center gap-1 text-xs text-primary underline"
@@ -101,7 +102,7 @@ export function MemoryKnowledgeBaseSection({
               {t("memory.noChunksRunFlow")}
             </p>
             <a
-              href="https://docs.langflow.org/memory-bases"
+              href={DOCS_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-xs text-primary underline"

@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { FaDiscord, FaGithub } from "react-icons/fa";
+import { FaGithub } from "react-icons/fa";
 import { useShallow } from "zustand/react/shallow";
 import logoDarkPng from "@/assets/logo_dark.png";
 import logoLightPng from "@/assets/logo_light.png";
@@ -9,7 +9,7 @@ import CardsWrapComponent from "@/components/core/cardsWrapComponent";
 import { useStartNewFlow } from "@/components/core/flowBuilderWelcome/hooks/use-start-new-flow";
 import { Button } from "@/components/ui/button";
 import { DotBackgroundDemo } from "@/components/ui/dot-background";
-import { DISCORD_URL, GITHUB_URL } from "@/constants/constants";
+import { GITHUB_URL } from "@/constants/constants";
 import { useGetUserData, useUpdateUser } from "@/controllers/API/queries/auth";
 import useAuthStore from "@/stores/authStore";
 import { useDarkStore } from "@/stores/darkStore";
@@ -30,7 +30,6 @@ export const EmptyPageCommunity = ({
   const folders = useFolderStore((state) => state.folders);
   const userData = useAuthStore(useShallow((state) => state.userData));
   const stars: number | undefined = useDarkStore((state) => state.stars);
-  const discordCount: number = useDarkStore((state) => state.discordCount);
   const { mutate: updateUser } = useUpdateUser();
   const { mutate: mutateLoggedUser } = useGetUserData();
   const startNewFlow = useStartNewFlow();
@@ -117,36 +116,6 @@ export const EmptyPageCommunity = ({
                     <div>
                       <span className="line-clamp-2 text-left text-base text-secondary-foreground">
                         {t("page.githubDescription")}
-                      </span>
-                    </div>
-                  </div>
-                  <ExternalLink className={EXTERNAL_LINK_ICON_CLASS} />
-                </div>
-              </Button>
-
-              <Button
-                unstyled
-                className="group mx-3 min-h-[84px] sm:mx-0"
-                onClick={() => {
-                  handleUserTrack("discord_clicked")();
-                  window.open(DISCORD_URL, "_blank", "noopener,noreferrer");
-                }}
-                data-testid="empty_page_discord_button"
-              >
-                <div className="relative flex flex-col rounded-lg border-[1px] bg-background p-4 transition-all duration-300 hover:border-discord-color">
-                  <div className="grid w-full items-center justify-between gap-2">
-                    <div className="flex gap-3">
-                      <FaDiscord className="h-6 w-6 text-discord-color" />
-                      <div>
-                        <span className="font-semibold">Discord</span>
-                        <span className="ml-2 font-mono text-muted-foreground">
-                          {formatNumber(discordCount)}
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="line-clamp-2 text-left text-base text-secondary-foreground">
-                        {t("page.discordDescription")}
                       </span>
                     </div>
                   </div>

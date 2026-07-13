@@ -17,7 +17,7 @@ type IconComponentType = React.ComponentType<{
   style?: React.CSSProperties;
   ref?: React.Ref<unknown>;
   "data-testid"?: string;
-  isDark?: boolean;
+  "data-is-dark"?: boolean;
 }>;
 
 export const ForwardedIconComponent = memo(
@@ -155,7 +155,7 @@ export const ForwardedIconComponent = memo(
       const componentProps = { ...baseProps, ref };
 
       const content = isValidComponent ? (
-        <TargetIcon {...componentProps} isDark={isDark} />
+        <TargetIcon {...componentProps} data-is-dark={isDark} />
       ) : (
         <div {...baseProps}>{TargetIcon}</div>
       );

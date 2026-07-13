@@ -80,9 +80,12 @@ test(
 
     await page.getByTestId("shared-button-flow").click();
 
-    await page.waitForSelector("text=Publish workflow to the Langflow Store.", {
-      timeout: 10000,
-    });
+    await page.waitForSelector(
+      "text=Publish workflow to the OpenXFlow Store.",
+      {
+        timeout: 10000,
+      },
+    );
     await page.waitForSelector('[data-testid="shared-button-flow"]', {
       timeout: 10000,
     });

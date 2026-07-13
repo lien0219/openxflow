@@ -1,7 +1,7 @@
 {
-  "name": "Langflow",
-  "short_name": "Langflow",
-  "description": "Langflow is a low-code builder that makes it easier to build powerful AIs that can use any API, model, or database.",
+  "name": "OpenXFlow",
+  "short_name": "OpenXFlow",
+  "description": "Open-source AI workflow platform",
   "icons": [
     {
       "src": "icons/32x32.png",
@@ -19,7 +19,7 @@
       "sizes": "256x256"
     },
     {
-      "src": "icons/icon.ico",
+      "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     }

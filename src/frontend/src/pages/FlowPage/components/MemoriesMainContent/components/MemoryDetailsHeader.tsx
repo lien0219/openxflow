@@ -15,6 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DOCS_URL } from "@/constants/constants";
 import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import useAlertStore from "@/stores/alertStore";
 import { extractApiErrorMessages } from "@/utils/apiError";
@@ -96,7 +97,7 @@ export function MemoryDetailsHeader({
             <TooltipContent className="max-w-xs">
               <p>{t("memory.autoCaptureTooltip")}</p>
               <a
-                href="https://docs.langflow.org/memory-bases"
+                href={DOCS_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-1 flex items-center gap-1 text-xs text-primary underline"
