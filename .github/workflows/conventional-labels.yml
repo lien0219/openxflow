@@ -6,6 +6,11 @@ on:
     types: [opened, edited, synchronize]
   merge_group:
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   validate-pr:
     name: Validate PR
