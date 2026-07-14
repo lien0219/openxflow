@@ -62,10 +62,13 @@ export default function AppHeader(): JSX.Element {
         <Button
           unstyled
           onClick={() => navigate("/")}
-          className="mr-1 flex h-8 w-8 items-center"
+          className="mr-1 flex h-8 items-center gap-2 rounded-md px-1"
           data-testid="icon-ChevronLeft"
         >
           <LangflowLogo className="h-5 w-5" />
+          <span className="whitespace-nowrap text-sm font-semibold text-foreground">
+            OpenXFlow
+          </span>
         </Button>
         <CustomOrgSelector />
       </div>
