@@ -16,6 +16,7 @@ from lfx.utils.async_helpers import run_until_complete
 from lfx.utils.secrets import secret_value_to_str
 
 from .provider_queries import (
+    get_model_provider_metadata,
     get_model_provider_variable_mapping,
     get_provider_all_variables,
 )
@@ -505,6 +506,39 @@ def validate_model_provider_key(provider: str, variables: dict[str, str], model_
                 logger.warning(msg)
                 raise ValueError(msg) from e
 
+        elif provider in {"DeepSeek", "Qwen"}:
+            from langchain_openai import ChatOpenAI  # type: ignore  # noqa: PGH003
+
+            metadata = get_model_provider_metadata()[provider]
+            api_key_variable = get_model_provider_variable_mapping()[provider]
+            api_key = variables.get(api_key_variable)
+            if not api_key:
+                return
+
+            base_url_variable = next(
+                (
+                    variable["variable_key"]
+                    for variable in metadata.get("variables", [])
+                    if variable.get("langchain_param") == "base_url"
+                ),
+                None,
+            )
+            base_url = variables.get(base_url_variable) if base_url_variable else None
+            base_url = base_url or metadata["base_url"]
+
+            from lfx.utils.ssrf_httpx import ssrf_protected_openai_clients_for_url
+            from lfx.utils.util import transform_localhost_url
+
+            base_url = transform_localhost_url(base_url)
+            llm = ChatOpenAI(
+                api_key=api_key,
+                model=validation_model,
+                max_tokens=1,
+                base_url=base_url,
+                **ssrf_protected_openai_clients_for_url(base_url),
+            )
+            llm.invoke("test")
+
         elif provider == "Ollama":
             import requests
 
@@ -548,6 +582,11 @@ def validate_model_provider_key(provider: str, variables: dict[str, str], model_
         if any(word in error_msg for word in ["401", "authentication", "api key"]):
             msg = f"Invalid API key for {provider}"
             logger.error(f"Invalid API key for {provider}: {e}")
+            raise ValueError(msg) from e
+
+        if provider in {"DeepSeek", "Qwen"}:
+            msg = f"Could not reach {provider} API endpoint"
+            logger.warning("%s: %s", msg, e)
             raise ValueError(msg) from e
 
         # Rethrow specific Ollama errors with a user-facing message

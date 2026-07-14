@@ -82,6 +82,14 @@ class LanguageModelComponent(LCModelComponent):
             show=False,
             real_time_refresh=True,
         ),
+        StrInput(
+            name="openai_compatible_base_url",
+            display_name="OpenAI-Compatible API URL",
+            info="Overrides the configured API endpoint for OpenAI-compatible providers.",
+            show=False,
+            real_time_refresh=True,
+            advanced=True,
+        ),
         MessageInput(
             name="input_value",
             display_name="Input",
@@ -135,6 +143,7 @@ class LanguageModelComponent(LCModelComponent):
             watsonx_url=getattr(self, "base_url_ibm_watsonx", None),
             watsonx_project_id=getattr(self, "project_id", None),
             ollama_base_url=getattr(self, "ollama_base_url", None),
+            openai_compatible_base_url=getattr(self, "openai_compatible_base_url", None),
         )
 
     def update_build_config(self, build_config: dict, field_value: str, field_name: str | None = None):

@@ -46,6 +46,28 @@ const mockProviders = [
     is_enabled: false,
     models: [{ model_name: "claude-3", metadata: { model_type: "llm" } }],
   },
+  {
+    provider: "DeepSeek",
+    icon: "DeepSeek",
+    is_enabled: false,
+    models: [
+      {
+        model_name: "deepseek-chat",
+        metadata: { model_type: "llm", tool_calling: true },
+      },
+    ],
+  },
+  {
+    provider: "Qwen",
+    icon: "Qwen",
+    is_enabled: false,
+    models: [
+      {
+        model_name: "qwen-plus",
+        metadata: { model_type: "llm", tool_calling: true },
+      },
+    ],
+  },
 ];
 
 let mockIsLoading = false;
@@ -177,6 +199,16 @@ describe("ProviderList", () => {
         screen.queryByTestId("provider-item-OpenAI"),
       ).not.toBeInTheDocument();
       expect(screen.getByTestId("provider-item-Anthropic")).toBeInTheDocument();
+    });
+
+    it("should find DeepSeek and Qwen by provider name", () => {
+      const { rerender } = render(
+        <ProviderList modelType="all" query="deepseek" />,
+      );
+      expect(screen.getByTestId("provider-item-DeepSeek")).toBeInTheDocument();
+
+      rerender(<ProviderList modelType="all" query="QWEN" />);
+      expect(screen.getByTestId("provider-item-Qwen")).toBeInTheDocument();
     });
 
     it("should show the no-results message when nothing matches", () => {

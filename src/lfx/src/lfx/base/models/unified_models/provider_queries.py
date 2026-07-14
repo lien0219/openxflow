@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from lfx.base.models.anthropic_constants import ANTHROPIC_MODELS_DETAILED
+from lfx.base.models.deepseek_constants import DEEPSEEK_MODELS_DETAILED
 from lfx.base.models.google_generative_ai_constants import (
     GOOGLE_GENERATIVE_AI_EMBEDDING_MODELS_DETAILED,
     GOOGLE_GENERATIVE_AI_MODELS_DETAILED,
@@ -19,6 +20,7 @@ from lfx.base.models.openai_constants import (
     OPENAI_MODELS_DETAILED,
 )
 from lfx.base.models.openrouter_constants import OPENROUTER_MODELS_DETAILED
+from lfx.base.models.qwen_constants import QWEN_MODELS_DETAILED
 from lfx.base.models.watsonx_constants import WATSONX_MODELS_DETAILED
 
 
@@ -41,6 +43,8 @@ _STATIC_MODELS_DETAILED: list[list[dict]] = [
     OLLAMA_EMBEDDING_MODELS_DETAILED,
     OPENROUTER_MODELS_DETAILED,
     WATSONX_MODELS_DETAILED,
+    DEEPSEEK_MODELS_DETAILED,
+    QWEN_MODELS_DETAILED,
 ]
 
 

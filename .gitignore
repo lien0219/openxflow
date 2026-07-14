@@ -279,6 +279,7 @@ src/frontend/temp
 .dspy_cache/
 *.db*
 *.mcp.json
+.playwright-mcp/
 
 news-aggregated.json
 .claude

@@ -1449,6 +1449,8 @@
   "modelProviders.saveButton": "保存",
   "modelProviders.searchModels": "搜索模型……",
   "modelProviders.searchProviders": "搜索提供商……",
+  "modelProviders.providerNameDeepSeek": "DeepSeek",
+  "modelProviders.providerNameQwen": "通义千问 Qwen",
   "modelProviders.showDeprecated": "显示 {{count}} 中已弃用的模型",
   "modelProviders.showDeprecatedSingular": "显示 1 个已弃用的模型",
   "modelProviders.tag.embedding": "嵌入",

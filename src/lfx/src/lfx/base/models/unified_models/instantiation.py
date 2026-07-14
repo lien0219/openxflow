@@ -38,6 +38,7 @@ def get_llm(
     watsonx_url=None,
     watsonx_project_id=None,
     ollama_base_url=None,
+    openai_compatible_base_url=None,
 ) -> Any:
     # Resolve helpers via package namespace so tests patching
     # lfx.base.models.unified_models.<name> keep working.
@@ -47,6 +48,7 @@ def get_llm(
     ollama_base_url = _to_str(ollama_base_url)
     watsonx_url = _to_str(watsonx_url)
     watsonx_project_id = _to_str(watsonx_project_id)
+    openai_compatible_base_url = _to_str(openai_compatible_base_url)
 
     # Check if model is already a BaseLanguageModel instance (from a connection)
     try:
@@ -283,6 +285,32 @@ def get_llm(
                 default_headers[header_name] = value
         if default_headers:
             kwargs["default_headers"] = default_headers
+    elif provider_param_mapping.get("model_class") == "ChatOpenAI" and (
+        provider_meta := model_provider_metadata.get(provider, {})
+    ).get("base_url"):
+        # OpenAI-compatible providers keep their credentials and endpoints
+        # isolated by metadata. The node-level URL takes precedence, followed
+        # by the user's encrypted global variable, the allowed environment
+        # fallback, and finally the provider's official endpoint.
+        base_url_variable = next(
+            (
+                variable["variable_key"]
+                for variable in provider_meta.get("variables", [])
+                if variable.get("langchain_param") == "base_url"
+            ),
+            None,
+        )
+        provider_vars = unified_models_module.get_all_variables_for_provider(user_id, provider)
+        configured_base_url = provider_vars.get(base_url_variable) if base_url_variable else None
+        env_base_url = _env_if_allowed(base_url_variable) if base_url_variable else None
+        base_url = openai_compatible_base_url or configured_base_url or env_base_url or provider_meta["base_url"]
+
+        from lfx.utils.ssrf_httpx import ssrf_protected_openai_clients_for_url
+        from lfx.utils.util import transform_localhost_url
+
+        base_url = transform_localhost_url(base_url)
+        kwargs["base_url"] = base_url
+        kwargs.update(ssrf_protected_openai_clients_for_url(base_url))
 
     try:
         return model_class(**kwargs)

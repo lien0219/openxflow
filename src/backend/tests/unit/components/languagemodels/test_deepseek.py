@@ -11,6 +11,7 @@ def test_deepseek_initialization():
     assert component.display_name == "DeepSeek"
     assert component.description == "Generate text using DeepSeek LLMs."
     assert component.icon == "DeepSeek"
+    assert component.model_name == "deepseek-v4-flash"
 
 
 def test_deepseek_template():
@@ -69,7 +70,7 @@ def test_deepseek_build_model(mock_chat_openai, temperature, max_tokens):
     mock_chat_openai.assert_called_once_with(
         max_tokens=max_tokens,
         model_kwargs={},
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
         base_url="https://api.deepseek.com",
         api_key="test-key",
         temperature=temperature,
@@ -85,13 +86,13 @@ def test_deepseek_get_models(mocker):
     # Mock SSRF-safe httpx helper
     mock_get = mocker.patch("lfx.components.deepseek.deepseek.ssrf_safe_httpx_get")
     mock_response = MagicMock()
-    mock_response.json.return_value = {"data": [{"id": "deepseek-chat"}, {"id": "deepseek-coder"}]}
+    mock_response.json.return_value = {"data": [{"id": "deepseek-v4-flash"}, {"id": "deepseek-v4-pro"}]}
     mock_get.return_value = mock_response
 
     # Test with API key
     component.api_key = "test-key"
     models = component.get_models()
-    assert models == ["deepseek-chat", "deepseek-coder"]
+    assert models == ["deepseek-v4-flash", "deepseek-v4-pro"]
 
     # Verify API call
     mock_get.assert_called_once_with(

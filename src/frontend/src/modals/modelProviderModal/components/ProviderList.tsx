@@ -54,6 +54,7 @@ const ProviderList = ({
           model_count: matchingModels.length,
           models: matchingModels,
           api_docs_url: provider.api_docs_url,
+          display_name_key: provider.display_name_key,
         };
       });
   }, [rawProviders, modelType, trimmedQuery]);
