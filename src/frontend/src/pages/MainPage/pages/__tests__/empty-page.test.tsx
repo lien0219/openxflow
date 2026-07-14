@@ -5,6 +5,7 @@ interface ButtonProps {
   children?: React.ReactNode;
   onClick?: () => void;
   "data-testid"?: string;
+  unstyled?: boolean;
   [key: string]: unknown;
 }
 
@@ -20,6 +21,7 @@ interface WrapperProps {
 
 // startNewFlow mock shared across the suite so assertions can inspect it.
 const startNewFlowMock = jest.fn();
+const uploadFlowMock = jest.fn().mockResolvedValue(undefined);
 
 jest.mock(
   "@/components/core/flowBuilderWelcome/hooks/use-start-new-flow",
@@ -27,6 +29,11 @@ jest.mock(
     useStartNewFlow: () => startNewFlowMock,
   }),
 );
+
+jest.mock("@/hooks/flows/use-upload-flow", () => ({
+  __esModule: true,
+  default: () => uploadFlowMock,
+}));
 
 jest.mock("@/assets/logo_dark.png", () => "logo_dark.png");
 jest.mock("@/assets/logo_light.png", () => "logo_light.png");
@@ -60,6 +67,7 @@ jest.mock("@/components/ui/button", () => ({
     children,
     onClick,
     "data-testid": testId,
+    unstyled: _unstyled,
     ...props
   }: ButtonProps) => (
     <button onClick={onClick} data-testid={testId} {...props}>
@@ -68,24 +76,26 @@ jest.mock("@/components/ui/button", () => ({
   ),
 }));
 
-jest.mock("@/controllers/API/queries/auth", () => ({
-  useGetUserData: () => ({ mutate: jest.fn() }),
-  useUpdateUser: () => ({ mutate: jest.fn() }),
-}));
-
-jest.mock("@/stores/authStore", () => ({
+jest.mock("@/stores/alertStore", () => ({
   __esModule: true,
-  default: () => ({ id: "user-1", optins: {} }),
+  default: (
+    selector: (s: {
+      setSuccessData: jest.Mock;
+      setErrorData: jest.Mock;
+    }) => unknown,
+  ) => selector({ setSuccessData: jest.fn(), setErrorData: jest.fn() }),
 }));
 
-jest.mock("@/stores/darkStore", () => ({
-  useDarkStore: (selector: (s: { stars: number }) => unknown) =>
-    selector({ stars: 149000 }),
+jest.mock("@/stores/flowsManagerStore", () => ({
+  __esModule: true,
+  default: (selector: (s: { examples: unknown[] }) => unknown) =>
+    selector({ examples: [] }),
 }));
 
-jest.mock("@/stores/foldersStore", () => ({
-  useFolderStore: (selector: (s: { folders: unknown[] }) => unknown) =>
-    selector({ folders: [] }),
+jest.mock("@/stores/utilityStore", () => ({
+  useUtilityStore: (
+    selector: (s: { hideStarterProjects: boolean }) => unknown,
+  ) => selector({ hideStarterProjects: false }),
 }));
 
 jest.mock("../../hooks/use-on-file-drop", () => ({
@@ -112,5 +122,13 @@ describe("EmptyPageCommunity - Create first flow behavior", () => {
     expect(
       screen.queryByTestId("empty_page_discord_button"),
     ).not.toBeInTheDocument();
+  });
+
+  it("should_open_existing_file_picker_when_import_flow_clicked", () => {
+    render(<EmptyPageCommunity setOpenModal={jest.fn()} />);
+
+    fireEvent.click(screen.getByTestId("empty_page_import_flow_button"));
+
+    expect(uploadFlowMock).toHaveBeenCalledWith({});
   });
 });
