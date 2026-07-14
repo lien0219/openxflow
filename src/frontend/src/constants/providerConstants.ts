@@ -31,6 +31,8 @@ export const PROVIDER_VARIABLE_MAPPING: Record<string, string> = {
   Google: "GOOGLE_API_KEY",
   Ollama: "OLLAMA_BASE_URL",
   "IBM WatsonX": "WATSONX_APIKEY",
+  DeepSeek: "DEEPSEEK_API_KEY",
+  Qwen: "DASHSCOPE_API_KEY",
   Cohere: "COHERE_API_KEY",
   HuggingFace: "HUGGINGFACEHUB_API_TOKEN",
   Groq: "GROQ_API_KEY",

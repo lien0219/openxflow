@@ -104,6 +104,33 @@ describe("useGetModelProviders", () => {
   });
 
   describe("Response transformation", () => {
+    it("should preserve metadata-driven provider icon and localized name key", async () => {
+      mockApiGet.mockResolvedValue({
+        data: [
+          {
+            provider: "Qwen",
+            models: [],
+            is_enabled: true,
+            icon: "Qwen",
+            display_name_key: "modelProviders.providerNameQwen",
+          },
+        ] satisfies ModelProviderInfo[],
+      });
+
+      const { result } = renderHook(() => useGetModelProviders({}), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual([
+          expect.objectContaining({
+            icon: "Qwen",
+            display_name_key: "modelProviders.providerNameQwen",
+          }),
+        ]);
+      });
+    });
+
     it("should add icon to provider based on provider name", async () => {
       const mockResponse: ModelProviderInfo[] = [
         {

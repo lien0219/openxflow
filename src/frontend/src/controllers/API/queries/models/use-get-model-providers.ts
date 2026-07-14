@@ -12,6 +12,8 @@ export interface ModelProviderInfo {
   is_enabled: boolean;
   is_configured?: boolean;
   api_docs_url?: string;
+  icon?: string;
+  display_name_key?: string;
 }
 
 export interface ModelProviderWithStatus extends ModelProviderInfo {
@@ -50,7 +52,7 @@ export const useGetModelProviders: useQueryFunctionType<
 
     return providersData.map((providerInfo) => ({
       ...providerInfo,
-      icon: getProviderIcon(providerInfo.provider),
+      icon: providerInfo.icon || getProviderIcon(providerInfo.provider),
     }));
   };
 

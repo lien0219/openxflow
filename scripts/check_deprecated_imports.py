@@ -101,7 +101,7 @@ def main() -> int:
             print("See: https://python.langchain.com/docs/versions/migrating_chains/", file=sys.stderr)
             return 1
         # No deprecated imports found
-        print("✅ No deprecated imports found")
+        print("No deprecated imports found")
     except Exception as e:  # noqa: BLE001
         # Catch-all for unexpected errors during script execution
         print(f"Error: {e}", file=sys.stderr)

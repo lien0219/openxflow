@@ -42,6 +42,11 @@ VARIABLES_TO_GET_FROM_ENVIRONMENT = [
     "OPENROUTER_API_KEY",
     "OPENROUTER_SITE_URL",
     "OPENROUTER_APP_NAME",
+    # OpenAI-compatible DeepSeek and Qwen variables
+    "DEEPSEEK_API_KEY",
+    "DEEPSEEK_BASE_URL",
+    "DASHSCOPE_API_KEY",
+    "DASHSCOPE_BASE_URL",
 ]
 
 # Agentic experience specific variables

@@ -1017,6 +1017,8 @@
   "modelProviders.searchModels": "Search models…",
   "modelProviders.noProvidersMatch": "No providers match your search.",
   "modelProviders.noModelsMatch": "No models match your search.",
+  "modelProviders.providerNameDeepSeek": "DeepSeek",
+  "modelProviders.providerNameQwen": "Qwen",
   "modelProviders.tag.tool": "tool",
   "modelProviders.tag.reasoning": "reasoning",
   "modelProviders.tag.vision": "vision",

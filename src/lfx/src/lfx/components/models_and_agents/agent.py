@@ -188,6 +188,14 @@ class AgentComponent(ToolCallingAgentComponent):
             show=False,
             required=False,
         ),
+        StrInput(
+            name="openai_compatible_base_url",
+            display_name="OpenAI-Compatible API URL",
+            info="Overrides the configured API endpoint for OpenAI-compatible providers.",
+            show=False,
+            real_time_refresh=True,
+            advanced=True,
+        ),
         MultilineInput(
             name="system_prompt",
             display_name="Agent Instructions",
@@ -377,6 +385,7 @@ class AgentComponent(ToolCallingAgentComponent):
             max_tokens=self._get_max_tokens_value(),
             watsonx_url=getattr(self, "base_url_ibm_watsonx", None),
             watsonx_project_id=getattr(self, "project_id", None),
+            openai_compatible_base_url=getattr(self, "openai_compatible_base_url", None),
         )
 
     async def get_agent_requirements(self):

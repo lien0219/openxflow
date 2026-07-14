@@ -9,18 +9,16 @@ from lfx.inputs.inputs import BoolInput, DictInput, DropdownInput, IntInput, Sec
 from lfx.utils.ssrf_httpx import ssrf_protected_openai_clients_for_url, ssrf_safe_httpx_get
 from lfx.utils.ssrf_protection import SSRFProtectionError
 
-DEEPSEEK_MODELS = [
-    "deepseek-v4-flash",
-    "deepseek-v4-pro",
-    "deepseek-chat",
-    "deepseek-reasoner",
-]
+QWEN_DEFAULT_MODELS = ["qwen-plus", "qwen-max", "qwen-turbo"]
+QWEN_DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 
-class DeepSeekModelComponent(LCModelComponent):
-    display_name = "DeepSeek"
-    description = "Generate text using DeepSeek LLMs."
-    icon = "DeepSeek"
+class QwenModelComponent(LCModelComponent):
+    """Generate text with Qwen via DashScope's OpenAI-compatible API."""
+
+    display_name = "Qwen"
+    description = "Generate text using Qwen models through DashScope."
+    icon = "Qwen"
 
     inputs = [
         *LCModelComponent.get_base_inputs(),
@@ -41,111 +39,87 @@ class DeepSeekModelComponent(LCModelComponent):
             name="json_mode",
             display_name="JSON Mode",
             advanced=True,
-            info="If True, it will output JSON regardless of passing a schema.",
+            info="If True, request JSON object output.",
         ),
         DropdownInput(
             name="model_name",
             display_name="Model Name",
-            info="DeepSeek model to use",
-            options=DEEPSEEK_MODELS,
-            value="deepseek-v4-flash",
+            info="Qwen model to use",
+            options=QWEN_DEFAULT_MODELS,
+            value=QWEN_DEFAULT_MODELS[0],
             refresh_button=True,
             combobox=True,
         ),
         StrInput(
-            name="api_base",
-            display_name="DeepSeek API Base",
+            name="base_url",
+            display_name="DashScope API Base",
             advanced=True,
-            info="Base URL for API requests. Defaults to https://api.deepseek.com",
-            value="https://api.deepseek.com",
+            info=f"Base URL for API requests. Defaults to {QWEN_DEFAULT_BASE_URL}",
+            value=QWEN_DEFAULT_BASE_URL,
         ),
         SecretStrInput(
             name="api_key",
-            display_name="DeepSeek API Key",
-            info="The DeepSeek API Key",
+            display_name="DashScope API Key",
+            info="The DashScope API key.",
             advanced=False,
-            value="DEEPSEEK_API_KEY",
+            value="DASHSCOPE_API_KEY",
             required=True,
         ),
         SliderInput(
             name="temperature",
             display_name="Temperature",
-            info="Controls randomness in responses",
-            value=1.0,
+            info="Controls randomness in responses.",
+            value=0.7,
             range_spec=RangeSpec(min=0, max=2, step=0.01),
             advanced=True,
-        ),
-        IntInput(
-            name="seed",
-            display_name="Seed",
-            info="The seed controls the reproducibility of the job.",
-            advanced=True,
-            value=1,
         ),
     ]
 
     def get_models(self) -> list[str]:
+        """Fetch models, degrading to stable seeds for unsupported endpoints."""
         if not self.api_key:
-            return DEEPSEEK_MODELS
+            return QWEN_DEFAULT_MODELS
 
-        url = f"{self.api_base}/models"
+        url = f"{(self.base_url or QWEN_DEFAULT_BASE_URL).rstrip('/')}/models"
         headers = {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
-
         try:
             response = ssrf_safe_httpx_get(url, headers=headers, timeout=10)
             response.raise_for_status()
-            model_list = response.json()
-            return [model["id"] for model in model_list.get("data", [])]
-        except SSRFProtectionError as e:
-            self.status = f"SSRF Protection: {e}"
-            return DEEPSEEK_MODELS
-        except httpx.HTTPError as e:
-            self.status = f"Error fetching models: {e}"
-            return DEEPSEEK_MODELS
+            data = response.json()
+            models = [model["id"] for model in data.get("data", []) if model.get("id")]
+        except SSRFProtectionError as exc:
+            self.status = f"SSRF Protection: {exc}"
+        except httpx.HTTPError as exc:
+            self.status = f"Error fetching models: {exc}"
+        else:
+            return models or QWEN_DEFAULT_MODELS
+        return QWEN_DEFAULT_MODELS
 
     @override
     def update_build_config(self, build_config: dict, field_value: str, field_name: str | None = None):
-        if field_name in {"api_key", "api_base", "model_name"}:
-            models = self.get_models()
-            build_config["model_name"]["options"] = models
+        if field_name in {"api_key", "base_url", "model_name"}:
+            build_config["model_name"]["options"] = self.get_models()
         return build_config
 
     def build_model(self) -> LanguageModel:
         try:
             from langchain_openai import ChatOpenAI
-        except ImportError as e:
+        except ImportError as exc:
             msg = "langchain-openai not installed. Please install with `pip install langchain-openai`"
-            raise ImportError(msg) from e
+            raise ImportError(msg) from exc
 
+        base_url = self.base_url or QWEN_DEFAULT_BASE_URL
         api_key = SecretStr(self.api_key).get_secret_value() if self.api_key else None
-        ssrf_client_kwargs = ssrf_protected_openai_clients_for_url(self.api_base)
-
         output = ChatOpenAI(
             model=self.model_name,
-            temperature=self.temperature if self.temperature is not None else 0.1,
+            temperature=self.temperature if self.temperature is not None else 0.7,
             max_tokens=self.max_tokens or None,
             model_kwargs=self.model_kwargs or {},
-            base_url=self.api_base,
+            base_url=base_url,
             api_key=api_key,
             streaming=self.stream if hasattr(self, "stream") else False,
-            seed=self.seed,
-            **ssrf_client_kwargs,
+            **ssrf_protected_openai_clients_for_url(base_url),
         )
-
         if self.json_mode:
             output = output.bind(response_format={"type": "json_object"})
-
         return output
-
-    def _get_exception_message(self, e: Exception):
-        """Get message from DeepSeek API exception."""
-        try:
-            from openai import BadRequestError
-
-            if isinstance(e, BadRequestError):
-                message = e.body.get("message")
-                if message:
-                    return message
-        except ImportError:
-            pass
-        return None

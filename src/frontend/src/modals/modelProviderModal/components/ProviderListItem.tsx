@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ForwardedIconComponent } from "@/components/common/genericIconComponent";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/utils/utils";
@@ -16,7 +17,7 @@ const ProviderListItem = ({
   onSelect,
   showIcon,
 }: ProviderListItemProps) => {
-  const hasModels = provider.model_count && provider.model_count > 0;
+  const { t } = useTranslation();
   const isEnabled = provider.is_enabled;
   const isConfigured = provider.is_configured;
   const isActive = isEnabled || isConfigured;
@@ -45,7 +46,11 @@ const ProviderListItem = ({
               !isActive && "text-muted-foreground",
             )}
           >
-            {provider.provider}
+            {provider.display_name_key
+              ? t(provider.display_name_key, {
+                  defaultValue: provider.provider,
+                })
+              : provider.provider}
           </span>
           {provider.model_count !== undefined && isActive && (
             <Badge

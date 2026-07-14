@@ -2,7 +2,7 @@
 export type Model = {
   model_name: string;
   /** Arbitrary metadata including icon, model_type, deprecated, default flags */
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 };
 
 /** Represents a model provider (e.g., OpenAI, Anthropic) */
@@ -14,6 +14,7 @@ export type Provider = {
   model_count?: number;
   models?: Model[];
   api_docs_url?: string;
+  display_name_key?: string;
 };
 
 /** Map of provider -> model_name -> enabled status */
