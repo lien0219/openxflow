@@ -1,469 +1,467 @@
-@layer base {
-  :root[data-theme="nebula"] {
-    --foreground: 245 39% 17%;
-    --background: 252 100% 99%;
-    --muted: 250 42% 96%;
-    --muted-foreground: 244 13% 46%;
-    --card: 0 0% 100%;
-    --card-foreground: 245 39% 17%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 245 39% 17%;
-    --border: 247 30% 88%;
-    --input: 247 30% 88%;
-    --primary: 262 83% 58%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 263 70% 50%;
-    --secondary: 250 42% 96%;
-    --secondary-foreground: 245 39% 17%;
-    --secondary-hover: 248 33% 91%;
-    --accent: 250 42% 96%;
-    --accent-foreground: 262 83% 58%;
-    --ring: 262 83% 58%;
-    --canvas: 250 60% 98%;
-    --canvas-dot: 247 22% 78%;
-    --node-selected: 262 83% 58%;
-    --node-ring: 250 27% 88%;
-    --connection: #7457d9;
-    --sidebar-background: 252 100% 99%;
-    --sidebar-foreground: 245 39% 17%;
-    --sidebar-primary: 262 83% 58%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 250 42% 96%;
-    --sidebar-accent-foreground: 245 39% 17%;
-    --sidebar-border: 247 30% 88%;
-    --sidebar-ring: 262 83% 58%;
-    --accent-indigo: 252 100% 95%;
-    --accent-indigo-foreground: 262 83% 58%;
-    --filter-background: #f0ebff;
-    --filter-foreground: #6d3ce7;
-    --hover: #f4f1fb;
-    --selected: #7c3aed;
-    --flow-icon: #6d3ce7;
-    --component-icon: #c24186;
-  }
+:root[data-theme="nebula"] {
+  --foreground: 245 39% 17%;
+  --background: 252 100% 99%;
+  --muted: 250 42% 96%;
+  --muted-foreground: 244 13% 46%;
+  --card: 0 0% 100%;
+  --card-foreground: 245 39% 17%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 245 39% 17%;
+  --border: 247 30% 88%;
+  --input: 247 30% 88%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 263 70% 50%;
+  --secondary: 250 42% 96%;
+  --secondary-foreground: 245 39% 17%;
+  --secondary-hover: 248 33% 91%;
+  --accent: 250 42% 96%;
+  --accent-foreground: 262 83% 58%;
+  --ring: 262 83% 58%;
+  --canvas: 250 60% 98%;
+  --canvas-dot: 247 22% 78%;
+  --node-selected: 262 83% 58%;
+  --node-ring: 250 27% 88%;
+  --connection: #7457d9;
+  --sidebar-background: 252 100% 99%;
+  --sidebar-foreground: 245 39% 17%;
+  --sidebar-primary: 262 83% 58%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 250 42% 96%;
+  --sidebar-accent-foreground: 245 39% 17%;
+  --sidebar-border: 247 30% 88%;
+  --sidebar-ring: 262 83% 58%;
+  --accent-indigo: 252 100% 95%;
+  --accent-indigo-foreground: 262 83% 58%;
+  --filter-background: #f0ebff;
+  --filter-foreground: #6d3ce7;
+  --hover: #f4f1fb;
+  --selected: #7c3aed;
+  --flow-icon: #6d3ce7;
+  --component-icon: #c24186;
+}
 
-  :root.dark[data-theme="nebula"],
-  :root[data-theme="nebula"][data-appearance="dark"] {
-    --foreground: 240 33% 97%;
-    --background: 240 44% 5%;
-    --muted: 237 30% 12%;
-    --muted-foreground: 234 18% 65%;
-    --card: 237 35% 9%;
-    --card-foreground: 240 33% 97%;
-    --popover: 237 35% 9%;
-    --popover-foreground: 240 33% 97%;
-    --border: 233 29% 20%;
-    --input: 233 25% 23%;
-    --primary: 258 90% 70%;
-    --primary-foreground: 240 44% 5%;
-    --primary-hover: 258 86% 75%;
-    --secondary: 237 30% 12%;
-    --secondary-foreground: 240 33% 97%;
-    --secondary-hover: 234 27% 17%;
-    --accent: 237 30% 12%;
-    --accent-foreground: 188 86% 63%;
-    --ring: 258 90% 70%;
-    --canvas: 236 45% 7%;
-    --canvas-dot: 232 25% 24%;
-    --node-selected: 258 90% 70%;
-    --node-ring: 233 29% 20%;
-    --connection: #9b87f5;
-    --sidebar-background: 238 40% 7%;
-    --sidebar-foreground: 240 33% 97%;
-    --sidebar-primary: 258 90% 70%;
-    --sidebar-primary-foreground: 240 44% 5%;
-    --sidebar-accent: 237 30% 12%;
-    --sidebar-accent-foreground: 240 33% 97%;
-    --sidebar-border: 233 29% 20%;
-    --sidebar-ring: 258 90% 70%;
-    --accent-indigo: 252 35% 22%;
-    --accent-indigo-foreground: 255 92% 82%;
-    --filter-background: #31245c;
-    --filter-foreground: #d8ceff;
-    --hover: #15182a;
-    --selected: #a78bfa;
-    --flow-icon: #8b7cf6;
-    --component-icon: #e879b0;
-    --code-background: 240 44% 5%;
-    --code-description-background: 237 35% 9%;
-  }
+:root.dark[data-theme="nebula"],
+:root[data-theme="nebula"][data-appearance="dark"] {
+  --foreground: 240 33% 97%;
+  --background: 240 44% 5%;
+  --muted: 237 30% 12%;
+  --muted-foreground: 234 18% 65%;
+  --card: 237 35% 9%;
+  --card-foreground: 240 33% 97%;
+  --popover: 237 35% 9%;
+  --popover-foreground: 240 33% 97%;
+  --border: 233 29% 20%;
+  --input: 233 25% 23%;
+  --primary: 258 90% 70%;
+  --primary-foreground: 240 44% 5%;
+  --primary-hover: 258 86% 75%;
+  --secondary: 237 30% 12%;
+  --secondary-foreground: 240 33% 97%;
+  --secondary-hover: 234 27% 17%;
+  --accent: 237 30% 12%;
+  --accent-foreground: 188 86% 63%;
+  --ring: 258 90% 70%;
+  --canvas: 236 45% 7%;
+  --canvas-dot: 232 25% 24%;
+  --node-selected: 258 90% 70%;
+  --node-ring: 233 29% 20%;
+  --connection: #9b87f5;
+  --sidebar-background: 238 40% 7%;
+  --sidebar-foreground: 240 33% 97%;
+  --sidebar-primary: 258 90% 70%;
+  --sidebar-primary-foreground: 240 44% 5%;
+  --sidebar-accent: 237 30% 12%;
+  --sidebar-accent-foreground: 240 33% 97%;
+  --sidebar-border: 233 29% 20%;
+  --sidebar-ring: 258 90% 70%;
+  --accent-indigo: 252 35% 22%;
+  --accent-indigo-foreground: 255 92% 82%;
+  --filter-background: #31245c;
+  --filter-foreground: #d8ceff;
+  --hover: #15182a;
+  --selected: #a78bfa;
+  --flow-icon: #8b7cf6;
+  --component-icon: #e879b0;
+  --code-background: 240 44% 5%;
+  --code-description-background: 237 35% 9%;
+}
 
-  :root[data-theme="polar"] {
-    --foreground: 213 44% 14%;
-    --background: 210 33% 98%;
-    --muted: 210 29% 95%;
-    --muted-foreground: 215 16% 44%;
-    --card: 0 0% 100%;
-    --card-foreground: 213 44% 14%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 213 44% 14%;
-    --border: 212 25% 88%;
-    --input: 212 25% 88%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 221 83% 53%;
-    --secondary: 210 29% 96%;
-    --secondary-foreground: 213 44% 14%;
-    --secondary-hover: 212 24% 91%;
-    --accent: 206 100% 96%;
-    --accent-foreground: 221 83% 53%;
-    --ring: 217 91% 60%;
-    --canvas: 210 33% 98%;
-    --canvas-dot: 212 22% 82%;
-    --node-selected: 217 91% 60%;
-    --node-ring: 212 25% 88%;
-    --connection: #3b82f6;
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 213 44% 14%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 29% 95%;
-    --sidebar-accent-foreground: 213 44% 14%;
-    --sidebar-border: 212 25% 88%;
-    --sidebar-ring: 217 91% 60%;
-    --hover: #f1f5f9;
-    --selected: #2563eb;
-    --flow-icon: #2563eb;
-    --component-icon: #0891b2;
-  }
+:root[data-theme="polar"] {
+  --foreground: 213 44% 14%;
+  --background: 210 33% 98%;
+  --muted: 210 29% 95%;
+  --muted-foreground: 215 16% 44%;
+  --card: 0 0% 100%;
+  --card-foreground: 213 44% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 213 44% 14%;
+  --border: 212 25% 88%;
+  --input: 212 25% 88%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 221 83% 53%;
+  --secondary: 210 29% 96%;
+  --secondary-foreground: 213 44% 14%;
+  --secondary-hover: 212 24% 91%;
+  --accent: 206 100% 96%;
+  --accent-foreground: 221 83% 53%;
+  --ring: 217 91% 60%;
+  --canvas: 210 33% 98%;
+  --canvas-dot: 212 22% 82%;
+  --node-selected: 217 91% 60%;
+  --node-ring: 212 25% 88%;
+  --connection: #3b82f6;
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 213 44% 14%;
+  --sidebar-primary: 217 91% 60%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 210 29% 95%;
+  --sidebar-accent-foreground: 213 44% 14%;
+  --sidebar-border: 212 25% 88%;
+  --sidebar-ring: 217 91% 60%;
+  --hover: #f1f5f9;
+  --selected: #2563eb;
+  --flow-icon: #2563eb;
+  --component-icon: #0891b2;
+}
 
-  :root.dark[data-theme="polar"],
-  :root[data-theme="polar"][data-appearance="dark"] {
-    --foreground: 210 40% 96%;
-    --background: 215 32% 8%;
-    --muted: 215 25% 14%;
-    --muted-foreground: 215 16% 66%;
-    --card: 215 28% 11%;
-    --card-foreground: 210 40% 96%;
-    --popover: 215 28% 11%;
-    --popover-foreground: 210 40% 96%;
-    --border: 215 20% 22%;
-    --input: 215 20% 25%;
-    --primary: 211 100% 70%;
-    --primary-foreground: 215 32% 8%;
-    --primary-hover: 210 100% 77%;
-    --secondary: 215 25% 14%;
-    --secondary-foreground: 210 40% 96%;
-    --secondary-hover: 215 21% 19%;
-    --accent: 215 25% 14%;
-    --accent-foreground: 188 86% 63%;
-    --ring: 211 100% 70%;
-    --canvas: 215 32% 9%;
-    --canvas-dot: 215 18% 26%;
-    --node-selected: 211 100% 70%;
-    --node-ring: 215 20% 22%;
-    --connection: #67b7ff;
-    --sidebar-background: 215 30% 9%;
-    --sidebar-foreground: 210 40% 96%;
-    --sidebar-primary: 211 100% 70%;
-    --sidebar-primary-foreground: 215 32% 8%;
-    --sidebar-accent: 215 25% 14%;
-    --sidebar-accent-foreground: 210 40% 96%;
-    --sidebar-border: 215 20% 22%;
-    --sidebar-ring: 211 100% 70%;
-    --hover: #172033;
-    --selected: #60a5fa;
-    --flow-icon: #60a5fa;
-    --component-icon: #22d3ee;
-  }
+:root.dark[data-theme="polar"],
+:root[data-theme="polar"][data-appearance="dark"] {
+  --foreground: 210 40% 96%;
+  --background: 215 32% 8%;
+  --muted: 215 25% 14%;
+  --muted-foreground: 215 16% 66%;
+  --card: 215 28% 11%;
+  --card-foreground: 210 40% 96%;
+  --popover: 215 28% 11%;
+  --popover-foreground: 210 40% 96%;
+  --border: 215 20% 22%;
+  --input: 215 20% 25%;
+  --primary: 211 100% 70%;
+  --primary-foreground: 215 32% 8%;
+  --primary-hover: 210 100% 77%;
+  --secondary: 215 25% 14%;
+  --secondary-foreground: 210 40% 96%;
+  --secondary-hover: 215 21% 19%;
+  --accent: 215 25% 14%;
+  --accent-foreground: 188 86% 63%;
+  --ring: 211 100% 70%;
+  --canvas: 215 32% 9%;
+  --canvas-dot: 215 18% 26%;
+  --node-selected: 211 100% 70%;
+  --node-ring: 215 20% 22%;
+  --connection: #67b7ff;
+  --sidebar-background: 215 30% 9%;
+  --sidebar-foreground: 210 40% 96%;
+  --sidebar-primary: 211 100% 70%;
+  --sidebar-primary-foreground: 215 32% 8%;
+  --sidebar-accent: 215 25% 14%;
+  --sidebar-accent-foreground: 210 40% 96%;
+  --sidebar-border: 215 20% 22%;
+  --sidebar-ring: 211 100% 70%;
+  --hover: #172033;
+  --selected: #60a5fa;
+  --flow-icon: #60a5fa;
+  --component-icon: #22d3ee;
+}
 
-  :root[data-theme="terminal"] {
-    --font-sans: "JetBrains Mono", monospace;
-    --foreground: 145 48% 16%;
-    --background: 138 25% 97%;
-    --muted: 136 24% 92%;
-    --muted-foreground: 142 18% 38%;
-    --card: 135 33% 99%;
-    --card-foreground: 145 48% 16%;
-    --popover: 135 33% 99%;
-    --popover-foreground: 145 48% 16%;
-    --border: 140 25% 79%;
-    --input: 140 25% 79%;
-    --primary: 142 71% 35%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 142 72% 29%;
-    --secondary: 136 24% 92%;
-    --secondary-foreground: 145 48% 16%;
-    --secondary-hover: 138 22% 86%;
-    --accent: 135 31% 89%;
-    --accent-foreground: 142 71% 28%;
-    --ring: 142 71% 35%;
-    --canvas: 138 25% 96%;
-    --canvas-dot: 140 24% 70%;
-    --node-selected: 142 71% 35%;
-    --node-ring: 140 25% 79%;
-    --connection: #16a34a;
-    --radius: 0.25rem;
-    --hover: #e7f2e9;
-    --selected: #15803d;
-    --flow-icon: #15803d;
-    --component-icon: #0f766e;
-  }
+:root[data-theme="terminal"] {
+  --font-sans: "JetBrains Mono", monospace;
+  --foreground: 145 48% 16%;
+  --background: 138 25% 97%;
+  --muted: 136 24% 92%;
+  --muted-foreground: 142 18% 38%;
+  --card: 135 33% 99%;
+  --card-foreground: 145 48% 16%;
+  --popover: 135 33% 99%;
+  --popover-foreground: 145 48% 16%;
+  --border: 140 25% 79%;
+  --input: 140 25% 79%;
+  --primary: 142 71% 35%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 142 72% 29%;
+  --secondary: 136 24% 92%;
+  --secondary-foreground: 145 48% 16%;
+  --secondary-hover: 138 22% 86%;
+  --accent: 135 31% 89%;
+  --accent-foreground: 142 71% 28%;
+  --ring: 142 71% 35%;
+  --canvas: 138 25% 96%;
+  --canvas-dot: 140 24% 70%;
+  --node-selected: 142 71% 35%;
+  --node-ring: 140 25% 79%;
+  --connection: #16a34a;
+  --radius: 0.25rem;
+  --hover: #e7f2e9;
+  --selected: #15803d;
+  --flow-icon: #15803d;
+  --component-icon: #0f766e;
+}
 
-  :root.dark[data-theme="terminal"],
-  :root[data-theme="terminal"][data-appearance="dark"] {
-    --foreground: 139 76% 88%;
-    --background: 140 24% 3%;
-    --muted: 142 22% 8%;
-    --muted-foreground: 141 24% 57%;
-    --card: 141 24% 5%;
-    --card-foreground: 139 76% 88%;
-    --popover: 141 24% 5%;
-    --popover-foreground: 139 76% 88%;
-    --border: 141 28% 15%;
-    --input: 141 27% 18%;
-    --primary: 145 87% 65%;
-    --primary-foreground: 140 24% 3%;
-    --primary-hover: 145 90% 72%;
-    --secondary: 142 22% 8%;
-    --secondary-foreground: 139 76% 88%;
-    --secondary-hover: 142 23% 12%;
-    --accent: 142 22% 8%;
-    --accent-foreground: 84 100% 69%;
-    --ring: 145 87% 65%;
-    --canvas: 140 24% 3%;
-    --canvas-dot: 141 28% 16%;
-    --node-selected: 145 87% 65%;
-    --node-ring: 141 28% 15%;
-    --connection: #53f28f;
-    --hover: #101712;
-    --selected: #53f28f;
-    --flow-icon: #53f28f;
-    --component-icon: #b7ff5f;
-    --code-background: 140 24% 3%;
-    --code-description-background: 141 24% 5%;
-  }
+:root.dark[data-theme="terminal"],
+:root[data-theme="terminal"][data-appearance="dark"] {
+  --foreground: 139 76% 88%;
+  --background: 140 24% 3%;
+  --muted: 142 22% 8%;
+  --muted-foreground: 141 24% 57%;
+  --card: 141 24% 5%;
+  --card-foreground: 139 76% 88%;
+  --popover: 141 24% 5%;
+  --popover-foreground: 139 76% 88%;
+  --border: 141 28% 15%;
+  --input: 141 27% 18%;
+  --primary: 145 87% 65%;
+  --primary-foreground: 140 24% 3%;
+  --primary-hover: 145 90% 72%;
+  --secondary: 142 22% 8%;
+  --secondary-foreground: 139 76% 88%;
+  --secondary-hover: 142 23% 12%;
+  --accent: 142 22% 8%;
+  --accent-foreground: 84 100% 69%;
+  --ring: 145 87% 65%;
+  --canvas: 140 24% 3%;
+  --canvas-dot: 141 28% 16%;
+  --node-selected: 145 87% 65%;
+  --node-ring: 141 28% 15%;
+  --connection: #53f28f;
+  --hover: #101712;
+  --selected: #53f28f;
+  --flow-icon: #53f28f;
+  --component-icon: #b7ff5f;
+  --code-background: 140 24% 3%;
+  --code-description-background: 141 24% 5%;
+}
 
-  :root[data-theme="bloom"] {
-    --foreground: 22 35% 18%;
-    --background: 35 67% 97%;
-    --muted: 32 46% 93%;
-    --muted-foreground: 24 16% 45%;
-    --card: 36 71% 99%;
-    --card-foreground: 22 35% 18%;
-    --popover: 36 71% 99%;
-    --popover-foreground: 22 35% 18%;
-    --border: 28 33% 84%;
-    --input: 28 33% 84%;
-    --primary: 14 78% 56%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 12 72% 49%;
-    --secondary: 32 46% 93%;
-    --secondary-foreground: 22 35% 18%;
-    --secondary-hover: 30 39% 88%;
-    --accent: 25 75% 93%;
-    --accent-foreground: 14 78% 44%;
-    --ring: 14 78% 56%;
-    --canvas: 35 67% 97%;
-    --canvas-dot: 28 28% 77%;
-    --node-selected: 14 78% 56%;
-    --node-ring: 28 33% 84%;
-    --connection: #ea7652;
-    --radius: 0.75rem;
-    --hover: #fff1e9;
-    --selected: #ea7652;
-    --flow-icon: #e06b47;
-    --component-icon: #9a5de0;
-  }
+:root[data-theme="bloom"] {
+  --foreground: 22 35% 18%;
+  --background: 35 67% 97%;
+  --muted: 32 46% 93%;
+  --muted-foreground: 24 16% 45%;
+  --card: 36 71% 99%;
+  --card-foreground: 22 35% 18%;
+  --popover: 36 71% 99%;
+  --popover-foreground: 22 35% 18%;
+  --border: 28 33% 84%;
+  --input: 28 33% 84%;
+  --primary: 14 78% 56%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 12 72% 49%;
+  --secondary: 32 46% 93%;
+  --secondary-foreground: 22 35% 18%;
+  --secondary-hover: 30 39% 88%;
+  --accent: 25 75% 93%;
+  --accent-foreground: 14 78% 44%;
+  --ring: 14 78% 56%;
+  --canvas: 35 67% 97%;
+  --canvas-dot: 28 28% 77%;
+  --node-selected: 14 78% 56%;
+  --node-ring: 28 33% 84%;
+  --connection: #ea7652;
+  --radius: 0.75rem;
+  --hover: #fff1e9;
+  --selected: #ea7652;
+  --flow-icon: #e06b47;
+  --component-icon: #9a5de0;
+}
 
-  :root.dark[data-theme="bloom"],
-  :root[data-theme="bloom"][data-appearance="dark"] {
-    --foreground: 30 44% 94%;
-    --background: 18 24% 8%;
-    --muted: 20 21% 14%;
-    --muted-foreground: 28 17% 66%;
-    --card: 20 23% 11%;
-    --card-foreground: 30 44% 94%;
-    --popover: 20 23% 11%;
-    --popover-foreground: 30 44% 94%;
-    --border: 20 20% 22%;
-    --input: 20 20% 25%;
-    --primary: 17 91% 68%;
-    --primary-foreground: 18 24% 8%;
-    --primary-hover: 18 95% 74%;
-    --secondary: 20 21% 14%;
-    --secondary-foreground: 30 44% 94%;
-    --secondary-hover: 20 20% 19%;
-    --accent: 20 21% 14%;
-    --accent-foreground: 287 74% 76%;
-    --ring: 17 91% 68%;
-    --canvas: 18 24% 8%;
-    --canvas-dot: 20 18% 24%;
-    --node-selected: 17 91% 68%;
-    --node-ring: 20 20% 22%;
-    --connection: #fb9a7b;
-    --hover: #2a1c19;
-    --selected: #fb9a7b;
-    --flow-icon: #fb9a7b;
-    --component-icon: #d99cff;
-  }
+:root.dark[data-theme="bloom"],
+:root[data-theme="bloom"][data-appearance="dark"] {
+  --foreground: 30 44% 94%;
+  --background: 18 24% 8%;
+  --muted: 20 21% 14%;
+  --muted-foreground: 28 17% 66%;
+  --card: 20 23% 11%;
+  --card-foreground: 30 44% 94%;
+  --popover: 20 23% 11%;
+  --popover-foreground: 30 44% 94%;
+  --border: 20 20% 22%;
+  --input: 20 20% 25%;
+  --primary: 17 91% 68%;
+  --primary-foreground: 18 24% 8%;
+  --primary-hover: 18 95% 74%;
+  --secondary: 20 21% 14%;
+  --secondary-foreground: 30 44% 94%;
+  --secondary-hover: 20 20% 19%;
+  --accent: 20 21% 14%;
+  --accent-foreground: 287 74% 76%;
+  --ring: 17 91% 68%;
+  --canvas: 18 24% 8%;
+  --canvas-dot: 20 18% 24%;
+  --node-selected: 17 91% 68%;
+  --node-ring: 20 20% 22%;
+  --connection: #fb9a7b;
+  --hover: #2a1c19;
+  --selected: #fb9a7b;
+  --flow-icon: #fb9a7b;
+  --component-icon: #d99cff;
+}
 
-  :root[data-theme="aurora"] {
-    --foreground: 247 32% 18%;
-    --background: 244 58% 96%;
-    --muted: 246 40% 92%;
-    --muted-foreground: 244 15% 45%;
-    --card: 0 0% 100% / 0.62;
-    --card-foreground: 247 32% 18%;
-    --popover: 0 0% 100% / 0.72;
-    --popover-foreground: 247 32% 18%;
-    --border: 0 0% 100% / 0.58;
-    --input: 247 28% 84% / 0.65;
-    --primary: 265 84% 61%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 266 73% 53%;
-    --secondary: 0 0% 100% / 0.48;
-    --secondary-foreground: 247 32% 18%;
-    --secondary-hover: 0 0% 100% / 0.7;
-    --accent: 275 100% 95% / 0.66;
-    --accent-foreground: 265 84% 55%;
-    --ring: 265 84% 61%;
-    --canvas: 244 58% 96% / 0.52;
-    --canvas-dot: 248 26% 73%;
-    --node-selected: 265 84% 61%;
-    --node-ring: 0 0% 100% / 0.64;
-    --connection: #8b5cf6;
-    --radius: 0.875rem;
-    --hover: #f1ebffb8;
-    --selected: #8b5cf6;
-    --flow-icon: #7c3aed;
-    --component-icon: #ec4899;
-  }
+:root[data-theme="aurora"] {
+  --foreground: 247 32% 18%;
+  --background: 244 58% 96%;
+  --muted: 246 40% 92%;
+  --muted-foreground: 244 15% 45%;
+  --card: 0 0% 100% / 0.62;
+  --card-foreground: 247 32% 18%;
+  --popover: 0 0% 100% / 0.72;
+  --popover-foreground: 247 32% 18%;
+  --border: 0 0% 100% / 0.58;
+  --input: 247 28% 84% / 0.65;
+  --primary: 265 84% 61%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 266 73% 53%;
+  --secondary: 0 0% 100% / 0.48;
+  --secondary-foreground: 247 32% 18%;
+  --secondary-hover: 0 0% 100% / 0.7;
+  --accent: 275 100% 95% / 0.66;
+  --accent-foreground: 265 84% 55%;
+  --ring: 265 84% 61%;
+  --canvas: 244 58% 96% / 0.52;
+  --canvas-dot: 248 26% 73%;
+  --node-selected: 265 84% 61%;
+  --node-ring: 0 0% 100% / 0.64;
+  --connection: #8b5cf6;
+  --radius: 0.875rem;
+  --hover: #f1ebffb8;
+  --selected: #8b5cf6;
+  --flow-icon: #7c3aed;
+  --component-icon: #ec4899;
+}
 
-  :root.dark[data-theme="aurora"],
-  :root[data-theme="aurora"][data-appearance="dark"] {
-    --foreground: 240 33% 97%;
-    --background: 245 44% 6%;
-    --muted: 242 28% 14% / 0.78;
-    --muted-foreground: 238 18% 68%;
-    --card: 242 32% 14% / 0.58;
-    --card-foreground: 240 33% 97%;
-    --popover: 242 32% 14% / 0.72;
-    --popover-foreground: 240 33% 97%;
-    --border: 0 0% 100% / 0.14;
-    --input: 0 0% 100% / 0.18;
-    --primary: 264 100% 75%;
-    --primary-foreground: 245 44% 6%;
-    --primary-hover: 264 100% 80%;
-    --secondary: 242 28% 14% / 0.7;
-    --secondary-foreground: 240 33% 97%;
-    --secondary-hover: 241 25% 20% / 0.82;
-    --accent: 242 28% 14% / 0.72;
-    --accent-foreground: 188 91% 67%;
-    --ring: 264 100% 75%;
-    --canvas: 245 44% 6% / 0.5;
-    --canvas-dot: 239 24% 27%;
-    --node-selected: 264 100% 75%;
-    --node-ring: 0 0% 100% / 0.16;
-    --connection: #c4b5fd;
-    --hover: #27203fbd;
-    --selected: #c4b5fd;
-    --flow-icon: #a78bfa;
-    --component-icon: #f472b6;
-    --code-background: 245 44% 6%;
-    --code-description-background: 242 32% 14%;
-  }
+:root.dark[data-theme="aurora"],
+:root[data-theme="aurora"][data-appearance="dark"] {
+  --foreground: 240 33% 97%;
+  --background: 245 44% 6%;
+  --muted: 242 28% 14% / 0.78;
+  --muted-foreground: 238 18% 68%;
+  --card: 242 32% 14% / 0.58;
+  --card-foreground: 240 33% 97%;
+  --popover: 242 32% 14% / 0.72;
+  --popover-foreground: 240 33% 97%;
+  --border: 0 0% 100% / 0.14;
+  --input: 0 0% 100% / 0.18;
+  --primary: 264 100% 75%;
+  --primary-foreground: 245 44% 6%;
+  --primary-hover: 264 100% 80%;
+  --secondary: 242 28% 14% / 0.7;
+  --secondary-foreground: 240 33% 97%;
+  --secondary-hover: 241 25% 20% / 0.82;
+  --accent: 242 28% 14% / 0.72;
+  --accent-foreground: 188 91% 67%;
+  --ring: 264 100% 75%;
+  --canvas: 245 44% 6% / 0.5;
+  --canvas-dot: 239 24% 27%;
+  --node-selected: 264 100% 75%;
+  --node-ring: 0 0% 100% / 0.16;
+  --connection: #c4b5fd;
+  --hover: #27203fbd;
+  --selected: #c4b5fd;
+  --flow-icon: #a78bfa;
+  --component-icon: #f472b6;
+  --code-background: 245 44% 6%;
+  --code-description-background: 242 32% 14%;
+}
 
-  :root[data-theme="nebula"] body,
-  :root[data-theme="aurora"] body {
-    background-attachment: fixed;
-  }
+:root[data-theme="nebula"] body,
+:root[data-theme="aurora"] body {
+  background-attachment: fixed;
+}
 
-  :root[data-theme="nebula"] body {
-    background-image:
-      radial-gradient(
-        circle at 14% 0%,
-        hsl(262 83% 58% / 0.08),
-        transparent 28rem
-      ),
-      radial-gradient(
-        circle at 88% 12%,
-        hsl(188 86% 53% / 0.06),
-        transparent 24rem
-      );
-  }
+:root[data-theme="nebula"] body {
+  background-image:
+    radial-gradient(
+      circle at 14% 0%,
+      hsl(262 83% 58% / 0.08),
+      transparent 28rem
+    ),
+    radial-gradient(
+      circle at 88% 12%,
+      hsl(188 86% 53% / 0.06),
+      transparent 24rem
+    );
+}
 
-  :root.dark[data-theme="nebula"] body {
-    background-image:
-      radial-gradient(
-        circle at 12% -5%,
-        hsl(262 83% 58% / 0.16),
-        transparent 34rem
-      ),
-      radial-gradient(
-        circle at 90% 8%,
-        hsl(188 86% 53% / 0.1),
-        transparent 30rem
-      );
-  }
+:root.dark[data-theme="nebula"] body {
+  background-image:
+    radial-gradient(
+      circle at 12% -5%,
+      hsl(262 83% 58% / 0.16),
+      transparent 34rem
+    ),
+    radial-gradient(
+      circle at 90% 8%,
+      hsl(188 86% 53% / 0.1),
+      transparent 30rem
+    );
+}
 
-  :root[data-theme="aurora"] body {
-    background-image:
-      radial-gradient(
-        circle at 8% 2%,
-        hsl(267 95% 70% / 0.32),
-        transparent 34rem
-      ),
-      radial-gradient(
-        circle at 92% 8%,
-        hsl(188 90% 64% / 0.28),
-        transparent 30rem
-      ),
-      radial-gradient(
-        circle at 72% 92%,
-        hsl(329 86% 70% / 0.22),
-        transparent 32rem
-      );
-  }
+:root[data-theme="aurora"] body {
+  background-image:
+    radial-gradient(
+      circle at 8% 2%,
+      hsl(267 95% 70% / 0.32),
+      transparent 34rem
+    ),
+    radial-gradient(
+      circle at 92% 8%,
+      hsl(188 90% 64% / 0.28),
+      transparent 30rem
+    ),
+    radial-gradient(
+      circle at 72% 92%,
+      hsl(329 86% 70% / 0.22),
+      transparent 32rem
+    );
+}
 
-  :root.dark[data-theme="aurora"] body {
-    background-image:
-      radial-gradient(
-        circle at 8% 0%,
-        hsl(267 95% 62% / 0.34),
-        transparent 36rem
-      ),
-      radial-gradient(
-        circle at 92% 10%,
-        hsl(188 90% 52% / 0.22),
-        transparent 32rem
-      ),
-      radial-gradient(
-        circle at 70% 96%,
-        hsl(329 86% 58% / 0.2),
-        transparent 34rem
-      );
-  }
+:root.dark[data-theme="aurora"] body {
+  background-image:
+    radial-gradient(
+      circle at 8% 0%,
+      hsl(267 95% 62% / 0.34),
+      transparent 36rem
+    ),
+    radial-gradient(
+      circle at 92% 10%,
+      hsl(188 90% 52% / 0.22),
+      transparent 32rem
+    ),
+    radial-gradient(
+      circle at 70% 96%,
+      hsl(329 86% 58% / 0.2),
+      transparent 34rem
+    );
+}
 
-  :root[data-theme="aurora"] [data-radix-popper-content-wrapper] > *,
-  :root[data-theme="aurora"] [role="dialog"],
-  :root[data-theme="aurora"] .react-flow__node > div {
-    backdrop-filter: blur(22px) saturate(135%);
-    -webkit-backdrop-filter: blur(22px) saturate(135%);
-  }
+:root[data-theme="aurora"] [data-radix-popper-content-wrapper] > *,
+:root[data-theme="aurora"] [role="dialog"],
+:root[data-theme="aurora"] .react-flow__node > div {
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+}
 
-  :root[data-theme="terminal"] .react-flow__node > div,
-  :root[data-theme="terminal"] button,
-  :root[data-theme="terminal"] input,
-  :root[data-theme="terminal"] [role="dialog"] {
-    border-radius: 0.25rem;
-  }
+:root[data-theme="terminal"] .react-flow__node > div,
+:root[data-theme="terminal"] button,
+:root[data-theme="terminal"] input,
+:root[data-theme="terminal"] [role="dialog"] {
+  border-radius: 0.25rem;
+}
 
-  :root[data-theme="terminal"] .react-flow__pane {
-    background-image:
-      linear-gradient(hsl(var(--canvas-dot) / 0.28) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--canvas-dot) / 0.28) 1px, transparent 1px);
-    background-size: 28px 28px;
-  }
+:root[data-theme="terminal"] .react-flow__pane {
+  background-image:
+    linear-gradient(hsl(var(--canvas-dot) / 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--canvas-dot) / 0.28) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
 
-  :root[data-theme="bloom"] .react-flow__node > div {
-    box-shadow: 0 12px 28px hsl(18 38% 40% / 0.1);
-  }
+:root[data-theme="bloom"] .react-flow__node > div {
+  box-shadow: 0 12px 28px hsl(18 38% 40% / 0.1);
+}
 
-  :root[data-theme="nebula"] .react-flow__edge.selected path,
-  :root[data-theme="nebula"] .react-flow__edge:hover path,
-  :root[data-theme="aurora"] .react-flow__edge.selected path,
-  :root[data-theme="aurora"] .react-flow__edge:hover path {
-    filter: drop-shadow(0 0 4px hsl(var(--node-selected) / 0.45));
-  }
+:root[data-theme="nebula"] .react-flow__edge.selected path,
+:root[data-theme="nebula"] .react-flow__edge:hover path,
+:root[data-theme="aurora"] .react-flow__edge.selected path,
+:root[data-theme="aurora"] .react-flow__edge:hover path {
+  filter: drop-shadow(0 0 4px hsl(var(--node-selected) / 0.45));
 }
