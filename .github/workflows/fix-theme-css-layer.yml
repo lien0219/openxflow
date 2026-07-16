@@ -23,3 +23,25 @@ jobs:
 
           path = Path("src/frontend/src/style/themes.css")
           content = path.read_text(encoding="utf-8")
+          prefix = "@layer base {\n"
+
+          if not content.startswith(prefix):
+              raise SystemExit(0)
+
+          inner = content[len(prefix):]
+          if not inner.endswith("}\n"):
+              raise SystemExit("themes.css does not have the expected closing brace")
+
+          inner = inner[:-2]
+          path.write_text(dedent(inner).rstrip() + "\n", encoding="utf-8")
+          PY
+      - name: Commit fix
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/frontend/src/style/themes.css
+          git commit -m "fix(theme): load presets as standalone CSS"
+          git push origin HEAD:agent/nebula-theme-preset
