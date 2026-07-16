@@ -19,12 +19,13 @@ import {
 import ThemeButtons from "../ThemeButtons";
 
 export const AccountMenu = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const version = useDarkStore((state) => state.version);
   const latestVersion = useDarkStore((state) => state.latestVersion);
   const navigate = useCustomNavigate();
   const { mutate: mutationLogout } = useLogout();
   const hideLogoutButton = useUtilityStore((state) => state.hideLogoutButton);
+  const isChinese = i18n.resolvedLanguage?.startsWith("zh") ?? false;
 
   const { isAdmin, autoLogin } = useAuthStore((state) => ({
     isAdmin: state.isAdmin,
@@ -141,7 +142,9 @@ export const AccountMenu = () => {
                 {t("account.theme")}
               </div>
               <div className="mt-0.5 text-xs text-muted-foreground">
-                主题风格与外观模式独立设置
+                {isChinese
+                  ? "仅经典主题支持外观切换"
+                  : "Only the Classic theme supports appearance switching"}
               </div>
             </div>
             <ThemeButtons />
