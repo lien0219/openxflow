@@ -7,5 +7,4 @@ export const DEFAULT_THEME_PRESET: ThemePreset = "classic";
 export const DEFAULT_THEME_PREFERENCE: ThemePreference = "system";
 
 export const isThemePreset = (value: unknown): value is ThemePreset =>
-  typeof value === "string" &&
-  THEME_PRESETS.includes(value as ThemePreset);
+  typeof value === "string" && THEME_PRESETS.includes(value as ThemePreset);
