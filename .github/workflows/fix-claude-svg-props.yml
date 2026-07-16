@@ -1,0 +1,24 @@
+name: Fix Claude SVG props
+
+on:
+  push:
+    branches:
+      - agent/nebula-theme-preset
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/nebula-theme-preset
+      - name: Fix invalid JSX SVG attributes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              'fill-rule
