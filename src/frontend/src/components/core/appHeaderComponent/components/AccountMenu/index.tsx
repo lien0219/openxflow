@@ -54,7 +54,7 @@ export const AccountMenu = () => {
           <CustomProfileIcon />
         </div>
       </HeaderMenuToggle>
-      <HeaderMenuItems position="right" classNameSize="w-[272px]">
+      <HeaderMenuItems position="right" classNameSize="w-[360px]">
         <div className="divide-y divide-foreground/10">
           <div>
             <div className="h-[44px] items-center px-4 pt-3">
@@ -135,11 +135,16 @@ export const AccountMenu = () => {
             </HeaderMenuItemLink>
           </div>
 
-          <div className="flex items-center justify-between px-4 py-[6.5px] text-sm">
-            <span className="">{t("account.theme")}</span>
-            <div className="relative top-[1px] float-right">
-              <ThemeButtons />
+          <div className="flex flex-col gap-3 px-4 py-3 text-sm">
+            <div>
+              <div className="font-medium text-foreground">
+                {t("account.theme")}
+              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                主题风格与外观模式独立设置
+              </div>
             </div>
+            <ThemeButtons />
           </div>
 
           {!autoLogin && !hideLogoutButton && (
