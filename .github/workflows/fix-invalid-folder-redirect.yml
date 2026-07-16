@@ -1,0 +1,25 @@
+name: Fix invalid folder redirect
+
+on:
+  push:
+    branches:
+      - agent/nebula-theme-preset
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/nebula-theme-preset
+      - name: Make invalid folder redirect silent and replace history
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/frontend/src/pages/MainPage/pages/homePage/index.tsx")
+          content = path.read_text(encoding="utf-8")
+          old = '''        // Folder doesn't exist for this user, redirect to /
