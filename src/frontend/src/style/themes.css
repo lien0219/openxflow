@@ -90,15 +90,31 @@
 
   :root[data-theme="nebula"] body {
     background-image:
-      radial-gradient(circle at 14% 0%, hsl(262 83% 58% / 0.08), transparent 28rem),
-      radial-gradient(circle at 88% 12%, hsl(188 86% 53% / 0.06), transparent 24rem);
+      radial-gradient(
+        circle at 14% 0%,
+        hsl(262 83% 58% / 0.08),
+        transparent 28rem
+      ),
+      radial-gradient(
+        circle at 88% 12%,
+        hsl(188 86% 53% / 0.06),
+        transparent 24rem
+      );
     background-attachment: fixed;
   }
 
   :root.dark[data-theme="nebula"] body {
     background-image:
-      radial-gradient(circle at 12% -5%, hsl(262 83% 58% / 0.16), transparent 34rem),
-      radial-gradient(circle at 90% 8%, hsl(188 86% 53% / 0.1), transparent 30rem);
+      radial-gradient(
+        circle at 12% -5%,
+        hsl(262 83% 58% / 0.16),
+        transparent 34rem
+      ),
+      radial-gradient(
+        circle at 90% 8%,
+        hsl(188 86% 53% / 0.1),
+        transparent 30rem
+      );
   }
 
   :root[data-theme="nebula"] .react-flow__edge.selected path,
