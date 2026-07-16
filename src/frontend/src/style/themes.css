@@ -389,20 +389,12 @@
       hsl(262 83% 58% / 0.16),
       transparent 34rem
     ),
-    radial-gradient(
-      circle at 90% 8%,
-      hsl(188 86% 53% / 0.1),
-      transparent 30rem
-    );
+    radial-gradient(circle at 90% 8%, hsl(188 86% 53% / 0.1), transparent 30rem);
 }
 
 :root[data-theme="aurora"] body {
   background-image:
-    radial-gradient(
-      circle at 8% 2%,
-      hsl(267 95% 70% / 0.32),
-      transparent 34rem
-    ),
+    radial-gradient(circle at 8% 2%, hsl(267 95% 70% / 0.32), transparent 34rem),
     radial-gradient(
       circle at 92% 8%,
       hsl(188 90% 64% / 0.28),
@@ -417,11 +409,7 @@
 
 :root.dark[data-theme="aurora"] body {
   background-image:
-    radial-gradient(
-      circle at 8% 0%,
-      hsl(267 95% 62% / 0.34),
-      transparent 36rem
-    ),
+    radial-gradient(circle at 8% 0%, hsl(267 95% 62% / 0.34), transparent 36rem),
     radial-gradient(
       circle at 92% 10%,
       hsl(188 90% 52% / 0.22),
