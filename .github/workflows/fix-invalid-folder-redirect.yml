@@ -22,4 +22,23 @@ jobs:
 
           path = Path("src/frontend/src/pages/MainPage/pages/homePage/index.tsx")
           content = path.read_text(encoding="utf-8")
-          old = '''        // Folder doesn't exist for this user, redirect to /
+          old = '''        // Folder doesn't exist for this user, redirect to /all
+        console.error("Invalid folderId, redirecting to /all");
+        navigate("/all");'''
+          new = '''        navigate("/all", { replace: true });'''
+
+          if old not in content:
+              raise SystemExit("Expected invalid-folder redirect block was not found")
+
+          path.write_text(content.replace(old, new, 1), encoding="utf-8")
+          PY
+      - name: Commit fix
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/frontend/src/pages/MainPage/pages/homePage/index.tsx
+          git commit -m "fix(frontend): silence invalid folder redirect fallback"
+          git push origin HEAD:agent/nebula-theme-preset
