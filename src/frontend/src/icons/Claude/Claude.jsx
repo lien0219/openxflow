@@ -8,10 +8,10 @@ const ClaudeSVG = (props) => {
       fill="none"
       {...props}
     >
-      <g clip-path="url(#clip0_216_1303)">
+      <g clipPath="url(#clip0_216_1303)">
         <path
-          fill-rule="evenodd"
-          clip-rule="evenodd"
+          fillRule="evenodd"
+          clipRule="evenodd"
           d="M3.61287 0H12.3871C14.3742 0 16 1.63334 16 3.62961V12.3704C16 14.3667 14.3742 16 12.3871 16H3.61287C1.62581 16 0 14.3667 0 12.3704V3.62961C0 1.63334 1.62581 0 3.61287 0Z"
           fill="#D77655"
         />

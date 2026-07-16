@@ -19,12 +19,13 @@ import {
 import ThemeButtons from "../ThemeButtons";
 
 export const AccountMenu = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const version = useDarkStore((state) => state.version);
   const latestVersion = useDarkStore((state) => state.latestVersion);
   const navigate = useCustomNavigate();
   const { mutate: mutationLogout } = useLogout();
   const hideLogoutButton = useUtilityStore((state) => state.hideLogoutButton);
+  const isChinese = i18n.resolvedLanguage?.startsWith("zh") ?? false;
 
   const { isAdmin, autoLogin } = useAuthStore((state) => ({
     isAdmin: state.isAdmin,
@@ -54,7 +55,7 @@ export const AccountMenu = () => {
           <CustomProfileIcon />
         </div>
       </HeaderMenuToggle>
-      <HeaderMenuItems position="right" classNameSize="w-[272px]">
+      <HeaderMenuItems position="right" classNameSize="w-[360px]">
         <div className="divide-y divide-foreground/10">
           <div>
             <div className="h-[44px] items-center px-4 pt-3">
@@ -135,11 +136,18 @@ export const AccountMenu = () => {
             </HeaderMenuItemLink>
           </div>
 
-          <div className="flex items-center justify-between px-4 py-[6.5px] text-sm">
-            <span className="">{t("account.theme")}</span>
-            <div className="relative top-[1px] float-right">
-              <ThemeButtons />
+          <div className="flex flex-col gap-3 px-4 py-3 text-sm">
+            <div>
+              <div className="font-medium text-foreground">
+                {t("account.theme")}
+              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                {isChinese
+                  ? "仅经典主题支持外观切换"
+                  : "Only the Classic theme supports appearance switching"}
+              </div>
             </div>
+            <ThemeButtons />
           </div>
 
           {!autoLogin && !hideLogoutButton && (
