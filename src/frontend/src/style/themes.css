@@ -1,0 +1,108 @@
+@layer base {
+  :root[data-theme="nebula"] {
+    --foreground: 245 39% 17%;
+    --background: 252 100% 99%;
+    --muted: 250 42% 96%;
+    --muted-foreground: 244 13% 46%;
+    --card: 0 0% 100%;
+    --card-foreground: 245 39% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 245 39% 17%;
+    --border: 247 30% 88%;
+    --input: 247 30% 88%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 263 70% 50%;
+    --secondary: 250 42% 96%;
+    --secondary-foreground: 245 39% 17%;
+    --secondary-hover: 248 33% 91%;
+    --accent: 250 42% 96%;
+    --accent-foreground: 262 83% 58%;
+    --ring: 262 83% 58%;
+    --canvas: 250 60% 98%;
+    --canvas-dot: 247 22% 78%;
+    --node-selected: 262 83% 58%;
+    --node-ring: 250 27% 88%;
+    --connection: #7457d9;
+    --sidebar-background: 252 100% 99%;
+    --sidebar-foreground: 245 39% 17%;
+    --sidebar-primary: 262 83% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 250 42% 96%;
+    --sidebar-accent-foreground: 245 39% 17%;
+    --sidebar-border: 247 30% 88%;
+    --sidebar-ring: 262 83% 58%;
+    --accent-indigo: 252 100% 95%;
+    --accent-indigo-foreground: 262 83% 58%;
+    --filter-background: #f0ebff;
+    --filter-foreground: #6d3ce7;
+    --hover: #f4f1fb;
+    --selected: #7c3aed;
+    --flow-icon: #6d3ce7;
+    --component-icon: #c24186;
+  }
+
+  :root.dark[data-theme="nebula"],
+  :root[data-theme="nebula"][data-appearance="dark"] {
+    --foreground: 240 33% 97%;
+    --background: 240 44% 5%;
+    --muted: 237 30% 12%;
+    --muted-foreground: 234 18% 65%;
+    --card: 237 35% 9%;
+    --card-foreground: 240 33% 97%;
+    --popover: 237 35% 9%;
+    --popover-foreground: 240 33% 97%;
+    --border: 233 29% 20%;
+    --input: 233 25% 23%;
+    --primary: 258 90% 70%;
+    --primary-foreground: 240 44% 5%;
+    --primary-hover: 258 86% 75%;
+    --secondary: 237 30% 12%;
+    --secondary-foreground: 240 33% 97%;
+    --secondary-hover: 234 27% 17%;
+    --accent: 237 30% 12%;
+    --accent-foreground: 188 86% 63%;
+    --ring: 258 90% 70%;
+    --canvas: 236 45% 7%;
+    --canvas-dot: 232 25% 24%;
+    --node-selected: 258 90% 70%;
+    --node-ring: 233 29% 20%;
+    --connection: #9b87f5;
+    --sidebar-background: 238 40% 7%;
+    --sidebar-foreground: 240 33% 97%;
+    --sidebar-primary: 258 90% 70%;
+    --sidebar-primary-foreground: 240 44% 5%;
+    --sidebar-accent: 237 30% 12%;
+    --sidebar-accent-foreground: 240 33% 97%;
+    --sidebar-border: 233 29% 20%;
+    --sidebar-ring: 258 90% 70%;
+    --accent-indigo: 252 35% 22%;
+    --accent-indigo-foreground: 255 92% 82%;
+    --filter-background: #31245c;
+    --filter-foreground: #d8ceff;
+    --hover: #15182a;
+    --selected: #a78bfa;
+    --flow-icon: #8b7cf6;
+    --component-icon: #e879b0;
+    --code-background: 240 44% 5%;
+    --code-description-background: 237 35% 9%;
+  }
+
+  :root[data-theme="nebula"] body {
+    background-image:
+      radial-gradient(circle at 14% 0%, hsl(262 83% 58% / 0.08), transparent 28rem),
+      radial-gradient(circle at 88% 12%, hsl(188 86% 53% / 0.06), transparent 24rem);
+    background-attachment: fixed;
+  }
+
+  :root.dark[data-theme="nebula"] body {
+    background-image:
+      radial-gradient(circle at 12% -5%, hsl(262 83% 58% / 0.16), transparent 34rem),
+      radial-gradient(circle at 90% 8%, hsl(188 86% 53% / 0.1), transparent 30rem);
+  }
+
+  :root[data-theme="nebula"] .react-flow__edge.selected path,
+  :root[data-theme="nebula"] .react-flow__edge:hover path {
+    filter: drop-shadow(0 0 4px hsl(258 90% 70% / 0.45));
+  }
+}
