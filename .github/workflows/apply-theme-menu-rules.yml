@@ -1,0 +1,28 @@
+name: Apply final theme menu rules
+
+on:
+  push:
+    branches:
+      - agent/nebula-theme-preset
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/nebula-theme-preset
+
+      - name: Update theme selector and translations
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          theme_buttons = Path("src/frontend/src/components/core/appHeaderComponent/components/ThemeButtons/index.tsx")
+          theme_buttons.write_text('''import { useEffect, useState } from "react";
+          import { useTranslation } from "react-i18next";
+          import ForwardedIconComponent from "@/
