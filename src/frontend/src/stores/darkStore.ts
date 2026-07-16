@@ -22,10 +22,10 @@ const setStoredValue = (key: string, value: string) => {
 const startedStars = Number(getStoredValue("githubStars")) || 0;
 const storedThemePreset = getStoredValue("themePreset");
 
-export const useDarkStore = create<DarkStoreType>((set, get) => ({
+export const useDarkStore = create<DarkStoreType>((set) => ({
   dark: (() => {
     const stored = getStoredValue("isDark");
-    if (stored !== null) return JSON.parse(stored);
+    if (stored !== null) return stored === "true";
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   })(),
   themePreset: isThemePreset(storedThemePreset)
