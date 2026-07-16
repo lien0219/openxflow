@@ -1,4 +1,11 @@
-export const THEME_PRESETS = ["classic", "nebula"] as const;
+export const THEME_PRESETS = [
+  "classic",
+  "nebula",
+  "polar",
+  "terminal",
+  "bloom",
+  "aurora",
+] as const;
 
 export type ThemePreset = (typeof THEME_PRESETS)[number];
 export type ThemePreference = "light" | "dark" | "system";
