@@ -79,9 +79,16 @@
 
 :root[data-theme="nebula"] body {
   background-image:
-    radial-gradient(circle at 14% 18%, hsl(267 90% 55% / 0.22), transparent 32rem),
-    radial-gradient(circle at 86% 14%, hsl(190 95% 55% / 0.16), transparent 30rem),
-    linear-gradient(135deg, #090d1d, #0d1024 48%, #081723);
+    radial-gradient(
+      circle at 14% 18%,
+      hsl(267 90% 55% / 0.22),
+      transparent 32rem
+    ),
+    radial-gradient(
+      circle at 86% 14%,
+      hsl(190 95% 55% / 0.16),
+      transparent 30rem
+    ), linear-gradient(135deg, #090d1d, #0d1024 48%, #081723);
   background-attachment: fixed;
 }
 
@@ -97,12 +104,24 @@
 
 :root[data-theme="nebula"] .react-flow__pane {
   background-image:
-    radial-gradient(circle at 26% 22%, hsl(267 90% 56% / 0.16), transparent 25rem),
-    radial-gradient(circle at 82% 30%, hsl(190 95% 55% / 0.1), transparent 24rem);
+    radial-gradient(
+      circle at 26% 22%,
+      hsl(267 90% 56% / 0.16),
+      transparent 25rem
+    ),
+    radial-gradient(
+      circle at 82% 30%,
+      hsl(190 95% 55% / 0.1),
+      transparent 24rem
+    );
 }
 
 :root[data-theme="nebula"] .react-flow__node > div {
-  background: linear-gradient(180deg, hsl(235 35% 15% / 0.96), hsl(235 35% 11% / 0.98));
+  background: linear-gradient(
+    180deg,
+    hsl(235 35% 15% / 0.96),
+    hsl(235 35% 11% / 0.98)
+  );
   box-shadow: 0 14px 36px #03061199;
 }
 
@@ -140,7 +159,11 @@
 }
 
 :root[data-theme="polar"] .react-flow__pane {
-  background-image: linear-gradient(180deg, rgb(248 251 255 / 0.7), rgb(239 246 252 / 0.8));
+  background-image: linear-gradient(
+    180deg,
+    rgb(248 251 255 / 0.7),
+    rgb(239 246 252 / 0.8)
+  );
 }
 
 :root[data-theme="polar"] .react-flow__node > div {
