@@ -1,0 +1,25 @@
+name: Fix theme CSS layer
+
+on:
+  push:
+    branches:
+      - agent/nebula-theme-preset
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/nebula-theme-preset
+      - name: Remove standalone Tailwind layer wrapper
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          path = Path("src/frontend/src/style/themes.css")
+          content = path.read_text(encoding="utf-8")
