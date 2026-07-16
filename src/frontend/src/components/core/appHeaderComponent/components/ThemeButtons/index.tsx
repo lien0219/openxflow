@@ -21,7 +21,8 @@ const PRESETS: Array<{
     id: "nebula",
     label: "Nebula Forge",
     description: "星云锻造",
-    swatchClassName: "bg-gradient-to-br from-violet-600 via-fuchsia-500 to-cyan-400",
+    swatchClassName:
+      "bg-gradient-to-br from-violet-600 via-fuchsia-500 to-cyan-400",
   },
 ];
 
@@ -36,13 +37,8 @@ const APPEARANCE_OPTIONS: Array<{
 ];
 
 export const ThemeButtons = () => {
-  const {
-    systemTheme,
-    dark,
-    themePreset,
-    setThemePreset,
-    setThemePreference,
-  } = useTheme();
+  const { systemTheme, dark, themePreset, setThemePreset, setThemePreference } =
+    useTheme();
   const [selectedAppearance, setSelectedAppearance] = useState<ThemePreference>(
     systemTheme ? "system" : dark ? "dark" : "light",
   );
