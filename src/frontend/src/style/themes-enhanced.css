@@ -1,0 +1,314 @@
+/* High-fidelity visual treatments for OpenXFlow theme presets. */
+
+:root:not([data-theme="classic"]) body,
+:root:not([data-theme="classic"]) #root {
+  min-height: 100%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+:root:not([data-theme="classic"]) header,
+:root:not([data-theme="classic"]) aside,
+:root:not([data-theme="classic"]) [data-sidebar],
+:root:not([data-theme="classic"]) [role="dialog"],
+:root:not([data-theme="classic"]) [data-radix-popper-content-wrapper] > * {
+  border-color: hsl(var(--border));
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+}
+
+:root:not([data-theme="classic"]) .react-flow,
+:root:not([data-theme="classic"]) .react-flow__renderer,
+:root:not([data-theme="classic"]) .react-flow__pane {
+  background-color: hsl(var(--canvas));
+}
+
+:root:not([data-theme="classic"]) .react-flow__background pattern circle {
+  fill: hsl(var(--canvas-dot));
+}
+
+:root:not([data-theme="classic"]) .react-flow__node > div {
+  border: 1px solid hsl(var(--node-ring));
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  box-shadow: 0 10px 30px hsl(var(--foreground) / 0.08);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+:root:not([data-theme="classic"]) .react-flow__node.selected > div {
+  border-color: hsl(var(--node-selected));
+  box-shadow:
+    0 0 0 1px hsl(var(--node-selected) / 0.7),
+    0 14px 36px hsl(var(--node-selected) / 0.18);
+}
+
+:root:not([data-theme="classic"]) .react-flow__handle {
+  border-color: hsl(var(--background));
+  box-shadow: 0 0 0 1px hsl(var(--node-selected) / 0.45);
+}
+
+:root:not([data-theme="classic"]) .react-flow__edge-path {
+  stroke: var(--connection);
+  stroke-width: 2;
+}
+
+:root:not([data-theme="classic"]) input,
+:root:not([data-theme="classic"]) textarea,
+:root:not([data-theme="classic"]) select,
+:root:not([data-theme="classic"]) [role="combobox"] {
+  border-color: hsl(var(--input));
+  background-color: hsl(var(--background) / 0.72);
+}
+
+:root[data-theme="nebula"] {
+  --background: 235 45% 7%;
+  --card: 234 35% 12%;
+  --popover: 234 35% 12%;
+  --canvas: 235 48% 6%;
+  --border: 231 28% 21%;
+  --node-ring: 231 28% 24%;
+  --foreground: 240 33% 97%;
+  --muted-foreground: 232 18% 69%;
+  --primary: 263 90% 70%;
+  --accent-foreground: 188 86% 68%;
+  --connection: #8b7cf6;
+}
+
+:root[data-theme="nebula"] body {
+  background-image:
+    radial-gradient(circle at 14% 18%, hsl(267 90% 55% / 0.22), transparent 32rem),
+    radial-gradient(circle at 86% 14%, hsl(190 95% 55% / 0.16), transparent 30rem),
+    linear-gradient(135deg, #090d1d, #0d1024 48%, #081723);
+  background-attachment: fixed;
+}
+
+:root[data-theme="nebula"] header,
+:root[data-theme="nebula"] aside,
+:root[data-theme="nebula"] [data-sidebar],
+:root[data-theme="nebula"] [role="dialog"],
+:root[data-theme="nebula"] [data-radix-popper-content-wrapper] > * {
+  background: hsl(234 38% 10% / 0.94);
+  box-shadow: inset 0 0 0 1px hsl(265 75% 70% / 0.06);
+  backdrop-filter: blur(14px) saturate(125%);
+}
+
+:root[data-theme="nebula"] .react-flow__pane {
+  background-image:
+    radial-gradient(circle at 26% 22%, hsl(267 90% 56% / 0.16), transparent 25rem),
+    radial-gradient(circle at 82% 30%, hsl(190 95% 55% / 0.1), transparent 24rem);
+}
+
+:root[data-theme="nebula"] .react-flow__node > div {
+  background: linear-gradient(180deg, hsl(235 35% 15% / 0.96), hsl(235 35% 11% / 0.98));
+  box-shadow: 0 14px 36px #03061199;
+}
+
+:root[data-theme="nebula"] .react-flow__node.selected > div {
+  box-shadow:
+    0 0 0 1px #9a7bff,
+    0 0 24px #7c3aed55,
+    0 18px 44px #030611bb;
+}
+
+:root[data-theme="polar"] {
+  --background: 213 40% 97%;
+  --card: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --canvas: 210 40% 97%;
+  --border: 213 28% 87%;
+  --node-ring: 213 24% 84%;
+  --foreground: 214 42% 15%;
+  --muted-foreground: 215 16% 45%;
+  --primary: 218 89% 58%;
+  --connection: #2f74d0;
+}
+
+:root[data-theme="polar"] body {
+  background: linear-gradient(135deg, #f5f8fc, #edf4fb 52%, #f8fbfe);
+}
+
+:root[data-theme="polar"] header,
+:root[data-theme="polar"] aside,
+:root[data-theme="polar"] [data-sidebar],
+:root[data-theme="polar"] [role="dialog"],
+:root[data-theme="polar"] [data-radix-popper-content-wrapper] > * {
+  background: rgb(255 255 255 / 0.94);
+  box-shadow: 0 8px 24px rgb(30 64 175 / 0.06);
+}
+
+:root[data-theme="polar"] .react-flow__pane {
+  background-image: linear-gradient(180deg, rgb(248 251 255 / 0.7), rgb(239 246 252 / 0.8));
+}
+
+:root[data-theme="polar"] .react-flow__node > div {
+  background: #fff;
+  box-shadow: 0 12px 30px rgb(30 64 175 / 0.1);
+}
+
+:root[data-theme="terminal"] {
+  --font-sans: "JetBrains Mono", monospace;
+  --background: 145 45% 2%;
+  --card: 143 40% 4%;
+  --popover: 143 40% 4%;
+  --canvas: 145 45% 2%;
+  --border: 143 42% 13%;
+  --node-ring: 143 44% 20%;
+  --foreground: 139 73% 86%;
+  --muted-foreground: 141 28% 56%;
+  --primary: 145 75% 58%;
+  --accent-foreground: 88 92% 64%;
+  --connection: #35df78;
+  --radius: 0.125rem;
+}
+
+:root[data-theme="terminal"] body,
+:root[data-theme="terminal"] #root {
+  background: #010503;
+  font-family: "JetBrains Mono", monospace;
+}
+
+:root[data-theme="terminal"] header,
+:root[data-theme="terminal"] aside,
+:root[data-theme="terminal"] [data-sidebar],
+:root[data-theme="terminal"] [role="dialog"],
+:root[data-theme="terminal"] [data-radix-popper-content-wrapper] > * {
+  border-color: #123d25;
+  background: #020804;
+  box-shadow: none;
+}
+
+:root[data-theme="terminal"] .react-flow__pane {
+  background-color: #010603;
+  background-image:
+    linear-gradient(#0d2a19 1px, transparent 1px),
+    linear-gradient(90deg, #0d2a19 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+:root[data-theme="terminal"] .react-flow__background {
+  display: none;
+}
+
+:root[data-theme="terminal"] button,
+:root[data-theme="terminal"] input,
+:root[data-theme="terminal"] textarea,
+:root[data-theme="terminal"] [role="combobox"],
+:root[data-theme="terminal"] .react-flow__node > div {
+  border-radius: 2px !important;
+}
+
+:root[data-theme="terminal"] .react-flow__node > div {
+  border-color: #145a2d;
+  background: #031008;
+  box-shadow: none;
+}
+
+:root[data-theme="terminal"] .react-flow__node.selected > div {
+  border-color: #40f287;
+  box-shadow: 0 0 0 1px #40f28766;
+}
+
+:root[data-theme="terminal"] .react-flow__edge-path {
+  filter: drop-shadow(0 0 3px #2eff7544);
+}
+
+:root[data-theme="bloom"] {
+  --background: 30 30% 92%;
+  --card: 31 26% 88%;
+  --popover: 31 28% 91%;
+  --canvas: 30 32% 91%;
+  --border: 25 18% 73%;
+  --node-ring: 24 18% 69%;
+  --foreground: 22 28% 17%;
+  --muted-foreground: 25 13% 43%;
+  --primary: 7 50% 48%;
+  --connection: #b55449;
+  --radius: 0.7rem;
+}
+
+:root[data-theme="bloom"] body {
+  background: linear-gradient(135deg, #e7dfd8, #dcd4ce 55%, #ece3db);
+}
+
+:root[data-theme="bloom"] header,
+:root[data-theme="bloom"] aside,
+:root[data-theme="bloom"] [data-sidebar],
+:root[data-theme="bloom"] [role="dialog"],
+:root[data-theme="bloom"] [data-radix-popper-content-wrapper] > * {
+  background: #e1d9d2;
+  box-shadow: 0 8px 26px rgb(83 56 42 / 0.08);
+}
+
+:root[data-theme="bloom"] .react-flow__pane {
+  background-color: #ded6cf;
+}
+
+:root[data-theme="bloom"] .react-flow__node > div {
+  border-color: #bea99f;
+  background: linear-gradient(180deg, #ded6cf, #d4cbc4);
+  box-shadow: 0 14px 28px rgb(73 47 37 / 0.12);
+}
+
+:root[data-theme="bloom"] .react-flow__node.selected > div {
+  border-color: #b34f45;
+  box-shadow:
+    0 0 0 1px #b34f4577,
+    0 14px 34px rgb(117 55 45 / 0.18);
+}
+
+:root[data-theme="aurora"] {
+  --background: 244 52% 7%;
+  --card: 242 38% 15% / 0.58;
+  --popover: 242 38% 15% / 0.74;
+  --canvas: 244 55% 7% / 0.42;
+  --border: 0 0% 100% / 0.13;
+  --node-ring: 0 0% 100% / 0.18;
+  --foreground: 240 38% 97%;
+  --muted-foreground: 239 20% 70%;
+  --primary: 263 96% 73%;
+  --connection: #9b83f7;
+  --radius: 0.9rem;
+}
+
+:root[data-theme="aurora"] body {
+  background-image:
+    radial-gradient(circle at 24% 24%, #6d28d955, transparent 34rem),
+    radial-gradient(circle at 79% 20%, #0891b244, transparent 32rem),
+    radial-gradient(circle at 58% 92%, #db277744, transparent 34rem),
+    linear-gradient(135deg, #0a0d24, #11112d 48%, #07182b);
+  background-attachment: fixed;
+}
+
+:root[data-theme="aurora"] header,
+:root[data-theme="aurora"] aside,
+:root[data-theme="aurora"] [data-sidebar],
+:root[data-theme="aurora"] [role="dialog"],
+:root[data-theme="aurora"] [data-radix-popper-content-wrapper] > *,
+:root[data-theme="aurora"] .react-flow__node > div {
+  border-color: rgb(255 255 255 / 0.14);
+  background: rgb(28 31 65 / 0.58);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.08),
+    0 16px 42px rgb(0 0 0 / 0.28);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+:root[data-theme="aurora"] .react-flow__pane {
+  background-image:
+    radial-gradient(circle at 20% 20%, #7c3aed44, transparent 30rem),
+    radial-gradient(circle at 80% 22%, #06b6d433, transparent 28rem),
+    radial-gradient(circle at 58% 86%, #ec489933, transparent 30rem);
+}
+
+:root[data-theme="aurora"] .react-flow__node.selected > div {
+  border-color: #b69bff;
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.14),
+    0 0 0 1px #a78bfa77,
+    0 0 30px #7c3aed55,
+    0 18px 48px rgb(0 0 0 / 0.35);
+}
