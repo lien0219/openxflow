@@ -24,25 +24,23 @@ export function resolveRuntimePaths(options: {
 
   if (options.isPackaged) {
     const runtimeRoot = path.join(options.resourcesPath, "runtime");
-    const pythonExecutable =
-      process.platform === "win32"
-        ? path.join(runtimeRoot, "python", "python.exe")
-        : path.join(runtimeRoot, "python", "bin", "python3");
     return validateRuntimePaths({
-      pythonExecutable,
+      pythonExecutable: resolveVirtualEnvironmentPython(path.join(runtimeRoot, "python")),
       frontendPath: path.join(runtimeRoot, "frontend"),
     });
   }
 
   const repositoryRoot = path.resolve(options.appPath, "..");
-  const pythonExecutable =
-    process.platform === "win32"
-      ? path.join(repositoryRoot, ".venv", "Scripts", "python.exe")
-      : path.join(repositoryRoot, ".venv", "bin", "python");
   return validateRuntimePaths({
-    pythonExecutable,
+    pythonExecutable: resolveVirtualEnvironmentPython(path.join(repositoryRoot, ".venv")),
     frontendPath: path.join(repositoryRoot, "src", "backend", "base", "langflow", "frontend"),
   });
+}
+
+export function resolveVirtualEnvironmentPython(environmentRoot: string): string {
+  return process.platform === "win32"
+    ? path.join(environmentRoot, "Scripts", "python.exe")
+    : path.join(environmentRoot, "bin", "python");
 }
 
 function validateRuntimePaths(paths: RuntimePaths): RuntimePaths {
