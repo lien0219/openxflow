@@ -1,8 +1,13 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const desktopRoot = path.resolve(scriptDirectory, "..");
+
 await build({
-  entryPoints: [new URL("../src/preload/index.ts", import.meta.url).pathname],
-  outfile: new URL("../dist/preload/index.cjs", import.meta.url).pathname,
+  entryPoints: [path.join(desktopRoot, "src", "preload", "index.ts")],
+  outfile: path.join(desktopRoot, "dist", "preload", "index.cjs"),
   bundle: true,
   platform: "node",
   format: "cjs",
