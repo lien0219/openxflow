@@ -24,4 +24,11 @@
     "dist": "npm run build && electron-builder"
   },
   "devDependencies": {
-    "@biomejs/biome":
+    "@biomejs/biome": "2.1.1",
+    "@types/node": "25.0.0",
+    "electron": "43.0.0",
+    "electron-builder": "26.0.20",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}
