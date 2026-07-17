@@ -1,10 +1,13 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcessByStdio } from "node:child_process";
+import type { Readable } from "node:stream";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { RuntimeStatus } from "../shared/contracts.js";
 import { DesktopError, toErrorMessage } from "./errors.js";
 import type { DesktopLogger } from "./logger.js";
 import { allocateLoopbackPort } from "./port-manager.js";
+
+type RuntimeProcess = ChildProcessByStdio<null, Readable, Readable>;
 
 export interface BackendManagerOptions {
   pythonExecutable: string;
@@ -18,7 +21,7 @@ export class BackendManager {
   readonly #options: Required<Omit<BackendManagerOptions, "startupTimeoutMs">> & {
     startupTimeoutMs: number;
   };
-  #process: ChildProcessWithoutNullStreams | null = null;
+  #process: RuntimeProcess | null = null;
   #status: RuntimeStatus = {
     status: "idle",
     port: null,
@@ -91,20 +94,29 @@ export class BackendManager {
 
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => this.#options.logger.info("runtime.stdout", { chunk }));
-      child.stderr.on("data", (chunk: string) => this.#options.logger.warn("runtime.stderr", { chunk }));
+      child.stdout.on("data", (chunk: string) =>
+        this.#options.logger.info("runtime.stdout", { chunk }),
+      );
+      child.stderr.on("data", (chunk: string) =>
+        this.#options.logger.warn("runtime.stderr", { chunk }),
+      );
       child.once("error", (error) => this.#handleUnexpectedExit(error));
       child.once("exit", (code, signal) => {
         if (this.#status.status !== "stopping" && this.#status.status !== "stopped") {
           this.#handleUnexpectedExit(
-            new Error(`Runtime exited unexpectedly (code=${String(code)}, signal=${String(signal)}).`),
+            new Error(
+              `Runtime exited unexpectedly (code=${String(code)}, signal=${String(signal)}).`,
+            ),
           );
         }
       });
 
       await this.#waitUntilReady(port);
       this.#status.status = "ready";
-      this.#options.logger.info("OpenXFlow runtime is ready", { port, pid: this.#status.pid });
+      this.#options.logger.info("OpenXFlow runtime is ready", {
+        port,
+        pid: this.#status.pid,
+      });
       return this.getStatus();
     } catch (error) {
       this.#status.status = "failed";
@@ -129,7 +141,6 @@ export class BackendManager {
 
     this.#status.status = "stopping";
     this.#options.logger.info("Stopping OpenXFlow runtime", { pid: child.pid });
-
     await terminateProcess(child);
     this.#process = null;
     this.#status = { ...this.#status, status: "stopped", pid: null };
@@ -150,9 +161,7 @@ export class BackendManager {
         const response = await fetch(`http://127.0.0.1:${port}/health`, {
           signal: AbortSignal.timeout(2_000),
         });
-        if (response.ok) {
-          return;
-        }
+        if (response.ok) return;
       } catch {
         // The runtime is still starting. Retry with a bounded backoff.
       }
@@ -173,10 +182,8 @@ export class BackendManager {
   }
 }
 
-async function terminateProcess(child: ChildProcessWithoutNullStreams): Promise<void> {
-  if (child.pid === undefined) {
-    return;
-  }
+async function terminateProcess(child: RuntimeProcess): Promise<void> {
+  if (child.pid === undefined) return;
 
   if (process.platform === "win32") {
     await new Promise<void>((resolve) => {
@@ -195,7 +202,5 @@ async function terminateProcess(child: ChildProcessWithoutNullStreams): Promise<
     new Promise<boolean>((resolve) => child.once("exit", () => resolve(true))),
     delay(5_000).then(() => false),
   ]);
-  if (!exited && !child.killed) {
-    child.kill("SIGKILL");
-  }
+  if (!exited && !child.killed) child.kill("SIGKILL");
 }
