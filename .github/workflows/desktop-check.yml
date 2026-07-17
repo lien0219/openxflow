@@ -33,8 +33,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
       - run: npm install --package-lock-only --ignore-scripts
       - run: npm ci
       - run: npm run test:ci
@@ -56,8 +54,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
       - run: npm install --package-lock-only --ignore-scripts
       - run: npm ci
       - run: npm run pack -- --publish never
