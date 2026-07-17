@@ -116,7 +116,7 @@ function createMainWindow(): BrowserWindow {
     backgroundColor: "#111827",
     autoHideMenuBar: process.platform !== "darwin",
     webPreferences: {
-      preload: path.join(app.getAppPath(), "dist", "preload", "index.js"),
+      preload: path.join(app.getAppPath(), "dist", "preload", "index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
