@@ -19,6 +19,7 @@
     "lint:fix": "biome check --write src tests scripts",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "test:ci": "npm run typecheck && npm run lint && npm test",
+    "frontend:prepare": "node scripts/prepare-frontend.mjs",
     "runtime:build": "node scripts/build-runtime.mjs",
     "runtime:verify": "node scripts/verify-runtime.mjs",
     "pack": "npm run build && electron-builder --dir",
