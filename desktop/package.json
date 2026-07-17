@@ -1,0 +1,27 @@
+{
+  "name": "@openxflow/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenXFlow desktop application for Windows and macOS",
+  "main": "dist/main/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "dev": "npm run build && node scripts/dev.mjs",
+    "start": "electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check src tests scripts",
+    "lint:fix": "biome check --write src tests scripts",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test:ci": "npm run typecheck && npm run lint && npm test",
+    "runtime:build": "node scripts/build-runtime.mjs",
+    "runtime:verify": "node scripts/verify-runtime.mjs",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
+  },
+  "devDependencies": {
+    "@biomejs/biome":
