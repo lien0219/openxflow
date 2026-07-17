@@ -41,10 +41,13 @@ if (!acquiredLock) {
     }
   });
 
-  void app.whenReady().then(bootstrap).catch(async (error: unknown) => {
-    console.error(error);
-    await app.quit();
-  });
+  void app
+    .whenReady()
+    .then(bootstrap)
+    .catch(async (error: unknown) => {
+      console.error(error);
+      await app.quit();
+    });
 }
 
 async function bootstrap(): Promise<void> {
@@ -65,11 +68,15 @@ async function bootstrap(): Promise<void> {
     logger,
   });
 
-  process.on("uncaughtException", (error) => logger.error("uncaughtException", { message: error.message }));
-  process.on("unhandledRejection", (reason) => logger.error("unhandledRejection", { reason: String(reason) }));
+  process.on("uncaughtException", (error) =>
+    logger.error("uncaughtException", { message: error.message }),
+  );
+  process.on("unhandledRejection", (reason) =>
+    logger.error("unhandledRejection", { reason: String(reason) }),
+  );
 
   const status = await backendManager.start();
-  logger.info("Desktop runtime started", status);
+  logger.info("Desktop runtime started", { ...status });
   unregisterIpc = registerIpcHandlers({ app, backendManager, logsDirectory: paths.logs });
   mainWindow = createMainWindow(backendManager.getUrl());
 
