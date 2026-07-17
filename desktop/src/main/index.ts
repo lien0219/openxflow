@@ -1,6 +1,7 @@
 import path from "node:path";
 import { app, BrowserWindow, shell } from "electron";
 import { BackendManager } from "./backend-manager.js";
+import { toErrorMessage } from "./errors.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { createDesktopLogger } from "./logger.js";
 import {
@@ -36,17 +37,20 @@ if (!acquiredLock) {
   });
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0 && backendManager) {
-      mainWindow = createMainWindow(backendManager.getUrl());
+    if (BrowserWindow.getAllWindows().length !== 0 || !backendManager) return;
+    const status = backendManager.getStatus();
+    mainWindow = createMainWindow();
+    if (status.status === "ready") {
+      void loadApplication(mainWindow, backendManager.getUrl());
     }
   });
 
   void app
     .whenReady()
     .then(bootstrap)
-    .catch(async (error: unknown) => {
+    .catch((error: unknown) => {
       console.error(error);
-      await app.quit();
+      app.quit();
     });
 }
 
@@ -75,10 +79,21 @@ async function bootstrap(): Promise<void> {
     logger.error("unhandledRejection", { reason: String(reason) }),
   );
 
-  const status = await backendManager.start();
-  logger.info("Desktop runtime started", { ...status });
   unregisterIpc = registerIpcHandlers({ app, backendManager, logsDirectory: paths.logs });
-  mainWindow = createMainWindow(backendManager.getUrl());
+  mainWindow = createMainWindow();
+  await mainWindow.loadFile(path.join(app.getAppPath(), "dist", "loading", "index.html"));
+
+  try {
+    const status = await backendManager.start();
+    logger.info("Desktop runtime started", { ...status });
+    await loadApplication(mainWindow, backendManager.getUrl());
+  } catch (error) {
+    const message = toErrorMessage(error);
+    logger.error("Desktop bootstrap failed", { message });
+    await mainWindow.loadFile(path.join(app.getAppPath(), "dist", "loading", "error.html"), {
+      query: { message },
+    });
+  }
 
   app.once("before-quit", async (event) => {
     if (!shuttingDown) return;
@@ -90,7 +105,7 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-function createMainWindow(applicationUrl: string): BrowserWindow {
+function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     title: "OpenXFlow",
     width: 1440,
@@ -111,11 +126,14 @@ function createMainWindow(applicationUrl: string): BrowserWindow {
   });
 
   disableUntrustedPermissions(window.webContents);
-  installNavigationGuards(window, applicationUrl, async (url) => await shell.openExternal(url));
   window.once("ready-to-show", () => window.show());
   window.on("closed", () => {
     if (mainWindow === window) mainWindow = null;
   });
-  void window.loadURL(applicationUrl);
   return window;
+}
+
+async function loadApplication(window: BrowserWindow, applicationUrl: string): Promise<void> {
+  installNavigationGuards(window, applicationUrl, async (url) => await shell.openExternal(url));
+  await window.loadURL(applicationUrl);
 }
