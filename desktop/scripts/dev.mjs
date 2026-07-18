@@ -10,4 +10,15 @@ const child = spawn(electronExecutable, ["."], {
   shell: false,
 });
 
-child.once("exit",
+child.once("exit", (code, signal) => {
+  if (signal) {
+    console.error(`Electron exited because of signal ${signal}`);
+    process.exit(1);
+  }
+  process.exit(code ?? 1);
+});
+
+child.once("error", (error) => {
+  console.error("Failed to start Electron:", error);
+  process.exit(1);
+});
