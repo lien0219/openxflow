@@ -53,13 +53,37 @@ Runtime artifacts are generated under `desktop/resources/runtime` and must be bu
 Unsigned local smoke package:
 
 ```bash
-npm run pack -- --publish never
+npm run pack
 ```
 
 Installer/disk image:
 
 ```bash
-npm run dist -- --publish never
+npm run dist
+```
+
+The packaging wrapper retries transient Electron download failures three times. Override retry behavior with:
+
+```bash
+OPENXFLOW_DESKTOP_BUILD_ATTEMPTS=5 \
+OPENXFLOW_DESKTOP_BUILD_RETRY_DELAY_MS=10000 \
+npm run pack
+```
+
+If Electron downloads are unstable in your region, configure a mirror before packaging.
+
+Windows CMD:
+
+```bat
+set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+npm run pack
+```
+
+PowerShell:
+
+```powershell
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+npm run pack
 ```
 
 Release signing is intentionally supplied through CI secrets:
