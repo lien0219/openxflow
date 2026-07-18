@@ -18,8 +18,9 @@ jobs:
           ref: feature/desktop-app
           fetch-depth: 0
       - name: Update Chinese and English READMEs
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           zh_path = Path("README.md")
@@ -101,6 +102,7 @@ jobs:
               "We also thank LangChain, FastAPI, React, Electron, and the broader open-source community.",
           )
           en_path.write_text(en, encoding="utf-8")
+          PY
       - name: Commit changes
         run: |
           git config user.name github-actions[bot]
