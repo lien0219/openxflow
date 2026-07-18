@@ -27,7 +27,32 @@ npm install
 npm run test:ci
 ```
 
-The desktop launcher resolves the development runtime from the repository `.venv`. You can override both paths explicitly:
+The desktop launcher resolves platform-native development environments in this order:
+
+- Windows: `.venv-win`, then `.venv`
+- macOS/Linux: `.venv`
+
+A virtual environment created in WSL or Linux cannot be reused by the Windows Electron process. Keep the existing Unix environment and create a separate Windows environment instead.
+
+Windows CMD:
+
+```bat
+cd /d D:\project\openxflow
+uv python install 3.12
+set UV_PROJECT_ENVIRONMENT=.venv-win
+uv sync --python 3.12 --frozen --extra postgresql
+cd desktop
+npm run frontend:prepare
+npm run dev
+```
+
+Add `.venv-win/` to `.git/info/exclude` when it is not already ignored by the repository:
+
+```bat
+echo .venv-win/>>.git\info\exclude
+```
+
+You can override the Python and frontend paths independently:
 
 ```bash
 OPENXFLOW_DESKTOP_PYTHON=/absolute/path/to/python \
@@ -35,7 +60,13 @@ OPENXFLOW_DESKTOP_FRONTEND=/absolute/path/to/frontend \
 npm run dev
 ```
 
-On Windows, set the same values using PowerShell environment variables.
+On Windows CMD:
+
+```bat
+set OPENXFLOW_DESKTOP_PYTHON=D:\path\to\python.exe
+set OPENXFLOW_DESKTOP_FRONTEND=D:\path\to\frontend
+npm run dev
+```
 
 ## Embedded runtime
 
