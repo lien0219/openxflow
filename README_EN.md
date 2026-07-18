@@ -20,10 +20,11 @@ An open-source AI workflow platform for developers.
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Electron](https://img.shields.io/badge/Desktop-Windows%20%7C%20macOS-47848F?style=flat-square&logo=electron&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-Supported-5A67D8?style=flat-square)
 ![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-EA4AAA?style=flat-square)
 
-[Quick Start](#-quick-start) · [Core Capabilities](#-core-capabilities) · [Documentation](#-documentation) · [Contributing](#-contributing) · [GitHub Issues](https://github.com/lien0219/openxflow/issues)
+[Quick Start](#-quick-start) · [Desktop](#desktop-application) · [Core Capabilities](#-core-capabilities) · [Documentation](#-documentation) · [Contributing](#-contributing) · [GitHub Issues](https://github.com/lien0219/openxflow/issues)
 
 </div>
 
@@ -32,6 +33,8 @@ An open-source AI workflow platform for developers.
 OpenXFlow is an open-source AI workflow platform for building, testing, running, and integrating AI applications through a visual interface.
 
 It enables developers to connect large language models, agents, knowledge bases, data sources, APIs, MCP servers, and external tools into reusable and extensible workflows.
+
+OpenXFlow supports both browser-based use and desktop applications for Windows and macOS.
 
 > Connect, orchestrate, and reuse every AI capability.
 
@@ -47,7 +50,8 @@ It enables developers to connect large language models, agents, knowledge bases,
 | Multiple model providers | Use major cloud providers, local models, and API-compatible model services |
 | Custom components | Extend nodes, tools, data processing, and integrations with Python |
 | API services | Integrate workflows through REST APIs, webhooks, and MCP |
-| Open deployment | Run locally, build containers, deploy privately, and customize integrations |
+| Desktop application | Run on Windows x64, macOS Apple Silicon, and macOS Intel |
+| Open deployment | Run locally, use desktop builds, build containers, deploy privately, and customize integrations |
 
 ## 🧩 Core Capabilities
 
@@ -117,7 +121,7 @@ flowchart LR
     Data --> Result
 ```
 
-Start with a user or business requirement, compose agents, reusable capabilities, MCP tools, and knowledge retrieval on the canvas, then run the workflow in the interface or integrate it through an API, webhook, or MCP.
+Start with a user or business requirement, compose agents, reusable capabilities, MCP tools, and knowledge retrieval on the canvas, then run the workflow in the web or desktop interface, or integrate it through an API, webhook, or MCP.
 
 ## 🎯 Use Cases
 
@@ -136,6 +140,7 @@ Start with a user or business requirement, compose agents, reusable capabilities
 flowchart TB
     subgraph Experience[Experience Layer]
         Web[React visual canvas]
+        Desktop[Electron desktop application]
         Playground[Playground]
         Clients[API and MCP clients]
     end
@@ -163,6 +168,7 @@ flowchart TB
     Storage[(Application database and file storage)]
 
     Web --> FastAPI
+    Desktop --> FastAPI
     Playground --> FastAPI
     Clients --> FastAPI
     Clients --> MCPAPI
@@ -179,7 +185,7 @@ flowchart TB
     Services --> Storage
 ```
 
-- **Experience layer:** Visual canvas, Playground, and entry points for API and MCP clients.
+- **Experience layer:** Web visual canvas, Electron desktop application, Playground, and entry points for API and MCP clients.
 - **Application services:** FastAPI endpoints for workflows, projects, files, knowledge bases, authentication, and MCP.
 - **Orchestration and runtime:** The graph engine and LFX coordinate nodes, data flow, agents, and components.
 - **Integration layer:** Model services, MCP servers, business APIs, data sources, and vector stores.
@@ -190,12 +196,13 @@ flowchart TB
 | --- | --- |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, Zustand, XYFlow |
 | Backend | Python 3.10–3.14, FastAPI, SQLModel / SQLAlchemy, Alembic |
+| Desktop | Electron, electron-builder, Windows NSIS, macOS DMG |
 | Workflow | Langflow graph execution engine, LFX |
 | Agents | LangChain ecosystem, tool calling, structured output |
-| Protocols | REST API, webhooks, MCP |
+| Protocols | REST APIs, webhooks, MCP |
 | Data storage | SQLite, optional PostgreSQL, file storage |
 | Vector search | Components for Chroma, Qdrant, Weaviate, Pinecone, Milvus, FAISS, and more |
-| Deployment | Local source build, Docker / Podman, Docker Compose, Dev Containers |
+| Deployment | Local web builds, Windows/macOS desktop builds, Docker / Podman, Docker Compose, Dev Containers |
 
 ## 🚀 Quick Start
 
@@ -204,9 +211,9 @@ flowchart TB
 - Python `>=3.10,<3.15`
 - Node.js `>=20.19.0` (v22.12 LTS recommended) and npm v10.9+
 - `uv >=0.4`
-- GNU Make
+- GNU Make for web source development
 
-Windows users should use WSL or the included Dev Container.
+Windows web development should use WSL or the included Dev Container; the Windows desktop application runs directly on Windows.
 
 ### Clone the Repository
 
@@ -224,7 +231,7 @@ git clone https://github.com/lien0219/openxflow.git
 cd openxflow
 ```
 
-### Run Locally
+### Run the Web Application
 
 Install dependencies, build the frontend, and start the application:
 
@@ -237,6 +244,25 @@ Open <http://localhost:7860>. To clear the frontend build cache before restartin
 ```bash
 make run_clic
 ```
+
+### Desktop Application
+
+Windows x64, macOS Apple Silicon arm64, and macOS Intel x64 are supported.
+
+Install the desktop workspace and perform the first-time setup:
+
+```bash
+npm --prefix desktop install
+npm --prefix desktop run dev:setup
+```
+
+For subsequent starts:
+
+```bash
+npm --prefix desktop run dev
+```
+
+See the [desktop guide](./DESKTOP.md) for packaging, platform setup, testing, and troubleshooting.
 
 ### Development Mode
 
@@ -258,8 +284,6 @@ The backend listens on `http://localhost:7860`, and the frontend development ser
 
 ### Build and Run a Container
 
-The repository includes a container build target for the current source:
-
 ```bash
 make docker_build DOCKER=docker
 docker run --rm -p 7860:7860 langflow:1.10.2
@@ -271,6 +295,7 @@ docker run --rm -p 7860:7860 langflow:1.10.2
 openxflow/
 ├── .github/                 # GitHub workflows and repository configuration
 ├── deploy/                  # Deployment and observability configuration
+├── desktop/                 # Electron desktop application, runtime, and packaging scripts
 ├── docker/                  # Container builds and development configuration
 ├── docker_example/          # Docker Compose example
 ├── docs/                    # Docusaurus documentation
@@ -282,6 +307,7 @@ openxflow/
 │   ├── langflow-stepflow/   # Workflow step execution support
 │   ├── sdk/                 # Python SDK
 │   └── bundles/             # Optional component extension bundles
+├── DESKTOP.md               # Windows and macOS desktop guide
 ├── README.md                # Simplified Chinese product overview
 ├── README_EN.md             # English product overview
 ├── DEVELOPMENT.md           # Development environment guide
@@ -292,6 +318,7 @@ openxflow/
 
 | Document | Description |
 | --- | --- |
+| [DESKTOP.md](./DESKTOP.md) | Windows/macOS installation, startup, testing, and packaging |
 | [DEVELOPMENT.md](./DEVELOPMENT.md) | Local development, Dev Containers, and environment setup |
 | [CUSTOMIZATION.md](./CUSTOMIZATION.md) | Project maintenance and customization guide |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guide |
@@ -313,7 +340,7 @@ OpenXFlow is built upon the excellent open-source [Langflow](https://github.com/
 
 Special thanks to the Langflow team and all community contributors for their work on visual AI workflows and agent development.
 
-We also thank LangChain, FastAPI, React, and the broader open-source community.
+We also thank LangChain, FastAPI, React, Electron, and the broader open-source community.
 
 ## 📄 License
 
