@@ -20,10 +20,11 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Electron](https://img.shields.io/badge/Desktop-Windows%20%7C%20macOS-47848F?style=flat-square&logo=electron&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-Supported-5A67D8?style=flat-square)
 ![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-EA4AAA?style=flat-square)
 
-[快速开始](#-快速开始) · [核心能力](#-核心能力) · [开发文档](#-文档) · [参与贡献](#-参与贡献) · [GitHub Issues](https://github.com/lien0219/openxflow/issues)
+[快速开始](#-快速开始) · [桌面端](#桌面端运行) · [核心能力](#-核心能力) · [开发文档](#-文档) · [参与贡献](#-参与贡献) · [GitHub Issues](https://github.com/lien0219/openxflow/issues)
 
 </div>
 
@@ -32,6 +33,8 @@
 OpenXFlow 是一个面向开发者的开源 AI 工作流平台。通过可视化画布，开发者可以连接大语言模型、Agent、知识库、数据源、API 和外部工具，快速构建、调试、运行和集成 AI 应用。
 
 平台融合可视化工作流、Agent 编排、MCP 工具协议、Skills 能力组织和 RAG 知识检索，让复杂 AI 应用能够以模块化、可复用、可扩展的方式构建。
+
+OpenXFlow 同时支持浏览器运行与 Windows、macOS 桌面端。桌面端复用现有 React 前端和 FastAPI 后端，不复制业务逻辑，Web 与桌面端功能修改保持同步。
 
 > 让每一个 AI 能力，都能够被连接、编排和复用。
 
@@ -47,7 +50,8 @@ OpenXFlow 是一个面向开发者的开源 AI 工作流平台。通过可视化
 | 多模型支持 | 连接主流云端模型、本地模型与兼容 API 的模型服务 |
 | 自定义组件 | 使用 Python 扩展节点、工具、数据处理和业务集成 |
 | API 服务 | 通过 REST API、Webhook 与 MCP 将工作流接入现有系统 |
-| 开源部署 | 支持本地运行、容器构建、私有化部署与定制集成 |
+| 桌面应用 | 基于 Electron 支持 Windows x64、macOS Apple Silicon 与 Intel |
+| 开源部署 | 支持本地运行、桌面运行、容器构建、私有化部署与定制集成 |
 
 ## 🧩 核心能力
 
@@ -117,7 +121,7 @@ flowchart LR
     Data --> Result
 ```
 
-从需求出发，在画布中组合 Agent、可复用能力、MCP 工具与知识检索；工作流可以在界面中运行，也可以通过 API、Webhook 或 MCP 集成到业务系统。
+从需求出发，在画布中组合 Agent、可复用能力、MCP 工具与知识检索；工作流可以在 Web 或桌面界面中运行，也可以通过 API、Webhook 或 MCP 集成到业务系统。
 
 ## 🎯 应用场景
 
@@ -136,6 +140,7 @@ flowchart LR
 flowchart TB
     subgraph Experience[交互层]
         Web[React 可视化画布]
+        Desktop[Electron 桌面应用]
         Playground[Playground]
         Clients[API 与 MCP 客户端]
     end
@@ -163,6 +168,7 @@ flowchart TB
     Storage[(应用数据库与文件存储)]
 
     Web --> FastAPI
+    Desktop --> FastAPI
     Playground --> FastAPI
     Clients --> FastAPI
     Clients --> MCPAPI
@@ -179,7 +185,7 @@ flowchart TB
     Services --> Storage
 ```
 
-- **交互层**：提供可视化画布、Playground，以及 API 和 MCP 客户端入口。
+- **交互层**：提供 Web 可视化画布、Electron 桌面应用、Playground，以及 API 和 MCP 客户端入口。
 - **应用服务层**：FastAPI 承载工作流、项目、文件、知识库、认证与 MCP 接口。
 - **编排与执行层**：工作流图和 LFX 运行时负责节点调度、数据传递、Agent 与组件执行。
 - **集成层**：连接模型服务、MCP Server、业务 API、数据源与向量存储。
@@ -190,12 +196,13 @@ flowchart TB
 | --- | --- |
 | 前端 | React 19、TypeScript、Vite、Tailwind CSS、Zustand、XYFlow |
 | 后端 | Python 3.10–3.14、FastAPI、SQLModel / SQLAlchemy、Alembic |
+| 桌面端 | Electron、electron-builder、Windows NSIS、macOS DMG |
 | 工作流 | Langflow 图执行引擎、LFX |
 | Agent | LangChain 生态、工具调用、结构化输出 |
 | 协议 | REST API、Webhook、MCP |
 | 数据存储 | SQLite、可选 PostgreSQL、文件存储 |
 | 向量检索 | Chroma、Qdrant、Weaviate、Pinecone、Milvus、FAISS 等组件 |
-| 部署 | 本地源码运行、Docker / Podman、Docker Compose、Dev Container |
+| 部署 | Web 本地运行、Windows/macOS 桌面端、Docker / Podman、Docker Compose、Dev Container |
 
 ## 🚀 快速开始
 
@@ -204,9 +211,9 @@ flowchart TB
 - Python `>=3.10,<3.15`
 - Node.js `>=20.19.0`（推荐 v22.12 LTS）与 npm v10.9+
 - `uv >=0.4`
-- GNU Make
+- Web 源码开发需要 GNU Make
 
-Windows 用户建议使用 WSL 或仓库内置的 Dev Container。
+Windows Web 开发建议使用 WSL 或仓库内置的 Dev Container；Windows 桌面端直接在 Windows 环境中运行。
 
 ### 克隆仓库
 
@@ -224,7 +231,7 @@ git clone https://github.com/lien0219/openxflow.git
 cd openxflow
 ```
 
-### 本地运行
+### Web 本地运行
 
 安装依赖、构建前端并启动应用：
 
@@ -237,6 +244,25 @@ make run_cli
 ```bash
 make run_clic
 ```
+
+### 桌面端运行
+
+支持 Windows x64、macOS Apple Silicon arm64 和 macOS Intel x64。
+
+首次安装桌面工程依赖并一键初始化启动：
+
+```bash
+npm --prefix desktop install
+npm --prefix desktop run dev:setup
+```
+
+初始化完成后，日常启动：
+
+```bash
+npm --prefix desktop run dev
+```
+
+桌面端复用 Web 前后端业务代码，不影响 `make run_cli` 等原有命令。安装包构建、平台环境和常见问题请查看[桌面端指南](./DESKTOP.md)。
 
 ### 开发模式
 
@@ -271,6 +297,7 @@ docker run --rm -p 7860:7860 langflow:1.10.2
 openxflow/
 ├── .github/                 # GitHub 工作流与仓库配置
 ├── deploy/                  # 部署与可观测性配置
+├── desktop/                 # Electron 桌面端、原生运行时与打包脚本
 ├── docker/                  # 容器构建与开发配置
 ├── docker_example/          # Docker Compose 示例
 ├── docs/                    # Docusaurus 文档
@@ -282,6 +309,7 @@ openxflow/
 │   ├── langflow-stepflow/   # 工作流步骤执行支持
 │   ├── sdk/                 # Python SDK
 │   └── bundles/             # 可选组件扩展包
+├── DESKTOP.md               # Windows 与 macOS 桌面端指南
 ├── README.md                # 简体中文产品介绍
 ├── README_EN.md             # English product overview
 ├── DEVELOPMENT.md           # 开发环境指南
@@ -292,6 +320,7 @@ openxflow/
 
 | 文档 | 说明 |
 | --- | --- |
+| [DESKTOP.md](./DESKTOP.md) | Windows/macOS 桌面端安装、启动、测试与打包 |
 | [DEVELOPMENT.md](./DEVELOPMENT.md) | 本地开发、Dev Container 与环境配置 |
 | [CUSTOMIZATION.md](./CUSTOMIZATION.md) | 项目维护与定制开发指南 |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 参与贡献指南 |
@@ -313,7 +342,7 @@ OpenXFlow 基于优秀的开源项目 [Langflow](https://github.com/langflow-ai/
 
 特别感谢 Langflow 团队及所有社区贡献者，为可视化 AI 工作流和 Agent 开发生态作出的贡献。
 
-同时感谢 LangChain、FastAPI、React 及相关开源项目和贡献者。
+同时感谢 LangChain、FastAPI、React、Electron 及相关开源项目和贡献者。
 
 ## 📄 License
 
