@@ -1,14 +1,13 @@
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import electronExecutable from "electron";
 
-const child = spawn(process.platform === "win32" ? "electron.cmd" : "electron", ["."], {
-  cwd: new URL("..", import.meta.url),
+const desktopRoot = fileURLToPath(new URL("..", import.meta.url));
+const child = spawn(electronExecutable, ["."], {
+  cwd: desktopRoot,
   env: process.env,
   stdio: "inherit",
   shell: false,
 });
 
-child.once("exit", (code) => process.exit(code ?? 1));
-child.once("error", (error) => {
-  console.error(error);
-  process.exit(1);
-});
+child.once("exit",
