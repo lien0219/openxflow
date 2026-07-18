@@ -22,8 +22,8 @@
     "frontend:prepare": "node scripts/prepare-frontend.mjs",
     "runtime:build": "node scripts/build-runtime.mjs",
     "runtime:verify": "node scripts/verify-runtime.mjs",
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder"
+    "pack": "npm run build && node scripts/run-electron-builder.mjs pack",
+    "dist": "npm run build && node scripts/run-electron-builder.mjs dist"
   },
   "devDependencies": {
     "@biomejs/biome": "2.1.1",
