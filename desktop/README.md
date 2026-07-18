@@ -1,154 +1,56 @@
 # OpenXFlow Desktop
 
-OpenXFlow Desktop is a thin Electron shell around the existing OpenXFlow React frontend and FastAPI runtime. It does not duplicate application business logic.
+OpenXFlow Desktop 是现有 React 前端和 FastAPI/Python 运行时的 Electron 桌面外壳，不复制业务代码。
 
-## Architecture
+完整安装、启动、打包、Windows/macOS 测试、数据目录和常见问题说明请查看：
 
-- Electron main process owns application lifecycle, local port allocation, native dialogs and the Python child process.
-- The existing OpenXFlow frontend is loaded from the local FastAPI server.
-- Mutable data is stored under Electron's `userData` directory, never under the installation directory.
-- The renderer has no Node.js access. Native capabilities are exposed through a small, typed preload bridge.
-- The backend listens on `127.0.0.1` with one worker and never binds to the LAN in desktop mode.
+- [OpenXFlow 桌面端指南](../DESKTOP.md)
 
-## Requirements
+## 常用命令
 
-- Node.js 22.12 or newer
-- npm
-- `uv`
-- A built OpenXFlow frontend
-
-## Development
-
-From the repository root, initialize OpenXFlow normally and build the frontend. Then:
+在仓库根目录执行：
 
 ```bash
-cd desktop
-npm install
-npm run test:ci
+npm --prefix desktop install
+npm --prefix desktop run dev:setup
 ```
 
-The desktop launcher resolves platform-native development environments in this order:
-
-- Windows: `.venv-win`, then `.venv`
-- macOS/Linux: `.venv`
-
-A virtual environment created in WSL or Linux cannot be reused by the Windows Electron process. Keep the existing Unix environment and create a separate Windows environment instead.
-
-Windows CMD:
-
-```bat
-cd /d D:\project\openxflow
-uv python install 3.12
-set UV_PROJECT_ENVIRONMENT=.venv-win
-uv sync --python 3.12 --frozen --extra postgresql
-cd desktop
-npm run frontend:prepare
-npm run dev
-```
-
-Add `.venv-win/` to `.git/info/exclude` when it is not already ignored by the repository:
-
-```bat
-echo .venv-win/>>.git\info\exclude
-```
-
-You can override the Python and frontend paths independently:
+首次初始化完成后：
 
 ```bash
-OPENXFLOW_DESKTOP_PYTHON=/absolute/path/to/python \
-OPENXFLOW_DESKTOP_FRONTEND=/absolute/path/to/frontend \
-npm run dev
+npm --prefix desktop run dev
 ```
 
-On Windows CMD:
-
-```bat
-set OPENXFLOW_DESKTOP_PYTHON=D:\path\to\python.exe
-set OPENXFLOW_DESKTOP_FRONTEND=D:\path\to\frontend
-npm run dev
-```
-
-## Embedded runtime
-
-Build a platform-specific Python 3.12 runtime and copy the frontend assets:
+质量检查：
 
 ```bash
-npm run runtime:build
-npm run runtime:verify
+npm --prefix desktop run typecheck
+npm --prefix desktop run lint
+npm --prefix desktop test
+npm --prefix desktop run build
 ```
 
-Runtime artifacts are generated under `desktop/resources/runtime` and must be built independently on each target operating system and architecture.
-
-## Packaging
-
-Unsigned local smoke package:
+打包测试：
 
 ```bash
-npm run pack
+npm --prefix desktop run pack
 ```
 
-Installer/disk image:
+完整运行时和安装包：
 
 ```bash
-npm run dist
+npm --prefix desktop run frontend:prepare
+npm --prefix desktop run runtime:build
+npm --prefix desktop run runtime:verify
+npm --prefix desktop run dist
 ```
 
-The packaging wrapper retries transient Electron download failures three times. Override retry behavior with:
-
-```bash
-OPENXFLOW_DESKTOP_BUILD_ATTEMPTS=5 \
-OPENXFLOW_DESKTOP_BUILD_RETRY_DELAY_MS=10000 \
-npm run pack
-```
-
-If Electron downloads are unstable in your region, configure a mirror before packaging.
-
-Windows CMD:
-
-```bat
-set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-npm run pack
-```
-
-PowerShell:
-
-```powershell
-$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-npm run pack
-```
-
-Release signing is intentionally supplied through CI secrets:
-
-- Windows Authenticode certificate
-- Apple Developer ID Application certificate
-- Apple notarization credentials
-
-## Data locations
-
-Electron supplies the platform `userData` directory. The application creates:
+## 平台环境
 
 ```text
-OpenXFlow/
-├── config/
-├── database/
-├── files/
-├── components/
-├── plugins/
-├── logs/
-├── cache/
-└── backups/
+Windows  .venv-win\Scripts\python.exe
+macOS    .venv/bin/python
+Linux    .venv/bin/python
 ```
 
-Uninstalling the application does not delete this directory by default.
-
-## Quality gates
-
-Every desktop pull request targeting `develop` runs on Windows and macOS:
-
-- strict TypeScript type checking
-- Biome linting and formatting checks
-- unit tests
-- production TypeScript build
-- unsigned unpacked package smoke build
-
-A desktop change must not be merged while any required check is failing.
+桌面命令不会改变 `make run_cli`、`make backend` 或 `make frontend` 等 Web 端命令。
