@@ -34,7 +34,7 @@ OpenXFlow 是一个面向开发者的开源 AI 工作流平台。通过可视化
 
 平台融合可视化工作流、Agent 编排、MCP 工具协议、Skills 能力组织和 RAG 知识检索，让复杂 AI 应用能够以模块化、可复用、可扩展的方式构建。
 
-OpenXFlow 同时支持浏览器运行与 Windows、macOS 桌面端。桌面端复用现有 React 前端和 FastAPI 后端，不复制业务逻辑，Web 与桌面端功能修改保持同步。
+OpenXFlow 同时支持浏览器运行与 Windows、macOS 桌面端。
 
 > 让每一个 AI 能力，都能够被连接、编排和复用。
 
@@ -262,7 +262,7 @@ npm --prefix desktop run dev:setup
 npm --prefix desktop run dev
 ```
 
-桌面端复用 Web 前后端业务代码，不影响 `make run_cli` 等原有命令。安装包构建、平台环境和常见问题请查看[桌面端指南](./DESKTOP.md)。
+安装包构建、平台环境和常见问题请查看[桌面端指南](./DESKTOP.md)。
 
 ### 开发模式
 
