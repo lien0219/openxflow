@@ -12,6 +12,8 @@
     "clean": "node scripts/clean.mjs",
     "build": "npm run clean && tsc -p tsconfig.build.json && node scripts/bundle-preload.mjs && node scripts/copy-assets.mjs && node scripts/verify-build.mjs",
     "dev": "npm run build && node scripts/dev.mjs",
+    "dev:setup": "node scripts/setup-dev.mjs --start",
+    "setup:dev": "node scripts/setup-dev.mjs",
     "start": "electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome lint src tests scripts",
