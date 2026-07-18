@@ -15,39 +15,54 @@ export function resolveRuntimePaths(options: {
   const configuredPython = process.env.OPENXFLOW_DESKTOP_PYTHON;
   const configuredFrontend = process.env.OPENXFLOW_DESKTOP_FRONTEND;
 
-  if (configuredPython && configuredFrontend) {
-    return validateRuntimePaths({
-      pythonExecutable: path.resolve(configuredPython),
-      frontendPath: path.resolve(configuredFrontend),
-    });
-  }
-
   if (options.isPackaged) {
     const runtimeRoot = path.join(options.resourcesPath, "runtime");
     return validateRuntimePaths({
-      pythonExecutable: resolveVirtualEnvironmentPython(path.join(runtimeRoot, "python")),
-      frontendPath: path.join(runtimeRoot, "frontend"),
+      pythonExecutable: configuredPython
+        ? path.resolve(configuredPython)
+        : resolveVirtualEnvironmentPython(path.join(runtimeRoot, "python")),
+      frontendPath: configuredFrontend
+        ? path.resolve(configuredFrontend)
+        : path.join(runtimeRoot, "frontend"),
     });
   }
 
   const repositoryRoot = path.resolve(options.appPath, "..");
   return validateRuntimePaths({
-    pythonExecutable: resolveVirtualEnvironmentPython(path.join(repositoryRoot, ".venv")),
-    frontendPath: path.join(repositoryRoot, "src", "backend", "base", "langflow", "frontend"),
+    pythonExecutable: configuredPython
+      ? path.resolve(configuredPython)
+      : resolveDevelopmentPython(repositoryRoot),
+    frontendPath: configuredFrontend
+      ? path.resolve(configuredFrontend)
+      : path.join(repositoryRoot, "src", "backend", "base", "langflow", "frontend"),
   });
 }
 
-export function resolveVirtualEnvironmentPython(environmentRoot: string): string {
-  return process.platform === "win32"
+export function resolveVirtualEnvironmentPython(
+  environmentRoot: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  return platform === "win32"
     ? path.join(environmentRoot, "Scripts", "python.exe")
     : path.join(environmentRoot, "bin", "python");
+}
+
+export function resolveDevelopmentPython(
+  repositoryRoot: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const environmentNames = platform === "win32" ? [".venv-win", ".venv"] : [".venv"];
+  const candidates = environmentNames.map((environmentName) =>
+    resolveVirtualEnvironmentPython(path.join(repositoryRoot, environmentName), platform),
+  );
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 function validateRuntimePaths(paths: RuntimePaths): RuntimePaths {
   if (!existsSync(paths.pythonExecutable)) {
     throw new DesktopError(
       "RUNTIME_NOT_FOUND",
-      `Python runtime was not found at ${paths.pythonExecutable}. Run the desktop runtime build first.`,
+      `Python runtime was not found at ${paths.pythonExecutable}. Create a platform-native development environment or set OPENXFLOW_DESKTOP_PYTHON.`,
     );
   }
   if (!existsSync(paths.frontendPath)) {
