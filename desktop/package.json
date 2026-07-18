@@ -1,0 +1,39 @@
+{
+  "name": "@openxflow/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenXFlow desktop application for Windows and macOS",
+  "main": "dist/main/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -p tsconfig.build.json && node scripts/bundle-preload.mjs && node scripts/copy-assets.mjs && node scripts/verify-build.mjs",
+    "dev": "npm run build && node scripts/dev.mjs",
+    "dev:setup": "node scripts/setup-dev.mjs --start",
+    "setup:dev": "node scripts/setup-dev.mjs",
+    "start": "electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src tests scripts",
+    "format:check": "biome format src tests scripts",
+    "lint:fix": "biome check --write src tests scripts",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test:ci": "npm run typecheck && npm run lint && npm test",
+    "frontend:prepare": "node scripts/prepare-frontend.mjs",
+    "runtime:build": "node scripts/build-runtime.mjs",
+    "runtime:verify": "node scripts/verify-runtime.mjs",
+    "pack": "npm run build && node scripts/run-electron-builder.mjs pack",
+    "dist": "npm run build && node scripts/run-electron-builder.mjs dist"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.1.1",
+    "@types/node": "25.5.0",
+    "electron": "43.0.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.25.12",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

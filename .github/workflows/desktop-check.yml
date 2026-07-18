@@ -1,0 +1,74 @@
+name: Desktop checks
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-check.yml"
+  push:
+    branches:
+      - feature/desktop-app
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Typecheck, lint and tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14]
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - run: npm install --package-lock-only --ignore-scripts
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint and formatting
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+
+  package-smoke:
+    name: Package smoke test
+    needs: quality
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14]
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - run: npm install --package-lock-only --ignore-scripts
+      - run: npm ci
+      - name: Build unpacked desktop application
+        run: npm run pack
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-unpacked-${{ runner.os }}
+          path: desktop/release/**
+          if-no-files-found: error
+          retention-days: 7
