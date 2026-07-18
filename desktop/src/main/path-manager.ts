@@ -1,5 +1,5 @@
-import { access, mkdir } from "node:fs/promises";
 import { constants } from "node:fs";
+import { access, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 export interface DesktopPaths {
@@ -37,6 +37,7 @@ export async function ensureDesktopPaths(paths: DesktopPaths): Promise<void> {
 
 export function createBackendEnvironment(paths: DesktopPaths): NodeJS.ProcessEnv {
   return {
+    PYTHONSAFEPATH: "1",
     LANGFLOW_CONFIG_DIR: paths.config,
     LANGFLOW_CACHE_DIR: paths.cache,
     LANGFLOW_DATABASE_URL: `sqlite:///${path.join(paths.database, "openxflow.db")}`,
