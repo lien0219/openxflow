@@ -57,7 +57,7 @@ async function run(command, args, cwd, env = process.env) {
       cwd,
       env,
       stdio: "inherit",
-      shell: false,
+      shell: process.platform === "win32" && command.endsWith(".cmd"),
     });
 
     child.once("error", (error) => {
