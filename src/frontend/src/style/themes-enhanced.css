@@ -1,20 +1,80 @@
-/* High-fidelity visual treatments for OpenXFlow theme presets. */
+/* Consumer-grade visual treatments for OpenXFlow theme presets. */
+
+:root:not([data-theme="classic"]) {
+  --radius: 0.625rem;
+  --theme-shadow-xs: 0 1px 2px rgb(15 23 42 / 0.04);
+  --theme-shadow-sm:
+    0 1px 2px rgb(15 23 42 / 0.05), 0 6px 18px rgb(15 23 42 / 0.06);
+  --theme-shadow-md:
+    0 8px 24px rgb(15 23 42 / 0.08), 0 2px 6px rgb(15 23 42 / 0.05);
+}
 
 :root:not([data-theme="classic"]) body,
 :root:not([data-theme="classic"]) #root {
   min-height: 100%;
-  background: hsl(var(--background));
+  background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
 
-:root:not([data-theme="classic"]) header,
-:root:not([data-theme="classic"]) aside,
-:root:not([data-theme="classic"]) [data-sidebar],
+:root:not([data-theme="classic"]) header {
+  border-bottom-color: hsl(var(--border));
+  background-color: hsl(var(--background) / 0.92);
+  backdrop-filter: blur(14px) saturate(120%);
+}
+
 :root:not([data-theme="classic"]) [role="dialog"],
 :root:not([data-theme="classic"]) [data-radix-popper-content-wrapper] > * {
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  box-shadow: var(--theme-shadow-md);
+}
+
+:root:not([data-theme="classic"]) input,
+:root:not([data-theme="classic"]) textarea,
+:root:not([data-theme="classic"]) select,
+:root:not([data-theme="classic"]) [role="combobox"] {
+  border-color: hsl(var(--input));
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+:root:not([data-theme="classic"]) input:focus,
+:root:not([data-theme="classic"]) textarea:focus,
+:root:not([data-theme="classic"]) select:focus,
+:root:not([data-theme="classic"]) [role="combobox"]:focus {
+  border-color: hsl(var(--ring) / 0.7);
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.12);
+}
+
+:root:not([data-theme="classic"]) [data-testid="theme-controls"] {
+  gap: 0.625rem;
+}
+
+:root:not([data-theme="classic"])
+  [data-testid="theme-controls"]
+  button[data-testid^="theme_preset_"] {
+  min-height: 3.75rem;
   border-color: hsl(var(--border));
   background-color: hsl(var(--card));
-  color: hsl(var(--card-foreground));
+  box-shadow: var(--theme-shadow-xs);
+}
+
+:root:not([data-theme="classic"])
+  [data-testid="theme-controls"]
+  button[data-testid^="theme_preset_"]:hover {
+  border-color: hsl(var(--primary) / 0.35);
+  background-color: hsl(var(--accent) / 0.72);
+}
+
+:root:not([data-theme="classic"])
+  [data-testid="theme-controls"]
+  button[data-testid^="theme_preset_"][aria-pressed="true"] {
+  border-color: hsl(var(--primary) / 0.7);
+  background-color: hsl(var(--accent));
+  box-shadow:
+    0 0 0 1px hsl(var(--primary) / 0.1),
+    0 8px 20px hsl(var(--primary) / 0.08);
 }
 
 :root:not([data-theme="classic"]) .react-flow,
@@ -31,7 +91,7 @@
   border: 1px solid hsl(var(--node-ring));
   background: hsl(var(--card));
   color: hsl(var(--card-foreground));
-  box-shadow: 0 10px 30px hsl(var(--foreground) / 0.08);
+  box-shadow: var(--theme-shadow-sm);
   transition:
     border-color 160ms ease,
     box-shadow 160ms ease,
@@ -41,13 +101,13 @@
 :root:not([data-theme="classic"]) .react-flow__node.selected > div {
   border-color: hsl(var(--node-selected));
   box-shadow:
-    0 0 0 1px hsl(var(--node-selected) / 0.7),
-    0 14px 36px hsl(var(--node-selected) / 0.18);
+    0 0 0 1px hsl(var(--node-selected) / 0.45),
+    0 12px 30px hsl(var(--node-selected) / 0.14);
 }
 
 :root:not([data-theme="classic"]) .react-flow__handle {
-  border-color: hsl(var(--background));
-  box-shadow: 0 0 0 1px hsl(var(--node-selected) / 0.45);
+  border-color: hsl(var(--canvas));
+  box-shadow: 0 0 0 1px hsl(var(--node-selected) / 0.35);
 }
 
 :root:not([data-theme="classic"]) .react-flow__edge-path {
@@ -55,283 +115,297 @@
   stroke-width: 2;
 }
 
-:root:not([data-theme="classic"]) input,
-:root:not([data-theme="classic"]) textarea,
-:root:not([data-theme="classic"]) select,
-:root:not([data-theme="classic"]) [role="combobox"] {
-  border-color: hsl(var(--input));
-  background-color: hsl(var(--background) / 0.72);
-}
-
+/* Nebula Forge: premium dark, restrained purple and cyan accents. */
 :root[data-theme="nebula"] {
-  --background: 235 45% 7%;
-  --card: 234 35% 12%;
-  --popover: 234 35% 12%;
-  --canvas: 235 48% 6%;
-  --border: 231 28% 21%;
-  --node-ring: 231 28% 24%;
-  --foreground: 240 33% 97%;
-  --muted-foreground: 232 18% 69%;
-  --primary: 263 90% 70%;
-  --accent-foreground: 188 86% 68%;
-  --connection: #8b7cf6;
+  --font-sans: "Inter", sans-serif;
+  --foreground: 225 24% 94%;
+  --background: 232 34% 9%;
+  --muted: 231 24% 17%;
+  --muted-foreground: 225 15% 67%;
+  --card: 232 28% 13%;
+  --card-foreground: 225 24% 94%;
+  --popover: 232 30% 12%;
+  --popover-foreground: 225 24% 94%;
+  --border: 230 20% 23%;
+  --input: 230 20% 25%;
+  --primary: 262 82% 66%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 262 82% 72%;
+  --secondary: 231 24% 17%;
+  --secondary-foreground: 225 24% 94%;
+  --secondary-hover: 231 22% 21%;
+  --accent: 258 33% 20%;
+  --accent-foreground: 263 90% 82%;
+  --ring: 262 82% 66%;
+  --canvas: 232 36% 8%;
+  --canvas-dot: 228 18% 25%;
+  --node-selected: 262 82% 66%;
+  --node-ring: 230 20% 24%;
+  --connection: #8f7af2;
+  --sidebar-background: 232 32% 11%;
+  --sidebar-foreground: 225 24% 94%;
+  --sidebar-primary: 262 82% 66%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 232 24% 17%;
+  --sidebar-accent-foreground: 225 24% 94%;
+  --sidebar-border: 230 20% 21%;
+  --sidebar-ring: 262 82% 66%;
+  --hover: #20263a;
+  --selected: #8f7af2;
+  --flow-icon: #8f7af2;
+  --component-icon: #d26ba8;
 }
 
 :root[data-theme="nebula"] body {
   background-image:
-    radial-gradient(
-      circle at 14% 18%,
-      hsl(267 90% 55% / 0.22),
-      transparent 32rem
-    ),
-    radial-gradient(
-      circle at 86% 14%,
-      hsl(190 95% 55% / 0.16),
-      transparent 30rem
-    ), linear-gradient(135deg, #090d1d, #0d1024 48%, #081723);
+    radial-gradient(circle at 18% 0%, rgb(124 58 237 / 0.12), transparent 28rem),
+    radial-gradient(circle at 88% 8%, rgb(14 165 233 / 0.08), transparent 25rem);
   background-attachment: fixed;
-}
-
-:root[data-theme="nebula"] header,
-:root[data-theme="nebula"] aside,
-:root[data-theme="nebula"] [data-sidebar],
-:root[data-theme="nebula"] [role="dialog"],
-:root[data-theme="nebula"] [data-radix-popper-content-wrapper] > * {
-  background: hsl(234 38% 10% / 0.94);
-  box-shadow: inset 0 0 0 1px hsl(265 75% 70% / 0.06);
-  backdrop-filter: blur(14px) saturate(125%);
 }
 
 :root[data-theme="nebula"] .react-flow__pane {
   background-image:
-    radial-gradient(
-      circle at 26% 22%,
-      hsl(267 90% 56% / 0.16),
-      transparent 25rem
-    ),
-    radial-gradient(
-      circle at 82% 30%,
-      hsl(190 95% 55% / 0.1),
-      transparent 24rem
-    );
+    radial-gradient(circle at 28% 20%, rgb(124 58 237 / 0.08), transparent 24rem),
+    radial-gradient(circle at 78% 24%, rgb(14 165 233 / 0.05), transparent 22rem);
 }
 
 :root[data-theme="nebula"] .react-flow__node > div {
-  background: linear-gradient(
-    180deg,
-    hsl(235 35% 15% / 0.96),
-    hsl(235 35% 11% / 0.98)
-  );
-  box-shadow: 0 14px 36px #03061199;
+  background: linear-gradient(180deg, #1a2034, #171c2e);
 }
 
-:root[data-theme="nebula"] .react-flow__node.selected > div {
-  box-shadow:
-    0 0 0 1px #9a7bff,
-    0 0 24px #7c3aed55,
-    0 18px 44px #030611bb;
-}
-
+/* Polar Studio: crisp enterprise light theme. */
 :root[data-theme="polar"] {
-  --background: 213 40% 97%;
+  --font-sans: "Inter", sans-serif;
+  --foreground: 215 39% 15%;
+  --background: 214 30% 97%;
+  --muted: 213 28% 94%;
+  --muted-foreground: 215 15% 44%;
   --card: 0 0% 100%;
+  --card-foreground: 215 39% 15%;
   --popover: 0 0% 100%;
-  --canvas: 210 40% 97%;
-  --border: 213 28% 87%;
-  --node-ring: 213 24% 84%;
-  --foreground: 214 42% 15%;
-  --muted-foreground: 215 16% 45%;
-  --primary: 218 89% 58%;
-  --connection: #2f74d0;
+  --popover-foreground: 215 39% 15%;
+  --border: 214 24% 88%;
+  --input: 214 24% 84%;
+  --primary: 217 83% 55%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 217 83% 48%;
+  --secondary: 213 28% 94%;
+  --secondary-foreground: 215 39% 15%;
+  --secondary-hover: 213 25% 90%;
+  --accent: 212 100% 95%;
+  --accent-foreground: 217 83% 45%;
+  --ring: 217 83% 55%;
+  --canvas: 214 32% 97%;
+  --canvas-dot: 214 19% 79%;
+  --node-selected: 217 83% 55%;
+  --node-ring: 214 24% 84%;
+  --connection: #3478d4;
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 215 39% 15%;
+  --sidebar-primary: 217 83% 55%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 213 28% 94%;
+  --sidebar-accent-foreground: 215 39% 15%;
+  --sidebar-border: 214 24% 88%;
+  --sidebar-ring: 217 83% 55%;
+  --hover: #eef4fa;
+  --selected: #3478d4;
+  --flow-icon: #3478d4;
+  --component-icon: #1593b5;
 }
 
 :root[data-theme="polar"] body {
-  background: linear-gradient(135deg, #f5f8fc, #edf4fb 52%, #f8fbfe);
-}
-
-:root[data-theme="polar"] header,
-:root[data-theme="polar"] aside,
-:root[data-theme="polar"] [data-sidebar],
-:root[data-theme="polar"] [role="dialog"],
-:root[data-theme="polar"] [data-radix-popper-content-wrapper] > * {
-  background: rgb(255 255 255 / 0.94);
-  box-shadow: 0 8px 24px rgb(30 64 175 / 0.06);
-}
-
-:root[data-theme="polar"] .react-flow__pane {
-  background-image: linear-gradient(
-    180deg,
-    rgb(248 251 255 / 0.7),
-    rgb(239 246 252 / 0.8)
-  );
+  background-image: linear-gradient(180deg, #f8fafc, #f3f6fa);
 }
 
 :root[data-theme="polar"] .react-flow__node > div {
-  background: #fff;
-  box-shadow: 0 12px 30px rgb(30 64 175 / 0.1);
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.05),
+    0 10px 24px rgb(37 99 235 / 0.07);
 }
 
+/* Terminal Ops: dark graphite UI with green as an accent, not a tint. */
 :root[data-theme="terminal"] {
-  --font-sans: "JetBrains Mono", monospace;
-  --background: 145 45% 2%;
-  --card: 143 40% 4%;
-  --popover: 143 40% 4%;
-  --canvas: 145 45% 2%;
-  --border: 143 42% 13%;
-  --node-ring: 143 44% 20%;
-  --foreground: 139 73% 86%;
-  --muted-foreground: 141 28% 56%;
-  --primary: 145 75% 58%;
-  --accent-foreground: 88 92% 64%;
-  --connection: #35df78;
-  --radius: 0.125rem;
+  --font-sans: "Inter", sans-serif;
+  --foreground: 140 10% 91%;
+  --background: 150 8% 7%;
+  --muted: 150 6% 14%;
+  --muted-foreground: 145 7% 62%;
+  --card: 150 7% 10%;
+  --card-foreground: 140 10% 91%;
+  --popover: 150 8% 9%;
+  --popover-foreground: 140 10% 91%;
+  --border: 150 7% 20%;
+  --input: 150 7% 23%;
+  --primary: 145 63% 48%;
+  --primary-foreground: 150 10% 6%;
+  --primary-hover: 145 63% 55%;
+  --secondary: 150 6% 14%;
+  --secondary-foreground: 140 10% 91%;
+  --secondary-hover: 150 6% 18%;
+  --accent: 146 22% 16%;
+  --accent-foreground: 145 67% 66%;
+  --ring: 145 63% 48%;
+  --canvas: 150 10% 6%;
+  --canvas-dot: 145 10% 20%;
+  --node-selected: 145 63% 48%;
+  --node-ring: 150 7% 22%;
+  --connection: #36bd70;
+  --sidebar-background: 150 8% 8%;
+  --sidebar-foreground: 140 10% 91%;
+  --sidebar-primary: 145 63% 48%;
+  --sidebar-primary-foreground: 150 10% 6%;
+  --sidebar-accent: 150 6% 14%;
+  --sidebar-accent-foreground: 140 10% 91%;
+  --sidebar-border: 150 7% 18%;
+  --sidebar-ring: 145 63% 48%;
+  --hover: #1b211e;
+  --selected: #36bd70;
+  --flow-icon: #36bd70;
+  --component-icon: #4bbfa3;
 }
 
 :root[data-theme="terminal"] body,
 :root[data-theme="terminal"] #root {
-  background: #010503;
-  font-family: "JetBrains Mono", monospace;
-}
-
-:root[data-theme="terminal"] header,
-:root[data-theme="terminal"] aside,
-:root[data-theme="terminal"] [data-sidebar],
-:root[data-theme="terminal"] [role="dialog"],
-:root[data-theme="terminal"] [data-radix-popper-content-wrapper] > * {
-  border-color: #123d25;
-  background: #020804;
-  box-shadow: none;
+  background: #111412;
 }
 
 :root[data-theme="terminal"] .react-flow__pane {
-  background-color: #010603;
+  background-color: #0c100e;
   background-image:
-    linear-gradient(#0d2a19 1px, transparent 1px),
-    linear-gradient(90deg, #0d2a19 1px, transparent 1px);
-  background-size: 30px 30px;
+    linear-gradient(rgb(54 189 112 / 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(54 189 112 / 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
 :root[data-theme="terminal"] .react-flow__background {
   display: none;
 }
 
-:root[data-theme="terminal"] button,
-:root[data-theme="terminal"] input,
-:root[data-theme="terminal"] textarea,
-:root[data-theme="terminal"] [role="combobox"],
 :root[data-theme="terminal"] .react-flow__node > div {
-  border-radius: 2px !important;
+  border-radius: 0.375rem;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.22);
 }
 
-:root[data-theme="terminal"] .react-flow__node > div {
-  border-color: #145a2d;
-  background: #031008;
-  box-shadow: none;
-}
-
-:root[data-theme="terminal"] .react-flow__node.selected > div {
-  border-color: #40f287;
-  box-shadow: 0 0 0 1px #40f28766;
-}
-
-:root[data-theme="terminal"] .react-flow__edge-path {
-  filter: drop-shadow(0 0 3px #2eff7544);
-}
-
+/* Bloom Studio: warm, airy and polished without muddy gray surfaces. */
 :root[data-theme="bloom"] {
-  --background: 30 30% 92%;
-  --card: 31 26% 88%;
-  --popover: 31 28% 91%;
-  --canvas: 30 32% 91%;
-  --border: 25 18% 73%;
-  --node-ring: 24 18% 69%;
-  --foreground: 22 28% 17%;
-  --muted-foreground: 25 13% 43%;
-  --primary: 7 50% 48%;
-  --connection: #b55449;
-  --radius: 0.7rem;
+  --font-sans: "Inter", sans-serif;
+  --foreground: 20 25% 18%;
+  --background: 30 33% 97%;
+  --muted: 24 32% 94%;
+  --muted-foreground: 22 13% 45%;
+  --card: 30 50% 99%;
+  --card-foreground: 20 25% 18%;
+  --popover: 30 50% 99%;
+  --popover-foreground: 20 25% 18%;
+  --border: 24 27% 87%;
+  --input: 24 27% 83%;
+  --primary: 7 55% 52%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 7 55% 46%;
+  --secondary: 24 32% 94%;
+  --secondary-foreground: 20 25% 18%;
+  --secondary-hover: 24 29% 90%;
+  --accent: 12 61% 94%;
+  --accent-foreground: 7 55% 43%;
+  --ring: 7 55% 52%;
+  --canvas: 28 36% 96%;
+  --canvas-dot: 23 19% 78%;
+  --node-selected: 7 55% 52%;
+  --node-ring: 24 27% 84%;
+  --connection: #c05c50;
+  --sidebar-background: 30 50% 99%;
+  --sidebar-foreground: 20 25% 18%;
+  --sidebar-primary: 7 55% 52%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 24 32% 94%;
+  --sidebar-accent-foreground: 20 25% 18%;
+  --sidebar-border: 24 27% 87%;
+  --sidebar-ring: 7 55% 52%;
+  --hover: #f7eeea;
+  --selected: #c05c50;
+  --flow-icon: #c05c50;
+  --component-icon: #8d62cc;
 }
 
 :root[data-theme="bloom"] body {
-  background: linear-gradient(135deg, #e7dfd8, #dcd4ce 55%, #ece3db);
-}
-
-:root[data-theme="bloom"] header,
-:root[data-theme="bloom"] aside,
-:root[data-theme="bloom"] [data-sidebar],
-:root[data-theme="bloom"] [role="dialog"],
-:root[data-theme="bloom"] [data-radix-popper-content-wrapper] > * {
-  background: #e1d9d2;
-  box-shadow: 0 8px 26px rgb(83 56 42 / 0.08);
-}
-
-:root[data-theme="bloom"] .react-flow__pane {
-  background-color: #ded6cf;
+  background-image:
+    radial-gradient(circle at 0% 0%, rgb(249 168 154 / 0.12), transparent 26rem),
+    linear-gradient(180deg, #fbf8f5, #f7f2ee);
 }
 
 :root[data-theme="bloom"] .react-flow__node > div {
-  border-color: #bea99f;
-  background: linear-gradient(180deg, #ded6cf, #d4cbc4);
-  box-shadow: 0 14px 28px rgb(73 47 37 / 0.12);
-}
-
-:root[data-theme="bloom"] .react-flow__node.selected > div {
-  border-color: #b34f45;
+  background: #fffdfb;
   box-shadow:
-    0 0 0 1px #b34f4577,
-    0 14px 34px rgb(117 55 45 / 0.18);
+    0 1px 2px rgb(73 47 37 / 0.05),
+    0 10px 24px rgb(73 47 37 / 0.08);
 }
 
+/* Aurora Glass: deep navy with selective glass surfaces and strong legibility. */
 :root[data-theme="aurora"] {
-  --background: 244 52% 7%;
-  --card: 242 38% 15% / 0.58;
-  --popover: 242 38% 15% / 0.74;
-  --canvas: 244 55% 7% / 0.42;
-  --border: 0 0% 100% / 0.13;
-  --node-ring: 0 0% 100% / 0.18;
-  --foreground: 240 38% 97%;
-  --muted-foreground: 239 20% 70%;
-  --primary: 263 96% 73%;
-  --connection: #9b83f7;
-  --radius: 0.9rem;
+  --font-sans: "Inter", sans-serif;
+  --foreground: 225 24% 95%;
+  --background: 231 45% 10%;
+  --muted: 230 31% 18%;
+  --muted-foreground: 225 16% 68%;
+  --card: 230 34% 14%;
+  --card-foreground: 225 24% 95%;
+  --popover: 230 34% 13%;
+  --popover-foreground: 225 24% 95%;
+  --border: 226 23% 25%;
+  --input: 226 23% 28%;
+  --primary: 258 88% 70%;
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 258 88% 76%;
+  --secondary: 230 31% 18%;
+  --secondary-foreground: 225 24% 95%;
+  --secondary-hover: 230 28% 22%;
+  --accent: 249 35% 22%;
+  --accent-foreground: 259 92% 82%;
+  --ring: 258 88% 70%;
+  --canvas: 232 48% 8%;
+  --canvas-dot: 228 20% 25%;
+  --node-selected: 258 88% 70%;
+  --node-ring: 226 23% 27%;
+  --connection: #9a86f5;
+  --sidebar-background: 231 39% 12%;
+  --sidebar-foreground: 225 24% 95%;
+  --sidebar-primary: 258 88% 70%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 230 31% 18%;
+  --sidebar-accent-foreground: 225 24% 95%;
+  --sidebar-border: 226 23% 23%;
+  --sidebar-ring: 258 88% 70%;
+  --hover: #242a43;
+  --selected: #9a86f5;
+  --flow-icon: #9a86f5;
+  --component-icon: #e16fae;
 }
 
 :root[data-theme="aurora"] body {
   background-image:
-    radial-gradient(circle at 24% 24%, #6d28d955, transparent 34rem),
-    radial-gradient(circle at 79% 20%, #0891b244, transparent 32rem),
-    radial-gradient(circle at 58% 92%, #db277744, transparent 34rem),
-    linear-gradient(135deg, #0a0d24, #11112d 48%, #07182b);
+    radial-gradient(circle at 12% 0%, rgb(99 102 241 / 0.14), transparent 30rem),
+    radial-gradient(circle at 88% 10%, rgb(14 165 233 / 0.1), transparent 26rem);
   background-attachment: fixed;
 }
 
-:root[data-theme="aurora"] header,
-:root[data-theme="aurora"] aside,
-:root[data-theme="aurora"] [data-sidebar],
 :root[data-theme="aurora"] [role="dialog"],
-:root[data-theme="aurora"] [data-radix-popper-content-wrapper] > *,
-:root[data-theme="aurora"] .react-flow__node > div {
-  border-color: rgb(255 255 255 / 0.14);
-  background: rgb(28 31 65 / 0.58);
-  box-shadow:
-    inset 0 1px rgb(255 255 255 / 0.08),
-    0 16px 42px rgb(0 0 0 / 0.28);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
+:root[data-theme="aurora"] [data-radix-popper-content-wrapper] > * {
+  background-color: rgb(22 28 52 / 0.92);
+  backdrop-filter: blur(18px) saturate(125%);
 }
 
 :root[data-theme="aurora"] .react-flow__pane {
   background-image:
-    radial-gradient(circle at 20% 20%, #7c3aed44, transparent 30rem),
-    radial-gradient(circle at 80% 22%, #06b6d433, transparent 28rem),
-    radial-gradient(circle at 58% 86%, #ec489933, transparent 30rem);
+    radial-gradient(circle at 20% 24%, rgb(124 58 237 / 0.1), transparent 24rem),
+    radial-gradient(circle at 80% 18%, rgb(14 165 233 / 0.06), transparent 22rem);
 }
 
-:root[data-theme="aurora"] .react-flow__node.selected > div {
-  border-color: #b69bff;
-  box-shadow:
-    inset 0 1px rgb(255 255 255 / 0.14),
-    0 0 0 1px #a78bfa77,
-    0 0 30px #7c3aed55,
-    0 18px 48px rgb(0 0 0 / 0.35);
+:root[data-theme="aurora"] .react-flow__node > div {
+  background: linear-gradient(
+    180deg,
+    rgb(29 36 65 / 0.94),
+    rgb(23 29 53 / 0.96)
+  );
+  backdrop-filter: blur(12px) saturate(115%);
 }
