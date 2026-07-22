@@ -18,10 +18,7 @@ from langflow.channels.services.files import (
     resolve_owned_knowledge_base,
 )
 from langflow.channels.services.workflow import ChannelWorkflowExecutor
-from langflow.services.authorization import (
-    KnowledgeBaseAction,
-    ensure_knowledge_base_permission,
-)
+from langflow.services.authorization import KnowledgeBaseAction, ensure_knowledge_base_permission
 from langflow.services.database.models.channel.model import ChannelConnection, ChannelConversationBinding
 from langflow.services.database.models.knowledge_base.model import KnowledgeBaseRecord
 from langflow.services.database.models.user.model import User
@@ -45,7 +42,9 @@ class ChannelDispatchService:
         self.file_service = ChannelFileService(session, connection, adapter)
 
     async def handle(self, event: ChannelEvent) -> ChannelMessage | None:
-        if self._should_ignore_group_event(event):
+        command, argument = self._parse_command(event.message.text)
+        binding = await self._get_conversation_binding(event)
+        if self._should_ignore_group_event(event, binding=binding, command=command):
             return None
 
         identity = await resolve_channel_identity(self.session, event)
@@ -57,7 +56,6 @@ class ChannelDispatchService:
         if user is None or not user.is_active:
             return ChannelMessage(text="绑定的 OpenXFlow 账号不存在或已停用，请联系管理员。")
 
-        command, argument = self._parse_command(event.message.text)
         if command in {"/start", "/help"}:
             return self._help_message(bound=True)
         if command in {"/bind", "/whoami"}:
@@ -65,9 +63,6 @@ class ChannelDispatchService:
                 title="账号已绑定",
                 text=f"当前渠道账号已绑定 OpenXFlow 用户：{user.username}",
             )
-
-        binding = await self._get_conversation_binding(event)
-
         if command == "/knowledge":
             return await self._knowledge_message(user, binding)
         if command == "/use-kb":
@@ -290,10 +285,7 @@ class ChannelDispatchService:
             f"• {asset.filename}｜{labels.get(asset.status, asset.status)}｜{str(asset.id)[:8]}"
             for asset in assets
         ]
-        return ChannelMessage(
-            title="最近文件",
-            text="\n".join(lines),
-        )
+        return ChannelMessage(title="最近文件", text="\n".join(lines))
 
     async def _build_bound_context(
         self,
@@ -323,12 +315,19 @@ class ChannelDispatchService:
         return command, argument.strip()
 
     @staticmethod
-    def _should_ignore_group_event(event: ChannelEvent) -> bool:
-        return (
-            event.conversation.conversation_type != "private"
-            and event.event_type == ChannelEventType.TEXT
-            and not event.message.mentions
-        )
+    def _should_ignore_group_event(
+        event: ChannelEvent,
+        *,
+        binding: ChannelConversationBinding | None = None,
+        command: str | None = None,
+    ) -> bool:
+        if event.conversation.conversation_type == "private":
+            return False
+        if event.event_type != ChannelEventType.TEXT:
+            return False
+        if command is not None or event.message.mentions:
+            return False
+        return binding is None or binding.response_mode != "all_messages"
 
     @staticmethod
     def _help_message(*, bound: bool) -> ChannelMessage:
