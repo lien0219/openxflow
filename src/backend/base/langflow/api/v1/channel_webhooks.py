@@ -32,7 +32,7 @@ async def receive_telegram_webhook(
     gateway = ChannelGateway()
     gateway.register_adapter(connection_id, adapter)
     deduplicator = ChannelEventDeduplicator(db)
-    dispatcher = ChannelDispatchService(db, connection)
+    dispatcher = ChannelDispatchService(db, connection, adapter)
 
     try:
         await gateway.receive(

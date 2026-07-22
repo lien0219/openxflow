@@ -12,10 +12,10 @@ from .auth import (
     SSOUserProfile,
 )
 from .channel import (
-    ChannelBindingCode,
     ChannelConnection,
     ChannelConversationBinding,
     ChannelEventReceipt,
+    ChannelFileAsset,
     ChannelIdentity,
 )
 from .deployment import Deployment
@@ -45,10 +45,10 @@ __all__ = [
     "AuthzTeam",
     "AuthzTeamMember",
     "CasbinRule",
-    "ChannelBindingCode",
     "ChannelConnection",
     "ChannelConversationBinding",
     "ChannelEventReceipt",
+    "ChannelFileAsset",
     "ChannelIdentity",
     "Deployment",
     "DeploymentProviderAccount",

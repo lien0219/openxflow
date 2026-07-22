@@ -13,6 +13,11 @@ from langflow.services.database.models.channel.crud import (
     upsert_channel_conversation_binding,
     upsert_channel_identity,
 )
+from langflow.services.database.models.channel.file_model import (
+    ChannelFileAsset,
+    ChannelFileAssetRead,
+    ChannelFileStatus,
+)
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelConnectionCreate,
@@ -41,6 +46,9 @@ __all__ = [
     "ChannelConversationBindingRead",
     "ChannelConversationBindingUpsert",
     "ChannelEventReceipt",
+    "ChannelFileAsset",
+    "ChannelFileAssetRead",
+    "ChannelFileStatus",
     "ChannelIdentity",
     "ChannelIdentityCreate",
     "ChannelIdentityRead",

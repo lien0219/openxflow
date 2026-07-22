@@ -81,8 +81,10 @@ class ChannelWorkflowExecutor:
         user: User,
         flow_identifier: str,
         input_value: str | None,
+        channel_context: dict[str, Any] | None = None,
     ) -> ChannelMessage:
-        # Import lazily to keep API router initialization acyclic.
+        # Lazy import avoids a router -> channel webhook -> workflow -> endpoints
+        # cycle while FastAPI is still constructing the v1 router.
         from langflow.api.v1.endpoints import simple_run_flow
 
         flow = await get_flow_by_id_or_endpoint_name(
@@ -98,18 +100,25 @@ class ChannelWorkflowExecutor:
             workspace_id=getattr(flow, "workspace_id", None),
             folder_id=getattr(flow, "folder_id", None),
         )
-        context = {
-            "channel": {
-                "type": event.channel.value,
-                "connection_id": str(event.connection_id),
-                "conversation_id": event.conversation.external_conversation_id,
-                "conversation_type": event.conversation.conversation_type,
-                "message_id": event.message.external_message_id,
-                "event_id": event.event_id,
-                "external_user_id": event.user.external_user_id,
-                "openxflow_user_id": str(user.id),
-            }
+        normalized_attachments = [
+            attachment.model_dump(exclude_none=True)
+            for attachment in event.message.attachments
+        ]
+        context_payload: dict[str, Any] = {
+            "type": event.channel.value,
+            "connection_id": str(event.connection_id),
+            "conversation_id": event.conversation.external_conversation_id,
+            "conversation_type": event.conversation.conversation_type,
+            "message_id": event.message.external_message_id,
+            "event_id": event.event_id,
+            "external_user_id": event.user.external_user_id,
+            "openxflow_user_id": str(user.id),
+            "attachments": normalized_attachments,
+            "message_metadata": dict(event.message.metadata),
         }
+        if channel_context:
+            context_payload.update(channel_context)
+        context = {"channel": context_payload}
         request = SimplifiedAPIRequest(
             input_value=input_value,
             input_type="chat",
