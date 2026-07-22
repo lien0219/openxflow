@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from langflow.api.utils import DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
+from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.services.deduplication import ChannelEventDeduplicator
 from langflow.channels.services.dispatch import ChannelDispatchService
@@ -17,14 +18,15 @@ from langflow.services.database.models.channel.model import ChannelConnection
 router = APIRouter(prefix="/channel-webhooks", tags=["Channel Webhooks"])
 
 
-@router.post("/telegram/{connection_id}", status_code=status.HTTP_200_OK)
-async def receive_telegram_webhook(
+async def _receive_provider_event(
+    *,
     connection_id: UUID,
     request: Request,
     db: DbSession,
+    expected_channel_type: str,
 ) -> dict[str, bool]:
     connection = await db.get(ChannelConnection, connection_id)
-    if connection is None or connection.channel_type != "telegram" or not connection.enabled:
+    if connection is None or connection.channel_type != expected_channel_type or not connection.enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
 
     payload = await request.body()
@@ -44,7 +46,7 @@ async def receive_telegram_webhook(
         )
     except PermissionError as exc:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Telegram webhook signature") from exc
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid channel webhook signature") from exc
     except DuplicateChannelEventError:
         await db.rollback()
         return {"ok": True}
@@ -52,8 +54,51 @@ async def receive_telegram_webhook(
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
-        await db.commit()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Channel event processing failed") from exc
 
     await db.commit()
     return {"ok": True}
+
+
+@router.post("/telegram/{connection_id}", status_code=status.HTTP_200_OK)
+async def receive_telegram_webhook(
+    connection_id: UUID,
+    request: Request,
+    db: DbSession,
+) -> dict[str, bool]:
+    return await _receive_provider_event(
+        connection_id=connection_id,
+        request=request,
+        db=db,
+        expected_channel_type="telegram",
+    )
+
+
+@router.post("/feishu/{connection_id}", status_code=status.HTTP_200_OK)
+async def receive_feishu_webhook(
+    connection_id: UUID,
+    request: Request,
+    db: DbSession,
+) -> dict[str, bool | str]:
+    connection = await db.get(ChannelConnection, connection_id)
+    if connection is None or connection.channel_type != "feishu" or not connection.enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
+
+    payload = await request.body()
+    adapter = build_channel_adapter(connection)
+    if not isinstance(adapter, FeishuChannelAdapter):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a Feishu channel")
+
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    if FeishuChannelAdapter.is_url_verification(payload):
+        if not await adapter.verify_event(headers, payload):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Feishu verification token")
+        return {"challenge": FeishuChannelAdapter.get_url_verification_challenge(payload)}
+
+    return await _receive_provider_event(
+        connection_id=connection_id,
+        request=request,
+        db=db,
+        expected_channel_type="feishu",
+    )
