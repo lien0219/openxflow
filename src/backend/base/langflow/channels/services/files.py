@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,7 @@ from langflow.services.authorization import (
 from langflow.services.database.models.channel.file_model import ChannelFileAsset, ChannelFileStatus
 from langflow.services.database.models.channel.model import ChannelConnection, ChannelConversationBinding
 from langflow.services.database.models.file.model import File as UserFile
-from langflow.services.database.models.jobs.model import JobType
+from langflow.services.database.models.jobs.model import JobStatus, JobType
 from langflow.services.database.models.knowledge_base.model import KnowledgeBaseRecord
 from langflow.services.database.models.user.model import User
 from langflow.services.deps import (
@@ -133,14 +134,21 @@ async def _finalize_channel_file_asset(
     status: ChannelFileStatus,
     error_message: str | None = None,
 ) -> None:
-    async with session_scope() as session:
-        asset = await session.get(ChannelFileAsset, asset_id)
-        if asset is None:
-            return
-        asset.status = status.value
-        asset.error_message = error_message[:2000] if error_message else None
-        asset.updated_at = _utc_now()
-        session.add(asset)
+    # The background task can start a few milliseconds before the webhook
+    # transaction commits. Retry the lookup briefly instead of silently losing
+    # the terminal status update.
+    for attempt in range(6):
+        async with session_scope() as session:
+            asset = await session.get(ChannelFileAsset, asset_id)
+            if asset is not None:
+                asset.status = status.value
+                asset.error_message = error_message[:2000] if error_message else None
+                asset.updated_at = _utc_now()
+                session.add(asset)
+                return
+        if attempt < 5:
+            await asyncio.sleep(0.1 * (2**attempt))
+    await logger.aerror("Channel file asset %s was not visible after commit retries", asset_id)
 
 
 async def run_channel_ingestion_and_notify(
@@ -477,22 +485,31 @@ class ChannelFileService:
         await self.session.flush()
 
         task_service = get_task_service()
-        await task_service.fire_and_forget_task(
-            run_channel_ingestion_and_notify,
-            asset_id=asset.id,
-            connection_id=self.connection.id,
-            job_id=job_id,
-            kb_name=kb.name,
-            kb_path=str(kb_path),
-            filename=filename,
-            content=content,
-            chunk_size=kb.chunk_size,
-            chunk_overlap=kb.chunk_overlap,
-            separator=kb.separator or "",
-            model_selection=dict(model_selection),
-            user_id=user.id,
-            target_id=event.conversation.external_conversation_id,
-        )
+        try:
+            await task_service.fire_and_forget_task(
+                run_channel_ingestion_and_notify,
+                asset_id=asset.id,
+                connection_id=self.connection.id,
+                job_id=job_id,
+                kb_name=kb.name,
+                kb_path=str(kb_path),
+                filename=filename,
+                content=content,
+                chunk_size=kb.chunk_size,
+                chunk_overlap=kb.chunk_overlap,
+                separator=kb.separator or "",
+                model_selection=dict(model_selection),
+                user_id=user.id,
+                target_id=event.conversation.external_conversation_id,
+            )
+        except Exception as exc:
+            await job_service.update_job_status(job_id, JobStatus.FAILED, finished_timestamp=True)
+            asset.status = ChannelFileStatus.FAILED.value
+            asset.error_message = f"Failed to schedule ingestion: {exc}"[:2000]
+            asset.updated_at = _utc_now()
+            self.session.add(asset)
+            await self.session.flush()
+            raise
         return job_id, kb.name
 
     @staticmethod
