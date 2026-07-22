@@ -73,6 +73,29 @@
   overscroll-behavior: contain;
 }
 
+/* Project overflow actions should inherit the project row surface instead of
+ * rendering the button component's default white background. */
+:root:not([data-theme="classic"])
+  [data-theme-region="collection-sidebar"]
+  button[aria-haspopup="menu"] {
+  border-color: transparent;
+  background-color: transparent;
+  color: hsl(var(--muted-foreground));
+  box-shadow: none;
+}
+
+:root:not([data-theme="classic"])
+  [data-theme-region="collection-sidebar"]
+  button[aria-haspopup="menu"]:is(:hover, :focus-visible),
+:root:not([data-theme="classic"])
+  [data-theme-region="collection-sidebar"]
+  button[aria-haspopup="menu"][data-state="open"] {
+  border-color: transparent;
+  background-color: hsl(var(--foreground) / 0.07);
+  color: hsl(var(--foreground));
+  box-shadow: none;
+}
+
 :root:not([data-theme="classic"])
   [data-testid="theme-controls"]
   button[data-testid^="theme_preset_"] {
