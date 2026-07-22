@@ -1,3 +1,4 @@
+from langflow.services.database.models.channel.binding_model import ChannelBindingCode
 from langflow.services.database.models.channel.crud import (
     claim_channel_event,
     create_channel_connection,
@@ -30,6 +31,7 @@ from langflow.services.database.models.channel.model import (
 )
 
 __all__ = [
+    "ChannelBindingCode",
     "ChannelConnection",
     "ChannelConnectionCreate",
     "ChannelConnectionRead",

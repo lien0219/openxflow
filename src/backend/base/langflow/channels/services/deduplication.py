@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from sqlmodel import select
+
 from langflow.services.database.models.channel.crud import claim_channel_event, mark_channel_event
 from langflow.services.database.models.channel.model import ChannelEventReceipt, ChannelReceiptStatus
 
@@ -20,6 +22,23 @@ class ChannelEventDeduplicator:
 
     async def claim(self, event: ChannelEvent, payload: bytes) -> ChannelEventReceipt | None:
         payload_digest = hashlib.sha256(payload).hexdigest()
+        statement = select(ChannelEventReceipt).where(
+            ChannelEventReceipt.connection_id == event.connection_id,
+            ChannelEventReceipt.external_event_id == event.event_id,
+        )
+        existing = (await self.session.exec(statement)).first()
+        if existing is not None:
+            if existing.status != ChannelReceiptStatus.FAILED.value:
+                return None
+            existing.status = ChannelReceiptStatus.PROCESSING.value
+            existing.event_type = event.event_type.value
+            existing.payload_digest = payload_digest
+            existing.error_message = None
+            existing.processed_at = None
+            self.session.add(existing)
+            await self.session.flush()
+            return existing
+
         return await claim_channel_event(
             self.session,
             connection_id=event.connection_id,
