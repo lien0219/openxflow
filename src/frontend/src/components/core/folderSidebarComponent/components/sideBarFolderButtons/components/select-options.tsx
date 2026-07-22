@@ -43,11 +43,7 @@ export const SelectOptions = ({
         }
         value=""
       >
-        <ShadTooltip
-          content={optionsLabel}
-          side="right"
-          styleClasses="z-50"
-        >
+        <ShadTooltip content={optionsLabel} side="right" styleClasses="z-50">
           <SelectTrigger
             className="w-fit"
             id={`options-trigger-${item.name}`}
