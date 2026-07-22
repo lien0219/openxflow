@@ -36,21 +36,15 @@ export default function CollectionPage(): JSX.Element {
 
   const handleDeleteFolder = () => {
     mutate(
-      {
-        folder_id: folderToEdit?.id!,
-      },
+      { folder_id: folderToEdit?.id! },
       {
         onSuccess: () => {
-          setSuccessData({
-            title: t("project.deletedSuccessfully"),
-          });
+          setSuccessData({ title: t("project.deletedSuccessfully") });
           navigate("/all");
         },
         onError: (err) => {
           console.error(err);
-          setErrorData({
-            title: t("project.errorDeleting"),
-          });
+          setErrorData({ title: t("project.errorDeleting") });
         },
       },
     );
@@ -60,25 +54,24 @@ export default function CollectionPage(): JSX.Element {
 
   return (
     <SidebarProvider width="280px">
-      {flows && examples && folders && showMainContent && (
-        <SideBarFoldersButtonsComponent
-          handleChangeFolder={(id: string) => {
-            navigate(`all/folder/${id}`);
-          }}
-          handleDeleteFolder={(item) => {
-            setFolderToEdit(item);
-            setOpenDeleteFolderModal(true);
-          }}
-          handleFilesClick={() => {
-            navigate("assets");
-          }}
-        />
-      )}
-      <main className="flex h-full w-full overflow-hidden">
+      <div data-theme-region="collection-sidebar">
+        {flows && examples && folders && showMainContent && (
+          <SideBarFoldersButtonsComponent
+            handleChangeFolder={(id: string) => navigate(`all/folder/${id}`)}
+            handleDeleteFolder={(item) => {
+              setFolderToEdit(item);
+              setOpenDeleteFolderModal(true);
+            }}
+            handleFilesClick={() => navigate("assets")}
+          />
+        )}
+      </div>
+      <main
+        className="flex h-full w-full overflow-hidden"
+        data-theme-region="collection-main"
+      >
         {flows && examples && folders ? (
-          <div
-            className={`relative mx-auto flex h-full w-full flex-col overflow-hidden`}
-          >
+          <div className="relative mx-auto flex h-full w-full flex-col overflow-hidden">
             {showMainContent ? (
               <Outlet />
             ) : (

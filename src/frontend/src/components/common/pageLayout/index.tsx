@@ -23,9 +23,18 @@ export default function PageLayout({
   const navigate = useCustomNavigate();
 
   return (
-    <div className="flex w-full flex-1 flex-col justify-between overflow-auto overflow-x-hidden bg-background">
-      <div className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col">
-        <div className="flex flex-col gap-4 p-6 pt-0">
+    <div
+      className="flex w-full flex-1 flex-col justify-between overflow-auto overflow-x-hidden bg-background"
+      data-theme-page="standard"
+    >
+      <div
+        className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col"
+        data-theme-region="page-container"
+      >
+        <div
+          className="flex flex-col gap-4 p-6 pt-0"
+          data-theme-region="page-header"
+        >
           <CustomBanner />
           <div className="flex w-full items-center justify-between gap-4 space-y-0.5 pb-2 pt-10">
             <div className="flex w-full flex-col">
@@ -60,7 +69,9 @@ export default function PageLayout({
         <div className="flex shrink-0 px-6">
           <Separator className="flex" />
         </div>
-        <div className="flex flex-1 p-6 pt-7">{children}</div>
+        <div className="flex flex-1 p-6 pt-7" data-theme-region="page-content">
+          {children}
+        </div>
       </div>
     </div>
   );

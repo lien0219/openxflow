@@ -27,6 +27,8 @@ export const SelectOptions = ({
   checkPathName: (folderId: string) => boolean;
 }) => {
   const { t } = useTranslation();
+  const optionsLabel = t("folder.options");
+
   return (
     <div>
       <Select
@@ -41,22 +43,20 @@ export const SelectOptions = ({
         }
         value=""
       >
-        <ShadTooltip
-          content={t("folder.options")}
-          side="right"
-          styleClasses="z-50"
-        >
+        <ShadTooltip content={optionsLabel} side="right" styleClasses="z-50">
           <SelectTrigger
             className="w-fit"
             id={`options-trigger-${item.name}`}
+            aria-label={optionsLabel}
+            data-theme-control="project-overflow"
             data-testid={
               "more-options-button" + `_${convertTestName(item?.name ?? "")}`
             }
           >
             <IconComponent
-              name={"MoreHorizontal"}
+              name="MoreHorizontal"
               className={cn(
-                `w-4 stroke-[1.5] px-0 text-muted-foreground group-hover/menu-button:block group-hover/menu-button:text-foreground`,
+                "w-4 stroke-[1.5] px-0 text-muted-foreground group-hover/menu-button:block group-hover/menu-button:text-foreground",
                 checkPathName(item.id!) ? "block" : "hidden",
               )}
             />
