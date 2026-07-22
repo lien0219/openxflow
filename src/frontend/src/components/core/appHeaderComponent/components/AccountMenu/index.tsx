@@ -52,11 +52,20 @@ export const AccountMenu = () => {
           <CustomProfileIcon />
         </div>
       </HeaderMenuToggle>
-      <HeaderMenuItems position="right" classNameSize="w-[400px] max-w-[calc(100vw-24px)]">
-        <div className="divide-y divide-border/70" data-theme-region="account-menu">
+      <HeaderMenuItems
+        position="right"
+        classNameSize="w-[400px] max-w-[calc(100vw-24px)]"
+      >
+        <div
+          className="divide-y divide-border/70"
+          data-theme-region="account-menu"
+        >
           <div className="px-4 py-3">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-sm font-medium" data-testid="menu_version_button">
+              <span
+                className="text-sm font-medium"
+                data-testid="menu_version_button"
+              >
                 {t("account.version")}
               </span>
               <div
@@ -67,18 +76,25 @@ export const AccountMenu = () => {
                     : "text-accent-amber-foreground",
                 )}
               >
-                {version} {isLatestVersion ? t("account.latest") : t("account.updateAvailable")}
+                {version}{" "}
+                {isLatestVersion
+                  ? t("account.latest")
+                  : t("account.updateAvailable")}
               </div>
             </div>
           </div>
 
           <div className="py-1">
             <HeaderMenuItemButton onClick={() => navigate("/settings")}>
-              <span data-testid="menu_settings_button">{t("account.settings")}</span>
+              <span data-testid="menu_settings_button">
+                {t("account.settings")}
+              </span>
             </HeaderMenuItemButton>
             {isAdmin && !autoLogin && (
               <HeaderMenuItemButton onClick={() => navigate("/admin")}>
-                <span data-testid="menu_admin_page_button">{t("account.adminPage")}</span>
+                <span data-testid="menu_admin_page_button">
+                  {t("account.adminPage")}
+                </span>
               </HeaderMenuItemButton>
             )}
             <HeaderMenuItemLink
@@ -91,17 +107,26 @@ export const AccountMenu = () => {
 
           <div className="py-1">
             <HeaderMenuItemLink newPage href={GITHUB_URL}>
-              <span className="flex items-center gap-2" data-testid="menu_github_button">
+              <span
+                className="flex items-center gap-2"
+                data-testid="menu_github_button"
+              >
                 <FaGithub className="h-4 w-4" />
                 {t("account.github")}
               </span>
             </HeaderMenuItemLink>
           </div>
 
-          <section className="space-y-3 px-4 py-4" aria-labelledby="theme-menu-title">
+          <section
+            className="space-y-3 px-4 py-4"
+            aria-labelledby="theme-menu-title"
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div id="theme-menu-title" className="text-sm font-semibold text-foreground">
+                <div
+                  id="theme-menu-title"
+                  className="text-sm font-semibold text-foreground"
+                >
                   {t("account.theme")}
                 </div>
                 <div className="mt-1 text-xs leading-5 text-muted-foreground">
