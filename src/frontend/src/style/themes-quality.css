@@ -96,6 +96,62 @@
   transform: scale(1.01);
 }
 
+/*
+ * Keep the workflow node geometry identical to the official Classic theme.
+ * Theme presets may recolor surfaces, but they must not clip handles, move
+ * selected nodes, or alter the spacing of the node content regions.
+ */
+:root:not([data-theme="classic"]):is(
+    [data-theme-scene="editor"],
+    [data-theme-scene="playground"],
+    [data-theme-scene="viewer"]
+  ) {
+  --radius: 0.5rem;
+}
+
+:root:not([data-theme="classic"]):is(
+    [data-theme-scene="editor"],
+    [data-theme-scene="playground"],
+    [data-theme-scene="viewer"]
+  )
+  .react-flow__node {
+  overflow: visible;
+}
+
+:root:not([data-theme="classic"]):is(
+    [data-theme-scene="editor"],
+    [data-theme-scene="playground"],
+    [data-theme-scene="viewer"]
+  )
+  .react-flow__node
+  > div {
+  overflow: visible;
+  box-sizing: border-box;
+  border-radius: var(--radius);
+  transform: none;
+}
+
+:root:not([data-theme="classic"]):is(
+    [data-theme-scene="editor"],
+    [data-theme-scene="playground"],
+    [data-theme-scene="viewer"]
+  )
+  .react-flow__node.selected
+  > div {
+  transform: none;
+}
+
+:root:not([data-theme="classic"]):is(
+    [data-theme-scene="editor"],
+    [data-theme-scene="playground"],
+    [data-theme-scene="viewer"]
+  )
+  .react-flow__handle {
+  z-index: 20;
+  overflow: visible;
+  flex: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-theme="classic"]) *,
   :root:not([data-theme="classic"]) *::before,
