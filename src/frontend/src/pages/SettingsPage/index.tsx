@@ -60,6 +60,16 @@ export default function SettingsPage(): JSX.Element {
       ),
     },
     {
+      title: "渠道中心",
+      href: "/settings/channels",
+      icon: (
+        <ForwardedIconComponent
+          name="RadioTower"
+          className="w-4 flex-shrink-0 justify-start stroke-[1.5]"
+        />
+      ),
+    },
+    {
       title: t("settings.nav.globalVariables"),
       href: "/settings/global-variables",
       icon: (
@@ -113,7 +123,7 @@ export default function SettingsPage(): JSX.Element {
 
   if (!ENABLE_DATASTAX_LANGFLOW) {
     const langflowItems = CustomStoreSidebar(true, ENABLE_LANGFLOW_STORE);
-    sidebarNavItems.splice(2, 0, ...langflowItems);
+    sidebarNavItems.splice(3, 0, ...langflowItems);
   }
 
   return (
