@@ -210,6 +210,13 @@ async def claim_channel_event(
     event_type: str,
     payload_digest: str | None,
 ) -> ChannelEventReceipt | None:
+    existing_statement = select(ChannelEventReceipt.id).where(
+        ChannelEventReceipt.connection_id == connection_id,
+        ChannelEventReceipt.external_event_id == external_event_id,
+    )
+    if (await session.exec(existing_statement)).first() is not None:
+        return None
+
     receipt = ChannelEventReceipt(
         connection_id=connection_id,
         external_event_id=external_event_id,
@@ -217,11 +224,11 @@ async def claim_channel_event(
         status=ChannelReceiptStatus.PROCESSING.value,
         payload_digest=payload_digest,
     )
-    session.add(receipt)
     try:
-        await session.flush()
+        async with session.begin_nested():
+            session.add(receipt)
+            await session.flush()
     except IntegrityError:
-        await session.rollback()
         return None
     await session.refresh(receipt)
     return receipt

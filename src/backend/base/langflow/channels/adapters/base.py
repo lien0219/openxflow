@@ -23,6 +23,9 @@ class ChannelAdapter(ABC):
     async def send_message(self, target_id: str, message: ChannelMessage) -> str:
         """Send a message and return the provider message identifier."""
 
+    async def acknowledge_event(self, event: ChannelEvent) -> None:
+        """Acknowledge provider-specific interactive events when required."""
+
     async def update_message(self, external_message_id: str, message: ChannelMessage) -> None:
         raise NotImplementedError(f"{self.channel_type} does not support message updates")
 

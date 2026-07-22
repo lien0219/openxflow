@@ -64,6 +64,7 @@ class ChannelGateway:
                 raise DuplicateChannelEventError(event.event_id)
 
         try:
+            await adapter.acknowledge_event(event)
             response = await handler(event)
             if response is not None:
                 await adapter.send_message(event.conversation.external_conversation_id, response)
