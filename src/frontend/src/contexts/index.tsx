@@ -8,7 +8,6 @@ import { TooltipProvider } from "../components/ui/tooltip";
 import { ApiInterceptor } from "../controllers/API/api";
 import { AuthProvider } from "./authContext";
 
-// Export queryClient for use in utility functions (e.g., messageUtils, buildUtils)
 export const queryClient = new QueryClient();
 
 type ThemeScene =
@@ -25,7 +24,9 @@ const resolveThemeScene = (pathname: string): ThemeScene => {
   const path = pathname.toLowerCase();
 
   if (path.startsWith("/playground/")) return "playground";
-  if (path.startsWith("/flow/")) return path.endsWith("/view") ? "viewer" : "editor";
+  if (path.startsWith("/flow/")) {
+    return path.endsWith("/view") ? "viewer" : "editor";
+  }
   if (path.startsWith("/settings")) return "settings";
   if (path.startsWith("/admin")) return "admin";
   if (
@@ -50,8 +51,7 @@ function ThemeSceneController() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    const scene = resolveThemeScene(pathname);
-    document.documentElement.dataset.themeScene = scene;
+    document.documentElement.dataset.themeScene = resolveThemeScene(pathname);
 
     return () => {
       delete document.documentElement.dataset.themeScene;
@@ -63,22 +63,20 @@ function ThemeSceneController() {
 
 export default function ContextWrapper({ children }: { children: ReactNode }) {
   return (
-    <>
-      <CustomWrapper>
-        <GradientWrapper>
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <TooltipProvider skipDelayDuration={0}>
-                <ReactFlowProvider>
-                  <ApiInterceptor />
-                  <ThemeSceneController />
-                  {children}
-                </ReactFlowProvider>
-              </TooltipProvider>
-            </AuthProvider>
-          </QueryClientProvider>
-        </GradientWrapper>
-      </CustomWrapper>
-    </>
+    <CustomWrapper>
+      <GradientWrapper>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TooltipProvider skipDelayDuration={0}>
+              <ReactFlowProvider>
+                <ApiInterceptor />
+                <ThemeSceneController />
+                {children}
+              </ReactFlowProvider>
+            </TooltipProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </GradientWrapper>
+    </CustomWrapper>
   );
 }
