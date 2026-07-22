@@ -7,8 +7,7 @@
   --theme-card-border: hsl(var(--border));
   --theme-card-bg: hsl(var(--card));
   --theme-card-shadow:
-    0 1px 2px rgb(15 23 42 / 0.04),
-    0 10px 28px rgb(15 23 42 / 0.05);
+    0 1px 2px rgb(15 23 42 / 0.04), 0 10px 28px rgb(15 23 42 / 0.05);
 }
 
 /* Shared dashboard shell */
@@ -146,10 +145,7 @@
   backdrop-filter: blur(22px) saturate(120%);
 }
 
-:root:not([data-theme="classic"])[data-theme-scene="auth"]
-  form
-  > div
-  > div {
+:root:not([data-theme="classic"])[data-theme-scene="auth"] form > div > div {
   width: 100%;
   max-width: 24rem;
 }
@@ -221,8 +217,7 @@
 }
 
 /* Admin and dense data views */
-:root:not([data-theme="classic"])[data-theme-scene="admin"]
-  .admin-page-panel {
+:root:not([data-theme="classic"])[data-theme-scene="admin"] .admin-page-panel {
   width: min(100%, var(--theme-page-max-width));
   margin-inline: auto;
   padding-inline: 1.5rem;
@@ -272,9 +267,7 @@
 
 /* Dialogs, popovers and command surfaces */
 :root:not([data-theme="classic"]) [role="dialog"],
-:root:not([data-theme="classic"])
-  [data-radix-popper-content-wrapper]
-  > * {
+:root:not([data-theme="classic"]) [data-radix-popper-content-wrapper] > * {
   border-radius: var(--theme-panel-radius);
 }
 
