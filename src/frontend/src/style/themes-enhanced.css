@@ -165,8 +165,16 @@
 
 :root[data-theme="nebula"] .react-flow__pane {
   background-image:
-    radial-gradient(circle at 28% 20%, rgb(124 58 237 / 0.08), transparent 24rem),
-    radial-gradient(circle at 78% 24%, rgb(14 165 233 / 0.05), transparent 22rem);
+    radial-gradient(
+      circle at 28% 20%,
+      rgb(124 58 237 / 0.08),
+      transparent 24rem
+    ),
+    radial-gradient(
+      circle at 78% 24%,
+      rgb(14 165 233 / 0.05),
+      transparent 22rem
+    );
 }
 
 :root[data-theme="nebula"] .react-flow__node > div {
@@ -398,7 +406,11 @@
 :root[data-theme="aurora"] .react-flow__pane {
   background-image:
     radial-gradient(circle at 20% 24%, rgb(124 58 237 / 0.1), transparent 24rem),
-    radial-gradient(circle at 80% 18%, rgb(14 165 233 / 0.06), transparent 22rem);
+    radial-gradient(
+      circle at 80% 18%,
+      rgb(14 165 233 / 0.06),
+      transparent 22rem
+    );
 }
 
 :root[data-theme="aurora"] .react-flow__node > div {
