@@ -69,8 +69,7 @@
 
 :root:not([data-theme="classic"])[data-theme-scene="settings"]
   [data-theme-region="settings-main"],
-:root:not([data-theme="classic"])[data-theme-scene="admin"]
-  .admin-page-panel,
+:root:not([data-theme="classic"])[data-theme-scene="admin"] .admin-page-panel,
 :root:not([data-theme="classic"])[data-theme-scene="library"]
   [data-theme-region="page-content"],
 :root:not([data-theme="classic"])[data-theme-scene="collection"]
@@ -80,12 +79,12 @@
 
 :root:not([data-theme="classic"])[data-theme-scene="settings"]
   [data-theme-region="settings-sidebar"],
-:root:not([data-theme="classic"])[data-theme-scene="library"]
-  [data-sidebar],
+:root:not([data-theme="classic"])[data-theme-scene="library"] [data-sidebar],
 :root:not([data-theme="classic"])[data-theme-scene="collection"]
   [data-theme-region="collection-sidebar"] {
   background-color: hsl(
-    var(--sidebar-background) / var(--theme-scene-panel-alpha)
+    var(--sidebar-background) /
+    var(--theme-scene-panel-alpha)
   );
 }
 
@@ -203,7 +202,8 @@
     [data-theme-scene="settings"],
     [data-theme-scene="admin"],
     [data-theme-scene="library"]
-  ) body {
+  )
+  body {
   background-image: linear-gradient(180deg, #f8fafc, #f4f7fb);
 }
 
@@ -211,6 +211,7 @@
     [data-theme-scene="settings"],
     [data-theme-scene="admin"],
     [data-theme-scene="library"]
-  ) body {
+  )
+  body {
   background-image: linear-gradient(180deg, #fcfaf8, #f8f4f1);
 }
