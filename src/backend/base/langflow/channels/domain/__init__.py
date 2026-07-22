@@ -1,0 +1,1 @@
+"""Channel gateway domain models."""
