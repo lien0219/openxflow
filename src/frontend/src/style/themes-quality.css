@@ -96,6 +96,18 @@
   transform: scale(1.01);
 }
 
+/* Match the Classic settings layout: the right side is a transparent layout
+ * container, while only its actual setting cards own borders and surfaces. */
+:root:not([data-theme="classic"])[data-theme-scene="settings"]
+  [data-theme-region="settings-main"] {
+  min-width: 0;
+  margin-left: 1.25rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 /*
  * Keep the workflow node geometry identical to the official Classic theme.
  * Theme presets may recolor surfaces, but they must not clip handles, move
@@ -190,7 +202,7 @@
 
   :root:not([data-theme="classic"]) [data-theme-region="settings-main"] {
     margin-left: 0;
-    border-radius: 0.75rem;
+    border-radius: 0;
   }
 
   :root:not([data-theme="classic"]) [data-theme-region="settings-sidebar"] {
