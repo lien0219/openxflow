@@ -6,7 +6,6 @@ import hashlib
 import json
 from typing import Any
 
-from langflow.api.v1.endpoints import simple_run_flow
 from langflow.api.v1.schemas import RunResponse, SimplifiedAPIRequest
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelMessageType
 from langflow.helpers.flow import get_flow_by_id_or_endpoint_name
@@ -83,6 +82,9 @@ class ChannelWorkflowExecutor:
         flow_identifier: str,
         input_value: str | None,
     ) -> ChannelMessage:
+        # Import lazily to keep API router initialization acyclic.
+        from langflow.api.v1.endpoints import simple_run_flow
+
         flow = await get_flow_by_id_or_endpoint_name(
             flow_identifier,
             user.id,
