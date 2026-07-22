@@ -17,7 +17,6 @@ export default function SettingsPage(): JSX.Element {
   const autoLogin = useAuthStore((state) => state.autoLogin);
   const hasStore = useStoreStore((state) => state.hasStore);
 
-  // Hides the General settings if there is nothing to show
   const showGeneralSettings = ENABLE_PROFILE_ICONS || hasStore || !autoLogin;
 
   const sidebarNavItems: {
@@ -90,7 +89,6 @@ export default function SettingsPage(): JSX.Element {
         />
       ),
     },
-
     {
       title: t("settings.nav.shortcuts"),
       href: "/settings/shortcuts",
@@ -113,7 +111,6 @@ export default function SettingsPage(): JSX.Element {
     },
   );
 
-  // TODO: Remove this on cleanup
   if (!ENABLE_DATASTAX_LANGFLOW) {
     const langflowItems = CustomStoreSidebar(true, ENABLE_LANGFLOW_STORE);
     sidebarNavItems.splice(2, 0, ...langflowItems);
@@ -126,8 +123,13 @@ export default function SettingsPage(): JSX.Element {
       description={t("settings.description")}
     >
       <SidebarProvider width="15rem" defaultOpen={false}>
-        <SideBarButtonsComponent items={sidebarNavItems} />
-        <main className="flex flex-1 overflow-hidden">
+        <div data-theme-region="settings-sidebar">
+          <SideBarButtonsComponent items={sidebarNavItems} />
+        </div>
+        <main
+          className="flex flex-1 overflow-hidden"
+          data-theme-region="settings-main"
+        >
           <div className="flex flex-1 flex-col overflow-x-hidden pt-1">
             <Outlet />
           </div>
