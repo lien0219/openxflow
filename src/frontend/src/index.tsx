@@ -10,6 +10,7 @@ import "./style/themes.css";
 import "./style/themes-enhanced.css";
 import "./style/themes-scenes.css";
 import "./style/themes-components.css";
+import "./style/themes-quality.css";
 // @ts-ignore
 import "./App.css";
 import "./style/applies.css";
