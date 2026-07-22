@@ -22,7 +22,15 @@
 }
 
 :root:not([data-theme="classic"])
-  :is(button, a, input, textarea, select, [role="button"], [role="menuitem"]):focus-visible {
+  :is(
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    [role="button"],
+    [role="menuitem"]
+  ):focus-visible {
   border-radius: max(0.375rem, var(--radius));
 }
 
