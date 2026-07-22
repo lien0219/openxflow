@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from langflow.channels.adapters.base import ChannelAdapter
+from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelType
+
+if TYPE_CHECKING:
+    from langflow.channels.services.deduplication import ChannelEventDeduplicator
 
 ChannelHandler = Callable[[ChannelEvent], Awaitable[ChannelMessage | None]]
 
@@ -39,6 +44,8 @@ class ChannelGateway:
         headers: dict[str, str],
         payload: bytes,
         handler: ChannelHandler,
+        *,
+        deduplicator: ChannelEventDeduplicator | None = None,
     ) -> ChannelEvent:
         adapter = self.get_adapter(connection_id)
         if not await adapter.verify_event(headers, payload):
@@ -50,9 +57,23 @@ class ChannelGateway:
         if event.channel != adapter.channel_type:
             raise ValueError("Parsed channel event has an unexpected channel type")
 
-        response = await handler(event)
-        if response is not None:
-            await adapter.send_message(event.conversation.external_conversation_id, response)
+        receipt = None
+        if deduplicator is not None:
+            receipt = await deduplicator.claim(event, payload)
+            if receipt is None:
+                raise DuplicateChannelEventError(event.event_id)
+
+        try:
+            response = await handler(event)
+            if response is not None:
+                await adapter.send_message(event.conversation.external_conversation_id, response)
+        except Exception as exc:
+            if deduplicator is not None and receipt is not None:
+                await deduplicator.fail(receipt, exc)
+            raise
+        else:
+            if deduplicator is not None and receipt is not None:
+                await deduplicator.complete(receipt)
         return event
 
     async def send(self, connection_id: UUID, target_id: str, message: ChannelMessage) -> str:
