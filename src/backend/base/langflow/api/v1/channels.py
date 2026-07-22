@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from langflow.api.utils import CurrentActiveUser, DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.telegram import TelegramChannelAdapter
+from langflow.channels.services.conversation_validation import validate_conversation_binding_resources
 from langflow.services.database.models.channel.crud import (
     create_channel_connection,
     delete_channel_connection,
@@ -235,6 +236,7 @@ async def put_channel_conversation(
     current_user: CurrentActiveUser,
 ) -> ChannelConversationBindingRead:
     await _owned_connection_or_404(db, current_user.id, connection_id)
+    await validate_conversation_binding_resources(db, current_user, payload)
     result = await upsert_channel_conversation_binding(db, connection_id, payload)
     await db.commit()
     return result
