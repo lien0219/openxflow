@@ -69,10 +69,7 @@ export default function PageLayout({
         <div className="flex shrink-0 px-6">
           <Separator className="flex" />
         </div>
-        <div
-          className="flex flex-1 p-6 pt-7"
-          data-theme-region="page-content"
-        >
+        <div className="flex flex-1 p-6 pt-7" data-theme-region="page-content">
           {children}
         </div>
       </div>
