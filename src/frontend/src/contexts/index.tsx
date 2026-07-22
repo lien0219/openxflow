@@ -4,6 +4,7 @@ import { type ReactNode, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { GradientWrapper } from "@/components/common/GradientWrapper";
 import { CustomWrapper } from "@/customization/custom-wrapper";
+import { ENABLE_CUSTOM_PARAM } from "@/customization/feature-flags";
 import { TooltipProvider } from "../components/ui/tooltip";
 import { ApiInterceptor } from "../controllers/API/api";
 import { AuthProvider } from "./authContext";
@@ -20,8 +21,37 @@ type ThemeScene =
   | "library"
   | "viewer";
 
+const ROUTE_ROOTS = new Set([
+  "account",
+  "admin",
+  "all",
+  "assets",
+  "components",
+  "flow",
+  "flows",
+  "login",
+  "mcp",
+  "playground",
+  "settings",
+  "signup",
+]);
+
+const normalizeThemePath = (pathname: string): string => {
+  const segments = pathname.toLowerCase().split("/").filter(Boolean);
+
+  if (
+    ENABLE_CUSTOM_PARAM &&
+    segments.length > 0 &&
+    !ROUTE_ROOTS.has(segments[0])
+  ) {
+    segments.shift();
+  }
+
+  return `/${segments.join("/")}`;
+};
+
 const resolveThemeScene = (pathname: string): ThemeScene => {
-  const path = pathname.toLowerCase();
+  const path = normalizeThemePath(pathname);
 
   if (path.startsWith("/playground/")) return "playground";
   if (path.startsWith("/flow/")) {
@@ -37,7 +67,7 @@ const resolveThemeScene = (pathname: string): ThemeScene => {
     return "auth";
   }
   if (
-    path.includes("/assets/") ||
+    path.startsWith("/assets/") ||
     path.includes("knowledge-bases") ||
     path.includes("/files")
   ) {
@@ -52,10 +82,6 @@ function ThemeSceneController() {
 
   useEffect(() => {
     document.documentElement.dataset.themeScene = resolveThemeScene(pathname);
-
-    return () => {
-      delete document.documentElement.dataset.themeScene;
-    };
   }, [pathname]);
 
   return null;
