@@ -74,10 +74,10 @@
 }
 
 /* Project overflow actions should inherit the project row surface instead of
- * rendering the button component's default white background. */
+ * rendering the select trigger's default surface. */
 :root:not([data-theme="classic"])
   [data-theme-region="collection-sidebar"]
-  button[aria-haspopup="menu"] {
+  [data-theme-control="project-overflow"] {
   border-color: transparent;
   background-color: transparent;
   color: hsl(var(--muted-foreground));
@@ -86,10 +86,10 @@
 
 :root:not([data-theme="classic"])
   [data-theme-region="collection-sidebar"]
-  button[aria-haspopup="menu"]:is(:hover, :focus-visible),
+  [data-theme-control="project-overflow"]:is(:hover, :focus-visible),
 :root:not([data-theme="classic"])
   [data-theme-region="collection-sidebar"]
-  button[aria-haspopup="menu"][data-state="open"] {
+  [data-theme-control="project-overflow"][data-state="open"] {
   border-color: transparent;
   background-color: hsl(var(--foreground) / 0.07);
   color: hsl(var(--foreground));
