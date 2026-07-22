@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
+from pydantic import AnyHttpUrl, BaseModel
 from sqlalchemy.exc import IntegrityError
 
 from langflow.api.utils import CurrentActiveUser, DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
+from langflow.channels.adapters.telegram import TelegramChannelAdapter
 from langflow.services.database.models.channel.crud import (
     create_channel_connection,
     delete_channel_connection,
@@ -25,6 +28,7 @@ from langflow.services.database.models.channel.crud import (
 from langflow.services.database.models.channel.model import (
     ChannelConnectionCreate,
     ChannelConnectionRead,
+    ChannelConnectionStatus,
     ChannelConnectionUpdate,
     ChannelConversationBindingRead,
     ChannelConversationBindingUpsert,
@@ -33,6 +37,11 @@ from langflow.services.database.models.channel.model import (
 )
 
 router = APIRouter(prefix="/channels", tags=["Channels"])
+
+
+class TelegramWebhookConfigureRequest(BaseModel):
+    public_base_url: AnyHttpUrl
+    drop_pending_updates: bool = False
 
 
 async def _owned_connection_or_404(db: DbSession, user_id: UUID, connection_id: UUID):
@@ -62,7 +71,10 @@ async def create_channel_connection_route(
         return result
     except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A channel connection with this name already exists") from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A channel connection with this name already exists",
+        ) from exc
 
 
 @router.patch("/{connection_id}", response_model=ChannelConnectionRead)
@@ -79,7 +91,10 @@ async def update_channel_connection_route(
         return result
     except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A channel connection with this name already exists") from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A channel connection with this name already exists",
+        ) from exc
 
 
 @router.delete("/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -102,9 +117,62 @@ async def test_channel_connection_route(
 ) -> dict[str, Any]:
     connection = await _owned_connection_or_404(db, current_user.id, connection_id)
     try:
-        return await build_channel_adapter(connection).healthcheck()
+        result = await build_channel_adapter(connection).healthcheck()
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
+    except Exception as exc:
+        connection.status = ChannelConnectionStatus.ERROR.value
+        connection.last_error = str(exc)[:2000]
+        connection.updated_at = datetime.now(timezone.utc)
+        db.add(connection)
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Channel connection test failed") from exc
+
+    connection.status = ChannelConnectionStatus.CONNECTED.value
+    connection.last_error = None
+    connection.last_connected_at = datetime.now(timezone.utc)
+    connection.updated_at = datetime.now(timezone.utc)
+    db.add(connection)
+    await db.commit()
+    return result
+
+
+@router.post("/{connection_id}/telegram/webhook")
+async def configure_telegram_webhook(
+    connection_id: UUID,
+    payload: TelegramWebhookConfigureRequest,
+    db: DbSession,
+    current_user: CurrentActiveUser,
+) -> dict[str, Any]:
+    connection = await _owned_connection_or_404(db, current_user.id, connection_id)
+    adapter = build_channel_adapter(connection)
+    if not isinstance(adapter, TelegramChannelAdapter):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a Telegram channel")
+
+    webhook_url = (
+        f"{str(payload.public_base_url).rstrip('/')}"
+        f"/api/v1/channel-webhooks/telegram/{connection_id}"
+    )
+    try:
+        configured = await adapter.set_webhook(
+            webhook_url,
+            drop_pending_updates=payload.drop_pending_updates,
+        )
+    except Exception as exc:
+        connection.status = ChannelConnectionStatus.ERROR.value
+        connection.last_error = str(exc)[:2000]
+        connection.updated_at = datetime.now(timezone.utc)
+        db.add(connection)
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Telegram webhook configuration failed") from exc
+
+    connection.status = ChannelConnectionStatus.CONNECTED.value
+    connection.last_error = None
+    connection.last_connected_at = datetime.now(timezone.utc)
+    connection.updated_at = datetime.now(timezone.utc)
+    db.add(connection)
+    await db.commit()
+    return {"ok": configured, "webhook_url": webhook_url}
 
 
 @router.get("/{connection_id}/identities", response_model=list[ChannelIdentityRead])
@@ -126,7 +194,10 @@ async def put_channel_identity(
 ) -> ChannelIdentityRead:
     await _owned_connection_or_404(db, current_user.id, connection_id)
     if payload.openxflow_user_id != current_user.id and not current_user.is_superuser:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot bind this channel identity to another user")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot bind this channel identity to another user",
+        )
     result = await upsert_channel_identity(db, connection_id, payload)
     await db.commit()
     return result
