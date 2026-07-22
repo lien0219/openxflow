@@ -9,24 +9,12 @@ from fastapi import APIRouter, HTTPException, Request, status
 from langflow.api.utils import DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
-from langflow.channels.domain.models import ChannelEvent, ChannelMessage
 from langflow.channels.services.deduplication import ChannelEventDeduplicator
+from langflow.channels.services.dispatch import ChannelDispatchService
 from langflow.channels.services.gateway import ChannelGateway
 from langflow.services.database.models.channel.model import ChannelConnection
 
 router = APIRouter(prefix="/channel-webhooks", tags=["Channel Webhooks"])
-
-
-async def _default_channel_handler(event: ChannelEvent) -> ChannelMessage | None:
-    """Temporary transport-level handler until workflow dispatch is wired."""
-    if event.event_type.value == "message.command" and event.message.text in {"/start", "/help"}:
-        return ChannelMessage(
-            title="OpenXFlow",
-            text=(
-                "渠道连接成功。下一阶段将启用账号绑定、工作流运行、知识库文件上传与问答。"
-            ),
-        )
-    return None
 
 
 @router.post("/telegram/{connection_id}", status_code=status.HTTP_200_OK)
@@ -44,13 +32,14 @@ async def receive_telegram_webhook(
     gateway = ChannelGateway()
     gateway.register_adapter(connection_id, adapter)
     deduplicator = ChannelEventDeduplicator(db)
+    dispatcher = ChannelDispatchService(db, connection)
 
     try:
         await gateway.receive(
             connection_id,
             {key.lower(): value for key, value in request.headers.items()},
             payload,
-            _default_channel_handler,
+            dispatcher.handle,
             deduplicator=deduplicator,
         )
     except PermissionError as exc:
@@ -62,6 +51,9 @@ async def receive_telegram_webhook(
     except ValueError as exc:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Channel event processing failed") from exc
 
     await db.commit()
     return {"ok": True}

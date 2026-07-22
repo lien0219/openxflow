@@ -12,6 +12,7 @@ from .auth import (
     SSOUserProfile,
 )
 from .channel import (
+    ChannelBindingCode,
     ChannelConnection,
     ChannelConversationBinding,
     ChannelEventReceipt,
@@ -44,6 +45,7 @@ __all__ = [
     "AuthzTeam",
     "AuthzTeamMember",
     "CasbinRule",
+    "ChannelBindingCode",
     "ChannelConnection",
     "ChannelConversationBinding",
     "ChannelEventReceipt",
