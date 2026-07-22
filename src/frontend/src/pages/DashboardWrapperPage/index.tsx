@@ -6,9 +6,17 @@ export function DashboardWrapperPage() {
   useTheme();
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden">
-      <AppHeader />
-      <div className="flex w-full flex-1 flex-row overflow-hidden">
+    <div
+      className="flex h-screen w-full flex-col overflow-hidden"
+      data-theme-shell="dashboard"
+    >
+      <div data-theme-region="header">
+        <AppHeader />
+      </div>
+      <div
+        className="flex w-full flex-1 flex-row overflow-hidden"
+        data-theme-region="workspace"
+      >
         <Outlet />
       </div>
     </div>
