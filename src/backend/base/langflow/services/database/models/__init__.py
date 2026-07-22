@@ -11,6 +11,12 @@ from .auth import (
     SSOConfig,
     SSOUserProfile,
 )
+from .channel import (
+    ChannelConnection,
+    ChannelConversationBinding,
+    ChannelEventReceipt,
+    ChannelIdentity,
+)
 from .deployment import Deployment
 from .deployment_provider_account import DeploymentProviderAccount
 from .file import File
@@ -38,6 +44,10 @@ __all__ = [
     "AuthzTeam",
     "AuthzTeamMember",
     "CasbinRule",
+    "ChannelConnection",
+    "ChannelConversationBinding",
+    "ChannelEventReceipt",
+    "ChannelIdentity",
     "Deployment",
     "DeploymentProviderAccount",
     "File",
