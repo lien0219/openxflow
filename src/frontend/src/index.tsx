@@ -9,6 +9,7 @@ import "./style/index.css";
 import "./style/themes.css";
 import "./style/themes-enhanced.css";
 import "./style/themes-scenes.css";
+import "./style/themes-components.css";
 // @ts-ignore
 import "./App.css";
 import "./style/applies.css";
