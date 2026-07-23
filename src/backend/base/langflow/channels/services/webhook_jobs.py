@@ -1,0 +1,274 @@
+"""Database-backed queue for provider callbacks acknowledged before workflow execution."""
+
+from __future__ import annotations
+
+import asyncio
+from contextlib import asynccontextmanager
+from datetime import timedelta
+from typing import Any
+from uuid import UUID, uuid4
+
+import sqlalchemy as sa
+from lfx.log.logger import logger
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from langflow.channels.services.runtime_config import (
+    durable_webhook_job_config,
+    webhook_limiter_limits_from_env,
+)
+from langflow.channels.services.webhook_processing import process_provider_webhook
+from langflow.services.database.models.channel.model import utc_now
+from langflow.services.database.models.channel.webhook_job_model import (
+    ChannelWebhookJob,
+    ChannelWebhookJobStatus,
+)
+from langflow.services.deps import session_scope
+
+
+async def enqueue_provider_webhook_job(
+    session: AsyncSession,
+    *,
+    connection_id: UUID,
+    channel_type: str,
+    external_event_id: str,
+    headers: dict[str, str],
+    payload: bytes,
+) -> bool:
+    """Persist a validated callback and commit it before returning a successful provider ACK."""
+    config = durable_webhook_job_config()
+    job = ChannelWebhookJob(
+        connection_id=connection_id,
+        channel_type=channel_type,
+        external_event_id=external_event_id,
+        headers_data=dict(headers),
+        payload=payload,
+        max_attempts=config.max_attempts,
+    )
+    session.add(job)
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        return False
+    return True
+
+
+def _claimable(now):  # type: ignore[no-untyped-def]
+    return sa.or_(
+        sa.and_(
+            ChannelWebhookJob.status == ChannelWebhookJobStatus.PENDING.value,
+            ChannelWebhookJob.next_attempt_at <= now,
+        ),
+        sa.and_(
+            ChannelWebhookJob.status == ChannelWebhookJobStatus.PROCESSING.value,
+            ChannelWebhookJob.lease_expires_at.is_not(None),
+            ChannelWebhookJob.lease_expires_at <= now,
+        ),
+    )
+
+
+async def claim_provider_webhook_job(
+    session: AsyncSession,
+    *,
+    worker_id: UUID,
+) -> ChannelWebhookJob | None:
+    """Claim one ready or expired-lease job through a portable conditional update."""
+    config = durable_webhook_job_config()
+    now = utc_now()
+    candidate_ids = list(
+        (
+            await session.exec(
+                select(ChannelWebhookJob.id)
+                .where(_claimable(now))
+                .order_by(ChannelWebhookJob.next_attempt_at, ChannelWebhookJob.created_at)
+                .limit(16)
+            )
+        ).all()
+    )
+    for candidate_id in candidate_ids:
+        result = await session.exec(
+            sa.update(ChannelWebhookJob)
+            .where(ChannelWebhookJob.id == candidate_id, _claimable(now))
+            .values(
+                status=ChannelWebhookJobStatus.PROCESSING.value,
+                attempts=ChannelWebhookJob.attempts + 1,
+                lease_owner=worker_id,
+                lease_expires_at=now + timedelta(seconds=config.lease_seconds),
+                updated_at=now,
+                last_error=None,
+            )
+        )
+        if result.rowcount != 1:
+            await session.rollback()
+            continue
+        await session.commit()
+        return await session.get(ChannelWebhookJob, candidate_id)
+    await session.rollback()
+    return None
+
+
+async def complete_provider_webhook_job(
+    session: AsyncSession,
+    *,
+    job_id: UUID,
+    worker_id: UUID,
+) -> bool:
+    now = utc_now()
+    result = await session.exec(
+        sa.update(ChannelWebhookJob)
+        .where(
+            ChannelWebhookJob.id == job_id,
+            ChannelWebhookJob.status == ChannelWebhookJobStatus.PROCESSING.value,
+            ChannelWebhookJob.lease_owner == worker_id,
+        )
+        .values(
+            status=ChannelWebhookJobStatus.COMPLETED.value,
+            lease_owner=None,
+            lease_expires_at=None,
+            completed_at=now,
+            updated_at=now,
+            last_error=None,
+        )
+    )
+    await session.commit()
+    return result.rowcount == 1
+
+
+async def fail_provider_webhook_job(
+    session: AsyncSession,
+    *,
+    job: ChannelWebhookJob,
+    worker_id: UUID,
+    error: str,
+) -> bool:
+    """Schedule retry or mark the leased job terminally failed."""
+    config = durable_webhook_job_config()
+    now = utc_now()
+    exhausted = job.attempts >= job.max_attempts
+    if exhausted:
+        status = ChannelWebhookJobStatus.FAILED.value
+        next_attempt_at = job.next_attempt_at
+    else:
+        delay = min(
+            config.retry_max_seconds,
+            config.retry_base_seconds * (2 ** max(0, job.attempts - 1)),
+        )
+        status = ChannelWebhookJobStatus.PENDING.value
+        next_attempt_at = now + timedelta(seconds=delay)
+
+    result = await session.exec(
+        sa.update(ChannelWebhookJob)
+        .where(
+            ChannelWebhookJob.id == job.id,
+            ChannelWebhookJob.status == ChannelWebhookJobStatus.PROCESSING.value,
+            ChannelWebhookJob.lease_owner == worker_id,
+        )
+        .values(
+            status=status,
+            lease_owner=None,
+            lease_expires_at=None,
+            next_attempt_at=next_attempt_at,
+            updated_at=now,
+            last_error=error[:2000],
+        )
+    )
+    await session.commit()
+    return result.rowcount == 1
+
+
+class DurableWebhookJobWorker:
+    """Run process-local consumers for the shared database webhook queue."""
+
+    def __init__(self) -> None:
+        self.worker_id = uuid4()
+        self._stop_event = asyncio.Event()
+        self._tasks: list[asyncio.Task[None]] = []
+
+    async def run(self) -> None:
+        config = durable_webhook_job_config()
+        if not config.enabled:
+            await logger.adebug("Durable channel webhook jobs are disabled")
+            return
+        worker_count = webhook_limiter_limits_from_env().max_concurrency
+        self._tasks = [
+            asyncio.create_task(self._consume(index), name=f"channel-webhook-job-{index}")
+            for index in range(worker_count)
+        ]
+        try:
+            await self._stop_event.wait()
+        finally:
+            for task in self._tasks:
+                task.cancel()
+            if self._tasks:
+                await asyncio.gather(*self._tasks, return_exceptions=True)
+            self._tasks.clear()
+
+    async def stop(self) -> None:
+        self._stop_event.set()
+
+    async def _consume(self, _index: int) -> None:
+        config = durable_webhook_job_config()
+        while not self._stop_event.is_set():
+            job = await self._claim_one()
+            if job is None:
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=config.poll_seconds)
+                except TimeoutError:
+                    pass
+                continue
+            await self._process(job)
+
+    async def _claim_one(self) -> ChannelWebhookJob | None:
+        try:
+            async with session_scope() as session:
+                return await claim_provider_webhook_job(session, worker_id=self.worker_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            await logger.aexception("Unable to claim a durable channel webhook job")
+            return None
+
+    async def _process(self, job: ChannelWebhookJob) -> None:
+        error = "Channel webhook processing failed"
+        try:
+            success = await process_provider_webhook(
+                connection_id=job.connection_id,
+                expected_channel_type=job.channel_type,
+                headers={str(key): str(value) for key, value in job.headers_data.items()},
+                payload=job.payload,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            success = False
+            error = str(exc) or type(exc).__name__
+            await logger.aexception("Durable channel webhook job %s crashed", job.id)
+
+        async with session_scope() as session:
+            if success:
+                await complete_provider_webhook_job(
+                    session,
+                    job_id=job.id,
+                    worker_id=self.worker_id,
+                )
+            else:
+                await fail_provider_webhook_job(
+                    session,
+                    job=job,
+                    worker_id=self.worker_id,
+                    error=error,
+                )
+
+
+@asynccontextmanager
+async def durable_webhook_job_lifespan(_app):  # type: ignore[no-untyped-def]
+    worker = DurableWebhookJobWorker()
+    task = asyncio.create_task(worker.run(), name="channel-webhook-job-worker")
+    try:
+        yield
+    finally:
+        await worker.stop()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
