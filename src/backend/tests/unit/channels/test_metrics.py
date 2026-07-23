@@ -7,16 +7,24 @@ from langflow.channels.services.metrics import (
     record_outbound_failure,
     record_outbound_retry,
     record_outbound_success,
+    record_token_rejection,
+    record_token_refresh_failure,
+    record_token_refresh_success,
+    record_token_replay,
     reset_outbound_metrics_for_testing,
+    reset_token_recovery_metrics_for_testing,
+    token_recovery_metrics_snapshot,
 )
 
 
 def setup_function() -> None:
     reset_outbound_metrics_for_testing()
+    reset_token_recovery_metrics_for_testing()
 
 
 def teardown_function() -> None:
     reset_outbound_metrics_for_testing()
+    reset_token_recovery_metrics_for_testing()
 
 
 def test_outbound_metric_snapshot_groups_by_channel_and_operation() -> None:
@@ -33,9 +41,25 @@ def test_outbound_metric_snapshot_groups_by_channel_and_operation() -> None:
     assert snapshot.failed[("feishu", "send_response", "http_503")] == 1
 
 
+def test_token_recovery_snapshot_groups_by_provider() -> None:
+    record_token_rejection("WeCom")
+    record_token_refresh_success("wecom")
+    record_token_refresh_failure("feishu")
+    record_token_replay("wecom")
+
+    snapshot = token_recovery_metrics_snapshot()
+    assert snapshot.rejections["wecom"] == 1
+    assert snapshot.refresh_succeeded["wecom"] == 1
+    assert snapshot.refresh_failed["feishu"] == 1
+    assert snapshot.replays["wecom"] == 1
+
+
 def test_channel_prometheus_collector_exposes_runtime_metrics() -> None:
     record_outbound_attempt("telegram.send_message")
     record_outbound_retry("telegram.send_message", "http_429")
+    record_token_rejection("dingtalk")
+    record_token_refresh_success("dingtalk")
+    record_token_replay("dingtalk")
 
     registry = CollectorRegistry(auto_describe=True)
     registry.register(ChannelMetricsCollector())
@@ -47,3 +71,6 @@ def test_channel_prometheus_collector_exposes_runtime_metrics() -> None:
         'openxflow_channel_outbound_retries_total{channel="telegram",operation="send_message",reason="http_429"} 1.0'
         in rendered
     )
+    assert 'openxflow_channel_token_rejections_total{provider="dingtalk"} 1.0' in rendered
+    assert 'openxflow_channel_token_refresh_succeeded_total{provider="dingtalk"} 1.0' in rendered
+    assert 'openxflow_channel_token_replays_total{provider="dingtalk"} 1.0' in rendered
