@@ -66,6 +66,7 @@ class ChannelStreamRuntimeRead(BaseModel):
 
 class DurableWebhookJobRuntimeRead(BaseModel):
     enabled: bool
+    worker_count: int
     poll_seconds: float
     lease_seconds: float
     max_attempts: int
