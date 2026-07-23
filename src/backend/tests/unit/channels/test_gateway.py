@@ -69,6 +69,51 @@ async def test_gateway_rejects_invalid_signature():
         await gateway.receive(connection_id, {}, b"{}", handler)
 
 
+async def test_gateway_accepts_minimal_internal_preverified_headers():
+    connection_id = uuid4()
+    adapter = MockChannelAdapter(connection_id, verification_token="secret")
+    gateway = ChannelGateway()
+    gateway.register_adapter(connection_id, adapter)
+
+    async def handler(event):
+        return None
+
+    event = await gateway.receive(
+        connection_id,
+        {
+            "x-openxflow-preverified": "1",
+            "content-type": "application/json",
+        },
+        b'{"event_id":"event-preverified","text":"hello"}',
+        handler,
+    )
+
+    assert event.event_id == "event-preverified"
+
+
+@pytest.mark.parametrize("extra_header", ["authorization", "cookie", "x-forwarded-for"])
+async def test_gateway_rejects_preverified_marker_with_unapproved_headers(extra_header: str):
+    connection_id = uuid4()
+    adapter = MockChannelAdapter(connection_id, verification_token="secret")
+    gateway = ChannelGateway()
+    gateway.register_adapter(connection_id, adapter)
+
+    async def handler(event):
+        del event
+        return None
+
+    with pytest.raises(PermissionError):
+        await gateway.receive(
+            connection_id,
+            {
+                "x-openxflow-preverified": "1",
+                extra_header: "sensitive",
+            },
+            b'{"event_id":"event-preverified"}',
+            handler,
+        )
+
+
 async def test_gateway_rejects_duplicate_event():
     connection_id = uuid4()
     gateway = ChannelGateway()
