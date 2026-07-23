@@ -23,6 +23,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS", "2")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS", "14")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE", "250")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS", "45")
     result = await read_channel_runtime(object())
 
     assert result.streams_enabled is False
@@ -63,6 +64,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.durable_webhook_jobs.completed_retention_days == 2
     assert result.durable_webhook_jobs.failed_retention_days == 14
     assert result.durable_webhook_jobs.cleanup_batch_size == 250
+    assert result.durable_webhook_jobs.outbound_delivery_retention_days == 45
     assert result.durable_webhook_jobs.running_managers >= 0
     assert result.durable_webhook_jobs.consumer_tasks >= 0
     assert result.durable_webhook_jobs.pending_jobs >= 0
@@ -81,6 +83,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.outbound_delivery.sent_total >= 0
     assert result.outbound_delivery.failed_total >= 0
     assert result.outbound_delivery.state_errors_total >= 0
+    assert result.outbound_delivery.cleaned_total >= 0
     assert result.outbound_retry.max_attempts == 5
 
 
@@ -118,6 +121,9 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_outbound_delivery_sent" in response.body
     assert b"openxflow_channel_outbound_delivery_failed" in response.body
     assert b"openxflow_channel_outbound_delivery_state_errors" in response.body
+    assert b"openxflow_channel_outbound_delivery_cleaned" in response.body
+    assert b'delivery_kind="acknowledgement"' in response.body
+    assert b'delivery_kind="response"' in response.body
     assert b"openxflow_channel_webhook_pending" in response.body
     assert b"openxflow_channel_webhook_pending_bytes" in response.body
     assert b"openxflow_channel_webhook_max_pending_bytes" in response.body
