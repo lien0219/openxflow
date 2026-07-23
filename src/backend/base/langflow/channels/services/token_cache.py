@@ -1,12 +1,18 @@
-"""Provider access-token cache key and response parsing helpers."""
+"""Provider access-token cache key, parsing, and synchronization helpers."""
 
 from __future__ import annotations
 
 import hashlib
 import math
+import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
+
+from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
+
+TokenCache = dict[str, tuple[str, float]]
 
 
 class InvalidProviderTokenResponseError(RuntimeError):
@@ -33,6 +39,30 @@ def provider_token_cache_key(
             secret_digest,
         )
     )
+
+
+async def get_cached_provider_token(
+    *,
+    cache: TokenCache,
+    cache_key: str,
+    force_refresh: bool,
+    lock_pool: LoopLocalKeyedLockPool,
+    fetch_new_token: Callable[[], Awaitable[tuple[str, float]]],
+) -> str:
+    """Return one cached token while serializing refreshes only for the same credential key."""
+    now = time.monotonic()
+    cached = cache.get(cache_key)
+    if not force_refresh and cached is not None and cached[1] > now:
+        return cached[0]
+
+    async with lock_pool.hold(cache_key):
+        now = time.monotonic()
+        cached = cache.get(cache_key)
+        if not force_refresh and cached is not None and cached[1] > now:
+            return cached[0]
+        token, expires_at = await fetch_new_token()
+        cache[cache_key] = (token, expires_at)
+        return token
 
 
 def response_json_object(response: httpx.Response) -> dict[str, Any] | None:
