@@ -346,8 +346,9 @@ async def process_provider_webhook(
     expected_channel_type: str,
     headers: dict[str, str],
     payload: bytes,
+    preverified: bool = False,
 ) -> bool:
-    """Process one already-validated provider callback in an isolated DB session."""
+    """Process one provider callback in an isolated database session."""
     async with session_scope() as session:
         connection = await session.get(ChannelConnection, connection_id)
         if connection is None or connection.channel_type != expected_channel_type or not connection.enabled:
@@ -364,13 +365,21 @@ async def process_provider_webhook(
         dispatcher = ChannelDispatchService(session, connection, adapter)
 
         try:
-            await gateway.receive(
-                connection_id,
-                headers,
-                payload,
-                dispatcher.handle,
-                deduplicator=deduplicator,
-            )
+            if preverified:
+                await gateway.receive_verified(
+                    connection_id,
+                    payload,
+                    dispatcher.handle,
+                    deduplicator=deduplicator,
+                )
+            else:
+                await gateway.receive(
+                    connection_id,
+                    headers,
+                    payload,
+                    dispatcher.handle,
+                    deduplicator=deduplicator,
+                )
         except DuplicateChannelEventError:
             await session.rollback()
             await logger.adebug(
