@@ -8,6 +8,8 @@ import {
   type ChannelConnectionCreate,
   type ChannelConnectionUpdate,
   type ChannelConversationBinding,
+  type ChannelConversationBindingUpsert,
+  type ChannelType,
   useConfigureTelegramWebhook,
   useCreateChannelConnection,
   useDeleteChannelConnection,
@@ -20,31 +22,44 @@ import {
   useUpdateChannelConnection,
   useUpsertChannelConversation,
 } from "@/controllers/API/queries/channels";
-import { useGetKnowledgeBases } from "@/controllers/API/queries/knowledge-bases/use-get-knowledge-bases";
 import { useGetRefreshFlowsQuery } from "@/controllers/API/queries/flows/use-get-refresh-flows-query";
+import { useGetKnowledgeBases } from "@/controllers/API/queries/knowledge-bases/use-get-knowledge-bases";
 import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import useAlertStore from "@/stores/alertStore";
 import ChannelConnectionDialog from "./components/ChannelConnectionDialog";
 import ConversationBindingDialog from "./components/ConversationBindingDialog";
-import { getApiErrorMessage, getChannelStatusMeta, readConnectionSetting } from "./utils";
+import {
+  buildChannelWebhookUrl,
+  getApiErrorMessage,
+  getChannelStatusMeta,
+  readConnectionSetting,
+} from "./utils";
 
+type SupportedChannelType = Extract<ChannelType, "telegram" | "feishu">;
 type DeleteTarget =
   | { kind: "connection"; id: string; name: string }
   | { kind: "identity"; id: string; name: string }
   | null;
 
-const PROVIDERS = [
+const PROVIDERS: Array<{
+  id: ChannelType;
+  name: string;
+  enabled: boolean;
+  icon: string;
+}> = [
   { id: "telegram", name: "Telegram", enabled: true, icon: "Send" },
-  { id: "feishu", name: "飞书", enabled: false, icon: "MessagesSquare" },
+  { id: "feishu", name: "飞书", enabled: true, icon: "MessagesSquare" },
   { id: "dingtalk", name: "钉钉", enabled: false, icon: "MessageCircle" },
   { id: "wecom", name: "企业微信", enabled: false, icon: "Building2" },
-] as const;
+];
 
 export default function ChannelsPage() {
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
   const setErrorData = useAlertStore((state) => state.setErrorData);
   const [selectedConnectionId, setSelectedConnectionId] = useState("");
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
+  const [newChannelType, setNewChannelType] =
+    useState<SupportedChannelType>("telegram");
   const [editingConnection, setEditingConnection] =
     useState<ChannelConnection | null>(null);
   const [conversationDialogOpen, setConversationDialogOpen] = useState(false);
@@ -53,10 +68,8 @@ export default function ChannelsPage() {
   const [bindingCode, setBindingCode] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
 
-  const {
-    data: connections = [],
-    isLoading: connectionsLoading,
-  } = useGetChannelConnections();
+  const { data: connections = [], isLoading: connectionsLoading } =
+    useGetChannelConnections();
   const selectedConnection = useMemo(
     () =>
       connections.find((connection) => connection.id === selectedConnectionId) ??
@@ -105,6 +118,12 @@ export default function ChannelsPage() {
   const showError = (title: string, error: unknown) =>
     setErrorData({ title, list: [getApiErrorMessage(error)] });
 
+  const openNewConnection = (channelType: SupportedChannelType) => {
+    setNewChannelType(channelType);
+    setEditingConnection(null);
+    setConnectionDialogOpen(true);
+  };
+
   const handleConnectionSubmit = async ({
     payload,
     publicBaseUrl,
@@ -120,7 +139,7 @@ export default function ChannelsPage() {
           })
         : await createConnection.mutateAsync(payload as ChannelConnectionCreate);
 
-      if (publicBaseUrl) {
+      if (connection.channel_type === "telegram" && publicBaseUrl) {
         await configureWebhook.mutateAsync({
           connectionId: connection.id,
           payload: {
@@ -129,11 +148,15 @@ export default function ChannelsPage() {
           },
         });
       }
+
       setSelectedConnectionId(connection.id);
       setConnectionDialogOpen(false);
       setEditingConnection(null);
       setSuccessData({
-        title: publicBaseUrl ? "Telegram 连接与 Webhook 已配置" : "Telegram 连接已保存",
+        title:
+          connection.channel_type === "telegram" && publicBaseUrl
+            ? "Telegram 连接与 Webhook 已配置"
+            : `${connection.name}连接已保存`,
       });
     } catch (error) {
       showError("保存渠道连接失败", error);
@@ -147,15 +170,21 @@ export default function ChannelsPage() {
         connectionId: connection.id,
       });
       setSuccessData({
-        title: `连接成功：@${result.username ?? result.display_name ?? connection.name}`,
+        title: `连接成功：${result.username ?? result.display_name ?? connection.name}`,
       });
     } catch (error) {
       showError("渠道连接测试失败", error);
     }
   };
 
-  const handleConfigureWebhook = async (connection: ChannelConnection) => {
-    const publicBaseUrl = readConnectionSetting(connection, "public_base_url", "");
+  const handleConfigureTelegramWebhook = async (
+    connection: ChannelConnection,
+  ) => {
+    const publicBaseUrl = readConnectionSetting(
+      connection,
+      "public_base_url",
+      "",
+    );
     if (!publicBaseUrl) {
       setEditingConnection(connection);
       setConnectionDialogOpen(true);
@@ -191,7 +220,7 @@ export default function ChannelsPage() {
   };
 
   const handleConversationSubmit = async (
-    payload: Parameters<typeof upsertConversation.mutateAsync>[0]["payload"],
+    payload: ChannelConversationBindingUpsert,
   ) => {
     if (!selectedConnection) return;
     try {
@@ -236,25 +265,26 @@ export default function ChannelsPage() {
     );
   }
 
+  const webhookUrl = selectedConnection
+    ? buildChannelWebhookUrl(selectedConnection)
+    : null;
+
   return (
     <div className="flex h-full w-full flex-col gap-6 overflow-y-auto pb-8 pr-1">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
             渠道中心
-            <ForwardedIconComponent name="RadioTower" className="h-5 w-5 text-primary" />
+            <ForwardedIconComponent
+              name="RadioTower"
+              className="h-5 w-5 text-primary"
+            />
           </h2>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            让用户在 Telegram、飞书、钉钉和企业微信手机端运行工作流、查询知识库并上传文件。当前阶段已开放 Telegram 全链路配置。
+            在 Telegram 和飞书手机端运行工作流、查询知识库、上传文件并处理互动操作。钉钉和企业微信将在后续阶段接入。
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => {
-            setEditingConnection(null);
-            setConnectionDialogOpen(true);
-          }}
-        >
+        <Button variant="primary" onClick={() => openNewConnection("telegram")}>
           <ForwardedIconComponent name="Plus" className="h-4 w-4" />
           新增连接
         </Button>
@@ -262,29 +292,49 @@ export default function ChannelsPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {PROVIDERS.map((provider) => (
-          <div key={provider.id} className="flex items-center justify-between rounded-xl border p-4">
+          <button
+            type="button"
+            key={provider.id}
+            disabled={!provider.enabled}
+            onClick={() =>
+              provider.enabled &&
+              openNewConnection(provider.id as SupportedChannelType)
+            }
+            className="flex items-center justify-between rounded-xl border p-4 text-left transition-colors enabled:hover:bg-accent disabled:cursor-default"
+          >
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-muted p-2">
-                <ForwardedIconComponent name={provider.icon} className="h-5 w-5" />
+                <ForwardedIconComponent
+                  name={provider.icon}
+                  className="h-5 w-5"
+                />
               </div>
               <div>
                 <div className="text-sm font-medium">{provider.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  {provider.enabled ? "已开放" : "后续阶段接入"}
+                  {provider.enabled ? "已开放，点击创建" : "后续阶段接入"}
                 </div>
               </div>
             </div>
-            <span className={`h-2.5 w-2.5 rounded-full ${provider.enabled ? "bg-accent-emerald-foreground" : "bg-muted-foreground/30"}`} />
-          </div>
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                provider.enabled
+                  ? "bg-accent-emerald-foreground"
+                  : "bg-muted-foreground/30"
+              }`}
+            />
+          </button>
         ))}
       </div>
 
       <div className="grid min-h-0 gap-6 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.8fr)]">
         <section className="flex flex-col gap-3">
-          <div className="text-sm font-medium text-muted-foreground">渠道连接</div>
+          <div className="text-sm font-medium text-muted-foreground">
+            渠道连接
+          </div>
           {connections.length === 0 ? (
             <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              尚未创建渠道连接。先创建 Telegram Bot 连接并配置 Webhook。
+              尚未创建连接。可从上方选择 Telegram 或飞书开始配置。
             </div>
           ) : (
             connections.map((connection) => {
@@ -295,7 +345,11 @@ export default function ChannelsPage() {
                   type="button"
                   key={connection.id}
                   onClick={() => setSelectedConnectionId(connection.id)}
-                  className={`rounded-xl border p-4 text-left transition-colors ${selected ? "border-primary bg-accent" : "hover:bg-accent/60"}`}
+                  className={`rounded-xl border p-4 text-left transition-colors ${
+                    selected
+                      ? "border-primary bg-accent"
+                      : "hover:bg-accent/60"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -304,7 +358,9 @@ export default function ChannelsPage() {
                         {connection.channel_type} · {connection.connection_mode}
                       </div>
                     </div>
-                    <span className={`rounded-full px-2 py-1 text-xs ${status.className}`}>
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs ${status.className}`}
+                    >
                       {status.label}
                     </span>
                   </div>
@@ -328,22 +384,57 @@ export default function ChannelsPage() {
             <>
               <div className="rounded-xl border p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-base font-semibold">{selectedConnection.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base font-semibold">
+                      {selectedConnection.name}
+                    </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      已配置凭证：{selectedConnection.configured_credential_keys.join(", ") || "无"}
+                      已配置凭证：
+                      {selectedConnection.configured_credential_keys.join(", ") ||
+                        "无"}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      最近连接：{selectedConnection.last_connected_at ? new Date(selectedConnection.last_connected_at).toLocaleString() : "尚未测试"}
+                      最近连接：
+                      {selectedConnection.last_connected_at
+                        ? new Date(
+                            selectedConnection.last_connected_at,
+                          ).toLocaleString()
+                        : "尚未测试"}
                     </p>
+                    {webhookUrl && (
+                      <div className="mt-4 rounded-lg bg-muted/60 p-3">
+                        <div className="text-xs font-medium">
+                          {selectedConnection.channel_type === "feishu"
+                            ? "飞书事件订阅地址"
+                            : "Webhook 地址"}
+                        </div>
+                        <code className="mt-1 block break-all text-xs text-muted-foreground">
+                          {webhookUrl}
+                        </code>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleTestConnection(selectedConnection)} loading={testConnection.isPending}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTestConnection(selectedConnection)}
+                      loading={testConnection.isPending}
+                    >
                       测试连接
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleConfigureWebhook(selectedConnection)} loading={configureWebhook.isPending}>
-                      配置 Webhook
-                    </Button>
+                    {selectedConnection.channel_type === "telegram" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          handleConfigureTelegramWebhook(selectedConnection)
+                        }
+                        loading={configureWebhook.isPending}
+                      >
+                        配置 Webhook
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -383,31 +474,42 @@ export default function ChannelsPage() {
                   <div className="flex w-full gap-2 sm:w-auto">
                     <Input
                       value={bindingCode}
-                      onChange={(event) => setBindingCode(event.target.value.toUpperCase())}
+                      onChange={(event) =>
+                        setBindingCode(event.target.value.toUpperCase())
+                      }
                       placeholder="输入绑定码"
                       maxLength={12}
                       className="sm:w-48"
                     />
-                    <Button onClick={handleRedeemBinding} loading={redeemBinding.isPending} disabled={!bindingCode.trim()}>
+                    <Button
+                      onClick={handleRedeemBinding}
+                      loading={redeemBinding.isPending}
+                      disabled={!bindingCode.trim()}
+                    >
                       绑定
                     </Button>
                   </div>
                 </div>
-
                 <div className="mt-5 flex flex-col gap-2">
                   {identitiesLoading ? (
                     <Loading />
                   ) : identities.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">还没有账号绑定记录。</div>
+                    <div className="text-sm text-muted-foreground">
+                      还没有账号绑定记录。
+                    </div>
                   ) : (
                     identities.map((identity) => (
-                      <div key={identity.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
+                      <div
+                        key={identity.id}
+                        className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2"
+                      >
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium">
                             {identity.display_name || identity.external_user_id}
                           </div>
                           <div className="truncate text-xs text-muted-foreground">
-                            Telegram ID：{identity.external_user_id} · OpenXFlow：{identity.openxflow_user_id}
+                            渠道用户：{identity.external_user_id} · OpenXFlow：
+                            {identity.openxflow_user_id}
                           </div>
                         </div>
                         <Button
@@ -418,7 +520,8 @@ export default function ChannelsPage() {
                             setDeleteTarget({
                               kind: "identity",
                               id: identity.id,
-                              name: identity.display_name || identity.external_user_id,
+                              name:
+                                identity.display_name || identity.external_user_id,
                             })
                           }
                         >
@@ -450,7 +553,6 @@ export default function ChannelsPage() {
                     新增绑定
                   </Button>
                 </div>
-
                 <div className="mt-5 flex flex-col gap-2">
                   {conversationsLoading ? (
                     <Loading />
@@ -460,19 +562,30 @@ export default function ChannelsPage() {
                     </div>
                   ) : (
                     conversations.map((conversation) => {
-                      const flow = flows.find((item) => item.id === conversation.default_flow_id);
-                      const kb = knowledgeBases.find((item) => item.id === conversation.knowledge_base_id);
+                      const flow = flows.find(
+                        (item) => item.id === conversation.default_flow_id,
+                      );
+                      const kb = knowledgeBases.find(
+                        (item) => item.id === conversation.knowledge_base_id,
+                      );
                       return (
-                        <div key={conversation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-3">
+                        <div
+                          key={conversation.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-3"
+                        >
                           <div className="min-w-0">
                             <div className="text-sm font-medium">
-                              {conversation.display_name || conversation.external_conversation_id}
+                              {conversation.display_name ||
+                                conversation.external_conversation_id}
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              {conversation.conversation_type} · Chat ID：{conversation.external_conversation_id}
+                              {conversation.conversation_type} · 会话 ID：
+                              {conversation.external_conversation_id}
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              工作流：{flow?.name ?? "未绑定"} · 知识库：{kb?.name ?? "未绑定"} · 文件上传：{conversation.allow_file_upload ? "允许" : "关闭"}
+                              工作流：{flow?.name ?? "未绑定"} · 知识库：
+                              {kb?.name ?? "未绑定"} · 文件上传：
+                              {conversation.allow_file_upload ? "允许" : "关闭"}
                             </div>
                           </div>
                           <Button
@@ -503,7 +616,12 @@ export default function ChannelsPage() {
           if (!open) setEditingConnection(null);
         }}
         connection={editingConnection}
-        loading={createConnection.isPending || updateConnection.isPending || configureWebhook.isPending}
+        initialChannelType={newChannelType}
+        loading={
+          createConnection.isPending ||
+          updateConnection.isPending ||
+          configureWebhook.isPending
+        }
         onSubmit={handleConnectionSubmit}
       />
 
