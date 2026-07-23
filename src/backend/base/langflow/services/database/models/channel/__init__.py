@@ -34,6 +34,10 @@ from langflow.services.database.models.channel.model import (
     ChannelIdentityStatus,
     ChannelReceiptStatus,
 )
+from langflow.services.database.models.channel.webhook_job_model import (
+    ChannelWebhookJob,
+    ChannelWebhookJobStatus,
+)
 
 __all__ = [
     "ChannelBindingCode",
@@ -54,6 +58,8 @@ __all__ = [
     "ChannelIdentityRead",
     "ChannelIdentityStatus",
     "ChannelReceiptStatus",
+    "ChannelWebhookJob",
+    "ChannelWebhookJobStatus",
     "claim_channel_event",
     "create_channel_connection",
     "delete_channel_connection",
