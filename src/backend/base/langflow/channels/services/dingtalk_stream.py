@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import tempfile
+import time
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +42,10 @@ class DingTalkStreamRuntimeSnapshot:
     running_managers: int
     leader_managers: int
     managed_clients: int
+    connection_errors_total: int
+    reconnect_attempts_total: int
+    successful_sync_total: int
+    last_successful_sync_timestamp_seconds: float
 
 
 class _DingTalkStreamRuntimeRegistry:
@@ -49,6 +54,10 @@ class _DingTalkStreamRuntimeRegistry:
     def __init__(self) -> None:
         self._lock = Lock()
         self._states: dict[object, tuple[bool, int]] = {}
+        self._connection_errors_total = 0
+        self._reconnect_attempts_total = 0
+        self._successful_sync_total = 0
+        self._last_successful_sync_timestamp_seconds = 0.0
 
     def register(self, token: object) -> None:
         with self._lock:
@@ -65,18 +74,46 @@ class _DingTalkStreamRuntimeRegistry:
         with self._lock:
             self._states.pop(token, None)
 
+    def record_connection_error(self) -> None:
+        with self._lock:
+            self._connection_errors_total += 1
+
+    def record_reconnect_attempt(self) -> None:
+        with self._lock:
+            self._reconnect_attempts_total += 1
+
+    def record_successful_sync(self, timestamp_seconds: float | None = None) -> None:
+        timestamp = time.time() if timestamp_seconds is None else timestamp_seconds
+        if timestamp < 0:
+            raise ValueError("timestamp_seconds must be non-negative")
+        with self._lock:
+            self._successful_sync_total += 1
+            self._last_successful_sync_timestamp_seconds = timestamp
+
     def snapshot(self) -> DingTalkStreamRuntimeSnapshot:
         with self._lock:
             states = tuple(self._states.values())
+            connection_errors_total = self._connection_errors_total
+            reconnect_attempts_total = self._reconnect_attempts_total
+            successful_sync_total = self._successful_sync_total
+            last_successful_sync_timestamp_seconds = self._last_successful_sync_timestamp_seconds
         return DingTalkStreamRuntimeSnapshot(
             running_managers=len(states),
             leader_managers=sum(1 for leader, _managed in states if leader),
             managed_clients=sum(managed for _leader, managed in states),
+            connection_errors_total=connection_errors_total,
+            reconnect_attempts_total=reconnect_attempts_total,
+            successful_sync_total=successful_sync_total,
+            last_successful_sync_timestamp_seconds=last_successful_sync_timestamp_seconds,
         )
 
     def reset(self) -> None:
         with self._lock:
             self._states.clear()
+            self._connection_errors_total = 0
+            self._reconnect_attempts_total = 0
+            self._successful_sync_total = 0
+            self._last_successful_sync_timestamp_seconds = 0.0
 
 
 _stream_runtime_registry = _DingTalkStreamRuntimeRegistry()
@@ -209,16 +246,22 @@ class DingTalkStreamManager:
                     task=task,
                 )
         self._publish_runtime_state()
+        _stream_runtime_registry.record_successful_sync()
 
     async def _run_connection(self, connection_id: UUID) -> None:
         delay = 2.0
+        attempt = 0
         while not self._stop_event.is_set():
+            if attempt > 0:
+                _stream_runtime_registry.record_reconnect_attempt()
+            attempt += 1
             try:
                 await self._run_sdk_client(connection_id)
                 delay = 2.0
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001
+                _stream_runtime_registry.record_connection_error()
                 await self._set_status(connection_id, ChannelConnectionStatus.ERROR, str(exc))
                 await logger.aexception("DingTalk Stream connection failed for %s", connection_id)
                 try:
