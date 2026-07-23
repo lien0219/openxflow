@@ -1,5 +1,6 @@
 from langflow.channels.services.runtime_config import (
     DEFAULT_CHANNEL_STREAMS_ENABLED,
+    DEFAULT_OUTBOUND_DELIVERY_RETENTION_DAYS,
     DEFAULT_WEBHOOK_DURABLE_ENABLED,
     DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE,
     DEFAULT_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS,
@@ -46,6 +47,7 @@ def test_channel_runtime_config_defaults(monkeypatch) -> None:
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS",
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS",
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE",
+        "LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -70,6 +72,7 @@ def test_channel_runtime_config_defaults(monkeypatch) -> None:
     assert durable.completed_retention_days == DEFAULT_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS
     assert durable.failed_retention_days == DEFAULT_WEBHOOK_JOB_FAILED_RETENTION_DAYS
     assert durable.cleanup_batch_size == DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE
+    assert durable.outbound_delivery_retention_days == DEFAULT_OUTBOUND_DELIVERY_RETENTION_DAYS
 
 
 def test_channel_runtime_config_accepts_valid_overrides(monkeypatch) -> None:
@@ -91,6 +94,7 @@ def test_channel_runtime_config_accepts_valid_overrides(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS", "2")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS", "14")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE", "250")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS", "45")
 
     limits = webhook_limiter_limits_from_env()
     durable = durable_webhook_job_config()
@@ -113,6 +117,7 @@ def test_channel_runtime_config_accepts_valid_overrides(monkeypatch) -> None:
     assert durable.completed_retention_days == 2
     assert durable.failed_retention_days == 14
     assert durable.cleanup_batch_size == 250
+    assert durable.outbound_delivery_retention_days == 45
 
 
 def test_channel_stream_boolean_values(monkeypatch) -> None:
@@ -134,9 +139,7 @@ def test_invalid_channel_stream_boolean_falls_back(monkeypatch) -> None:
 def test_webhook_runtime_config_clamps_pending_to_concurrency(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY", "8")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING", "2")
-
     limits = webhook_limiter_limits_from_env()
-
     assert limits.max_concurrency == 8
     assert limits.max_pending == 8
 
@@ -144,10 +147,7 @@ def test_webhook_runtime_config_clamps_pending_to_concurrency(monkeypatch) -> No
 def test_durable_webhook_worker_count_is_clamped_to_concurrency(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY", "3")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_WORKERS", "99")
-
-    durable = durable_webhook_job_config()
-
-    assert durable.worker_count == 3
+    assert durable_webhook_job_config().worker_count == 3
 
 
 def test_webhook_runtime_config_invalid_integer_values_fall_back(monkeypatch) -> None:
@@ -155,9 +155,7 @@ def test_webhook_runtime_config_invalid_integer_values_fall_back(monkeypatch) ->
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING", "0")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING_BYTES", "-1")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES", "")
-
     limits = webhook_limiter_limits_from_env()
-
     assert limits.max_concurrency == DEFAULT_WEBHOOK_MAX_CONCURRENCY
     assert limits.max_pending == DEFAULT_WEBHOOK_MAX_PENDING
     assert limits.max_pending_bytes == DEFAULT_WEBHOOK_MAX_PENDING_BYTES
@@ -167,7 +165,6 @@ def test_webhook_runtime_config_invalid_integer_values_fall_back(monkeypatch) ->
 def test_webhook_queue_timeout_zero_disables_and_invalid_values_fall_back(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS", "0")
     assert webhook_queue_timeout_seconds() == 0.0
-
     for value in ("nan", "inf", "-inf", "-1", "invalid"):
         monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS", value)
         assert webhook_queue_timeout_seconds() == DEFAULT_WEBHOOK_QUEUE_TIMEOUT_SECONDS
@@ -191,6 +188,7 @@ def test_durable_webhook_config_invalid_values_fall_back_and_clamp(monkeypatch) 
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS", "-1")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS", "invalid")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE", "0")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS", "0")
 
     durable = durable_webhook_job_config()
 
@@ -205,3 +203,4 @@ def test_durable_webhook_config_invalid_values_fall_back_and_clamp(monkeypatch) 
     assert durable.completed_retention_days == DEFAULT_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS
     assert durable.failed_retention_days == DEFAULT_WEBHOOK_JOB_FAILED_RETENTION_DAYS
     assert durable.cleanup_batch_size == DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE
+    assert durable.outbound_delivery_retention_days == DEFAULT_OUTBOUND_DELIVERY_RETENTION_DAYS
