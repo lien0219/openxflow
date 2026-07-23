@@ -1,3 +1,4 @@
+import asyncio
 import math
 
 import pytest
@@ -43,6 +44,31 @@ def test_timing_snapshot_uses_cumulative_histogram_buckets() -> None:
 def test_timing_metrics_reject_invalid_durations(duration: float) -> None:
     with pytest.raises(ValueError, match="duration_seconds"):
         record_webhook_queue_wait(duration)
+
+
+@pytest.mark.asyncio
+async def test_cancelled_stream_callback_is_not_recorded() -> None:
+    started = asyncio.Event()
+    never_finishes = asyncio.Event()
+
+    async def callback() -> None:
+        started.set()
+        try:
+            await never_finishes.wait()
+        finally:
+            record_stream_callback(success=False, duration_seconds=1.0)
+
+    task = asyncio.create_task(callback())
+    await started.wait()
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    snapshot = channel_timing_metrics_snapshot()
+    assert snapshot.stream_callbacks_succeeded == 0
+    assert snapshot.stream_callbacks_failed == 0
+    assert snapshot.stream_callback_duration.count == 0
 
 
 def test_timing_collector_exposes_counters_and_histograms() -> None:
