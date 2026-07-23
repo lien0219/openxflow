@@ -11,6 +11,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
 
 from langflow.utils import migration
 
@@ -25,7 +26,7 @@ def upgrade() -> None:
     if migration.table_exists("channel_webhook_job", conn):
         return
 
-    json_type = sa.JSON().with_variant(sa.dialects.postgresql.JSONB(), "postgresql")
+    json_type = sa.JSON().with_variant(JSONB(), "postgresql")
     op.create_table(
         "channel_webhook_job",
         sa.Column("id", sa.Uuid(), nullable=False),
