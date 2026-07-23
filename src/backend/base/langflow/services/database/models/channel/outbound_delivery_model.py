@@ -1,4 +1,4 @@
-"""Persistent at-most-once guard for replies to durable channel events."""
+"""Persistent at-most-once guard for durable channel event deliveries."""
 
 from __future__ import annotations
 
@@ -13,6 +13,11 @@ from sqlmodel import Field, SQLModel
 from langflow.services.database.models.channel.model import utc_now
 
 
+class ChannelOutboundDeliveryKind(StrEnum):
+    ACKNOWLEDGEMENT = "acknowledgement"
+    RESPONSE = "response"
+
+
 class ChannelOutboundDeliveryStatus(StrEnum):
     RESERVED = "reserved"
     SENT = "sent"
@@ -20,14 +25,15 @@ class ChannelOutboundDeliveryStatus(StrEnum):
 
 
 class ChannelOutboundDelivery(SQLModel, table=True):  # type: ignore[call-arg]
-    """One provider reply slot for one inbound event on one connection."""
+    """One provider delivery slot for one inbound event and delivery kind."""
 
     __tablename__ = "channel_outbound_delivery"
     __table_args__ = (
         UniqueConstraint(
             "connection_id",
             "external_event_id",
-            name="uq_channel_outbound_delivery_event",
+            "delivery_kind",
+            name="uq_channel_outbound_delivery_event_kind",
         ),
         Index("ix_channel_outbound_delivery_status_updated", "status", "updated_at"),
     )
@@ -42,6 +48,7 @@ class ChannelOutboundDelivery(SQLModel, table=True):  # type: ignore[call-arg]
         )
     )
     external_event_id: str = Field(nullable=False, max_length=255)
+    delivery_kind: str = Field(nullable=False, max_length=32)
     response_digest: str = Field(nullable=False, max_length=64)
     status: str = Field(default=ChannelOutboundDeliveryStatus.RESERVED.value, nullable=False, max_length=32)
     attempts: int = Field(default=1, nullable=False)
