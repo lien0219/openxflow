@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import TypeVar
 from uuid import UUID
+from weakref import WeakKeyDictionary
 
 from lfx.log.logger import logger
 
@@ -32,6 +33,22 @@ def _positive_int_env(name: str, default: int) -> int:
     except ValueError:
         return default
     return parsed if parsed > 0 else default
+
+
+def _positive_float_env(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
+def webhook_task_timeout_seconds() -> float:
+    """Maximum execution time for one accepted provider callback."""
+    return _positive_float_env("LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS", 300.0)
 
 
 @dataclass(frozen=True)
@@ -65,7 +82,7 @@ class WebhookProcessingLimiter:
         self._failed_total = 0
         self._state_lock = Lock()
         self._semaphore_lock = Lock()
-        self._semaphores: dict[int, asyncio.Semaphore] = {}
+        self._semaphores: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = WeakKeyDictionary()
 
     def try_reserve(self) -> bool:
         """Reserve one queue slot before returning a successful provider ACK."""
@@ -121,12 +138,12 @@ class WebhookProcessingLimiter:
                     self._active = max(0, self._active - 1)
 
     def _semaphore_for_current_loop(self) -> asyncio.Semaphore:
-        loop_key = id(asyncio.get_running_loop())
+        loop = asyncio.get_running_loop()
         with self._semaphore_lock:
-            semaphore = self._semaphores.get(loop_key)
+            semaphore = self._semaphores.get(loop)
             if semaphore is None:
                 semaphore = asyncio.Semaphore(self.max_concurrency)
-                self._semaphores[loop_key] = semaphore
+                self._semaphores[loop] = semaphore
             return semaphore
 
 
@@ -158,13 +175,23 @@ async def process_reserved_provider_webhook(
     """Run one reserved callback and always release its queue capacity."""
     success = False
     try:
-        success = await _webhook_limiter.run(
-            process_provider_webhook,
-            connection_id=connection_id,
-            expected_channel_type=expected_channel_type,
-            headers=headers,
-            payload=payload,
-        )
+        try:
+            success = await asyncio.wait_for(
+                _webhook_limiter.run(
+                    process_provider_webhook,
+                    connection_id=connection_id,
+                    expected_channel_type=expected_channel_type,
+                    headers=headers,
+                    payload=payload,
+                ),
+                timeout=webhook_task_timeout_seconds(),
+            )
+        except asyncio.TimeoutError:
+            await logger.aerror(
+                "Background %s channel webhook timed out for connection %s",
+                expected_channel_type,
+                connection_id,
+            )
     finally:
         _webhook_limiter.finish(success=success)
 

@@ -77,6 +77,33 @@ async def test_reserved_webhook_slot_is_released_after_failure(monkeypatch) -> N
     limiter.release()
 
 
+@pytest.mark.asyncio
+async def test_reserved_webhook_timeout_releases_capacity(monkeypatch) -> None:
+    limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
+    assert limiter.try_reserve() is True
+    never_finishes = asyncio.Event()
+
+    async def block(**_kwargs) -> bool:
+        await never_finishes.wait()
+        return True
+
+    monkeypatch.setattr(webhook_processing, "_webhook_limiter", limiter)
+    monkeypatch.setattr(webhook_processing, "process_provider_webhook", block)
+    monkeypatch.setattr(webhook_processing, "webhook_task_timeout_seconds", lambda: 0.01)
+
+    await webhook_processing.process_reserved_provider_webhook(
+        connection_id=uuid4(),
+        expected_channel_type="telegram",
+        headers={},
+        payload=b"{}",
+    )
+
+    snapshot = limiter.snapshot()
+    assert snapshot.pending == 0
+    assert snapshot.active == 0
+    assert snapshot.failed_total == 1
+
+
 def test_webhook_limiter_validates_configuration() -> None:
     with pytest.raises(ValueError, match="max_concurrency"):
         WebhookProcessingLimiter(max_concurrency=0, max_pending=1)

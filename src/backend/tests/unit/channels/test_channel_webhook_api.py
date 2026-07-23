@@ -17,10 +17,12 @@ class _FakeDB:
 
 
 class _FakeRequest:
-    headers = {"content-type": "application/json"}
-
-    def __init__(self, payload: bytes = b"{}") -> None:
+    def __init__(self, payload: bytes = b"{}", headers: dict[str, str] | None = None) -> None:
         self.payload = payload
+        self.headers = headers or {
+            "content-type": "application/json",
+            "content-length": str(len(payload)),
+        }
 
     async def body(self) -> bytes:
         return self.payload
@@ -50,16 +52,25 @@ class _FakeAdapter:
         )
 
 
-@pytest.mark.asyncio
-async def test_webhook_validation_schedules_background_processing(monkeypatch) -> None:
-    connection_id = uuid4()
-    connection = SimpleNamespace(
+def _connection(connection_id):
+    return SimpleNamespace(
         id=connection_id,
         channel_type="telegram",
         enabled=True,
     )
+
+
+def _adapter(connection_id):
     adapter = _FakeAdapter()
     adapter.connection_id = connection_id
+    return adapter
+
+
+@pytest.mark.asyncio
+async def test_webhook_validation_schedules_background_processing(monkeypatch) -> None:
+    connection_id = uuid4()
+    connection = _connection(connection_id)
+    adapter = _adapter(connection_id)
 
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.build_channel_adapter",
@@ -86,13 +97,8 @@ async def test_webhook_validation_schedules_background_processing(monkeypatch) -
 @pytest.mark.asyncio
 async def test_webhook_queue_full_returns_retryable_503(monkeypatch) -> None:
     connection_id = uuid4()
-    connection = SimpleNamespace(
-        id=connection_id,
-        channel_type="telegram",
-        enabled=True,
-    )
-    adapter = _FakeAdapter()
-    adapter.connection_id = connection_id
+    connection = _connection(connection_id)
+    adapter = _adapter(connection_id)
 
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.build_channel_adapter",
@@ -124,13 +130,8 @@ async def test_webhook_queue_full_returns_retryable_503(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_invalid_webhook_is_rejected_before_queue_reservation(monkeypatch) -> None:
     connection_id = uuid4()
-    connection = SimpleNamespace(
-        id=connection_id,
-        channel_type="telegram",
-        enabled=True,
-    )
-    adapter = _FakeAdapter()
-    adapter.connection_id = connection_id
+    connection = _connection(connection_id)
+    adapter = _adapter(connection_id)
 
     async def reject(_headers, _payload):
         return False
@@ -163,3 +164,89 @@ async def test_invalid_webhook_is_rejected_before_queue_reservation(monkeypatch)
 
     assert exc_info.value.status_code == 403
     assert reserved is False
+
+
+@pytest.mark.asyncio
+async def test_declared_oversized_webhook_is_rejected_before_adapter_build(monkeypatch) -> None:
+    connection_id = uuid4()
+    connection = _connection(connection_id)
+    adapter_built = False
+
+    def build(_connection):
+        nonlocal adapter_built
+        adapter_built = True
+        return _adapter(connection_id)
+
+    monkeypatch.setattr("langflow.api.v1.channel_webhooks.webhook_max_body_bytes", lambda: 4)
+    monkeypatch.setattr("langflow.api.v1.channel_webhooks.build_channel_adapter", build)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _validate_and_schedule_provider_event(
+            connection_id=connection_id,
+            request=_FakeRequest(payload=b"{}", headers={"content-length": "5"}),
+            db=_FakeDB(connection),
+            background_tasks=BackgroundTasks(),
+            expected_channel_type="telegram",
+        )
+
+    assert exc_info.value.status_code == 413
+    assert adapter_built is False
+
+
+@pytest.mark.asyncio
+async def test_actual_oversized_webhook_is_rejected_without_content_length(monkeypatch) -> None:
+    connection_id = uuid4()
+    connection = _connection(connection_id)
+
+    monkeypatch.setattr("langflow.api.v1.channel_webhooks.webhook_max_body_bytes", lambda: 4)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _validate_and_schedule_provider_event(
+            connection_id=connection_id,
+            request=_FakeRequest(payload=b"12345", headers={"content-type": "application/json"}),
+            db=_FakeDB(connection),
+            background_tasks=BackgroundTasks(),
+            expected_channel_type="telegram",
+        )
+
+    assert exc_info.value.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_background_task_registration_failure_releases_reservation(monkeypatch) -> None:
+    connection_id = uuid4()
+    connection = _connection(connection_id)
+    adapter = _adapter(connection_id)
+    released = False
+
+    class FailingBackgroundTasks:
+        def add_task(self, *_args, **_kwargs) -> None:
+            raise RuntimeError("task registration failed")
+
+    def release() -> None:
+        nonlocal released
+        released = True
+
+    monkeypatch.setattr(
+        "langflow.api.v1.channel_webhooks.build_channel_adapter",
+        lambda _connection: adapter,
+    )
+    monkeypatch.setattr(
+        "langflow.api.v1.channel_webhooks.reserve_provider_webhook_slot",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "langflow.api.v1.channel_webhooks.release_provider_webhook_slot",
+        release,
+    )
+
+    with pytest.raises(RuntimeError, match="task registration failed"):
+        await _validate_and_schedule_provider_event(
+            connection_id=connection_id,
+            request=_FakeRequest(),
+            db=_FakeDB(connection),
+            background_tasks=FailingBackgroundTasks(),
+            expected_channel_type="telegram",
+        )
+
+    assert released is True

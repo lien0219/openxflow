@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
@@ -27,6 +28,53 @@ router = APIRouter(
 )
 
 
+def _positive_int_env(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
+def webhook_max_body_bytes() -> int:
+    """Maximum accepted provider callback body size."""
+    return _positive_int_env("LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES", 1024 * 1024)
+
+
+async def _read_limited_body(request: Request) -> bytes:
+    max_body_bytes = webhook_max_body_bytes()
+    raw_content_length = request.headers.get("content-length")
+    if raw_content_length is not None:
+        try:
+            content_length = int(raw_content_length)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid Content-Length header",
+            ) from exc
+        if content_length < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid Content-Length header",
+            )
+        if content_length > max_body_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Channel webhook body exceeds {max_body_bytes} bytes",
+            )
+
+    payload = await request.body()
+    if len(payload) > max_body_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Channel webhook body exceeds {max_body_bytes} bytes",
+        )
+    return payload
+
+
 async def _validate_and_schedule_provider_event(
     *,
     connection_id: UUID,
@@ -35,12 +83,13 @@ async def _validate_and_schedule_provider_event(
     background_tasks: BackgroundTasks,
     expected_channel_type: str,
     provider_headers: dict[str, str] | None = None,
+    preloaded_payload: bytes | None = None,
 ) -> dict[str, bool]:
     connection = await db.get(ChannelConnection, connection_id)
     if connection is None or connection.channel_type != expected_channel_type or not connection.enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
 
-    payload = await request.body()
+    payload = preloaded_payload if preloaded_payload is not None else await _read_limited_body(request)
     headers = {key.lower(): value for key, value in request.headers.items()}
     headers.update({key.lower(): value for key, value in (provider_headers or {}).items()})
     adapter = build_channel_adapter(connection)
@@ -108,7 +157,7 @@ async def receive_feishu_webhook(
     if connection is None or connection.channel_type != "feishu" or not connection.enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
 
-    payload = await request.body()
+    payload = await _read_limited_body(request)
     adapter = build_channel_adapter(connection)
     if not isinstance(adapter, FeishuChannelAdapter):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a Feishu channel")
@@ -125,6 +174,7 @@ async def receive_feishu_webhook(
         db=db,
         background_tasks=background_tasks,
         expected_channel_type="feishu",
+        preloaded_payload=payload,
     )
 
 
