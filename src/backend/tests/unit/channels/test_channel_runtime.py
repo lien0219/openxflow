@@ -13,6 +13,10 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES", "2048")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS", "3.5")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS", "12.5")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED", "true")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS", "0.25")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS", "45")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS", "7")
     result = await read_channel_runtime(object())
 
     assert result.streams_enabled is False
@@ -44,6 +48,17 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.webhook.queue_timed_out_total >= 0
     assert result.webhook.cancelled_total >= 0
     assert result.webhook.client_disconnected_total >= 0
+    assert result.durable_webhook_jobs.enabled is True
+    assert result.durable_webhook_jobs.poll_seconds == 0.25
+    assert result.durable_webhook_jobs.lease_seconds == 45
+    assert result.durable_webhook_jobs.max_attempts == 7
+    assert result.durable_webhook_jobs.running_managers >= 0
+    assert result.durable_webhook_jobs.consumer_tasks >= 0
+    assert result.durable_webhook_jobs.claimed_total >= 0
+    assert result.durable_webhook_jobs.completed_total >= 0
+    assert result.durable_webhook_jobs.retried_total >= 0
+    assert result.durable_webhook_jobs.failed_total >= 0
+    assert result.durable_webhook_jobs.claim_errors_total >= 0
     assert result.outbound_retry.max_attempts == 5
 
 
@@ -65,6 +80,13 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_stream_callback_duration_seconds" in response.body
     assert b"openxflow_channel_webhook_queue_wait_duration_seconds" in response.body
     assert b"openxflow_channel_webhook_execution_duration_seconds" in response.body
+    assert b"openxflow_channel_webhook_job_running_managers" in response.body
+    assert b"openxflow_channel_webhook_job_consumer_tasks" in response.body
+    assert b"openxflow_channel_webhook_job_claimed" in response.body
+    assert b"openxflow_channel_webhook_job_completed" in response.body
+    assert b"openxflow_channel_webhook_job_retried" in response.body
+    assert b"openxflow_channel_webhook_job_failed" in response.body
+    assert b"openxflow_channel_webhook_job_claim_errors" in response.body
     assert b"openxflow_channel_webhook_pending" in response.body
     assert b"openxflow_channel_webhook_pending_bytes" in response.body
     assert b"openxflow_channel_webhook_max_pending_bytes" in response.body
