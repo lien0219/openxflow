@@ -14,6 +14,13 @@ from typing import TypeVar
 import httpx
 from lfx.log.logger import logger
 
+from langflow.channels.services.metrics import (
+    record_outbound_attempt,
+    record_outbound_failure,
+    record_outbound_retry,
+    record_outbound_success,
+)
+
 _T = TypeVar("_T")
 _RETRYABLE_STATUS_CODES = frozenset({408, 425, 429, *range(500, 600)})
 
@@ -93,11 +100,15 @@ async def retry_channel_operation(
     effective_policy = policy or channel_retry_policy_from_env()
     attempt = 1
     while True:
+        record_outbound_attempt(operation_name)
         try:
-            return await operation()
+            result = await operation()
         except Exception as exc:
+            reason = channel_error_reason(exc)
             if attempt >= effective_policy.max_attempts or not is_retryable_channel_error(exc):
+                record_outbound_failure(operation_name, reason)
                 raise
+            record_outbound_retry(operation_name, reason)
             delay = retry_delay_seconds(
                 exc,
                 attempt=attempt,
@@ -114,12 +125,21 @@ async def retry_channel_operation(
             )
             await sleep(delay)
             attempt += 1
+        else:
+            record_outbound_success(operation_name)
+            return result
 
 
 def is_retryable_channel_error(exc: Exception) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in _RETRYABLE_STATUS_CODES
     return isinstance(exc, httpx.RequestError)
+
+
+def channel_error_reason(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"http_{exc.response.status_code}"
+    return type(exc).__name__.lower()
 
 
 def retry_delay_seconds(

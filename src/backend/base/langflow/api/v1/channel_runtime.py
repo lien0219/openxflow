@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from dataclasses import asdict
+
+from fastapi import APIRouter, Response
+from prometheus_client import CollectorRegistry, generate_latest
+from prometheus_client.exposition import CONTENT_TYPE_LATEST
 from pydantic import BaseModel
 
 from langflow.api.utils import CurrentActiveUser
+from langflow.channels.services.metrics import ChannelMetricsCollector
 from langflow.channels.services.retry import channel_retry_policy_from_env
 from langflow.channels.services.webhook_processing import webhook_limiter_snapshot
 
@@ -42,11 +47,23 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
     webhook = webhook_limiter_snapshot()
     retry_policy = channel_retry_policy_from_env()
     return ChannelRuntimeRead(
-        webhook=ChannelWebhookRuntimeRead(**webhook.__dict__),
+        webhook=ChannelWebhookRuntimeRead(**asdict(webhook)),
         outbound_retry=ChannelOutboundRetryRuntimeRead(
             max_attempts=retry_policy.max_attempts,
             base_delay_seconds=retry_policy.base_delay_seconds,
             max_delay_seconds=retry_policy.max_delay_seconds,
             jitter_ratio=retry_policy.jitter_ratio,
         ),
+    )
+
+
+@router.get("/metrics", response_class=Response)
+async def read_channel_prometheus_metrics(current_user: CurrentActiveUser) -> Response:
+    """Return authenticated Prometheus exposition for channel-specific metrics."""
+    del current_user
+    registry = CollectorRegistry(auto_describe=True)
+    registry.register(ChannelMetricsCollector())
+    return Response(
+        content=generate_latest(registry),
+        media_type=CONTENT_TYPE_LATEST,
     )
