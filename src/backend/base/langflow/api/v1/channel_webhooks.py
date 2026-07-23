@@ -4,18 +4,15 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
 
 from langflow.api.utils import DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.adapters.wecom import WeComChannelAdapter
-from langflow.channels.domain.exceptions import DuplicateChannelEventError
-from langflow.channels.services.deduplication import ChannelEventDeduplicator
 from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
-from langflow.channels.services.dispatch import ChannelDispatchService
-from langflow.channels.services.gateway import ChannelGateway
+from langflow.channels.services.webhook_processing import process_provider_webhook
 from langflow.services.database.models.channel.model import ChannelConnection
 
 router = APIRouter(
@@ -25,11 +22,12 @@ router = APIRouter(
 )
 
 
-async def _receive_provider_event(
+async def _validate_and_schedule_provider_event(
     *,
     connection_id: UUID,
     request: Request,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     expected_channel_type: str,
     provider_headers: dict[str, str] | None = None,
 ) -> dict[str, bool]:
@@ -38,36 +36,28 @@ async def _receive_provider_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
 
     payload = await request.body()
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    headers.update({key.lower(): value for key, value in (provider_headers or {}).items()})
     adapter = build_channel_adapter(connection)
-    gateway = ChannelGateway()
-    gateway.register_adapter(connection_id, adapter)
-    deduplicator = ChannelEventDeduplicator(db)
-    dispatcher = ChannelDispatchService(db, connection, adapter)
-    normalized_headers = {key.lower(): value for key, value in request.headers.items()}
-    normalized_headers.update({key.lower(): value for key, value in (provider_headers or {}).items()})
 
     try:
-        await gateway.receive(
-            connection_id,
-            normalized_headers,
-            payload,
-            dispatcher.handle,
-            deduplicator=deduplicator,
-        )
+        if not await adapter.verify_event(headers, payload):
+            raise PermissionError("Channel event signature verification failed")
+        event = await adapter.parse_event(headers, payload)
+        if event.connection_id != connection_id or event.channel.value != expected_channel_type:
+            raise ValueError("Parsed channel event does not match the configured connection")
     except PermissionError as exc:
-        await db.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid channel webhook signature") from exc
-    except DuplicateChannelEventError:
-        await db.rollback()
-        return {"ok": True}
     except ValueError as exc:
-        await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except Exception as exc:
-        await db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Channel event processing failed") from exc
 
-    await db.commit()
+    background_tasks.add_task(
+        process_provider_webhook,
+        connection_id=connection_id,
+        expected_channel_type=expected_channel_type,
+        headers=headers,
+        payload=payload,
+    )
     return {"ok": True}
 
 
@@ -76,11 +66,13 @@ async def receive_telegram_webhook(
     connection_id: UUID,
     request: Request,
     db: DbSession,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, bool]:
-    return await _receive_provider_event(
+    return await _validate_and_schedule_provider_event(
         connection_id=connection_id,
         request=request,
         db=db,
+        background_tasks=background_tasks,
         expected_channel_type="telegram",
     )
 
@@ -90,6 +82,7 @@ async def receive_feishu_webhook(
     connection_id: UUID,
     request: Request,
     db: DbSession,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, bool | str]:
     connection = await db.get(ChannelConnection, connection_id)
     if connection is None or connection.channel_type != "feishu" or not connection.enabled:
@@ -101,15 +94,16 @@ async def receive_feishu_webhook(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a Feishu channel")
 
     headers = {key.lower(): value for key, value in request.headers.items()}
-    if FeishuChannelAdapter.is_url_verification(payload):
+    if adapter.is_url_verification(payload):
         if not await adapter.verify_event(headers, payload):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Feishu verification token")
-        return {"challenge": FeishuChannelAdapter.get_url_verification_challenge(payload)}
+        return {"challenge": adapter.get_url_verification_challenge(payload)}
 
-    return await _receive_provider_event(
+    return await _validate_and_schedule_provider_event(
         connection_id=connection_id,
         request=request,
         db=db,
+        background_tasks=background_tasks,
         expected_channel_type="feishu",
     )
 
@@ -119,12 +113,14 @@ async def receive_dingtalk_webhook(
     connection_id: UUID,
     request: Request,
     db: DbSession,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, bool]:
     """Compatibility callback for deployments choosing signed HTTP mode over Stream."""
-    return await _receive_provider_event(
+    return await _validate_and_schedule_provider_event(
         connection_id=connection_id,
         request=request,
         db=db,
+        background_tasks=background_tasks,
         expected_channel_type="dingtalk",
     )
 
@@ -161,14 +157,16 @@ async def receive_wecom_callback(
     connection_id: UUID,
     request: Request,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     msg_signature: str = Query(alias="msg_signature"),
     timestamp: str = Query(),
     nonce: str = Query(),
 ) -> PlainTextResponse:
-    await _receive_provider_event(
+    await _validate_and_schedule_provider_event(
         connection_id=connection_id,
         request=request,
         db=db,
+        background_tasks=background_tasks,
         expected_channel_type="wecom",
         provider_headers={
             "x-wecom-msg-signature": msg_signature,
