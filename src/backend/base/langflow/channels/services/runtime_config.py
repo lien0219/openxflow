@@ -11,6 +11,7 @@ DEFAULT_WEBHOOK_MAX_CONCURRENCY = 16
 DEFAULT_WEBHOOK_MAX_PENDING = 128
 DEFAULT_WEBHOOK_MAX_PENDING_BYTES = 64 * 1024 * 1024
 DEFAULT_WEBHOOK_MAX_BODY_BYTES = 1024 * 1024
+DEFAULT_WEBHOOK_QUEUE_TIMEOUT_SECONDS = 0.0
 DEFAULT_WEBHOOK_TASK_TIMEOUT_SECONDS = 300.0
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -51,6 +52,17 @@ def _positive_float_env(name: str, default: float) -> float:
     return parsed if math.isfinite(parsed) and parsed > 0 else default
 
 
+def _non_negative_float_env(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    return parsed if math.isfinite(parsed) and parsed >= 0 else default
+
+
 @dataclass(frozen=True)
 class WebhookLimiterLimits:
     max_concurrency: int
@@ -88,6 +100,14 @@ def webhook_max_body_bytes() -> int:
     return _positive_int_env(
         "LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES",
         DEFAULT_WEBHOOK_MAX_BODY_BYTES,
+    )
+
+
+def webhook_queue_timeout_seconds() -> float:
+    """Maximum queue wait before execution; zero disables queue timeout."""
+    return _non_negative_float_env(
+        "LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS",
+        DEFAULT_WEBHOOK_QUEUE_TIMEOUT_SECONDS,
     )
 
 
