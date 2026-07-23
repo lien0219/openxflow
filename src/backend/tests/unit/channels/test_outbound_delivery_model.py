@@ -8,7 +8,7 @@ from langflow.services.database.models.channel.outbound_delivery_model import (
 def test_outbound_delivery_model_schema_contract() -> None:
     table = ChannelOutboundDelivery.__table__
 
-    assert set(table.columns) == {
+    assert set(table.columns.keys()) == {
         "id",
         "connection_id",
         "external_event_id",
@@ -39,8 +39,14 @@ def test_outbound_delivery_model_schema_contract() -> None:
         "delivery_kind",
     ]
 
-    indexes = {index.name: [column.name for column in index.columns] for index in table.indexes}
-    assert indexes["ix_channel_outbound_delivery_status_updated"] == ["status", "updated_at"]
+    indexes = {
+        index.name: [column.name for column in index.columns]
+        for index in table.indexes
+    }
+    assert indexes["ix_channel_outbound_delivery_status_updated"] == [
+        "status",
+        "updated_at",
+    ]
     assert indexes["ix_channel_outbound_delivery_connection_id"] == ["connection_id"]
 
 
