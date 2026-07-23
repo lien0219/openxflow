@@ -106,37 +106,28 @@ async def test_reserved_webhook_timeout_releases_capacity(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_queued_webhook_does_not_consume_execution_timeout(monkeypatch) -> None:
-    limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=2)
-    assert limiter.try_reserve() is True
+    limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
     assert limiter.try_reserve() is True
 
-    first_started = asyncio.Event()
-    release_first = asyncio.Event()
-    second_started = asyncio.Event()
+    blocker_started = asyncio.Event()
+    release_blocker = asyncio.Event()
+    webhook_started = asyncio.Event()
 
-    async def process(**kwargs) -> bool:
-        payload = kwargs["payload"]
-        if payload == b"first":
-            first_started.set()
-            await release_first.wait()
-        else:
-            second_started.set()
+    async def occupy_slot() -> None:
+        blocker_started.set()
+        await release_blocker.wait()
+
+    async def process(**_kwargs) -> bool:
+        webhook_started.set()
         return True
 
     monkeypatch.setattr(webhook_processing, "_webhook_limiter", limiter)
     monkeypatch.setattr(webhook_processing, "process_provider_webhook", process)
     monkeypatch.setattr(webhook_processing, "webhook_task_timeout_seconds", lambda: 0.02)
 
-    first_task = asyncio.create_task(
-        webhook_processing.process_reserved_provider_webhook(
-            connection_id=uuid4(),
-            expected_channel_type="telegram",
-            headers={},
-            payload=b"first",
-        )
-    )
-    await first_started.wait()
-    second_task = asyncio.create_task(
+    blocker_task = asyncio.create_task(limiter.run(occupy_slot))
+    await blocker_started.wait()
+    webhook_task = asyncio.create_task(
         webhook_processing.process_reserved_provider_webhook(
             connection_id=uuid4(),
             expected_channel_type="telegram",
@@ -146,16 +137,16 @@ async def test_queued_webhook_does_not_consume_execution_timeout(monkeypatch) ->
     )
 
     await asyncio.sleep(0.04)
-    assert second_started.is_set() is False
-    assert second_task.done() is False
+    assert webhook_started.is_set() is False
+    assert webhook_task.done() is False
 
-    release_first.set()
-    await asyncio.gather(first_task, second_task)
+    release_blocker.set()
+    await asyncio.gather(blocker_task, webhook_task)
 
     snapshot = limiter.snapshot()
-    assert second_started.is_set() is True
+    assert webhook_started.is_set() is True
     assert snapshot.pending == 0
-    assert snapshot.succeeded_total == 2
+    assert snapshot.succeeded_total == 1
     assert snapshot.failed_total == 0
 
 
