@@ -106,11 +106,12 @@ class ChannelGateway:
                 raise DuplicateChannelEventError(event.event_id)
 
         try:
-            acknowledgement_sender = lambda: adapter.acknowledge_event(event)
-            if guard_outbound:
-                await send_outbound_acknowledgement_once(event, acknowledgement_sender)
-            else:
-                await acknowledgement_sender()
+            if adapter.requires_event_acknowledgement(event):
+                acknowledgement_sender = lambda: adapter.acknowledge_event(event)
+                if guard_outbound:
+                    await send_outbound_acknowledgement_once(event, acknowledgement_sender)
+                else:
+                    await acknowledgement_sender()
 
             response = await handler(event)
             if response is not None:
