@@ -114,7 +114,16 @@ async def test_durable_webhook_is_committed_without_background_task(monkeypatch)
     background_tasks = BackgroundTasks()
     response = await _validate_and_schedule_provider_event(
         connection_id=connection_id,
-        request=_FakeRequest(payload=b'{"message":"hello"}'),
+        request=_FakeRequest(
+            payload=b'{"message":"hello"}',
+            headers={
+                "content-type": "application/json",
+                "content-length": "19",
+                "x-telegram-bot-api-secret-token": "secret",
+                "authorization": "Bearer must-not-persist",
+                "cookie": "session=must-not-persist",
+            },
+        ),
         db=db,
         background_tasks=background_tasks,
         expected_channel_type="telegram",
@@ -126,7 +135,7 @@ async def test_durable_webhook_is_committed_without_background_task(monkeypatch)
     assert captured["channel_type"] == "telegram"
     assert captured["external_event_id"] == "event-1"
     assert captured["payload"] == b'{"message":"hello"}'
-    assert captured["headers"]["content-type"] == "application/json"
+    assert captured["headers"] == {"x-telegram-bot-api-secret-token": "secret"}
     assert background_tasks.tasks == []
 
 
