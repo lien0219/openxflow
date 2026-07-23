@@ -1,0 +1,62 @@
+name: Channel Gateway Frontend
+
+on:
+  push:
+    branches:
+      - feature/channel-gateway
+    paths:
+      - ".github/workflows/channel-gateway-frontend.yml"
+      - "src/frontend/package.json"
+      - "src/frontend/package-lock.json"
+      - "src/frontend/src/controllers/API/queries/channels/**"
+      - "src/frontend/src/controllers/API/helpers/constants.ts"
+      - "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/**"
+      - "src/frontend/src/pages/SettingsPage/index.tsx"
+      - "src/frontend/src/routes.tsx"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: channel-gateway-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  channel-center:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check Channel Center formatting and lint
+        run: >-
+          npx --no-install biome check
+          src/controllers/API/queries/channels
+          src/pages/SettingsPage/pages/ChannelsPage
+          src/controllers/API/helpers/constants.ts
+          src/pages/SettingsPage/index.tsx
+          src/routes.tsx
+
+      - name: Run Channel Center unit tests
+        run: >-
+          npm test --
+          --runInBand
+          src/pages/SettingsPage/pages/ChannelsPage/__tests__/utils.test.ts
+
+      - name: Type-check frontend
+        run: npx --no-install tsc --noEmit --pretty false --project tsconfig.json
