@@ -15,6 +15,7 @@ from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.adapters.wecom import WeComChannelAdapter
 from langflow.channels.security.webhook_headers import durable_webhook_headers
 from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
+from langflow.channels.services.outbound_delivery import outbound_delivery_lifespan
 from langflow.channels.services.runtime_config import durable_webhook_job_config, webhook_max_body_bytes
 from langflow.channels.services.webhook_jobs import (
     durable_webhook_job_lifespan,
@@ -32,10 +33,11 @@ from langflow.services.database.models.channel.model import ChannelConnection
 
 @asynccontextmanager
 async def channel_webhook_lifespan(app):  # type: ignore[no-untyped-def]
-    """Run Stream ownership and durable HTTP callback consumers together."""
+    """Run Stream ownership, durable consumers, and outbound receipt cleanup together."""
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(channel_stream_lifespan(app))
         await stack.enter_async_context(durable_webhook_job_lifespan(app))
+        await stack.enter_async_context(outbound_delivery_lifespan(app))
         yield
 
 
