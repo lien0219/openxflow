@@ -67,7 +67,7 @@ class ChannelGateway:
             await adapter.acknowledge_event(event)
             response = await handler(event)
             if response is not None:
-                await adapter.send_message(event.conversation.external_conversation_id, response)
+                await adapter.send_response(event, response)
         except Exception as exc:
             if deduplicator is not None and receipt is not None:
                 await deduplicator.fail(receipt, exc)

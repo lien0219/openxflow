@@ -23,6 +23,10 @@ class ChannelAdapter(ABC):
     async def send_message(self, target_id: str, message: ChannelMessage) -> str:
         """Send a message and return the provider message identifier."""
 
+    async def send_response(self, event: ChannelEvent, message: ChannelMessage) -> str:
+        """Reply to an inbound event, falling back to a new conversation message."""
+        return await self.send_message(event.conversation.external_conversation_id, message)
+
     async def acknowledge_event(self, event: ChannelEvent) -> None:
         """Acknowledge provider-specific interactive events when required."""
 

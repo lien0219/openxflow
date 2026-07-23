@@ -4,7 +4,12 @@ from uuid import uuid4
 import pytest
 
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
-from langflow.channels.domain.models import ChannelEventType, ChannelMessage
+from langflow.channels.domain.models import (
+    ChannelAction,
+    ChannelEventType,
+    ChannelMessage,
+    ChannelMessageType,
+)
 
 
 def _adapter() -> FeishuChannelAdapter:
@@ -16,7 +21,7 @@ def _adapter() -> FeishuChannelAdapter:
     )
 
 
-def _message_event(*, message_type: str = "text", content: dict | None = None) -> bytes:
+def _message_event(*, message_type: str = "text", content: dict | None = None, mentions: list | None = None) -> bytes:
     payload = {
         "schema": "2.0",
         "header": {
@@ -40,7 +45,7 @@ def _message_event(*, message_type: str = "text", content: dict | None = None) -
                 "chat_type": "p2p",
                 "message_type": message_type,
                 "content": json.dumps(content or {"text": "hello"}),
-                "mentions": [],
+                "mentions": mentions or [],
             },
         },
     }
@@ -91,16 +96,36 @@ async def test_feishu_text_event_is_normalized() -> None:
 
 
 @pytest.mark.asyncio
-async def test_feishu_command_is_detected() -> None:
+async def test_feishu_mention_placeholder_is_removed_before_command_detection() -> None:
     event = await _adapter().parse_event(
         {},
-        _message_event(content={"text": "/help"}),
+        _message_event(
+            content={"text": "@_user_1 /help"},
+            mentions=[{"key": "@_user_1", "id": {"open_id": "ou_bot"}}],
+        ),
     )
+    assert event.message.text == "/help"
     assert event.event_type == ChannelEventType.COMMAND
 
 
 @pytest.mark.asyncio
-async def test_feishu_file_identifier_contains_message_and_file_key() -> None:
+async def test_feishu_post_message_is_flattened() -> None:
+    event = await _adapter().parse_event(
+        {},
+        _message_event(
+            message_type="post",
+            content={
+                "title": "日报",
+                "content": [[{"tag": "text", "text": "销售额增长 12%"}]],
+            },
+        ),
+    )
+    assert event.event_type == ChannelEventType.TEXT
+    assert event.message.text == "日报\n销售额增长 12%"
+
+
+@pytest.mark.asyncio
+async def test_feishu_file_identifier_contains_resource_type() -> None:
     event = await _adapter().parse_event(
         {},
         _message_event(
@@ -110,36 +135,69 @@ async def test_feishu_file_identifier_contains_message_and_file_key() -> None:
     )
 
     assert event.event_type == ChannelEventType.FILE
-    assert len(event.message.attachments) == 1
-    assert event.message.attachments[0].external_file_id == "om_message:file-key"
+    assert event.message.attachments[0].external_file_id == "om_message:file-key:file"
     assert event.message.attachments[0].filename == "report.pdf"
 
 
 @pytest.mark.asyncio
-async def test_feishu_send_message_uses_chat_id(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_feishu_card_action_is_normalized() -> None:
+    payload = json.dumps(
+        {
+            "schema": "2.0",
+            "header": {
+                "event_id": "card-event",
+                "event_type": "card.action.trigger",
+                "tenant_key": "tenant-1",
+                "token": "verify-token",
+            },
+            "event": {
+                "operator": {"open_id": "ou_user"},
+                "context": {
+                    "open_chat_id": "oc_chat",
+                    "open_message_id": "om_card",
+                },
+                "action": {
+                    "tag": "button",
+                    "value": {"action_id": "approve", "value": "/run approve"},
+                },
+            },
+        }
+    ).encode()
+
+    event = await _adapter().parse_event({}, payload)
+    assert event.event_type == ChannelEventType.ACTION
+    assert event.message.text == "/run approve"
+    assert event.message.metadata["action_id"] == "approve"
+
+
+@pytest.mark.asyncio
+async def test_feishu_send_response_replies_to_original_message(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = _adapter()
     captured: dict = {}
 
     async def fake_request(method, path, *, params=None, payload=None):
-        captured.update(
-            {
-                "method": method,
-                "path": path,
-                "params": params,
-                "payload": payload,
-            }
-        )
+        captured.update({"method": method, "path": path, "params": params, "payload": payload})
         return {"message_id": "sent-message"}
 
     monkeypatch.setattr(adapter, "_request", fake_request)
-    message_id = await adapter.send_message(
-        "oc_chat",
-        ChannelMessage(title="Result", text="Done"),
-    )
+    event = await adapter.parse_event({}, _message_event())
+    message_id = await adapter.send_response(event, ChannelMessage(title="Result", text="Done"))
 
     assert message_id == "sent-message"
-    assert captured["method"] == "POST"
-    assert captured["path"] == "im/v1/messages"
-    assert captured["params"] == {"receive_id_type": "chat_id"}
-    assert captured["payload"]["receive_id"] == "oc_chat"
-    assert "Result" in captured["payload"]["content"]
+    assert captured["path"] == "im/v1/messages/om_message/reply"
+    assert captured["payload"]["reply_in_thread"] is False
+
+
+def test_feishu_card_renderer_builds_interactive_buttons() -> None:
+    msg_type, content = FeishuChannelAdapter._render_message(
+        ChannelMessage(
+            message_type=ChannelMessageType.CARD,
+            title="审批",
+            markdown="是否继续？",
+            actions=[ChannelAction(action_id="approve", label="通过", style="primary")],
+        )
+    )
+
+    assert msg_type == "interactive"
+    assert content["header"]["title"]["content"] == "审批"
+    assert content["elements"][1]["actions"][0]["value"]["action_id"] == "approve"
