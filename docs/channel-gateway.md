@@ -6,7 +6,7 @@ OpenXFlow Channel Gateway connects Telegram, Feishu, DingTalk, and Enterprise We
 
 | Variable | Default | Description |
 | --- | ---: | --- |
-| `LANGFLOW_CHANNEL_STREAMS_ENABLED` | `true` | Enables lifecycle-managed Stream clients such as DingTalk Stream. Set to `false` for workers that should only serve HTTP. |
+| `LANGFLOW_CHANNEL_STREAMS_ENABLED` | `true` | Enables lifecycle-managed Stream clients such as DingTalk Stream. Accepted true values are `1`, `true`, `yes`, and `on`; accepted false values are `0`, `false`, `no`, and `off`. Unrecognized values fall back to `true`. |
 | `LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY` | `16` | Maximum provider webhook jobs executing concurrently in one application process. |
 | `LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING` | `128` | Maximum accepted webhook jobs, including executing and waiting jobs, in one application process. Values below the concurrency limit are automatically raised to match it. |
 | `LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING_BYTES` | `67108864` | Maximum retained callback-body bytes across all accepted webhook jobs in one application process. |
@@ -97,7 +97,7 @@ Authenticated users can inspect the current process at:
 GET /api/v1/channel-runtime/
 ```
 
-The JSON response includes active, queued, accepted, rejected, succeeded, and failed webhook counts, current retained payload bytes, the pending-payload byte limit, the active per-request body-size and task-timeout limits, and the outbound retry policy.
+The JSON response includes the parsed `streams_enabled` state for the current process, active, queued, accepted, rejected, succeeded, and failed webhook counts, current retained payload bytes, the pending-payload byte limit, the active per-request body-size and task-timeout limits, and the outbound retry policy.
 
 Prometheus text exposition is available at:
 
@@ -127,7 +127,7 @@ Metrics are process-local. In a multi-worker deployment, scrape every worker or 
 
 ## DingTalk Stream deployment
 
-DingTalk connections with `connection_mode=stream` are maintained by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream connections.
+DingTalk connections with `connection_mode=stream` are maintained by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream connections. Use `GET /api/v1/channel-runtime/` on each worker to confirm its parsed `streams_enabled` state.
 
 The runtime requires the official Python package:
 
