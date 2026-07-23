@@ -6,6 +6,8 @@ import math
 from dataclasses import dataclass
 from threading import Lock
 
+from prometheus_client.core import CounterMetricFamily, HistogramMetricFamily
+
 _DURATION_BUCKETS_SECONDS = (
     0.005,
     0.01,
@@ -145,3 +147,56 @@ def channel_timing_metrics_snapshot() -> ChannelTimingMetricSnapshot:
 
 def reset_channel_timing_metrics_for_testing() -> None:
     _timing_metrics.reset()
+
+
+class ChannelTimingMetricsCollector:
+    """Expose inbound callback counters and cumulative timing histograms."""
+
+    def collect(self):  # type: ignore[no-untyped-def]
+        snapshot = channel_timing_metrics_snapshot()
+        for name, description, value in (
+            (
+                "openxflow_channel_stream_callbacks_succeeded",
+                "Successfully processed DingTalk Stream callbacks",
+                snapshot.stream_callbacks_succeeded,
+            ),
+            (
+                "openxflow_channel_stream_callbacks_failed",
+                "DingTalk Stream callbacks that returned provider-visible errors",
+                snapshot.stream_callbacks_failed,
+            ),
+        ):
+            metric = CounterMetricFamily(name, description)
+            metric.add_metric([], value)
+            yield metric
+
+        yield self._histogram(
+            "openxflow_channel_stream_callback_duration_seconds",
+            "DingTalk Stream callback processing duration in seconds",
+            snapshot.stream_callback_duration,
+        )
+        yield self._histogram(
+            "openxflow_channel_webhook_queue_wait_duration_seconds",
+            "HTTP channel webhook wait time before obtaining an execution slot",
+            snapshot.webhook_queue_wait_duration,
+        )
+        yield self._histogram(
+            "openxflow_channel_webhook_execution_duration_seconds",
+            "HTTP channel webhook execution duration after obtaining a slot",
+            snapshot.webhook_execution_duration,
+        )
+
+    @staticmethod
+    def _histogram(
+        name: str,
+        description: str,
+        snapshot: DurationHistogramSnapshot,
+    ) -> HistogramMetricFamily:
+        buckets = [(str(upper_bound), count) for upper_bound, count in snapshot.buckets]
+        buckets.append(("+Inf", snapshot.count))
+        return HistogramMetricFamily(
+            name,
+            description,
+            buckets=buckets,
+            sum_value=snapshot.sum_seconds,
+        )
