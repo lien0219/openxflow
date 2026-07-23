@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 
 from langflow.channels.adapters.dingtalk import DingTalkAPIError, DingTalkChannelAdapter
+from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
+from langflow.channels.services.token_cache import (
+    InvalidProviderTokenResponseError,
+    provider_token_cache_key,
+    provider_token_lifetime_seconds,
+    response_json_object,
+)
 from langflow.channels.services.token_refresh import (
     is_access_token_rejection,
     refresh_rejected_cached_token,
     request_with_token_refresh,
-    response_json_object,
 )
 
 _DINGTALK_ACCESS_TOKEN_REJECTION_CODES = {
@@ -26,6 +32,17 @@ _DINGTALK_ACCESS_TOKEN_REJECTION_CODES = {
 class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
     """Replay one API request after an explicit DingTalk token rejection."""
 
+    _token_lock_pool: ClassVar[LoopLocalKeyedLockPool] = LoopLocalKeyedLockPool()
+
+    @property
+    def _token_cache_key(self) -> str:
+        return provider_token_cache_key(
+            provider="dingtalk",
+            api_base_url=self.api_base_url,
+            public_id=self.client_id,
+            secret=self.client_secret,
+        )
+
     async def _fetch_access_token_entry(self) -> tuple[str, float]:
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
             response = await client.post(
@@ -38,16 +55,41 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
             raise DingTalkAPIError("Invalid DingTalk access-token response")
         token = body.get("accessToken")
         if not token:
-            raise DingTalkAPIError(str(body.get("message") or body.get("msg") or "DingTalk access token missing"))
-        expire_seconds = max(60, int(body.get("expireIn", 7200)))
+            raise DingTalkAPIError(
+                str(body.get("message") or body.get("msg") or "DingTalk access token missing")
+            )
+        try:
+            expire_seconds = provider_token_lifetime_seconds(
+                body,
+                "expireIn",
+                provider="DingTalk",
+            )
+        except InvalidProviderTokenResponseError as exc:
+            raise DingTalkAPIError(str(exc)) from exc
         return str(token), time.monotonic() + max(30, expire_seconds - 60)
+
+    async def _access_token(self, *, force_refresh: bool = False) -> str:
+        cache_key = self._token_cache_key
+        now = time.monotonic()
+        cached = self._token_cache.get(cache_key)
+        if not force_refresh and cached is not None and cached[1] > now:
+            return cached[0]
+
+        async with self._token_lock_pool.hold(cache_key):
+            now = time.monotonic()
+            cached = self._token_cache.get(cache_key)
+            if not force_refresh and cached is not None and cached[1] > now:
+                return cached[0]
+            token, expires_at = await self._fetch_access_token_entry()
+            self._token_cache[cache_key] = (token, expires_at)
+            return token
 
     async def _refresh_rejected_access_token(self, rejected_token: str) -> str:
         return await refresh_rejected_cached_token(
             cache=self._token_cache,
             cache_key=self._token_cache_key,
             rejected_token=rejected_token,
-            lock=self._token_lock,
+            lock_pool=self._token_lock_pool,
             fetch_new_token=self._fetch_access_token_entry,
             provider="dingtalk",
         )
@@ -92,5 +134,7 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
         if body is None:
             raise DingTalkAPIError("Invalid DingTalk API response")
         if body.get("code") not in {None, "", 0, "0"}:
-            raise DingTalkAPIError(str(body.get("message") or body.get("msg") or body["code"]))
+            raise DingTalkAPIError(
+                str(body.get("message") or body.get("msg") or body["code"])
+            )
         return body
