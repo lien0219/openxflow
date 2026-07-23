@@ -34,8 +34,13 @@ class ChannelWebhookRuntimeRead(BaseModel):
     task_timeout_seconds: float
     accepted_total: int
     rejected_total: int
+    rejected_pending_total: int
+    rejected_bytes_total: int
+    rejected_both_total: int
     succeeded_total: int
     failed_total: int
+    cancelled_total: int
+    client_disconnected_total: int
 
 
 class ChannelOutboundRetryRuntimeRead(BaseModel):
