@@ -77,7 +77,9 @@ async def test_postgres_serializes_outbound_delivery_reservation_races(monkeypat
                     f"""
                     CREATE TABLE {quoted_schema}.channel_outbound_delivery (
                         id UUID PRIMARY KEY,
-                        connection_id UUID NOT NULL REFERENCES {quoted_schema}.channel_connection(id) ON DELETE CASCADE,
+                        connection_id UUID NOT NULL
+                            REFERENCES {quoted_schema}.channel_connection(id)
+                            ON DELETE CASCADE,
                         external_event_id VARCHAR(255) NOT NULL,
                         delivery_kind VARCHAR(32) NOT NULL,
                         response_digest VARCHAR(64) NOT NULL,
@@ -95,9 +97,7 @@ async def test_postgres_serializes_outbound_delivery_reservation_races(monkeypat
                 )
             )
             await connection.execute(
-                sa.text(
-                    f"INSERT INTO {quoted_schema}.channel_connection (id) VALUES (:id)"
-                ),
+                sa.text(f"INSERT INTO {quoted_schema}.channel_connection (id) VALUES (:id)"),
                 {"id": connection_id},
             )
 
@@ -112,6 +112,7 @@ async def test_postgres_serializes_outbound_delivery_reservation_races(monkeypat
         assert sorted(decision.should_send for decision in first_race) == [False, True]
 
         winner = next(decision for decision in first_race if decision.should_send)
+        assert winner.delivery_id is not None
         await outbound_delivery.mark_outbound_delivery_failed(
             winner.delivery_id,
             winner.delivery_kind,
