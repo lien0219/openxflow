@@ -20,6 +20,10 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.stream_runtime.leader_managers >= 0
     assert result.stream_runtime.managed_clients >= 0
     assert result.stream_runtime.leader_managers <= result.stream_runtime.running_managers
+    assert result.stream_runtime.connection_errors_total >= 0
+    assert result.stream_runtime.reconnect_attempts_total >= 0
+    assert result.stream_runtime.successful_sync_total >= 0
+    assert result.stream_runtime.last_successful_sync_timestamp_seconds >= 0
     assert result.webhook.max_concurrency > 0
     assert result.webhook.max_pending >= result.webhook.max_concurrency
     assert result.webhook.pending >= result.webhook.active
@@ -50,6 +54,10 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_stream_running_managers" in response.body
     assert b"openxflow_channel_stream_leader_managers" in response.body
     assert b"openxflow_channel_stream_managed_clients" in response.body
+    assert b"openxflow_channel_stream_connection_errors" in response.body
+    assert b"openxflow_channel_stream_reconnect_attempts" in response.body
+    assert b"openxflow_channel_stream_successful_syncs" in response.body
+    assert b"openxflow_channel_stream_last_successful_sync_timestamp_seconds" in response.body
     assert b"openxflow_channel_webhook_pending" in response.body
     assert b"openxflow_channel_webhook_pending_bytes" in response.body
     assert b"openxflow_channel_webhook_max_pending_bytes" in response.body
