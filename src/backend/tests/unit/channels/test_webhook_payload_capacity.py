@@ -7,6 +7,12 @@ from langflow.channels.services import webhook_processing
 from langflow.channels.services.webhook_processing import WebhookProcessingLimiter
 
 
+def _reserve(limiter: WebhookProcessingLimiter, payload_size: int = 0):
+    reservation = limiter.try_reserve(payload_size)
+    assert reservation is not None
+    return reservation
+
+
 def test_webhook_limiter_rejects_payloads_beyond_byte_capacity() -> None:
     limiter = WebhookProcessingLimiter(
         max_concurrency=1,
@@ -14,9 +20,9 @@ def test_webhook_limiter_rejects_payloads_beyond_byte_capacity() -> None:
         max_pending_bytes=5,
     )
 
-    assert limiter.try_reserve(3) is True
-    assert limiter.try_reserve(2) is True
-    assert limiter.try_reserve(1) is False
+    first = _reserve(limiter, 3)
+    second = _reserve(limiter, 2)
+    assert limiter.try_reserve(1) is None
 
     snapshot = limiter.snapshot()
     assert snapshot.pending == 2
@@ -24,9 +30,13 @@ def test_webhook_limiter_rejects_payloads_beyond_byte_capacity() -> None:
     assert snapshot.max_pending_bytes == 5
     assert snapshot.rejected_total == 1
 
-    limiter.release(3)
+    limiter.cancel_reservation(first)
     assert limiter.snapshot().pending_bytes == 2
-    assert limiter.try_reserve(3) is True
+    third = _reserve(limiter, 3)
+
+    limiter.cancel_reservation(second)
+    limiter.cancel_reservation(third)
+    assert limiter.snapshot().pending_bytes == 0
 
 
 def test_webhook_limiter_rejects_negative_payload_sizes() -> None:
@@ -34,10 +44,13 @@ def test_webhook_limiter_rejects_negative_payload_sizes() -> None:
 
     with pytest.raises(ValueError, match="payload_size"):
         limiter.try_reserve(-1)
-    with pytest.raises(ValueError, match="payload_size"):
-        limiter.release(-1)
-    with pytest.raises(ValueError, match="payload_size"):
-        limiter.finish(success=True, payload_size=-1)
+
+
+def test_webhook_limiter_rejects_non_reservation_release() -> None:
+    limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
+
+    with pytest.raises(TypeError, match="WebhookReservation"):
+        limiter.cancel_reservation(1)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -48,7 +61,7 @@ async def test_completed_webhook_releases_payload_bytes(monkeypatch) -> None:
         max_pending=1,
         max_pending_bytes=len(payload),
     )
-    assert limiter.try_reserve(len(payload)) is True
+    reservation = _reserve(limiter, len(payload))
 
     async def succeed(**_kwargs) -> bool:
         return True
@@ -57,6 +70,7 @@ async def test_completed_webhook_releases_payload_bytes(monkeypatch) -> None:
     monkeypatch.setattr(webhook_processing, "process_provider_webhook", succeed)
 
     await webhook_processing.process_reserved_provider_webhook(
+        reservation=reservation,
         connection_id=uuid4(),
         expected_channel_type="telegram",
         headers={},
@@ -77,7 +91,7 @@ async def test_cancelled_webhook_releases_payload_bytes_without_failure(monkeypa
         max_pending=1,
         max_pending_bytes=len(payload),
     )
-    assert limiter.try_reserve(len(payload)) is True
+    reservation = _reserve(limiter, len(payload))
     started = asyncio.Event()
     never_finishes = asyncio.Event()
 
@@ -92,6 +106,7 @@ async def test_cancelled_webhook_releases_payload_bytes_without_failure(monkeypa
 
     task = asyncio.create_task(
         webhook_processing.process_reserved_provider_webhook(
+            reservation=reservation,
             connection_id=uuid4(),
             expected_channel_type="telegram",
             headers={},
