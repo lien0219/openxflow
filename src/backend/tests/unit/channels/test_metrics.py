@@ -70,6 +70,7 @@ def test_channel_prometheus_collector_exposes_runtime_metrics() -> None:
         "openxflow_channel_webhook_rejected_pending_total",
         "openxflow_channel_webhook_rejected_bytes_total",
         "openxflow_channel_webhook_rejected_both_total",
+        "openxflow_channel_webhook_queue_timed_out_total",
         "openxflow_channel_webhook_cancelled_total",
         "openxflow_channel_webhook_client_disconnected_total",
     ):
