@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from threading import Lock
-from typing import Awaitable, Callable, TypeVar
+from typing import TypeVar
 from uuid import UUID
 
 from lfx.log.logger import logger
@@ -79,6 +80,10 @@ class WebhookProcessingLimiter:
     def cancel_reservation(self) -> None:
         with self._state_lock:
             self._pending = max(0, self._pending - 1)
+
+    def release(self) -> None:
+        """Backward-compatible alias for cancelling a reserved queue slot."""
+        self.cancel_reservation()
 
     def finish(self, *, success: bool) -> None:
         with self._state_lock:
