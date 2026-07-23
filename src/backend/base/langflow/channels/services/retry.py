@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -23,6 +24,30 @@ from langflow.channels.services.metrics import (
 
 _T = TypeVar("_T")
 _RETRYABLE_STATUS_CODES = frozenset({408, 425, 429, *range(500, 600)})
+_PROVIDER_RATE_LIMIT_HINTS = (
+    "too many requests",
+    "rate limit",
+    "frequency limit",
+    "retry after",
+    "限流",
+    "频率限制",
+    "请求过于频繁",
+)
+_PROVIDER_BUSY_HINTS = (
+    "system busy",
+    "service unavailable",
+    "temporarily unavailable",
+    "temporary failure",
+    "try again later",
+    "系统繁忙",
+    "服务不可用",
+    "稍后重试",
+)
+_PROVIDER_TIMEOUT_HINTS = ("timeout", "timed out", "超时")
+_RETRY_AFTER_PATTERN = re.compile(
+    r"(?:retry[\s_-]*after|after)\D{0,16}(\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -133,12 +158,24 @@ async def retry_channel_operation(
 def is_retryable_channel_error(exc: Exception) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in _RETRYABLE_STATUS_CODES
-    return isinstance(exc, httpx.RequestError)
+    if isinstance(exc, httpx.RequestError):
+        return True
+    return _is_retryable_provider_api_error(exc)
 
 
 def channel_error_reason(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         return f"http_{exc.response.status_code}"
+    if isinstance(exc, httpx.RequestError):
+        return type(exc).__name__.lower()
+    if _is_provider_api_error(exc):
+        normalized = str(exc).casefold()
+        if _contains_any(normalized, _PROVIDER_RATE_LIMIT_HINTS):
+            return "provider_rate_limit"
+        if _contains_any(normalized, _PROVIDER_BUSY_HINTS):
+            return "provider_busy"
+        if _contains_any(normalized, _PROVIDER_TIMEOUT_HINTS):
+            return "provider_timeout"
     return type(exc).__name__.lower()
 
 
@@ -161,12 +198,44 @@ def retry_delay_seconds(
     return min(policy.max_delay_seconds, max(0.0, base_delay * jitter_multiplier))
 
 
+def _is_provider_api_error(exc: Exception) -> bool:
+    return type(exc).__name__.endswith("APIError")
+
+
+def _is_retryable_provider_api_error(exc: Exception) -> bool:
+    if not _is_provider_api_error(exc):
+        return False
+    normalized = str(exc).casefold()
+    return _contains_any(
+        normalized,
+        (*_PROVIDER_RATE_LIMIT_HINTS, *_PROVIDER_BUSY_HINTS, *_PROVIDER_TIMEOUT_HINTS),
+    )
+
+
+def _contains_any(value: str, hints: tuple[str, ...]) -> bool:
+    return any(hint in value for hint in hints)
+
+
 def _retry_after_seconds(exc: Exception) -> float | None:
-    if not isinstance(exc, httpx.HTTPStatusError):
-        return None
-    raw_value = exc.response.headers.get("Retry-After")
-    if not raw_value:
-        return None
+    attribute_value = getattr(exc, "retry_after", None)
+    if isinstance(attribute_value, (int, float)):
+        return float(attribute_value)
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        raw_value = exc.response.headers.get("Retry-After")
+        if raw_value:
+            parsed_header = _parse_retry_after_header(raw_value)
+            if parsed_header is not None:
+                return parsed_header
+
+    if _is_provider_api_error(exc):
+        match = _RETRY_AFTER_PATTERN.search(str(exc))
+        if match is not None:
+            return float(match.group(1))
+    return None
+
+
+def _parse_retry_after_header(raw_value: str) -> float | None:
     try:
         return float(raw_value)
     except ValueError:
