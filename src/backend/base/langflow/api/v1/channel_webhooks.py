@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
+from starlette.requests import ClientDisconnect
 
 from langflow.api.utils import DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
@@ -52,15 +53,21 @@ async def _read_limited_body(request: Request) -> bytes:
             )
 
     payload = bytearray()
-    async for chunk in request.stream():
-        if not chunk:
-            continue
-        if len(payload) + len(chunk) > max_body_bytes:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"Channel webhook body exceeds {max_body_bytes} bytes",
-            )
-        payload.extend(chunk)
+    try:
+        async for chunk in request.stream():
+            if not chunk:
+                continue
+            if len(payload) + len(chunk) > max_body_bytes:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"Channel webhook body exceeds {max_body_bytes} bytes",
+                )
+            payload.extend(chunk)
+    except ClientDisconnect as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Client disconnected before the channel webhook body was fully received",
+        ) from exc
     return bytes(payload)
 
 
