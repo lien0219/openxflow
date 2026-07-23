@@ -36,11 +36,14 @@ class LoopLocalKeyedLockPool:
             raise ValueError("key must not be empty")
         loop = asyncio.get_running_loop()
         entry = self._entry_for_key(loop, key)
-        await entry.lock.acquire()
+        acquired = False
         try:
+            await entry.lock.acquire()
+            acquired = True
             yield
         finally:
-            entry.lock.release()
+            if acquired:
+                entry.lock.release()
             self._release_entry(loop, key, entry)
 
     def retained_key_count_for_testing(self) -> int:
