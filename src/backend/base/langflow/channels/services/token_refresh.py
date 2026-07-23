@@ -4,36 +4,26 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import TypeVar
 
 import httpx
 
-from langflow.channels.services.loop_lock import LoopLocalAsyncLock
+from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
 from langflow.channels.services.metrics import (
     record_token_rejection,
     record_token_refresh_failure,
     record_token_refresh_success,
     record_token_replay,
 )
+from langflow.channels.services.token_cache import response_json_object
 
 _TResponse = TypeVar("_TResponse")
 TokenCache = dict[str, tuple[str, float]]
 
 
-def response_json_object(response: httpx.Response) -> dict[str, Any] | None:
-    """Return a JSON object response body without raising for binary or malformed bodies."""
-    if not response.content:
-        return None
-    try:
-        body = response.json()
-    except (ValueError, UnicodeDecodeError):
-        return None
-    return body if isinstance(body, dict) else None
-
-
 def is_access_token_rejection(
     response: httpx.Response,
-    body: dict[str, Any] | None,
+    body: dict | None,
     *,
     known_codes: set[str],
     code_fields: tuple[str, ...] = ("code", "errcode"),
@@ -53,7 +43,15 @@ def is_access_token_rejection(
     message = " ".join(str(body.get(field) or "") for field in message_fields).strip().lower()
     if not message:
         return False
-    mentions_token = any(term in message for term in ("access token", "access_token", "accesstoken", "tenant_access_token"))
+    mentions_token = any(
+        term in message
+        for term in (
+            "access token",
+            "access_token",
+            "accesstoken",
+            "tenant_access_token",
+        )
+    )
     indicates_rejection = any(
         term in message
         for term in (
@@ -74,12 +72,12 @@ async def refresh_rejected_cached_token(
     cache: TokenCache,
     cache_key: str,
     rejected_token: str,
-    lock: LoopLocalAsyncLock,
+    lock_pool: LoopLocalKeyedLockPool,
     fetch_new_token: Callable[[], Awaitable[tuple[str, float]]],
     provider: str = "unknown",
 ) -> str:
     """Refresh a rejected token once while allowing concurrent callers to reuse the winner."""
-    async with lock:
+    async with lock_pool.hold(cache_key):
         cached = cache.get(cache_key)
         if cached is not None and cached[0] != rejected_token and cached[1] > time.monotonic():
             return cached[0]
