@@ -8,6 +8,10 @@ on:
       - ".github/workflows/channel-gateway-core.yml"
       - ".github/workflows/channel-gateway-frontend.yml"
       - "src/backend/base/langflow/channels/**"
+      - "src/backend/base/langflow/alembic/versions/*channel*"
+      - "src/backend/base/langflow/alembic/versions/f7d0b5c3e4a6_add_channel_webhook_jobs.py"
+      - "src/backend/base/langflow/alembic/versions/a8e1c6d4f5b7_add_channel_outbound_delivery.py"
+      - "src/backend/base/langflow/services/database/models/channel/**"
       - "src/backend/tests/unit/channels/**"
       - "src/backend/base/pyproject.toml"
   workflow_dispatch:
@@ -68,3 +72,36 @@ jobs:
           src/backend/tests/unit/channels/test_token_cache_expiry_validation.py
           src/backend/tests/unit/channels/test_token_cache_metrics.py
           src/backend/tests/unit/channels/test_token_refresh.py
+
+  database-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Run SQLite migration and model contracts
+        env:
+          PYTHONPATH: src/backend/base
+        run: >-
+          uv run --no-project
+          --with 'lfx==1.10.2'
+          --with 'pytest==9.0.3'
+          --with 'sqlalchemy>=2.0.38,<3.0.0'
+          --with 'sqlmodel==0.0.37'
+          --with 'alembic>=1.13,<2.0.0'
+          --with 'aiosqlite>=0.20,<1.0.0'
+          --with 'pydantic>=2.13,<3.0.0'
+          pytest -q
+          src/backend/tests/unit/channels/test_channel_migrations_sqlite.py
+          src/backend/tests/unit/channels/test_outbound_delivery_model.py
