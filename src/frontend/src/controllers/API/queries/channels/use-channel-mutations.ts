@@ -22,6 +22,7 @@ export const useCreateChannelConnection: useMutationFunctionType<
   ChannelConnection
 > = (options) => {
   const { mutate, queryClient } = UseRequestProcessor();
+  const userOnSettled = options?.onSettled;
   return mutate(
     ["useCreateChannelConnection"],
     async (payload: ChannelConnectionCreate) => {
@@ -32,10 +33,11 @@ export const useCreateChannelConnection: useMutationFunctionType<
       return response.data;
     },
     {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
-      },
       ...options,
+      onSettled: async (data, error, variables, context) => {
+        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await userOnSettled?.(data, error, variables, context);
+      },
     },
   );
 };
@@ -46,6 +48,7 @@ export const useUpdateChannelConnection: useMutationFunctionType<
   ChannelConnection
 > = (options) => {
   const { mutate, queryClient } = UseRequestProcessor();
+  const userOnSettled = options?.onSettled;
   return mutate(
     ["useUpdateChannelConnection"],
     async ({ connectionId, payload }) => {
@@ -56,10 +59,11 @@ export const useUpdateChannelConnection: useMutationFunctionType<
       return response.data;
     },
     {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
-      },
       ...options,
+      onSettled: async (data, error, variables, context) => {
+        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await userOnSettled?.(data, error, variables, context);
+      },
     },
   );
 };
@@ -70,6 +74,7 @@ export const useDeleteChannelConnection: useMutationFunctionType<
   boolean
 > = (options) => {
   const { mutate, queryClient } = UseRequestProcessor();
+  const userOnSettled = options?.onSettled;
   return mutate(
     ["useDeleteChannelConnection"],
     async ({ connectionId }) => {
@@ -77,10 +82,11 @@ export const useDeleteChannelConnection: useMutationFunctionType<
       return true;
     },
     {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
-      },
       ...options,
+      onSettled: async (data, error, variables, context) => {
+        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await userOnSettled?.(data, error, variables, context);
+      },
     },
   );
 };
@@ -91,6 +97,7 @@ export const useTestChannelConnection: useMutationFunctionType<
   ChannelHealthResult
 > = (options) => {
   const { mutate, queryClient } = UseRequestProcessor();
+  const userOnSettled = options?.onSettled;
   return mutate(
     ["useTestChannelConnection"],
     async ({ connectionId }) => {
@@ -100,10 +107,11 @@ export const useTestChannelConnection: useMutationFunctionType<
       return response.data;
     },
     {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
-      },
       ...options,
+      onSettled: async (data, error, variables, context) => {
+        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await userOnSettled?.(data, error, variables, context);
+      },
     },
   );
 };
@@ -114,6 +122,7 @@ export const useConfigureTelegramWebhook: useMutationFunctionType<
   TelegramWebhookResult
 > = (options) => {
   const { mutate, queryClient } = UseRequestProcessor();
+  const userOnSettled = options?.onSettled;
   return mutate(
     ["useConfigureTelegramWebhook"],
     async ({ connectionId, payload }) => {
@@ -124,10 +133,11 @@ export const useConfigureTelegramWebhook: useMutationFunctionType<
       return response.data;
     },
     {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
-      },
       ...options,
+      onSettled: async (data, error, variables, context) => {
+        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await userOnSettled?.(data, error, variables, context);
+      },
     },
   );
 };
@@ -138,6 +148,7 @@ export const useRedeemChannelBindingCode: useMutationFunctionType<
   ChannelIdentity
 > = (options) => {
   const { mutate, queryClient } = UseRequestProcessor();
+  const userOnSettled = options?.onSettled;
   return mutate(
     ["useRedeemChannelBindingCode"],
     async ({ code }) => {
@@ -148,10 +159,13 @@ export const useRedeemChannelBindingCode: useMutationFunctionType<
       return response.data;
     },
     {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: ["useGetChannelIdentities"] });
-      },
       ...options,
+      onSettled: async (data, error, variables, context) => {
+        await queryClient.invalidateQueries({
+          queryKey: ["useGetChannelIdentities"],
+        });
+        await userOnSettled?.(data, error, variables, context);
+      },
     },
   );
 };
@@ -162,6 +176,7 @@ export const useDeleteChannelIdentity: useMutationFunctionType<
   boolean
 > = (options) => {
   const { mutate, queryClient } = UseRequestProcessor();
+  const userOnSettled = options?.onSettled;
   return mutate(
     ["useDeleteChannelIdentity"],
     async ({ connectionId, identityId }) => {
@@ -171,14 +186,15 @@ export const useDeleteChannelIdentity: useMutationFunctionType<
       return true;
     },
     {
-      onSettled: (_data, _error, variables) => {
+      ...options,
+      onSettled: async (data, error, variables, context) => {
         if (variables?.connectionId) {
-          queryClient.invalidateQueries({
+          await queryClient.invalidateQueries({
             queryKey: ["useGetChannelIdentities", variables.connectionId],
           });
         }
+        await userOnSettled?.(data, error, variables, context);
       },
-      ...options,
     },
   );
 };
@@ -189,6 +205,7 @@ export const useUpsertChannelConversation: useMutationFunctionType<
   ChannelConversationBinding
 > = (options) => {
   const { mutate, queryClient } = UseRequestProcessor();
+  const userOnSettled = options?.onSettled;
   return mutate(
     ["useUpsertChannelConversation"],
     async ({ connectionId, payload }) => {
@@ -199,14 +216,15 @@ export const useUpsertChannelConversation: useMutationFunctionType<
       return response.data;
     },
     {
-      onSettled: (_data, _error, variables) => {
+      ...options,
+      onSettled: async (data, error, variables, context) => {
         if (variables?.connectionId) {
-          queryClient.invalidateQueries({
+          await queryClient.invalidateQueries({
             queryKey: ["useGetChannelConversations", variables.connectionId],
           });
         }
+        await userOnSettled?.(data, error, variables, context);
       },
-      ...options,
     },
   );
 };
