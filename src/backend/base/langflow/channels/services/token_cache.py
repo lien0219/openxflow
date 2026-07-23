@@ -11,6 +11,14 @@ from typing import Any
 import httpx
 
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
+from langflow.channels.services.token_cache_metrics import (
+    record_token_cache_coalesced_refresh,
+    record_token_cache_forced_refresh,
+    record_token_cache_hit,
+    record_token_cache_miss,
+    record_token_cache_refresh_failure,
+    record_token_cache_refresh_success,
+)
 
 TokenCache = dict[str, tuple[str, float]]
 
@@ -43,6 +51,7 @@ def provider_token_cache_key(
 
 async def get_cached_provider_token(
     *,
+    provider: str,
     cache: TokenCache,
     cache_key: str,
     force_refresh: bool,
@@ -53,16 +62,28 @@ async def get_cached_provider_token(
     now = time.monotonic()
     observed = cache.get(cache_key)
     if not force_refresh and observed is not None and observed[1] > now:
+        record_token_cache_hit(provider)
         return observed[0]
+
+    if force_refresh:
+        record_token_cache_forced_refresh(provider)
+    else:
+        record_token_cache_miss(provider)
 
     async with lock_pool.hold(cache_key):
         now = time.monotonic()
         cached = cache.get(cache_key)
         if cached is not None and cached[1] > now:
             if not force_refresh or cached is not observed:
+                record_token_cache_coalesced_refresh(provider)
                 return cached[0]
-        token, expires_at = await fetch_new_token()
+        try:
+            token, expires_at = await fetch_new_token()
+        except Exception:
+            record_token_cache_refresh_failure(provider)
+            raise
         cache[cache_key] = (token, expires_at)
+        record_token_cache_refresh_success(provider)
         return token
 
 
