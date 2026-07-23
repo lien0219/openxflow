@@ -1,6 +1,10 @@
 from langflow.channels.services.runtime_config import (
     DEFAULT_CHANNEL_STREAMS_ENABLED,
     DEFAULT_WEBHOOK_DURABLE_ENABLED,
+    DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE,
+    DEFAULT_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS,
+    DEFAULT_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS,
+    DEFAULT_WEBHOOK_JOB_FAILED_RETENTION_DAYS,
     DEFAULT_WEBHOOK_JOB_LEASE_SECONDS,
     DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS,
     DEFAULT_WEBHOOK_JOB_POLL_SECONDS,
@@ -38,6 +42,10 @@ def test_channel_runtime_config_defaults(monkeypatch) -> None:
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS",
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_BASE_SECONDS",
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_MAX_SECONDS",
+        "LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS",
+        "LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS",
+        "LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS",
+        "LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -58,6 +66,10 @@ def test_channel_runtime_config_defaults(monkeypatch) -> None:
     assert durable.max_attempts == DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS
     assert durable.retry_base_seconds == DEFAULT_WEBHOOK_JOB_RETRY_BASE_SECONDS
     assert durable.retry_max_seconds == DEFAULT_WEBHOOK_JOB_RETRY_MAX_SECONDS
+    assert durable.cleanup_interval_seconds == DEFAULT_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS
+    assert durable.completed_retention_days == DEFAULT_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS
+    assert durable.failed_retention_days == DEFAULT_WEBHOOK_JOB_FAILED_RETENTION_DAYS
+    assert durable.cleanup_batch_size == DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE
 
 
 def test_channel_runtime_config_accepts_valid_overrides(monkeypatch) -> None:
@@ -75,6 +87,10 @@ def test_channel_runtime_config_accepts_valid_overrides(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS", "9")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_BASE_SECONDS", "3")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_MAX_SECONDS", "90")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS", "15")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS", "2")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS", "14")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE", "250")
 
     limits = webhook_limiter_limits_from_env()
     durable = durable_webhook_job_config()
@@ -93,6 +109,10 @@ def test_channel_runtime_config_accepts_valid_overrides(monkeypatch) -> None:
     assert durable.max_attempts == 9
     assert durable.retry_base_seconds == 3
     assert durable.retry_max_seconds == 90
+    assert durable.cleanup_interval_seconds == 15
+    assert durable.completed_retention_days == 2
+    assert durable.failed_retention_days == 14
+    assert durable.cleanup_batch_size == 250
 
 
 def test_channel_stream_boolean_values(monkeypatch) -> None:
@@ -167,6 +187,10 @@ def test_durable_webhook_config_invalid_values_fall_back_and_clamp(monkeypatch) 
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS", "-1")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_BASE_SECONDS", "10")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_MAX_SECONDS", "2")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS", "0")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS", "-1")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS", "invalid")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE", "0")
 
     durable = durable_webhook_job_config()
 
@@ -177,3 +201,7 @@ def test_durable_webhook_config_invalid_values_fall_back_and_clamp(monkeypatch) 
     assert durable.max_attempts == DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS
     assert durable.retry_base_seconds == 10
     assert durable.retry_max_seconds == 10
+    assert durable.cleanup_interval_seconds == DEFAULT_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS
+    assert durable.completed_retention_days == DEFAULT_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS
+    assert durable.failed_retention_days == DEFAULT_WEBHOOK_JOB_FAILED_RETENTION_DAYS
+    assert durable.cleanup_batch_size == DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE
