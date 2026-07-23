@@ -20,6 +20,14 @@ export function readConnectionSetting<T>(
   return value === undefined || value === null ? fallback : (value as T);
 }
 
+export function buildChannelWebhookUrl(
+  connection: ChannelConnection,
+): string | null {
+  const publicBaseUrl = readConnectionSetting(connection, "public_base_url", "").trim();
+  if (!publicBaseUrl) return null;
+  return `${publicBaseUrl.replace(/\/+$/, "")}/api/v1/channel-webhooks/${connection.channel_type}/${connection.id}`;
+}
+
 export function getChannelStatusMeta(status: string): {
   label: string;
   className: string;
