@@ -16,6 +16,14 @@ class OutboundMetricSnapshot:
     failed: dict[tuple[str, str, str], int]
 
 
+@dataclass(frozen=True)
+class TokenRecoveryMetricSnapshot:
+    rejections: dict[str, int]
+    refresh_succeeded: dict[str, int]
+    refresh_failed: dict[str, int]
+    replays: dict[str, int]
+
+
 class ChannelOutboundMetrics:
     """Thread-safe counters for provider API calls and retry outcomes."""
 
@@ -63,7 +71,52 @@ class ChannelOutboundMetrics:
             target[key] = target.get(key, 0) + 1
 
 
+class ChannelTokenRecoveryMetrics:
+    """Thread-safe counters for one-shot provider token recovery."""
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._rejections: dict[str, int] = {}
+        self._refresh_succeeded: dict[str, int] = {}
+        self._refresh_failed: dict[str, int] = {}
+        self._replays: dict[str, int] = {}
+
+    def record_rejection(self, provider: str) -> None:
+        self._increment(self._rejections, provider)
+
+    def record_refresh_success(self, provider: str) -> None:
+        self._increment(self._refresh_succeeded, provider)
+
+    def record_refresh_failure(self, provider: str) -> None:
+        self._increment(self._refresh_failed, provider)
+
+    def record_replay(self, provider: str) -> None:
+        self._increment(self._replays, provider)
+
+    def snapshot(self) -> TokenRecoveryMetricSnapshot:
+        with self._lock:
+            return TokenRecoveryMetricSnapshot(
+                rejections=dict(self._rejections),
+                refresh_succeeded=dict(self._refresh_succeeded),
+                refresh_failed=dict(self._refresh_failed),
+                replays=dict(self._replays),
+            )
+
+    def reset(self) -> None:
+        with self._lock:
+            self._rejections.clear()
+            self._refresh_succeeded.clear()
+            self._refresh_failed.clear()
+            self._replays.clear()
+
+    def _increment(self, target: dict[str, int], provider: str) -> None:
+        normalized = provider.strip().lower() or "unknown"
+        with self._lock:
+            target[normalized] = target.get(normalized, 0) + 1
+
+
 _outbound_metrics = ChannelOutboundMetrics()
+_token_recovery_metrics = ChannelTokenRecoveryMetrics()
 
 
 def split_operation_name(operation_name: str) -> tuple[str, str]:
@@ -95,6 +148,30 @@ def outbound_metrics_snapshot() -> OutboundMetricSnapshot:
 
 def reset_outbound_metrics_for_testing() -> None:
     _outbound_metrics.reset()
+
+
+def record_token_rejection(provider: str) -> None:
+    _token_recovery_metrics.record_rejection(provider)
+
+
+def record_token_refresh_success(provider: str) -> None:
+    _token_recovery_metrics.record_refresh_success(provider)
+
+
+def record_token_refresh_failure(provider: str) -> None:
+    _token_recovery_metrics.record_refresh_failure(provider)
+
+
+def record_token_replay(provider: str) -> None:
+    _token_recovery_metrics.record_replay(provider)
+
+
+def token_recovery_metrics_snapshot() -> TokenRecoveryMetricSnapshot:
+    return _token_recovery_metrics.snapshot()
+
+
+def reset_token_recovery_metrics_for_testing() -> None:
+    _token_recovery_metrics.reset()
 
 
 class ChannelMetricsCollector:
@@ -174,3 +251,31 @@ class ChannelMetricsCollector:
         for (channel, operation, reason), value in sorted(outbound.failed.items()):
             failed.add_metric([channel, operation, reason], value)
         yield failed
+
+        token_recovery = token_recovery_metrics_snapshot()
+        for name, description, values in (
+            (
+                "openxflow_channel_token_rejections",
+                "Provider API responses that explicitly rejected a cached access token",
+                token_recovery.rejections,
+            ),
+            (
+                "openxflow_channel_token_refresh_succeeded",
+                "Successful provider access-token refreshes after rejection",
+                token_recovery.refresh_succeeded,
+            ),
+            (
+                "openxflow_channel_token_refresh_failed",
+                "Failed provider access-token refreshes after rejection",
+                token_recovery.refresh_failed,
+            ),
+            (
+                "openxflow_channel_token_replays",
+                "Provider API requests replayed once after token recovery",
+                token_recovery.replays,
+            ),
+        ):
+            metric = CounterMetricFamily(name, description, labels=["provider"])
+            for provider, value in sorted(values.items()):
+                metric.add_metric([provider], value)
+            yield metric
