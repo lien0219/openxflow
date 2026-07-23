@@ -8,9 +8,9 @@ OpenXFlow Channel Gateway connects Telegram, Feishu, DingTalk, and Enterprise We
 | --- | ---: | --- |
 | `LANGFLOW_CHANNEL_STREAMS_ENABLED` | `true` | Enables lifecycle-managed Stream clients such as DingTalk Stream. Set to `false` for workers that should only serve HTTP. |
 | `LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY` | `16` | Maximum provider webhook jobs executing concurrently in one application process. |
-| `LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING` | `128` | Maximum accepted webhook jobs, including executing and waiting jobs, in one application process. Must be greater than or equal to the concurrency value. |
+| `LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING` | `128` | Maximum accepted webhook jobs, including executing and waiting jobs, in one application process. Values below the concurrency limit are automatically raised to match it. |
 | `LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES` | `1048576` | Maximum accepted provider callback body size. Requests above this limit return HTTP `413` before signature parsing. |
-| `LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS` | `300` | Maximum execution time for one accepted webhook job. Timed-out jobs are cancelled and release their concurrency slot. |
+| `LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS` | `300` | Maximum execution time for one webhook job after it obtains a concurrency slot. Queue wait time is not counted. |
 | `LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS` | `3` | Maximum attempts for transient outbound provider failures. |
 | `LANGFLOW_CHANNEL_HTTP_BASE_DELAY_SECONDS` | `0.5` | Initial exponential-backoff delay. |
 | `LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS` | `8` | Maximum retry delay, including provider `Retry-After` values. |
@@ -43,7 +43,7 @@ When the request body exceeds the configured limit, OpenXFlow returns:
 HTTP/1.1 413 Request Entity Too Large
 ```
 
-The size is checked first from `Content-Length` when supplied and again from the actual body bytes. This protects deployments when clients omit or falsify `Content-Length`.
+The size is checked first from `Content-Length` when supplied and again while the body is streamed. Reading stops as soon as the accumulated bytes exceed the configured limit, which protects deployments when clients omit or falsify `Content-Length`.
 
 When the local queue is full, OpenXFlow returns:
 
@@ -54,7 +54,7 @@ Retry-After: 1
 
 The event is **not** acknowledged as successful in this case. The provider may retry it. This avoids accepting and silently dropping callbacks during overload.
 
-A webhook job that exceeds `LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS` is cancelled, counted as failed, and releases its pending and active capacity. Because the provider has already received its successful acknowledgement, timeout recovery still depends on provider retries or a future durable queue.
+Queue wait time does not consume `LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS`. The timeout starts only after a job obtains a concurrency slot and begins provider-event processing. A running job that exceeds the limit is cancelled, counted as failed, and releases its pending and active capacity. Because the provider has already received its successful acknowledgement, timeout recovery still depends on provider retries or a future durable queue.
 
 ## Capacity guidance
 
@@ -66,6 +66,8 @@ max_pending = max_concurrency × 8
 ```
 
 Decrease concurrency when workflows are database-heavy or when the deployment has a small connection pool. Increase pending capacity only when the process has enough memory for retained request payloads and the expected workflow latency is bounded.
+
+`LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING` is normalized to at least `LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY`. This prevents an invalid environment-variable combination from crashing the application during module import, but operators should still configure the values explicitly and monitor the runtime diagnostics endpoint.
 
 Capacity is per application process. With four HTTP workers and the defaults, the deployment can execute up to 64 channel jobs concurrently and retain up to 512 accepted jobs in total.
 
