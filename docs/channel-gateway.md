@@ -89,6 +89,8 @@ OpenXFlow retries only transient outbound errors:
 
 Authentication errors, permission errors, and normal `4xx` validation failures are not retried. Provider `Retry-After` headers and recognized business-error retry delays take precedence over exponential backoff, subject to the configured maximum delay.
 
+Access-token recovery is separate from the transient retry policy. Enterprise WeChat API responses with `errcode` `40014` (invalid access token) or `42001` (expired access token), or an HTTP `401`, trigger one synchronized token refresh and one replay of the original request. A second authentication rejection is returned immediately, and unrelated business errors are never replayed by the token-recovery layer.
+
 ## Runtime diagnostics and metrics
 
 Authenticated users can inspect the current process at:
