@@ -89,7 +89,7 @@ OpenXFlow retries only transient outbound errors:
 
 Authentication errors, permission errors, and normal `4xx` validation failures are not retried. Provider `Retry-After` headers and recognized business-error retry delays take precedence over exponential backoff, subject to the configured maximum delay.
 
-Access-token recovery is separate from the transient retry policy. Enterprise WeChat API responses with `errcode` `40014` (invalid access token) or `42001` (expired access token), or an HTTP `401`, trigger one synchronized token refresh and one replay of the original request. A second authentication rejection is returned immediately, and unrelated business errors are never replayed by the token-recovery layer.
+Access-token recovery is separate from the transient retry policy. Feishu, DingTalk, and Enterprise WeChat API responses that explicitly reject an access token trigger one synchronized token refresh and one replay of the original request. Enterprise WeChat recognizes `errcode` `40014` and `42001`; Feishu recognizes its configured tenant-token rejection codes; DingTalk recognizes HTTP `401` and explicit access-token rejection codes or messages. A second authentication rejection is returned immediately, unrelated business errors are never replayed by the token-recovery layer, and concurrent failures reuse the first successful refresh. The same behavior applies to Feishu resource downloads and Enterprise WeChat media downloads.
 
 ## Runtime diagnostics and metrics
 
@@ -124,12 +124,18 @@ This endpoint is also authenticated. It exports:
 - `openxflow_channel_outbound_succeeded_total`
 - `openxflow_channel_outbound_retries_total`
 - `openxflow_channel_outbound_failed_total`
+- `openxflow_channel_token_rejections_total`
+- `openxflow_channel_token_refresh_succeeded_total`
+- `openxflow_channel_token_refresh_failed_total`
+- `openxflow_channel_token_replays_total`
+
+Token recovery metrics use only the bounded `provider` label (`feishu`, `dingtalk`, or `wecom`). They do not include connection IDs, user IDs, message IDs, or URLs.
 
 Metrics are process-local. In a multi-worker deployment, scrape every worker or aggregate them through the deployment's existing Prometheus multiprocess strategy.
 
 ## DingTalk Stream deployment
 
-DingTalk connections with `connection_mode=stream` are maintained by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream connections. Use `GET /api/v1/channel-runtime/` on each worker to confirm its parsed `streams_enabled` state.
+DingTalk connections with `connection_mode=stream` are maintained by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream connections. Use `GET /api/v1/channel-runtime/` on each worker to confirm its parsed `streams_enabled` state. Stream callback replies use the same synchronized access-token recovery as HTTP callback replies.
 
 The runtime requires the official Python package:
 
@@ -164,4 +170,4 @@ Enterprise WeChat requires an HTTPS callback URL and Safe Mode encryption. Confi
 - Run database migrations before enabling provider callbacks.
 - Keep only one shared public callback URL per connection.
 - Disable `LANGFLOW_CHANNEL_STREAMS_ENABLED` on dedicated HTTP-only workers when Stream ownership is handled by another deployment.
-- Monitor `400`, `413`, and `503` callback responses, pending payload bytes, provider retries, webhook timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
+- Monitor `400`, `413`, and `503` callback responses, pending payload bytes, provider retries, token rejections, token refresh failures, webhook timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
