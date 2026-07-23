@@ -7,6 +7,7 @@ import math
 import os
 import time
 from collections.abc import Awaitable, Callable
+from threading import RLock
 from typing import Any
 
 import httpx
@@ -26,6 +27,7 @@ from langflow.channels.services.token_cache_metrics import (
 TokenCache = dict[str, tuple[str, float]]
 DEFAULT_PROVIDER_TOKEN_CACHE_MAX_ENTRIES = 512
 TOKEN_CACHE_MAX_ENTRIES_ENV = "LANGFLOW_CHANNEL_TOKEN_CACHE_MAX_ENTRIES"
+_TOKEN_CACHE_STATE_LOCK = RLock()
 
 
 class InvalidProviderTokenResponseError(RuntimeError):
@@ -79,36 +81,38 @@ def prune_provider_token_cache(
         raise ValueError("max_entries must be positive")
     current_time = time.monotonic() if now is None else now
 
-    expired_evictions = 0
-    expired_keys = [
-        key
-        for key, (_token, expires_at) in cache.items()
-        if key != protected_key and expires_at <= current_time
-    ]
-    for key in expired_keys:
-        if cache.pop(key, None) is not None:
-            expired_evictions += 1
-
-    capacity_evictions = 0
-    if len(cache) > max_entries:
-        candidates = sorted(
-            (
-                (expires_at, key)
-                for key, (_token, expires_at) in cache.items()
-                if key != protected_key
-            ),
-        )
-        for _expires_at, key in candidates:
-            if len(cache) <= max_entries:
-                break
+    with _TOKEN_CACHE_STATE_LOCK:
+        expired_evictions = 0
+        expired_keys = [
+            key
+            for key, (_token, expires_at) in cache.items()
+            if key != protected_key and expires_at <= current_time
+        ]
+        for key in expired_keys:
             if cache.pop(key, None) is not None:
-                capacity_evictions += 1
+                expired_evictions += 1
+
+        capacity_evictions = 0
+        if len(cache) > max_entries:
+            candidates = sorted(
+                (
+                    (expires_at, key)
+                    for key, (_token, expires_at) in cache.items()
+                    if key != protected_key
+                ),
+            )
+            for _expires_at, key in candidates:
+                if len(cache) <= max_entries:
+                    break
+                if cache.pop(key, None) is not None:
+                    capacity_evictions += 1
+        retained_entries = len(cache)
 
     if expired_evictions:
         record_token_cache_eviction(provider, "expired", expired_evictions)
     if capacity_evictions:
         record_token_cache_eviction(provider, "capacity", capacity_evictions)
-    record_token_cache_entries(provider, len(cache))
+    record_token_cache_entries(provider, retained_entries)
     return expired_evictions, capacity_evictions
 
 
@@ -127,7 +131,8 @@ async def get_cached_provider_token(
     if normalized_max_entries <= 0:
         raise ValueError("max_entries must be positive")
     now = time.monotonic()
-    observed = cache.get(cache_key)
+    with _TOKEN_CACHE_STATE_LOCK:
+        observed = cache.get(cache_key)
     if not force_refresh and observed is not None and observed[1] > now:
         record_token_cache_hit(provider)
         prune_provider_token_cache(
@@ -146,7 +151,8 @@ async def get_cached_provider_token(
 
     async with lock_pool.hold(cache_key):
         now = time.monotonic()
-        cached = cache.get(cache_key)
+        with _TOKEN_CACHE_STATE_LOCK:
+            cached = cache.get(cache_key)
         if cached is not None and cached[1] > now:
             if not force_refresh or cached is not observed:
                 record_token_cache_coalesced_refresh(provider)
@@ -168,7 +174,8 @@ async def get_cached_provider_token(
         except Exception:
             record_token_cache_refresh_failure(provider)
             raise
-        cache[cache_key] = (token, expires_at)
+        with _TOKEN_CACHE_STATE_LOCK:
+            cache[cache_key] = (token, expires_at)
         prune_provider_token_cache(
             provider=provider,
             cache=cache,
