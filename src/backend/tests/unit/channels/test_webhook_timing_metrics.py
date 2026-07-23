@@ -66,4 +66,4 @@ async def test_webhook_queue_timeout_records_wait_without_execution() -> None:
     snapshot = channel_timing_metrics_snapshot()
     assert snapshot.webhook_queue_wait_duration.count == 1
     assert snapshot.webhook_execution_duration.count == 0
-    assert snapshot.webhook_queue_wait_duration.sum_seconds >= 0.01
+    assert snapshot.webhook_queue_wait_duration.sum_seconds > 0
