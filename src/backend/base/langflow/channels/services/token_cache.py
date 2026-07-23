@@ -13,6 +13,7 @@ import httpx
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
 from langflow.channels.services.token_cache_metrics import (
     record_token_cache_coalesced_refresh,
+    record_token_cache_eviction,
     record_token_cache_forced_refresh,
     record_token_cache_hit,
     record_token_cache_miss,
@@ -21,6 +22,7 @@ from langflow.channels.services.token_cache_metrics import (
 )
 
 TokenCache = dict[str, tuple[str, float]]
+DEFAULT_PROVIDER_TOKEN_CACHE_MAX_ENTRIES = 512
 
 
 class InvalidProviderTokenResponseError(RuntimeError):
@@ -49,6 +51,49 @@ def provider_token_cache_key(
     )
 
 
+def prune_provider_token_cache(
+    *,
+    provider: str,
+    cache: TokenCache,
+    protected_key: str,
+    now: float | None = None,
+    max_entries: int = DEFAULT_PROVIDER_TOKEN_CACHE_MAX_ENTRIES,
+) -> tuple[int, int]:
+    """Remove expired entries, then earliest-expiring entries above the capacity limit."""
+    if max_entries <= 0:
+        raise ValueError("max_entries must be positive")
+    current_time = time.monotonic() if now is None else now
+
+    expired_keys = [
+        key
+        for key, (_token, expires_at) in cache.items()
+        if key != protected_key and expires_at <= current_time
+    ]
+    for key in expired_keys:
+        cache.pop(key, None)
+
+    capacity_evictions = 0
+    if len(cache) > max_entries:
+        candidates = sorted(
+            (
+                (expires_at, key)
+                for key, (_token, expires_at) in cache.items()
+                if key != protected_key
+            ),
+        )
+        for _expires_at, key in candidates:
+            if len(cache) <= max_entries:
+                break
+            if cache.pop(key, None) is not None:
+                capacity_evictions += 1
+
+    if expired_keys:
+        record_token_cache_eviction(provider, "expired", len(expired_keys))
+    if capacity_evictions:
+        record_token_cache_eviction(provider, "capacity", capacity_evictions)
+    return len(expired_keys), capacity_evictions
+
+
 async def get_cached_provider_token(
     *,
     provider: str,
@@ -57,8 +102,11 @@ async def get_cached_provider_token(
     force_refresh: bool,
     lock_pool: LoopLocalKeyedLockPool,
     fetch_new_token: Callable[[], Awaitable[tuple[str, float]]],
+    max_entries: int = DEFAULT_PROVIDER_TOKEN_CACHE_MAX_ENTRIES,
 ) -> str:
     """Return one cached token while serializing refreshes only for the same credential key."""
+    if max_entries <= 0:
+        raise ValueError("max_entries must be positive")
     now = time.monotonic()
     observed = cache.get(cache_key)
     if not force_refresh and observed is not None and observed[1] > now:
@@ -83,6 +131,13 @@ async def get_cached_provider_token(
             record_token_cache_refresh_failure(provider)
             raise
         cache[cache_key] = (token, expires_at)
+        prune_provider_token_cache(
+            provider=provider,
+            cache=cache,
+            protected_key=cache_key,
+            now=now,
+            max_entries=max_entries,
+        )
         record_token_cache_refresh_success(provider)
         return token
 
