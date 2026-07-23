@@ -35,7 +35,9 @@ export const useCreateChannelConnection: useMutationFunctionType<
     {
       ...options,
       onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await queryClient.invalidateQueries({
+          queryKey: CONNECTIONS_QUERY_KEY,
+        });
         await userOnSettled?.(data, error, variables, context);
       },
     },
@@ -61,7 +63,9 @@ export const useUpdateChannelConnection: useMutationFunctionType<
     {
       ...options,
       onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await queryClient.invalidateQueries({
+          queryKey: CONNECTIONS_QUERY_KEY,
+        });
         await userOnSettled?.(data, error, variables, context);
       },
     },
@@ -84,7 +88,9 @@ export const useDeleteChannelConnection: useMutationFunctionType<
     {
       ...options,
       onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await queryClient.invalidateQueries({
+          queryKey: CONNECTIONS_QUERY_KEY,
+        });
         await userOnSettled?.(data, error, variables, context);
       },
     },
@@ -109,7 +115,9 @@ export const useTestChannelConnection: useMutationFunctionType<
     {
       ...options,
       onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await queryClient.invalidateQueries({
+          queryKey: CONNECTIONS_QUERY_KEY,
+        });
         await userOnSettled?.(data, error, variables, context);
       },
     },
@@ -135,7 +143,9 @@ export const useConfigureTelegramWebhook: useMutationFunctionType<
     {
       ...options,
       onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+        await queryClient.invalidateQueries({
+          queryKey: CONNECTIONS_QUERY_KEY,
+        });
         await userOnSettled?.(data, error, variables, context);
       },
     },

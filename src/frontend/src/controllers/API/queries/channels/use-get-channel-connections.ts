@@ -12,16 +12,14 @@ export const useGetChannelConnections: useQueryFunctionType<
   const { query } = UseRequestProcessor();
 
   const getConnections = async (): Promise<ChannelConnection[]> => {
-    const response = await api.get<ChannelConnection[]>(`${getURL("CHANNELS")}/`);
+    const response = await api.get<ChannelConnection[]>(
+      `${getURL("CHANNELS")}/`,
+    );
     return response.data;
   };
 
-  return query(
-    ["useGetChannelConnections"],
-    getConnections,
-    {
-      refetchOnWindowFocus: false,
-      ...options,
-    },
-  ) as UseQueryResult<ChannelConnection[], Error>;
+  return query(["useGetChannelConnections"], getConnections, {
+    refetchOnWindowFocus: false,
+    ...options,
+  }) as UseQueryResult<ChannelConnection[], Error>;
 };

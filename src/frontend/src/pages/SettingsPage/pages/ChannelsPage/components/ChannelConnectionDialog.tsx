@@ -158,7 +158,11 @@ export default function ChannelConnectionDialog({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.name.trim()) return;
-    if (!isEditing && form.channelType === "telegram" && !form.botToken.trim()) {
+    if (
+      !isEditing &&
+      form.channelType === "telegram" &&
+      !form.botToken.trim()
+    ) {
       return;
     }
     if (
@@ -211,7 +215,8 @@ export default function ChannelConnectionDialog({
       if (form.robotCode.trim()) credentials.robot_code = form.robotCode.trim();
     } else {
       if (form.corpId.trim()) credentials.corp_id = form.corpId.trim();
-      if (form.corpSecret.trim()) credentials.corp_secret = form.corpSecret.trim();
+      if (form.corpSecret.trim())
+        credentials.corp_secret = form.corpSecret.trim();
       if (form.agentId.trim()) credentials.agent_id = form.agentId.trim();
       if (form.callbackToken.trim()) {
         credentials.callback_token = form.callbackToken.trim();
@@ -280,7 +285,9 @@ export default function ChannelConnectionDialog({
                 className="primary-input h-10"
                 value={form.channelType}
                 onChange={(event) =>
-                  changeChannelType(event.target.value as ConfigurableChannelType)
+                  changeChannelType(
+                    event.target.value as ConfigurableChannelType,
+                  )
                 }
                 disabled={isEditing}
               >
@@ -325,8 +332,8 @@ export default function ChannelConnectionDialog({
           {form.channelType === "feishu" && (
             <>
               <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-                飞书事件订阅可启用加密。启用后，Verification Token 和 Encrypt Key
-                必须与飞书开放平台中的事件订阅配置完全一致。
+                飞书事件订阅可启用加密。启用后，Verification Token 和 Encrypt
+                Key 必须与飞书开放平台中的事件订阅配置完全一致。
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium">
@@ -361,9 +368,7 @@ export default function ChannelConnectionDialog({
                       setField("verificationToken", event.target.value)
                     }
                     placeholder={
-                      isEditing
-                        ? "留空保留原值"
-                        : "事件订阅 Verification Token"
+                      isEditing ? "留空保留原值" : "事件订阅 Verification Token"
                     }
                   />
                 </label>
@@ -376,9 +381,7 @@ export default function ChannelConnectionDialog({
                       setField("encryptKey", event.target.value)
                     }
                     placeholder={
-                      isEditing
-                        ? "留空保留原值"
-                        : "可选，事件订阅 Encrypt Key"
+                      isEditing ? "留空保留原值" : "可选，事件订阅 Encrypt Key"
                     }
                   />
                 </label>
@@ -397,7 +400,9 @@ export default function ChannelConnectionDialog({
                   Client ID / AppKey
                   <Input
                     value={form.clientId}
-                    onChange={(event) => setField("clientId", event.target.value)}
+                    onChange={(event) =>
+                      setField("clientId", event.target.value)
+                    }
                     placeholder={isEditing ? "留空保留原值" : "dingxxxxxxxx"}
                     required={!isEditing}
                   />
@@ -419,7 +424,9 @@ export default function ChannelConnectionDialog({
                 Robot Code
                 <Input
                   value={form.robotCode}
-                  onChange={(event) => setField("robotCode", event.target.value)}
+                  onChange={(event) =>
+                    setField("robotCode", event.target.value)
+                  }
                   placeholder="通常与 Client ID 相同，留空自动使用 Client ID"
                 />
               </label>
@@ -450,7 +457,9 @@ export default function ChannelConnectionDialog({
                     type="number"
                     min={1}
                     value={form.agentId}
-                    onChange={(event) => setField("agentId", event.target.value)}
+                    onChange={(event) =>
+                      setField("agentId", event.target.value)
+                    }
                     placeholder={isEditing ? "留空保留原值" : "1000002"}
                     required={!isEditing}
                   />

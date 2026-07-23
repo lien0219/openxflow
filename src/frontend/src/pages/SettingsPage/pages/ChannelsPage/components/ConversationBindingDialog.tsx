@@ -95,7 +95,8 @@ export default function ConversationBindingDialog({
         <DialogHeader>
           <DialogTitle>{binding ? "编辑会话绑定" : "新增会话绑定"}</DialogTitle>
           <DialogDescription>
-            将 Telegram 私聊或群聊绑定到默认工作流和知识库，用户可直接在手机端提问和上传资料。
+            将 Telegram
+            私聊或群聊绑定到默认工作流和知识库，用户可直接在手机端提问和上传资料。
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
@@ -143,7 +144,9 @@ export default function ConversationBindingDialog({
             <select
               className="primary-input h-10"
               value={form.defaultFlowId}
-              onChange={(event) => setField("defaultFlowId", event.target.value)}
+              onChange={(event) =>
+                setField("defaultFlowId", event.target.value)
+              }
             >
               <option value="">不绑定默认工作流</option>
               {flows.map((flow) => (

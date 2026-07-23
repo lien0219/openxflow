@@ -23,7 +23,11 @@ export function readConnectionSetting<T>(
 export function buildChannelWebhookUrl(
   connection: ChannelConnection,
 ): string | null {
-  const publicBaseUrl = readConnectionSetting(connection, "public_base_url", "").trim();
+  const publicBaseUrl = readConnectionSetting(
+    connection,
+    "public_base_url",
+    "",
+  ).trim();
   if (!publicBaseUrl) return null;
   return `${publicBaseUrl.replace(/\/+$/, "")}/api/v1/channel-webhooks/${connection.channel_type}/${connection.id}`;
 }
@@ -62,6 +66,8 @@ export function getApiErrorMessage(error: unknown): string {
     response?: { data?: { detail?: string } };
   };
   return (
-    candidate.response?.data?.detail ?? candidate.message ?? "请求失败，请稍后重试。"
+    candidate.response?.data?.detail ??
+    candidate.message ??
+    "请求失败，请稍后重试。"
   );
 }
