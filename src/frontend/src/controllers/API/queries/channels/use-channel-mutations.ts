@@ -1,4 +1,3 @@
-import type { useMutationFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
 import { UseRequestProcessor } from "../../services/request-processor";
@@ -10,14 +9,14 @@ import type {
   ChannelConversationBindingUpsert,
   ChannelHealthResult,
   ChannelIdentity,
+  ChannelMutationHook,
   TelegramWebhookConfigure,
   TelegramWebhookResult,
 } from "./types";
 
 const CONNECTIONS_QUERY_KEY = ["useGetChannelConnections"];
 
-export const useCreateChannelConnection: useMutationFunctionType<
-  undefined,
+export const useCreateChannelConnection: ChannelMutationHook<
   ChannelConnectionCreate,
   ChannelConnection
 > = (options) => {
@@ -44,8 +43,7 @@ export const useCreateChannelConnection: useMutationFunctionType<
   );
 };
 
-export const useUpdateChannelConnection: useMutationFunctionType<
-  undefined,
+export const useUpdateChannelConnection: ChannelMutationHook<
   { connectionId: string; payload: ChannelConnectionUpdate },
   ChannelConnection
 > = (options) => {
@@ -72,8 +70,7 @@ export const useUpdateChannelConnection: useMutationFunctionType<
   );
 };
 
-export const useDeleteChannelConnection: useMutationFunctionType<
-  undefined,
+export const useDeleteChannelConnection: ChannelMutationHook<
   { connectionId: string },
   boolean
 > = (options) => {
@@ -97,8 +94,7 @@ export const useDeleteChannelConnection: useMutationFunctionType<
   );
 };
 
-export const useTestChannelConnection: useMutationFunctionType<
-  undefined,
+export const useTestChannelConnection: ChannelMutationHook<
   { connectionId: string },
   ChannelHealthResult
 > = (options) => {
@@ -124,8 +120,7 @@ export const useTestChannelConnection: useMutationFunctionType<
   );
 };
 
-export const useConfigureTelegramWebhook: useMutationFunctionType<
-  undefined,
+export const useConfigureTelegramWebhook: ChannelMutationHook<
   { connectionId: string; payload: TelegramWebhookConfigure },
   TelegramWebhookResult
 > = (options) => {
@@ -152,8 +147,7 @@ export const useConfigureTelegramWebhook: useMutationFunctionType<
   );
 };
 
-export const useRedeemChannelBindingCode: useMutationFunctionType<
-  undefined,
+export const useRedeemChannelBindingCode: ChannelMutationHook<
   { code: string },
   ChannelIdentity
 > = (options) => {
@@ -180,8 +174,7 @@ export const useRedeemChannelBindingCode: useMutationFunctionType<
   );
 };
 
-export const useDeleteChannelIdentity: useMutationFunctionType<
-  undefined,
+export const useDeleteChannelIdentity: ChannelMutationHook<
   { connectionId: string; identityId: string },
   boolean
 > = (options) => {
@@ -198,19 +191,16 @@ export const useDeleteChannelIdentity: useMutationFunctionType<
     {
       ...options,
       onSettled: async (data, error, variables, context) => {
-        if (variables?.connectionId) {
-          await queryClient.invalidateQueries({
-            queryKey: ["useGetChannelIdentities", variables.connectionId],
-          });
-        }
+        await queryClient.invalidateQueries({
+          queryKey: ["useGetChannelIdentities", variables.connectionId],
+        });
         await userOnSettled?.(data, error, variables, context);
       },
     },
   );
 };
 
-export const useUpsertChannelConversation: useMutationFunctionType<
-  undefined,
+export const useUpsertChannelConversation: ChannelMutationHook<
   { connectionId: string; payload: ChannelConversationBindingUpsert },
   ChannelConversationBinding
 > = (options) => {
@@ -228,11 +218,9 @@ export const useUpsertChannelConversation: useMutationFunctionType<
     {
       ...options,
       onSettled: async (data, error, variables, context) => {
-        if (variables?.connectionId) {
-          await queryClient.invalidateQueries({
-            queryKey: ["useGetChannelConversations", variables.connectionId],
-          });
-        }
+        await queryClient.invalidateQueries({
+          queryKey: ["useGetChannelConversations", variables.connectionId],
+        });
         await userOnSettled?.(data, error, variables, context);
       },
     },
