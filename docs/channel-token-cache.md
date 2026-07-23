@@ -18,6 +18,20 @@ The raw App Secret, Client Secret, or Corp Secret is never stored in the key. Ro
 
 Cache state is process-local. Multiple application processes may each hold a valid token for the same provider application.
 
+## Bounded cache retention
+
+Each provider adapter cache retains at most 512 token entries by default.
+
+After a successful token refresh, OpenXFlow:
+
+1. removes every expired entry except the credential key currently being refreshed;
+2. writes or replaces the current token entry;
+3. when the cache still exceeds its limit, removes the earliest-expiring non-current entries until the cache is within capacity.
+
+The current refresh winner is protected from the same pruning cycle. This prevents account deletion, repeated secret rotation, or dynamic tenant creation from growing a class-level process cache without a bound.
+
+Expired entries are removed before valid entries are considered for capacity eviction. Cache pruning does not revoke Provider tokens; it only removes the local process copy. A later request can obtain a fresh token normally.
+
 ## Refresh synchronization
 
 Refresh locks are isolated by both the current asyncio event loop and the credential cache key.
@@ -56,7 +70,7 @@ Authentication recovery is separate from transient HTTP retry. Normal permission
 4. Confirm token-refresh failure metrics remain stable.
 5. Revoke the old secret at the provider after all application instances have reloaded the new connection.
 
-The old process-local cache entry expires naturally and is unreachable from adapters constructed with the new secret.
+The old process-local cache entry is unreachable from adapters constructed with the new secret and is removed after expiry or later capacity pruning.
 
 ## Metrics
 
@@ -71,6 +85,13 @@ openxflow_channel_token_cache_forced_refreshes_total
 openxflow_channel_token_cache_coalesced_refreshes_total
 openxflow_channel_token_cache_refresh_succeeded_total
 openxflow_channel_token_cache_refresh_failed_total
+openxflow_channel_token_cache_evictions_total
+```
+
+The eviction counter uses the additional fixed label:
+
+```text
+reason="expired|capacity"
 ```
 
 Rejected-token recovery:
@@ -82,13 +103,15 @@ openxflow_channel_token_refresh_failed_total
 openxflow_channel_token_replays_total
 ```
 
-All counters use only the fixed `provider` label. No application identifier, connection identifier, cache key, secret fingerprint, or raw credential is exported.
+All counters use only bounded labels. No application identifier, connection identifier, cache key, secret fingerprint, or raw credential is exported.
 
 Operational interpretation:
 
 - A rising cache-miss rate with few hits can indicate short token lifetimes, frequent process restarts, or excessive forced health checks.
 - A rising coalesced-refresh count is expected during bursts and demonstrates that duplicate Provider token requests were avoided.
 - Cache refresh failures indicate Provider, credential, DNS, network, or response-validation problems before a business API call can proceed.
+- Expired evictions are routine during long-running operation and secret rotation.
+- Sustained capacity evictions indicate more than 512 active or recently refreshed credential keys in one provider adapter process cache; review tenant distribution and worker sizing.
 - Rejection recovery failures indicate that a Provider explicitly rejected a cached token and the replacement-token request also failed.
 
 Process-local counters should be summed across application workers. Ratios such as hits divided by hits plus misses should use matching worker and time windows.
