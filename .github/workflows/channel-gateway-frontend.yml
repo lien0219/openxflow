@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  channel-center:
+  format-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -52,11 +52,51 @@ jobs:
           src/pages/SettingsPage/index.tsx
           src/routes.tsx
 
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --ignore-scripts
+
       - name: Run Channel Center unit tests
         run: >-
           npm test --
           --runInBand
           src/pages/SettingsPage/pages/ChannelsPage/__tests__/utils.test.ts
+
+  type-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --ignore-scripts
 
       - name: Type-check frontend
         run: npx --no-install tsc --noEmit --pretty false --project tsconfig.json
