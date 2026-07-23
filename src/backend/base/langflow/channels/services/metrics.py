@@ -176,7 +176,30 @@ class ChannelMetricsCollector:
     """Expose channel runtime state through the Prometheus collector protocol."""
 
     def collect(self):  # type: ignore[no-untyped-def]
+        from langflow.channels.services.dingtalk_stream import dingtalk_stream_runtime_snapshot
         from langflow.channels.services.webhook_processing import webhook_limiter_snapshot
+
+        stream_runtime = dingtalk_stream_runtime_snapshot()
+        for name, description, value in (
+            (
+                "openxflow_channel_stream_running_managers",
+                "Lifecycle-managed channel Stream managers running in this process",
+                stream_runtime.running_managers,
+            ),
+            (
+                "openxflow_channel_stream_leader_managers",
+                "Channel Stream managers currently holding the process election lock",
+                stream_runtime.leader_managers,
+            ),
+            (
+                "openxflow_channel_stream_managed_clients",
+                "DingTalk Stream clients currently managed by this process",
+                stream_runtime.managed_clients,
+            ),
+        ):
+            metric = GaugeMetricFamily(name, description)
+            metric.add_metric([], value)
+            yield metric
 
         webhook = webhook_limiter_snapshot()
         for name, description, value in (
