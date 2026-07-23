@@ -37,6 +37,7 @@ def test_stream_runtime_registry_tracks_health_counters_after_manager_exit() -> 
     token = object()
     registry = dingtalk_stream._stream_runtime_registry
     registry.register(token)
+    registry.record_sync_error()
     registry.record_connection_error()
     registry.record_connection_error()
     registry.record_reconnect_attempt()
@@ -45,6 +46,7 @@ def test_stream_runtime_registry_tracks_health_counters_after_manager_exit() -> 
 
     snapshot = dingtalk_stream.dingtalk_stream_runtime_snapshot()
     assert snapshot.running_managers == 0
+    assert snapshot.sync_errors_total == 1
     assert snapshot.connection_errors_total == 2
     assert snapshot.reconnect_attempts_total == 1
     assert snapshot.successful_sync_total == 1
@@ -104,6 +106,43 @@ async def test_stream_manager_registers_and_unregisters_for_run_lifecycle(monkey
 
 
 @pytest.mark.asyncio
+async def test_stream_manager_retries_sync_after_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dingtalk_stream, "channel_streams_enabled", lambda: True)
+    manager = dingtalk_stream.DingTalkStreamManager()
+    sync_attempts = 0
+
+    async def become_leader() -> None:
+        manager._has_leader_lock = True
+        manager._publish_runtime_state()
+
+    async def fail_then_stop() -> None:
+        nonlocal sync_attempts
+        sync_attempts += 1
+        if sync_attempts == 1:
+            raise RuntimeError("database unavailable")
+        dingtalk_stream._stream_runtime_registry.record_successful_sync(200.0)
+        await manager.stop()
+
+    async def immediate_wait_for(awaitable, *, timeout):
+        del timeout
+        if hasattr(awaitable, "close"):
+            awaitable.close()
+        return None
+
+    monkeypatch.setattr(manager, "_try_become_leader", become_leader)
+    monkeypatch.setattr(manager, "_sync_connections", fail_then_stop)
+    monkeypatch.setattr(dingtalk_stream.asyncio, "wait_for", immediate_wait_for)
+
+    await manager.run()
+
+    snapshot = dingtalk_stream.dingtalk_stream_runtime_snapshot()
+    assert sync_attempts == 2
+    assert snapshot.sync_errors_total == 1
+    assert snapshot.successful_sync_total == 1
+    assert snapshot.last_successful_sync_timestamp_seconds == 200.0
+
+
+@pytest.mark.asyncio
 async def test_stream_connection_failure_records_error_and_next_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
     manager = dingtalk_stream.DingTalkStreamManager()
     connection_attempts = 0
@@ -118,10 +157,10 @@ async def test_stream_connection_failure_records_error_and_next_attempt(monkeypa
     async def ignore_status(*_args, **_kwargs) -> None:
         return None
 
-    async def immediate_wait_for(_awaitable, *, timeout):
+    async def immediate_wait_for(awaitable, *, timeout):
         del timeout
-        if hasattr(_awaitable, "close"):
-            _awaitable.close()
+        if hasattr(awaitable, "close"):
+            awaitable.close()
         return None
 
     monkeypatch.setattr(manager, "_run_sdk_client", fail_then_stop)
