@@ -257,6 +257,9 @@ class TelegramChannelAdapter(ChannelAdapter):
         chat_id = result.get("chat", {}).get("id", target_id)
         return f"{chat_id}:{result['message_id']}"
 
+    def requires_event_acknowledgement(self, event: ChannelEvent) -> bool:
+        return bool(event.message.metadata.get("callback_query_id"))
+
     async def acknowledge_event(self, event: ChannelEvent) -> None:
         callback_query_id = event.message.metadata.get("callback_query_id")
         if callback_query_id:
