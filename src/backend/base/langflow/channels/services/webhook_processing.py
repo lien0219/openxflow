@@ -46,8 +46,13 @@ class WebhookLimiterSnapshot:
     max_concurrency: int
     accepted_total: int
     rejected_total: int
+    rejected_pending_total: int
+    rejected_bytes_total: int
+    rejected_both_total: int
     succeeded_total: int
     failed_total: int
+    cancelled_total: int
+    client_disconnected_total: int
 
 
 class WebhookProcessingLimiter:
@@ -74,8 +79,13 @@ class WebhookProcessingLimiter:
         self._active = 0
         self._accepted_total = 0
         self._rejected_total = 0
+        self._rejected_pending_total = 0
+        self._rejected_bytes_total = 0
+        self._rejected_both_total = 0
         self._succeeded_total = 0
         self._failed_total = 0
+        self._cancelled_total = 0
+        self._client_disconnected_total = 0
         self._reservations: dict[object, int] = {}
         self._state_lock = Lock()
         self._semaphore_lock = Lock()
@@ -85,8 +95,16 @@ class WebhookProcessingLimiter:
         """Reserve queue count and retained-payload capacity before returning a successful ACK."""
         self._validate_payload_size(payload_size)
         with self._state_lock:
-            if self._pending >= self.max_pending or self._pending_bytes + payload_size > self.max_pending_bytes:
+            pending_full = self._pending >= self.max_pending
+            bytes_full = self._pending_bytes + payload_size > self.max_pending_bytes
+            if pending_full or bytes_full:
                 self._rejected_total += 1
+                if pending_full and bytes_full:
+                    self._rejected_both_total += 1
+                elif pending_full:
+                    self._rejected_pending_total += 1
+                else:
+                    self._rejected_bytes_total += 1
                 return None
             token = object()
             self._reservations[token] = payload_size
@@ -95,11 +113,13 @@ class WebhookProcessingLimiter:
             self._accepted_total += 1
             return WebhookReservation(token)
 
-    def cancel_reservation(self, reservation: WebhookReservation) -> None:
+    def cancel_reservation(self, reservation: WebhookReservation, *, cancelled: bool = False) -> None:
         with self._state_lock:
             payload_size = self._consume_reservation_locked(reservation)
             self._pending -= 1
             self._pending_bytes -= payload_size
+            if cancelled:
+                self._cancelled_total += 1
 
     def finish(self, reservation: WebhookReservation, *, success: bool) -> None:
         with self._state_lock:
@@ -110,6 +130,11 @@ class WebhookProcessingLimiter:
                 self._succeeded_total += 1
             else:
                 self._failed_total += 1
+
+    def record_client_disconnect(self) -> None:
+        """Record a callback upload that ended before the request body was complete."""
+        with self._state_lock:
+            self._client_disconnected_total += 1
 
     def snapshot(self) -> WebhookLimiterSnapshot:
         with self._state_lock:
@@ -125,8 +150,13 @@ class WebhookProcessingLimiter:
                 max_concurrency=self.max_concurrency,
                 accepted_total=self._accepted_total,
                 rejected_total=self._rejected_total,
+                rejected_pending_total=self._rejected_pending_total,
+                rejected_bytes_total=self._rejected_bytes_total,
+                rejected_both_total=self._rejected_both_total,
                 succeeded_total=self._succeeded_total,
                 failed_total=self._failed_total,
+                cancelled_total=self._cancelled_total,
+                client_disconnected_total=self._client_disconnected_total,
             )
 
     async def run(self, callback: Callable[..., Awaitable[_T]], /, *args, **kwargs) -> _T:
@@ -181,6 +211,10 @@ def reserve_provider_webhook_slot(payload_size: int = 0) -> WebhookReservation |
 
 def release_provider_webhook_slot(reservation: WebhookReservation) -> None:
     _webhook_limiter.cancel_reservation(reservation)
+
+
+def record_provider_webhook_client_disconnect() -> None:
+    _webhook_limiter.record_client_disconnect()
 
 
 def webhook_limiter_snapshot() -> WebhookLimiterSnapshot:
@@ -238,7 +272,7 @@ async def process_reserved_provider_webhook(
             raise
     finally:
         if cancelled:
-            _webhook_limiter.cancel_reservation(reservation)
+            _webhook_limiter.cancel_reservation(reservation, cancelled=True)
         else:
             _webhook_limiter.finish(reservation, success=success)
 
