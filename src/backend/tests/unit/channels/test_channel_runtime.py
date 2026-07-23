@@ -36,3 +36,7 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_webhook_pending_bytes" in response.body
     assert b"openxflow_channel_webhook_max_pending_bytes" in response.body
     assert b"openxflow_channel_outbound_attempts" in response.body
+    assert b"openxflow_channel_token_rejections" in response.body
+    assert b"openxflow_channel_token_refresh_succeeded" in response.body
+    assert b"openxflow_channel_token_refresh_failed" in response.body
+    assert b"openxflow_channel_token_replays" in response.body
