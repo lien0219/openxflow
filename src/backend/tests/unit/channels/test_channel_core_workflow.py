@@ -17,11 +17,24 @@ def test_channel_core_workflow_uses_isolated_dependencies() -> None:
     assert "uv.lock" not in content
 
 
+def test_channel_core_workflow_runs_database_contracts() -> None:
+    content = _CORE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "database-contracts:" in content
+    assert "--with 'sqlalchemy>=2.0.38,<3.0.0'" in content
+    assert "--with 'sqlmodel==0.0.37'" in content
+    assert "--with 'alembic>=1.13,<2.0.0'" in content
+    assert "--with 'aiosqlite>=0.20,<1.0.0'" in content
+    assert "test_channel_migrations_sqlite.py" in content
+    assert "test_outbound_delivery_model.py" in content
+
+
 def test_channel_core_workflow_limits_branch_and_paths() -> None:
     content = _CORE_WORKFLOW.read_text(encoding="utf-8")
 
     assert "feature/channel-gateway" in content
     assert '"src/backend/base/langflow/channels/**"' in content
+    assert '"src/backend/base/langflow/services/database/models/channel/**"' in content
     assert '"src/backend/tests/unit/channels/**"' in content
     assert '".github/workflows/channel-gateway-frontend.yml"' in content
     assert "cancel-in-progress: true" in content
