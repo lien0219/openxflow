@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import re
@@ -28,6 +27,7 @@ from langflow.channels.domain.models import (
     ChannelUser,
 )
 from langflow.channels.security.wecom_crypto import WeComCryptoError, WeComMessageCrypt
+from langflow.channels.services.loop_lock import LoopLocalAsyncLock
 
 
 class WeComAPIError(RuntimeError):
@@ -37,7 +37,7 @@ class WeComAPIError(RuntimeError):
 class WeComChannelAdapter(ChannelAdapter):
     channel_type = ChannelType.WECOM
     _token_cache: ClassVar[dict[str, tuple[str, float]]] = {}
-    _token_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+    _token_lock: ClassVar[LoopLocalAsyncLock] = LoopLocalAsyncLock()
 
     def __init__(
         self,
