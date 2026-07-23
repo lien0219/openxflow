@@ -76,6 +76,11 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.durable_webhook_jobs.claim_errors_total >= 0
     assert result.durable_webhook_jobs.cleaned_total >= 0
     assert result.durable_webhook_jobs.maintenance_errors_total >= 0
+    assert result.outbound_delivery.reserved_total >= 0
+    assert result.outbound_delivery.suppressed_total >= 0
+    assert result.outbound_delivery.sent_total >= 0
+    assert result.outbound_delivery.failed_total >= 0
+    assert result.outbound_delivery.state_errors_total >= 0
     assert result.outbound_retry.max_attempts == 5
 
 
@@ -108,6 +113,11 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_webhook_job_claim_errors" in response.body
     assert b"openxflow_channel_webhook_job_cleaned" in response.body
     assert b"openxflow_channel_webhook_job_maintenance_errors" in response.body
+    assert b"openxflow_channel_outbound_delivery_reserved" in response.body
+    assert b"openxflow_channel_outbound_delivery_suppressed" in response.body
+    assert b"openxflow_channel_outbound_delivery_sent" in response.body
+    assert b"openxflow_channel_outbound_delivery_failed" in response.body
+    assert b"openxflow_channel_outbound_delivery_state_errors" in response.body
     assert b"openxflow_channel_webhook_pending" in response.body
     assert b"openxflow_channel_webhook_pending_bytes" in response.body
     assert b"openxflow_channel_webhook_max_pending_bytes" in response.body
