@@ -60,3 +60,33 @@ async def test_explicit_cache_capacity_overrides_environment(monkeypatch: pytest
     )
 
     assert set(cache) == {"late", "current"}
+
+
+@pytest.mark.asyncio
+async def test_environment_capacity_is_applied_on_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(TOKEN_CACHE_MAX_ENTRIES_ENV, "2")
+    now = time.monotonic()
+    cache = {
+        "current": ("current-token", now + 30),
+        "early": ("early-token", now + 10),
+        "late": ("late-token", now + 20),
+    }
+    fetch_calls = 0
+
+    async def fetch() -> tuple[str, float]:
+        nonlocal fetch_calls
+        fetch_calls += 1
+        return "unexpected", time.monotonic() + 60
+
+    token = await get_cached_provider_token(
+        provider="dingtalk",
+        cache=cache,
+        cache_key="current",
+        force_refresh=False,
+        lock_pool=LoopLocalKeyedLockPool(),
+        fetch_new_token=fetch,
+    )
+
+    assert token == "current-token"
+    assert fetch_calls == 0
+    assert set(cache) == {"current", "late"}
