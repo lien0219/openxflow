@@ -84,6 +84,9 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.outbound_delivery.failed_total >= 0
     assert result.outbound_delivery.state_errors_total >= 0
     assert result.outbound_delivery.cleaned_total >= 0
+    assert result.outbound_delivery.retained_reserved >= 0
+    assert result.outbound_delivery.retained_sent >= 0
+    assert result.outbound_delivery.retained_failed >= 0
     assert result.outbound_retry.max_attempts == 5
 
 
@@ -122,6 +125,9 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_outbound_delivery_failed" in response.body
     assert b"openxflow_channel_outbound_delivery_state_errors" in response.body
     assert b"openxflow_channel_outbound_delivery_cleaned" in response.body
+    assert b"openxflow_channel_outbound_delivery_retained_reserved" in response.body
+    assert b"openxflow_channel_outbound_delivery_retained_sent" in response.body
+    assert b"openxflow_channel_outbound_delivery_retained_failed" in response.body
     assert b'delivery_kind="acknowledgement"' in response.body
     assert b'delivery_kind="response"' in response.body
     assert b"openxflow_channel_webhook_pending" in response.body
