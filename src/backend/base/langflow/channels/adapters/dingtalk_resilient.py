@@ -71,6 +71,7 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
 
     async def _access_token(self, *, force_refresh: bool = False) -> str:
         return await get_cached_provider_token(
+            provider="dingtalk",
             cache=self._token_cache,
             cache_key=self._token_cache_key,
             force_refresh=force_refresh,
