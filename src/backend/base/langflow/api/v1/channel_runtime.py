@@ -51,6 +51,7 @@ class ChannelStreamRuntimeRead(BaseModel):
     running_managers: int
     leader_managers: int
     managed_clients: int
+    sync_errors_total: int
     connection_errors_total: int
     reconnect_attempts_total: int
     successful_sync_total: int
