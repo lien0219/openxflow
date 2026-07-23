@@ -9,6 +9,12 @@ from typing import Any, TypeVar
 import httpx
 
 from langflow.channels.services.loop_lock import LoopLocalAsyncLock
+from langflow.channels.services.metrics import (
+    record_token_rejection,
+    record_token_refresh_failure,
+    record_token_refresh_success,
+    record_token_replay,
+)
 
 _TResponse = TypeVar("_TResponse")
 TokenCache = dict[str, tuple[str, float]]
@@ -70,6 +76,7 @@ async def refresh_rejected_cached_token(
     rejected_token: str,
     lock: LoopLocalAsyncLock,
     fetch_new_token: Callable[[], Awaitable[tuple[str, float]]],
+    provider: str = "unknown",
 ) -> str:
     """Refresh a rejected token once while allowing concurrent callers to reuse the winner."""
     async with lock:
@@ -77,8 +84,13 @@ async def refresh_rejected_cached_token(
         if cached is not None and cached[0] != rejected_token and cached[1] > time.monotonic():
             return cached[0]
 
-        token, expires_at = await fetch_new_token()
+        try:
+            token, expires_at = await fetch_new_token()
+        except Exception:
+            record_token_refresh_failure(provider)
+            raise
         cache[cache_key] = (token, expires_at)
+        record_token_refresh_success(provider)
         return token
 
 
@@ -88,11 +100,14 @@ async def request_with_token_refresh(
     refresh_token: Callable[[str], Awaitable[str]],
     send: Callable[[str], Awaitable[_TResponse]],
     is_rejected: Callable[[_TResponse], bool],
+    provider: str = "unknown",
 ) -> _TResponse:
     """Send once and replay at most once after an explicit access-token rejection."""
     token = await get_token()
     response = await send(token)
     if not is_rejected(response):
         return response
+    record_token_rejection(provider)
     refreshed = await refresh_token(token)
+    record_token_replay(provider)
     return await send(refreshed)
