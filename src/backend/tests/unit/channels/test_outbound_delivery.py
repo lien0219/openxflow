@@ -15,6 +15,7 @@ from langflow.channels.services import outbound_delivery
 from langflow.channels.services.outbound_delivery import (
     OutboundDeliveryDecision,
     channel_response_digest,
+    send_outbound_acknowledgement_once,
     send_outbound_response_once,
 )
 
@@ -44,6 +45,50 @@ def test_channel_response_digest_is_stable_and_content_sensitive() -> None:
     assert channel_response_digest(first) == channel_response_digest(same)
     assert channel_response_digest(first) != channel_response_digest(changed)
     assert len(channel_response_digest(first)) == 64
+
+
+@pytest.mark.asyncio
+async def test_send_outbound_acknowledgement_once_marks_success(monkeypatch) -> None:
+    delivery_id = uuid4()
+    calls = []
+    marked = []
+
+    async def reserve(_event):
+        return OutboundDeliveryDecision(should_send=True, delivery_id=delivery_id)
+
+    async def sender() -> None:
+        calls.append("acknowledged")
+
+    async def mark_sent(actual_delivery_id, provider_message_id):
+        marked.append((actual_delivery_id, provider_message_id))
+
+    monkeypatch.setattr(outbound_delivery, "reserve_outbound_acknowledgement", reserve)
+    monkeypatch.setattr(outbound_delivery, "mark_outbound_delivery_sent", mark_sent)
+
+    result = await send_outbound_acknowledgement_once(_event(), sender)
+
+    assert result is True
+    assert calls == ["acknowledged"]
+    assert marked == [(delivery_id, None)]
+
+
+@pytest.mark.asyncio
+async def test_send_outbound_acknowledgement_once_skips_existing_reservation(monkeypatch) -> None:
+    called = False
+
+    async def reserve(_event):
+        return OutboundDeliveryDecision(should_send=False, delivery_id=uuid4())
+
+    async def sender() -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(outbound_delivery, "reserve_outbound_acknowledgement", reserve)
+
+    result = await send_outbound_acknowledgement_once(_event(), sender)
+
+    assert result is False
+    assert called is False
 
 
 @pytest.mark.asyncio
