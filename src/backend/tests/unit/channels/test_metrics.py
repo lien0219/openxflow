@@ -65,7 +65,15 @@ def test_channel_prometheus_collector_exposes_runtime_metrics() -> None:
     registry.register(ChannelMetricsCollector())
     rendered = generate_latest(registry).decode()
 
-    assert "openxflow_channel_webhook_pending" in rendered
+    for metric_name in (
+        "openxflow_channel_webhook_pending",
+        "openxflow_channel_webhook_rejected_pending_total",
+        "openxflow_channel_webhook_rejected_bytes_total",
+        "openxflow_channel_webhook_rejected_both_total",
+        "openxflow_channel_webhook_cancelled_total",
+        "openxflow_channel_webhook_client_disconnected_total",
+    ):
+        assert metric_name in rendered
     assert 'openxflow_channel_outbound_attempts_total{channel="telegram",operation="send_message"} 1.0' in rendered
     assert (
         'openxflow_channel_outbound_retries_total{channel="telegram",operation="send_message",reason="http_429"} 1.0'
