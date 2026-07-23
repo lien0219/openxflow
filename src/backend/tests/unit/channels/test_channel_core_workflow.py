@@ -74,6 +74,15 @@ def test_channel_frontend_workflow_uses_locked_toolchain() -> None:
     assert "npm install" not in content
 
 
+def test_channel_frontend_workflow_runs_checks_independently() -> None:
+    content = _FRONTEND_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "format-lint:" in content
+    assert "unit-tests:" in content
+    assert "type-check:" in content
+    assert content.count("npm ci --ignore-scripts") == 3
+
+
 def test_channel_frontend_workflow_limits_branch_and_paths() -> None:
     content = _FRONTEND_WORKFLOW.read_text(encoding="utf-8")
 
