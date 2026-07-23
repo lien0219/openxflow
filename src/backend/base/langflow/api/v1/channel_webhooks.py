@@ -11,11 +11,16 @@ from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.services.deduplication import ChannelEventDeduplicator
+from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
 from langflow.channels.services.dispatch import ChannelDispatchService
 from langflow.channels.services.gateway import ChannelGateway
 from langflow.services.database.models.channel.model import ChannelConnection
 
-router = APIRouter(prefix="/channel-webhooks", tags=["Channel Webhooks"])
+router = APIRouter(
+    prefix="/channel-webhooks",
+    tags=["Channel Webhooks"],
+    lifespan=channel_stream_lifespan,
+)
 
 
 async def _receive_provider_event(
@@ -101,4 +106,19 @@ async def receive_feishu_webhook(
         request=request,
         db=db,
         expected_channel_type="feishu",
+    )
+
+
+@router.post("/dingtalk/{connection_id}", status_code=status.HTTP_200_OK)
+async def receive_dingtalk_webhook(
+    connection_id: UUID,
+    request: Request,
+    db: DbSession,
+) -> dict[str, bool]:
+    """Compatibility callback for deployments choosing signed HTTP mode over Stream."""
+    return await _receive_provider_event(
+        connection_id=connection_id,
+        request=request,
+        db=db,
+        expected_channel_type="dingtalk",
     )

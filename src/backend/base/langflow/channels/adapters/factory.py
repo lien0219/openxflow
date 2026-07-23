@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from langflow.channels.adapters.base import ChannelAdapter
+from langflow.channels.adapters.dingtalk import DingTalkChannelAdapter
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.adapters.mock import MockChannelAdapter
 from langflow.channels.adapters.telegram import TelegramChannelAdapter
@@ -39,6 +40,14 @@ def build_channel_adapter(connection: ChannelConnection) -> ChannelAdapter:
                     "https://open.feishu.cn/open-apis",
                 )
             ),
+        )
+    if channel_type is ChannelType.DINGTALK:
+        return DingTalkChannelAdapter(
+            connection.id,
+            client_id=credentials.get("client_id", ""),
+            client_secret=credentials.get("client_secret", ""),
+            robot_code=credentials.get("robot_code"),
+            api_base_url=str(connection.settings_data.get("api_base_url", "https://api.dingtalk.com")),
         )
 
     msg = f"Channel adapter '{channel_type.value}' has not been implemented yet"
