@@ -1,36 +1,14 @@
-"""Provider-specific header minimization for durable webhook persistence."""
+"""Internal durable webhook replay markers."""
 
 from __future__ import annotations
 
-_DURABLE_HEADER_ALLOWLISTS: dict[str, frozenset[str]] = {
-    "telegram": frozenset({"x-telegram-bot-api-secret-token"}),
-    "feishu": frozenset(),
-    "dingtalk": frozenset(
-        {
-            "timestamp",
-            "sign",
-            "x-dingtalk-timestamp",
-            "x-dingtalk-signature",
-        }
-    ),
-    "wecom": frozenset(
-        {
-            "x-wecom-msg-signature",
-            "x-wecom-timestamp",
-            "x-wecom-nonce",
-        }
-    ),
-}
+_SUPPORTED_DURABLE_CHANNELS = frozenset({"telegram", "feishu", "dingtalk", "wecom"})
+_PREVERIFIED_HEADERS = {"x-openxflow-preverified": "1"}
 
 
 def durable_webhook_headers(channel_type: str, headers: dict[str, str]) -> dict[str, str]:
-    """Return only headers required to re-verify a persisted provider callback."""
-    try:
-        allowed = _DURABLE_HEADER_ALLOWLISTS[channel_type]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported durable webhook channel type: {channel_type}") from exc
-    return {
-        normalized: value
-        for key, value in headers.items()
-        if (normalized := key.lower()) in allowed
-    }
+    """Return a non-sensitive internal marker for an already-verified callback."""
+    del headers
+    if channel_type not in _SUPPORTED_DURABLE_CHANNELS:
+        raise ValueError(f"Unsupported durable webhook channel type: {channel_type}")
+    return dict(_PREVERIFIED_HEADERS)
