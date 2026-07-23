@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -43,7 +44,7 @@ def _positive_float_env(name: str, default: float) -> float:
         parsed = float(value)
     except ValueError:
         return default
-    return parsed if parsed > 0 else default
+    return parsed if math.isfinite(parsed) and parsed > 0 else default
 
 
 def webhook_task_timeout_seconds() -> float:
@@ -174,6 +175,7 @@ async def process_reserved_provider_webhook(
 ) -> None:
     """Run one reserved callback and always release its queue capacity."""
     success = False
+    cancelled = False
     try:
         try:
             success = await asyncio.wait_for(
@@ -186,14 +188,20 @@ async def process_reserved_provider_webhook(
                 ),
                 timeout=webhook_task_timeout_seconds(),
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await logger.aerror(
                 "Background %s channel webhook timed out for connection %s",
                 expected_channel_type,
                 connection_id,
             )
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
     finally:
-        _webhook_limiter.finish(success=success)
+        if cancelled:
+            _webhook_limiter.cancel_reservation()
+        else:
+            _webhook_limiter.finish(success=success)
 
 
 async def process_provider_webhook(
