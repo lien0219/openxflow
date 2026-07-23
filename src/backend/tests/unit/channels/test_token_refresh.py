@@ -4,7 +4,7 @@ import time
 import httpx
 import pytest
 
-from langflow.channels.services.loop_lock import LoopLocalAsyncLock
+from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
 from langflow.channels.services.token_refresh import (
     is_access_token_rejection,
     refresh_rejected_cached_token,
@@ -106,7 +106,7 @@ async def test_request_replays_at_most_once_after_token_rejection() -> None:
 @pytest.mark.asyncio
 async def test_concurrent_rejected_tokens_share_one_refresh() -> None:
     cache = {"connection": ("rejected-token", time.monotonic() + 3600)}
-    lock = LoopLocalAsyncLock()
+    lock_pool = LoopLocalKeyedLockPool()
     fetch_calls = 0
 
     async def fetch_new_token() -> tuple[str, float]:
@@ -121,7 +121,7 @@ async def test_concurrent_rejected_tokens_share_one_refresh() -> None:
                 cache=cache,
                 cache_key="connection",
                 rejected_token="rejected-token",
-                lock=lock,
+                lock_pool=lock_pool,
                 fetch_new_token=fetch_new_token,
             )
             for _ in range(10)
@@ -130,6 +130,42 @@ async def test_concurrent_rejected_tokens_share_one_refresh() -> None:
 
     assert tokens == ["replacement-token"] * 10
     assert fetch_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_different_cache_keys_refresh_concurrently() -> None:
+    now = time.monotonic() + 3600
+    cache = {
+        "first": ("rejected-first", now),
+        "second": ("rejected-second", now),
+    }
+    lock_pool = LoopLocalKeyedLockPool()
+    entered: set[str] = set()
+    both_entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def refresh(key: str, rejected: str) -> str:
+        async def fetch_new_token() -> tuple[str, float]:
+            entered.add(key)
+            if len(entered) == 2:
+                both_entered.set()
+            await release.wait()
+            return f"new-{key}", time.monotonic() + 3600
+
+        return await refresh_rejected_cached_token(
+            cache=cache,
+            cache_key=key,
+            rejected_token=rejected,
+            lock_pool=lock_pool,
+            fetch_new_token=fetch_new_token,
+        )
+
+    first = asyncio.create_task(refresh("first", "rejected-first"))
+    second = asyncio.create_task(refresh("second", "rejected-second"))
+    await asyncio.wait_for(both_entered.wait(), timeout=1)
+    release.set()
+
+    assert await asyncio.gather(first, second) == ["new-first", "new-second"]
 
 
 @pytest.mark.asyncio
@@ -146,7 +182,7 @@ async def test_newer_cached_token_is_not_overwritten_by_late_rejection() -> None
         cache=cache,
         cache_key="connection",
         rejected_token="older-rejected-token",
-        lock=LoopLocalAsyncLock(),
+        lock_pool=LoopLocalKeyedLockPool(),
         fetch_new_token=fetch_new_token,
     )
 
