@@ -60,7 +60,6 @@ async def test_webhook_validation_schedules_background_processing(monkeypatch) -
     )
     adapter = _FakeAdapter()
     adapter.connection_id = connection_id
-    reserved = False
 
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.build_channel_adapter",
