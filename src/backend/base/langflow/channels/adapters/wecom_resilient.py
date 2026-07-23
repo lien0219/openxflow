@@ -48,6 +48,17 @@ class ResilientWeComChannelAdapter(WeComChannelAdapter):
             provider="wecom",
         )
 
+    @staticmethod
+    def _is_token_rejection(result: tuple[httpx.Response, dict[str, Any] | None]) -> bool:
+        response, body = result
+        return is_access_token_rejection(
+            response,
+            body,
+            known_codes=_WECOM_ACCESS_TOKEN_REJECTION_CODES,
+            code_fields=("errcode", "code"),
+            message_fields=("errmsg", "message", "msg"),
+        )
+
     async def _api_request(
         self,
         method: str,
@@ -67,21 +78,11 @@ class ResilientWeComChannelAdapter(WeComChannelAdapter):
                 )
             return response, response_json_object(response)
 
-        def is_rejected(result: tuple[httpx.Response, dict[str, Any] | None]) -> bool:
-            response, body = result
-            return is_access_token_rejection(
-                response,
-                body,
-                known_codes=_WECOM_ACCESS_TOKEN_REJECTION_CODES,
-                code_fields=("errcode", "code"),
-                message_fields=("errmsg", "message", "msg"),
-            )
-
         response, body = await request_with_token_refresh(
             get_token=self._access_token,
             refresh_token=self._refresh_rejected_access_token,
             send=send,
-            is_rejected=is_rejected,
+            is_rejected=self._is_token_rejection,
             provider="wecom",
         )
         response.raise_for_status()
@@ -91,3 +92,34 @@ class ResilientWeComChannelAdapter(WeComChannelAdapter):
             body = {}
         self._raise_for_business_error(body)
         return body
+
+    async def download_file(self, external_file_id: str) -> tuple[bytes, dict[str, Any]]:
+        prefix, separator, media_id = external_file_id.partition(":")
+        if prefix != "wecom" or not separator or not media_id:
+            raise ValueError("Invalid WeCom media identifier")
+
+        async def send(token: str) -> tuple[httpx.Response, dict[str, Any] | None]:
+            async with httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=False) as client:
+                response = await client.get(
+                    f"{self.api_base_url}/cgi-bin/media/get",
+                    params={"access_token": token, "media_id": media_id},
+                )
+            return response, response_json_object(response)
+
+        response, body = await request_with_token_refresh(
+            get_token=self._access_token,
+            refresh_token=self._refresh_rejected_access_token,
+            send=send,
+            is_rejected=self._is_token_rejection,
+            provider="wecom",
+        )
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "")
+        if body is not None:
+            self._raise_for_business_error(body)
+            raise WeComAPIError("WeCom media response did not contain a file")
+        return response.content, {
+            "provider": "wecom",
+            "content_type": content_type or None,
+            "filename": self._response_filename(response.headers.get("content-disposition")),
+        }
