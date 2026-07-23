@@ -1,18 +1,6 @@
 name: Channel Gateway Frontend
 
 on:
-  push:
-    branches:
-      - feature/channel-gateway
-    paths:
-      - ".github/workflows/channel-gateway-frontend.yml"
-      - "src/frontend/package.json"
-      - "src/frontend/package-lock.json"
-      - "src/frontend/src/controllers/API/queries/channels/**"
-      - "src/frontend/src/controllers/API/helpers/constants.ts"
-      - "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/**"
-      - "src/frontend/src/pages/SettingsPage/index.tsx"
-      - "src/frontend/src/routes.tsx"
   pull_request:
     branches:
       - main
@@ -53,7 +41,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci --ignore-scripts
+        run: npm ci --ignore-scripts --loglevel=error
 
       - name: Check Channel Center formatting and lint
         run: >-
@@ -82,7 +70,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci --ignore-scripts
+        run: npm ci --ignore-scripts --loglevel=error
 
       - name: Run Channel Center unit tests
         run: >-
@@ -108,7 +96,7 @@ jobs:
           cache-dependency-path: src/frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci --ignore-scripts
+        run: npm ci --ignore-scripts --loglevel=error
 
       - name: Type-check frontend
         run: npx --no-install tsc --noEmit --pretty false --project tsconfig.json
