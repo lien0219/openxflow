@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import pytest
@@ -67,6 +68,43 @@ async def test_token_cache_metrics_record_hit_refresh_and_failure() -> None:
     assert snapshot.forced_refreshes == {"feishu": 1}
     assert snapshot.refresh_succeeded == {"feishu": 1}
     assert snapshot.refresh_failed == {"dingtalk": 1}
+
+
+@pytest.mark.asyncio
+async def test_token_cache_metrics_count_concurrent_refresh_coalescing() -> None:
+    cache: dict[str, tuple[str, float]] = {}
+    pool = LoopLocalKeyedLockPool()
+    fetch_started = asyncio.Event()
+    release_fetch = asyncio.Event()
+
+    async def fetch() -> tuple[str, float]:
+        fetch_started.set()
+        await release_fetch.wait()
+        return "shared-token", time.monotonic() + 60
+
+    tasks = [
+        asyncio.create_task(
+            get_cached_provider_token(
+                provider="wecom",
+                cache=cache,
+                cache_key="wecom-key",
+                force_refresh=False,
+                lock_pool=pool,
+                fetch_new_token=fetch,
+            )
+        )
+        for _ in range(8)
+    ]
+    await fetch_started.wait()
+    await asyncio.sleep(0)
+    release_fetch.set()
+
+    assert await asyncio.gather(*tasks) == ["shared-token"] * 8
+    snapshot = token_cache_metrics_snapshot()
+    assert snapshot.misses == {"wecom": 8}
+    assert snapshot.coalesced_refreshes == {"wecom": 7}
+    assert snapshot.refresh_succeeded == {"wecom": 1}
+    assert snapshot.refresh_failed == {}
 
 
 def test_token_cache_metrics_collector_uses_only_provider_label() -> None:
