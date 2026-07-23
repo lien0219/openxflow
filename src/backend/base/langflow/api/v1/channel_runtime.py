@@ -12,6 +12,10 @@ from pydantic import BaseModel
 from langflow.api.utils import CurrentActiveUser
 from langflow.channels.services.dingtalk_stream import dingtalk_stream_runtime_snapshot
 from langflow.channels.services.metrics import ChannelMetricsCollector
+from langflow.channels.services.outbound_delivery_metrics import (
+    OutboundDeliveryMetricsCollector,
+    outbound_delivery_metrics_snapshot,
+)
 from langflow.channels.services.retry import channel_retry_policy_from_env
 from langflow.channels.services.runtime_config import (
     channel_streams_enabled,
@@ -91,6 +95,14 @@ class DurableWebhookJobRuntimeRead(BaseModel):
     maintenance_errors_total: int
 
 
+class OutboundDeliveryRuntimeRead(BaseModel):
+    reserved_total: int
+    suppressed_total: int
+    sent_total: int
+    failed_total: int
+    state_errors_total: int
+
+
 class ChannelOutboundRetryRuntimeRead(BaseModel):
     max_attempts: int
     base_delay_seconds: float
@@ -103,6 +115,7 @@ class ChannelRuntimeRead(BaseModel):
     stream_runtime: ChannelStreamRuntimeRead
     webhook: ChannelWebhookRuntimeRead
     durable_webhook_jobs: DurableWebhookJobRuntimeRead
+    outbound_delivery: OutboundDeliveryRuntimeRead
     outbound_retry: ChannelOutboundRetryRuntimeRead
 
 
@@ -113,6 +126,7 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
     webhook = webhook_limiter_snapshot()
     durable_config = durable_webhook_job_config()
     durable_runtime = durable_webhook_job_metrics_snapshot()
+    outbound_delivery = outbound_delivery_metrics_snapshot()
     retry_policy = channel_retry_policy_from_env()
     return ChannelRuntimeRead(
         streams_enabled=channel_streams_enabled(),
@@ -127,6 +141,7 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
             **asdict(durable_config),
             **asdict(durable_runtime),
         ),
+        outbound_delivery=OutboundDeliveryRuntimeRead(**asdict(outbound_delivery)),
         outbound_retry=ChannelOutboundRetryRuntimeRead(
             max_attempts=retry_policy.max_attempts,
             base_delay_seconds=retry_policy.base_delay_seconds,
@@ -144,6 +159,7 @@ async def read_channel_prometheus_metrics(current_user: CurrentActiveUser) -> Re
     registry.register(ChannelMetricsCollector())
     registry.register(ChannelTimingMetricsCollector())
     registry.register(DurableWebhookJobMetricsCollector())
+    registry.register(OutboundDeliveryMetricsCollector())
     return Response(
         content=generate_latest(registry),
         headers={"Content-Type": CONTENT_TYPE_LATEST},
