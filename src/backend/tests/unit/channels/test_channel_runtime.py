@@ -144,3 +144,9 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_token_refresh_succeeded" in response.body
     assert b"openxflow_channel_token_refresh_failed" in response.body
     assert b"openxflow_channel_token_replays" in response.body
+    assert b"openxflow_channel_token_cache_hits" in response.body
+    assert b"openxflow_channel_token_cache_misses" in response.body
+    assert b"openxflow_channel_token_cache_forced_refreshes" in response.body
+    assert b"openxflow_channel_token_cache_coalesced_refreshes" in response.body
+    assert b"openxflow_channel_token_cache_refresh_succeeded" in response.body
+    assert b"openxflow_channel_token_cache_refresh_failed" in response.body
