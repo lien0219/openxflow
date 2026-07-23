@@ -45,6 +45,7 @@ def webhook_max_body_bytes() -> int:
 
 
 async def _read_limited_body(request: Request) -> bytes:
+    """Read an ASGI request incrementally and stop as soon as the limit is exceeded."""
     max_body_bytes = webhook_max_body_bytes()
     raw_content_length = request.headers.get("content-length")
     if raw_content_length is not None:
@@ -66,13 +67,17 @@ async def _read_limited_body(request: Request) -> bytes:
                 detail=f"Channel webhook body exceeds {max_body_bytes} bytes",
             )
 
-    payload = await request.body()
-    if len(payload) > max_body_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Channel webhook body exceeds {max_body_bytes} bytes",
-        )
-    return payload
+    payload = bytearray()
+    async for chunk in request.stream():
+        if not chunk:
+            continue
+        if len(payload) + len(chunk) > max_body_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Channel webhook body exceeds {max_body_bytes} bytes",
+            )
+        payload.extend(chunk)
+    return bytes(payload)
 
 
 async def _validate_and_schedule_provider_event(
