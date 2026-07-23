@@ -5,9 +5,10 @@ import pytest
 from prometheus_client import CollectorRegistry, generate_latest
 
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
-from langflow.channels.services.token_cache import get_cached_provider_token
+from langflow.channels.services.token_cache import get_cached_provider_token, prune_provider_token_cache
 from langflow.channels.services.token_cache_metrics import (
     TokenCacheMetricsCollector,
+    record_token_cache_eviction,
     reset_token_cache_metrics_for_testing,
     token_cache_metrics_snapshot,
 )
@@ -107,7 +108,38 @@ async def test_token_cache_metrics_count_concurrent_refresh_coalescing() -> None
     assert snapshot.refresh_failed == {}
 
 
-def test_token_cache_metrics_collector_uses_only_provider_label() -> None:
+def test_token_cache_metrics_count_expired_and_capacity_evictions() -> None:
+    cache = {
+        "protected": ("current", 200.0),
+        "expired": ("old", 50.0),
+        "early": ("early", 120.0),
+        "late": ("late", 300.0),
+    }
+
+    prune_provider_token_cache(
+        provider="feishu",
+        cache=cache,
+        protected_key="protected",
+        now=100.0,
+        max_entries=2,
+    )
+
+    snapshot = token_cache_metrics_snapshot()
+    assert snapshot.evictions == {
+        ("feishu", "expired"): 1,
+        ("feishu", "capacity"): 1,
+    }
+
+
+def test_token_cache_metrics_reject_negative_eviction_count() -> None:
+    with pytest.raises(ValueError, match="non-negative"):
+        record_token_cache_eviction("wecom", "expired", -1)
+
+
+def test_token_cache_metrics_collector_uses_only_bounded_labels() -> None:
+    record_token_cache_eviction("feishu", "expired", 2)
+    record_token_cache_eviction("dingtalk", "capacity", 1)
+
     registry = CollectorRegistry(auto_describe=True)
     registry.register(TokenCacheMetricsCollector())
     body = generate_latest(registry)
@@ -118,6 +150,9 @@ def test_token_cache_metrics_collector_uses_only_provider_label() -> None:
     assert b"openxflow_channel_token_cache_coalesced_refreshes_total" in body
     assert b"openxflow_channel_token_cache_refresh_succeeded_total" in body
     assert b"openxflow_channel_token_cache_refresh_failed_total" in body
+    assert b"openxflow_channel_token_cache_evictions_total" in body
+    assert b'provider="feishu",reason="expired"' in body
+    assert b'provider="dingtalk",reason="capacity"' in body
     assert b"connection_id" not in body
     assert b"cache_key" not in body
     assert b"secret" not in body
