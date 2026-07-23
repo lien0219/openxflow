@@ -16,7 +16,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.channels.services.runtime_config import (
     durable_webhook_job_config,
-    webhook_limiter_limits_from_env,
     webhook_task_timeout_seconds,
 )
 from langflow.channels.services.timing_metrics import record_webhook_execution
@@ -244,7 +243,7 @@ class DurableWebhookJobWorker:
         if not config.enabled:
             await logger.adebug("Durable channel webhook jobs are disabled")
             return
-        worker_count = webhook_limiter_limits_from_env().max_concurrency
+        worker_count = config.worker_count
         self._tasks = [
             asyncio.create_task(self._consume(index), name=f"channel-webhook-job-{index}")
             for index in range(worker_count)
