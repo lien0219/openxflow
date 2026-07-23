@@ -130,7 +130,13 @@ async def get_cached_provider_token(
     observed = cache.get(cache_key)
     if not force_refresh and observed is not None and observed[1] > now:
         record_token_cache_hit(provider)
-        record_token_cache_entries(provider, len(cache))
+        prune_provider_token_cache(
+            provider=provider,
+            cache=cache,
+            protected_key=cache_key,
+            now=now,
+            max_entries=normalized_max_entries,
+        )
         return observed[0]
 
     if force_refresh:
@@ -144,7 +150,13 @@ async def get_cached_provider_token(
         if cached is not None and cached[1] > now:
             if not force_refresh or cached is not observed:
                 record_token_cache_coalesced_refresh(provider)
-                record_token_cache_entries(provider, len(cache))
+                prune_provider_token_cache(
+                    provider=provider,
+                    cache=cache,
+                    protected_key=cache_key,
+                    now=now,
+                    max_entries=normalized_max_entries,
+                )
                 return cached[0]
         try:
             token, expires_at = await fetch_new_token()
