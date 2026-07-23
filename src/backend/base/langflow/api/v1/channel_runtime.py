@@ -15,6 +15,7 @@ from langflow.channels.services.retry import channel_retry_policy_from_env
 from langflow.channels.services.runtime_config import (
     channel_streams_enabled,
     webhook_max_body_bytes,
+    webhook_queue_timeout_seconds,
     webhook_task_timeout_seconds,
 )
 from langflow.channels.services.webhook_processing import webhook_limiter_snapshot
@@ -31,6 +32,7 @@ class ChannelWebhookRuntimeRead(BaseModel):
     max_pending_bytes: int
     max_concurrency: int
     max_body_bytes: int
+    queue_timeout_seconds: float
     task_timeout_seconds: float
     accepted_total: int
     rejected_total: int
@@ -39,6 +41,7 @@ class ChannelWebhookRuntimeRead(BaseModel):
     rejected_both_total: int
     succeeded_total: int
     failed_total: int
+    queue_timed_out_total: int
     cancelled_total: int
     client_disconnected_total: int
 
@@ -66,6 +69,7 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
         webhook=ChannelWebhookRuntimeRead(
             **asdict(webhook),
             max_body_bytes=webhook_max_body_bytes(),
+            queue_timeout_seconds=webhook_queue_timeout_seconds(),
             task_timeout_seconds=webhook_task_timeout_seconds(),
         ),
         outbound_retry=ChannelOutboundRetryRuntimeRead(
