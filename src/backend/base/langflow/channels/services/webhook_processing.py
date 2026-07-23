@@ -20,12 +20,17 @@ from langflow.channels.services.gateway import ChannelGateway
 from langflow.channels.services.runtime_config import (
     DEFAULT_WEBHOOK_MAX_PENDING_BYTES,
     webhook_limiter_limits_from_env,
+    webhook_queue_timeout_seconds,
     webhook_task_timeout_seconds,
 )
 from langflow.services.database.models.channel.model import ChannelConnection
 from langflow.services.deps import session_scope
 
 _T = TypeVar("_T")
+
+
+class WebhookQueueTimeoutError(TimeoutError):
+    """Raised when a reserved webhook cannot obtain an execution slot in time."""
 
 
 @dataclass(frozen=True)
@@ -51,6 +56,7 @@ class WebhookLimiterSnapshot:
     rejected_both_total: int
     succeeded_total: int
     failed_total: int
+    queue_timed_out_total: int
     cancelled_total: int
     client_disconnected_total: int
 
@@ -84,6 +90,7 @@ class WebhookProcessingLimiter:
         self._rejected_both_total = 0
         self._succeeded_total = 0
         self._failed_total = 0
+        self._queue_timed_out_total = 0
         self._cancelled_total = 0
         self._client_disconnected_total = 0
         self._reservations: dict[object, int] = {}
@@ -121,7 +128,13 @@ class WebhookProcessingLimiter:
             if cancelled:
                 self._cancelled_total += 1
 
-    def finish(self, reservation: WebhookReservation, *, success: bool) -> None:
+    def finish(
+        self,
+        reservation: WebhookReservation,
+        *,
+        success: bool,
+        queue_timed_out: bool = False,
+    ) -> None:
         with self._state_lock:
             payload_size = self._consume_reservation_locked(reservation)
             self._pending -= 1
@@ -130,6 +143,8 @@ class WebhookProcessingLimiter:
                 self._succeeded_total += 1
             else:
                 self._failed_total += 1
+                if queue_timed_out:
+                    self._queue_timed_out_total += 1
 
     def record_client_disconnect(self) -> None:
         """Record a callback upload that ended before the request body was complete."""
@@ -155,13 +170,30 @@ class WebhookProcessingLimiter:
                 rejected_both_total=self._rejected_both_total,
                 succeeded_total=self._succeeded_total,
                 failed_total=self._failed_total,
+                queue_timed_out_total=self._queue_timed_out_total,
                 cancelled_total=self._cancelled_total,
                 client_disconnected_total=self._client_disconnected_total,
             )
 
-    async def run(self, callback: Callable[..., Awaitable[_T]], /, *args, **kwargs) -> _T:
+    async def run(
+        self,
+        callback: Callable[..., Awaitable[_T]],
+        /,
+        *args,
+        queue_timeout_seconds: float = 0.0,
+        **kwargs,
+    ) -> _T:
         semaphore = self._semaphore_for_current_loop()
-        async with semaphore:
+        acquired = False
+        try:
+            if queue_timeout_seconds > 0:
+                try:
+                    await asyncio.wait_for(semaphore.acquire(), timeout=queue_timeout_seconds)
+                except TimeoutError as exc:
+                    raise WebhookQueueTimeoutError("Webhook queue wait timed out") from exc
+            else:
+                await semaphore.acquire()
+            acquired = True
             with self._state_lock:
                 self._active += 1
             try:
@@ -169,6 +201,9 @@ class WebhookProcessingLimiter:
             finally:
                 with self._state_lock:
                     self._active -= 1
+        finally:
+            if acquired:
+                semaphore.release()
 
     @staticmethod
     def _validate_payload_size(payload_size: int) -> None:
@@ -258,6 +293,7 @@ async def process_reserved_provider_webhook(
     """Run one reserved callback and always release its queue and payload capacity."""
     success = False
     cancelled = False
+    queue_timed_out = False
     try:
         try:
             success = await _webhook_limiter.run(
@@ -266,6 +302,14 @@ async def process_reserved_provider_webhook(
                 expected_channel_type=expected_channel_type,
                 headers=headers,
                 payload=payload,
+                queue_timeout_seconds=webhook_queue_timeout_seconds(),
+            )
+        except WebhookQueueTimeoutError:
+            queue_timed_out = True
+            await logger.aerror(
+                "Background %s channel webhook queue wait timed out for connection %s",
+                expected_channel_type,
+                connection_id,
             )
         except asyncio.CancelledError:
             cancelled = True
@@ -274,7 +318,11 @@ async def process_reserved_provider_webhook(
         if cancelled:
             _webhook_limiter.cancel_reservation(reservation, cancelled=True)
         else:
-            _webhook_limiter.finish(reservation, success=success)
+            _webhook_limiter.finish(
+                reservation,
+                success=success,
+                queue_timed_out=queue_timed_out,
+            )
 
 
 async def process_provider_webhook(
