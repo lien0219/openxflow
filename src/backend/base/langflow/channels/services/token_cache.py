@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -24,10 +25,23 @@ from langflow.channels.services.token_cache_metrics import (
 
 TokenCache = dict[str, tuple[str, float]]
 DEFAULT_PROVIDER_TOKEN_CACHE_MAX_ENTRIES = 512
+TOKEN_CACHE_MAX_ENTRIES_ENV = "LANGFLOW_CHANNEL_TOKEN_CACHE_MAX_ENTRIES"
 
 
 class InvalidProviderTokenResponseError(RuntimeError):
     """Raised when a provider token endpoint returns an invalid response shape."""
+
+
+def provider_token_cache_max_entries() -> int:
+    """Return the normalized per-provider process cache capacity."""
+    raw_value = os.getenv(TOKEN_CACHE_MAX_ENTRIES_ENV)
+    if raw_value is None:
+        return DEFAULT_PROVIDER_TOKEN_CACHE_MAX_ENTRIES
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return DEFAULT_PROVIDER_TOKEN_CACHE_MAX_ENTRIES
+    return parsed if parsed > 0 else DEFAULT_PROVIDER_TOKEN_CACHE_MAX_ENTRIES
 
 
 def provider_token_cache_key(
@@ -106,10 +120,11 @@ async def get_cached_provider_token(
     force_refresh: bool,
     lock_pool: LoopLocalKeyedLockPool,
     fetch_new_token: Callable[[], Awaitable[tuple[str, float]]],
-    max_entries: int = DEFAULT_PROVIDER_TOKEN_CACHE_MAX_ENTRIES,
+    max_entries: int | None = None,
 ) -> str:
     """Return one cached token while serializing refreshes only for the same credential key."""
-    if max_entries <= 0:
+    normalized_max_entries = provider_token_cache_max_entries() if max_entries is None else max_entries
+    if normalized_max_entries <= 0:
         raise ValueError("max_entries must be positive")
     now = time.monotonic()
     observed = cache.get(cache_key)
@@ -147,7 +162,7 @@ async def get_cached_provider_token(
             cache=cache,
             protected_key=cache_key,
             now=refreshed_at,
-            max_entries=max_entries,
+            max_entries=normalized_max_entries,
         )
         record_token_cache_refresh_success(provider)
         return token
