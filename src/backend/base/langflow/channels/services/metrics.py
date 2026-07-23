@@ -208,6 +208,11 @@ class ChannelMetricsCollector:
 
         for name, description, value in (
             (
+                "openxflow_channel_stream_sync_errors",
+                "DingTalk Stream database synchronization failures in this process",
+                stream_runtime.sync_errors_total,
+            ),
+            (
                 "openxflow_channel_stream_connection_errors",
                 "DingTalk Stream client connection failures in this process",
                 stream_runtime.connection_errors_total,
