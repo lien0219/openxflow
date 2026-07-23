@@ -26,7 +26,8 @@ def test_provider_token_cache_default_capacity_is_bounded() -> None:
 )
 async def test_cached_provider_token_rejects_invalid_absolute_expiry(expires_at: float) -> None:
     reset_token_cache_metrics_for_testing()
-    cache = {"credential": ("previous-token", time.monotonic() - 1)}
+    previous_expiry = time.monotonic() - 1
+    cache = {"credential": ("previous-token", previous_expiry)}
 
     async def fetch() -> tuple[str, float]:
         return "invalid-token", expires_at
@@ -41,7 +42,7 @@ async def test_cached_provider_token_rejects_invalid_absolute_expiry(expires_at:
             fetch_new_token=fetch,
         )
 
-    assert cache == {"credential": ("previous-token", cache["credential"][1])}
+    assert cache == {"credential": ("previous-token", previous_expiry)}
     snapshot = token_cache_metrics_snapshot()
     assert snapshot.refresh_failed == {"feishu": 1}
     assert snapshot.refresh_succeeded == {}
