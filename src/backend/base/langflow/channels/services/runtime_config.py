@@ -20,6 +20,10 @@ DEFAULT_WEBHOOK_JOB_LEASE_SECONDS = 600.0
 DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS = 5
 DEFAULT_WEBHOOK_JOB_RETRY_BASE_SECONDS = 2.0
 DEFAULT_WEBHOOK_JOB_RETRY_MAX_SECONDS = 300.0
+DEFAULT_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS = 60.0
+DEFAULT_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS = 7
+DEFAULT_WEBHOOK_JOB_FAILED_RETENTION_DAYS = 30
+DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE = 500
 WEBHOOK_JOB_LEASE_SAFETY_SECONDS = 30.0
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -87,6 +91,10 @@ class DurableWebhookJobConfig:
     max_attempts: int
     retry_base_seconds: float
     retry_max_seconds: float
+    cleanup_interval_seconds: float
+    completed_retention_days: int
+    failed_retention_days: int
+    cleanup_batch_size: int
 
 
 def channel_streams_enabled() -> bool:
@@ -175,4 +183,20 @@ def durable_webhook_job_config() -> DurableWebhookJobConfig:
         ),
         retry_base_seconds=retry_base,
         retry_max_seconds=max(retry_base, retry_max),
+        cleanup_interval_seconds=_positive_float_env(
+            "LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS",
+            DEFAULT_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS,
+        ),
+        completed_retention_days=_positive_int_env(
+            "LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS",
+            DEFAULT_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS,
+        ),
+        failed_retention_days=_positive_int_env(
+            "LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS",
+            DEFAULT_WEBHOOK_JOB_FAILED_RETENTION_DAYS,
+        ),
+        cleanup_batch_size=_positive_int_env(
+            "LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE",
+            DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE,
+        ),
     )
