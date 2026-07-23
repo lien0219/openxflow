@@ -17,6 +17,18 @@ def test_channel_core_workflow_uses_isolated_dependencies() -> None:
     assert "uv.lock" not in content
 
 
+def test_channel_core_workflow_runs_resilient_adapter_contracts() -> None:
+    content = _CORE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "adapter-contracts:" in content
+    assert "--with 'pytest-asyncio>=0.23'" in content
+    assert "--with 'cryptography>=48.0.1'" in content
+    assert "--with 'defusedxml>=0.7.1,<1.0.0'" in content
+    assert "test_resilient_adapter_factory.py" in content
+    assert "test_resilient_token_cache_delegation.py" in content
+    assert "test_resilient_token_contracts.py" in content
+
+
 def test_channel_core_workflow_runs_database_contracts() -> None:
     content = _CORE_WORKFLOW.read_text(encoding="utf-8")
 
