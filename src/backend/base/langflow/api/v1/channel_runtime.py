@@ -15,11 +15,16 @@ from langflow.channels.services.metrics import ChannelMetricsCollector
 from langflow.channels.services.retry import channel_retry_policy_from_env
 from langflow.channels.services.runtime_config import (
     channel_streams_enabled,
+    durable_webhook_job_config,
     webhook_max_body_bytes,
     webhook_queue_timeout_seconds,
     webhook_task_timeout_seconds,
 )
 from langflow.channels.services.timing_metrics import ChannelTimingMetricsCollector
+from langflow.channels.services.webhook_job_metrics import (
+    DurableWebhookJobMetricsCollector,
+    durable_webhook_job_metrics_snapshot,
+)
 from langflow.channels.services.webhook_processing import webhook_limiter_snapshot
 
 router = APIRouter(prefix="/channel-runtime", tags=["Channels"])
@@ -59,6 +64,22 @@ class ChannelStreamRuntimeRead(BaseModel):
     last_successful_sync_timestamp_seconds: float
 
 
+class DurableWebhookJobRuntimeRead(BaseModel):
+    enabled: bool
+    poll_seconds: float
+    lease_seconds: float
+    max_attempts: int
+    retry_base_seconds: float
+    retry_max_seconds: float
+    running_managers: int
+    consumer_tasks: int
+    claimed_total: int
+    completed_total: int
+    retried_total: int
+    failed_total: int
+    claim_errors_total: int
+
+
 class ChannelOutboundRetryRuntimeRead(BaseModel):
     max_attempts: int
     base_delay_seconds: float
@@ -70,6 +91,7 @@ class ChannelRuntimeRead(BaseModel):
     streams_enabled: bool
     stream_runtime: ChannelStreamRuntimeRead
     webhook: ChannelWebhookRuntimeRead
+    durable_webhook_jobs: DurableWebhookJobRuntimeRead
     outbound_retry: ChannelOutboundRetryRuntimeRead
 
 
@@ -78,6 +100,8 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
     del current_user
     stream_runtime = dingtalk_stream_runtime_snapshot()
     webhook = webhook_limiter_snapshot()
+    durable_config = durable_webhook_job_config()
+    durable_runtime = durable_webhook_job_metrics_snapshot()
     retry_policy = channel_retry_policy_from_env()
     return ChannelRuntimeRead(
         streams_enabled=channel_streams_enabled(),
@@ -87,6 +111,10 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
             max_body_bytes=webhook_max_body_bytes(),
             queue_timeout_seconds=webhook_queue_timeout_seconds(),
             task_timeout_seconds=webhook_task_timeout_seconds(),
+        ),
+        durable_webhook_jobs=DurableWebhookJobRuntimeRead(
+            **asdict(durable_config),
+            **asdict(durable_runtime),
         ),
         outbound_retry=ChannelOutboundRetryRuntimeRead(
             max_attempts=retry_policy.max_attempts,
@@ -104,6 +132,7 @@ async def read_channel_prometheus_metrics(current_user: CurrentActiveUser) -> Re
     registry = CollectorRegistry(auto_describe=True)
     registry.register(ChannelMetricsCollector())
     registry.register(ChannelTimingMetricsCollector())
+    registry.register(DurableWebhookJobMetricsCollector())
     return Response(
         content=generate_latest(registry),
         headers={"Content-Type": CONTENT_TYPE_LATEST},
