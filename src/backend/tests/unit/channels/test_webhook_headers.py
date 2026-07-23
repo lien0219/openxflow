@@ -3,66 +3,30 @@ import pytest
 from langflow.channels.security.webhook_headers import durable_webhook_headers
 
 
-def test_telegram_durable_headers_keep_only_secret_token() -> None:
+@pytest.mark.parametrize("channel_type", ["telegram", "feishu", "dingtalk", "wecom"])
+def test_durable_headers_only_store_internal_preverified_marker(channel_type: str) -> None:
     result = durable_webhook_headers(
-        "telegram",
+        channel_type,
         {
-            "X-Telegram-Bot-Api-Secret-Token": "secret",
+            "X-Telegram-Bot-Api-Secret-Token": "telegram-secret",
+            "Timestamp": "1000",
+            "Sign": "dingtalk-signature",
+            "X-WeCom-Msg-Signature": "wecom-signature",
+            "X-WeCom-Timestamp": "2000",
+            "X-WeCom-Nonce": "nonce",
             "Authorization": "Bearer sensitive",
             "Cookie": "session=sensitive",
-            "Content-Type": "application/json",
+            "X-Forwarded-For": "192.0.2.1",
         },
     )
 
-    assert result == {"x-telegram-bot-api-secret-token": "secret"}
-
-
-def test_feishu_durable_headers_are_empty() -> None:
-    assert durable_webhook_headers(
-        "feishu",
-        {
-            "authorization": "Bearer sensitive",
-            "x-forwarded-for": "192.0.2.1",
-        },
-    ) == {}
-
-
-def test_dingtalk_durable_headers_keep_supported_signature_variants() -> None:
-    result = durable_webhook_headers(
-        "dingtalk",
-        {
-            "Timestamp": "1000",
-            "Sign": "legacy",
-            "X-DingTalk-Timestamp": "2000",
-            "X-DingTalk-Signature": "modern",
-            "Cookie": "sensitive",
-        },
-    )
-
-    assert result == {
-        "timestamp": "1000",
-        "sign": "legacy",
-        "x-dingtalk-timestamp": "2000",
-        "x-dingtalk-signature": "modern",
-    }
-
-
-def test_wecom_durable_headers_keep_synthesized_signature_values() -> None:
-    result = durable_webhook_headers(
-        "wecom",
-        {
-            "x-wecom-msg-signature": "signature",
-            "x-wecom-timestamp": "timestamp",
-            "x-wecom-nonce": "nonce",
-            "authorization": "sensitive",
-        },
-    )
-
-    assert result == {
-        "x-wecom-msg-signature": "signature",
-        "x-wecom-timestamp": "timestamp",
-        "x-wecom-nonce": "nonce",
-    }
+    assert result == {"x-openxflow-preverified": "1"}
+    rendered = repr(result)
+    assert "telegram-secret" not in rendered
+    assert "dingtalk-signature" not in rendered
+    assert "wecom-signature" not in rendered
+    assert "Bearer sensitive" not in rendered
+    assert "session=sensitive" not in rendered
 
 
 def test_unknown_durable_webhook_channel_is_rejected() -> None:
