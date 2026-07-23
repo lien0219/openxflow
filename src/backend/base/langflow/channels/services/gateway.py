@@ -7,21 +7,13 @@ from uuid import UUID
 from langflow.channels.adapters.base import ChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelType
+from langflow.channels.services.outbound_delivery import send_outbound_response_once
 from langflow.channels.services.retry import retry_channel_operation
 
 if TYPE_CHECKING:
     from langflow.channels.services.deduplication import ChannelEventDeduplicator
 
 ChannelHandler = Callable[[ChannelEvent], Awaitable[ChannelMessage | None]]
-_PREVERIFIED_HEADER = "x-openxflow-preverified"
-_PREVERIFIED_ALLOWED_HEADERS = frozenset({_PREVERIFIED_HEADER, "content-type"})
-
-
-def _is_preverified_headers(headers: dict[str, str]) -> bool:
-    return (
-        headers.get(_PREVERIFIED_HEADER) == "1"
-        and set(headers).issubset(_PREVERIFIED_ALLOWED_HEADERS)
-    )
 
 
 class ChannelGateway:
@@ -58,7 +50,7 @@ class ChannelGateway:
         deduplicator: ChannelEventDeduplicator | None = None,
     ) -> ChannelEvent:
         adapter = self.get_adapter(connection_id)
-        if not _is_preverified_headers(headers) and not await adapter.verify_event(headers, payload):
+        if not await adapter.verify_event(headers, payload):
             raise PermissionError("Channel event signature verification failed")
         return await self._receive_parsed(
             connection_id,
@@ -66,6 +58,7 @@ class ChannelGateway:
             payload,
             handler,
             deduplicator=deduplicator,
+            guard_outbound=False,
         )
 
     async def receive_verified(
@@ -76,13 +69,14 @@ class ChannelGateway:
         *,
         deduplicator: ChannelEventDeduplicator | None = None,
     ) -> ChannelEvent:
-        """Process a callback whose signature was verified before durable persistence."""
+        """Process a callback verified before durable persistence with guarded replies."""
         return await self._receive_parsed(
             connection_id,
             {},
             payload,
             handler,
             deduplicator=deduplicator,
+            guard_outbound=True,
         )
 
     async def _receive_parsed(
@@ -93,6 +87,7 @@ class ChannelGateway:
         handler: ChannelHandler,
         *,
         deduplicator: ChannelEventDeduplicator | None,
+        guard_outbound: bool,
     ) -> ChannelEvent:
         adapter = self.get_adapter(connection_id)
         event = await adapter.parse_event(headers, payload)
@@ -111,10 +106,14 @@ class ChannelGateway:
             await adapter.acknowledge_event(event)
             response = await handler(event)
             if response is not None:
-                await retry_channel_operation(
+                sender = lambda: retry_channel_operation(
                     lambda: adapter.send_response(event, response),
                     operation_name=f"{adapter.channel_type.value}.send_response",
                 )
+                if guard_outbound:
+                    await send_outbound_response_once(event, response, sender)
+                else:
+                    await sender()
         except Exception as exc:
             if deduplicator is not None and receipt is not None:
                 await deduplicator.fail(receipt, exc)
