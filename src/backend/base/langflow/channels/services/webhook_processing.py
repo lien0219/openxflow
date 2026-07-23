@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from threading import Lock
@@ -22,6 +23,10 @@ from langflow.channels.services.runtime_config import (
     webhook_limiter_limits_from_env,
     webhook_queue_timeout_seconds,
     webhook_task_timeout_seconds,
+)
+from langflow.channels.services.timing_metrics import (
+    record_webhook_execution,
+    record_webhook_queue_wait,
 )
 from langflow.services.database.models.channel.model import ChannelConnection
 from langflow.services.deps import session_scope
@@ -181,24 +186,33 @@ class WebhookProcessingLimiter:
         /,
         *args,
         queue_timeout_seconds: float = 0.0,
+        record_timings: bool = False,
         **kwargs,
     ) -> _T:
         semaphore = self._semaphore_for_current_loop()
         acquired = False
+        queue_started_at = time.perf_counter()
         try:
             if queue_timeout_seconds > 0:
                 try:
                     await asyncio.wait_for(semaphore.acquire(), timeout=queue_timeout_seconds)
                 except TimeoutError as exc:
+                    if record_timings:
+                        record_webhook_queue_wait(time.perf_counter() - queue_started_at)
                     raise WebhookQueueTimeoutError("Webhook queue wait timed out") from exc
             else:
                 await semaphore.acquire()
             acquired = True
+            if record_timings:
+                record_webhook_queue_wait(time.perf_counter() - queue_started_at)
             with self._state_lock:
                 self._active += 1
+            execution_started_at = time.perf_counter()
             try:
                 return await callback(*args, **kwargs)
             finally:
+                if record_timings:
+                    record_webhook_execution(time.perf_counter() - execution_started_at)
                 with self._state_lock:
                     self._active -= 1
         finally:
@@ -303,6 +317,7 @@ async def process_reserved_provider_webhook(
                 headers=headers,
                 payload=payload,
                 queue_timeout_seconds=webhook_queue_timeout_seconds(),
+                record_timings=True,
             )
         except WebhookQueueTimeoutError:
             queue_timed_out = True
