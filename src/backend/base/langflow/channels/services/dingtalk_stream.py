@@ -16,7 +16,7 @@ from filelock import FileLock, Timeout as FileLockTimeout
 from lfx.log.logger import logger
 from sqlmodel import select
 
-from langflow.channels.adapters.dingtalk import DingTalkChannelAdapter
+from langflow.channels.adapters.dingtalk_resilient import ResilientDingTalkChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.security.credentials import decrypt_credentials
 from langflow.channels.services.deduplication import ChannelEventDeduplicator
@@ -47,7 +47,7 @@ async def process_dingtalk_stream_payload(connection_id: UUID, data: dict[str, A
         if connection is None or not connection.enabled or connection.channel_type != "dingtalk":
             return
         credentials = decrypt_credentials(connection.credentials_encrypted)
-        adapter = DingTalkChannelAdapter(
+        adapter = ResilientDingTalkChannelAdapter(
             connection.id,
             client_id=credentials.get("client_id", ""),
             client_secret=credentials.get("client_secret", ""),
