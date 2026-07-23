@@ -17,6 +17,16 @@ def test_channel_core_workflow_uses_isolated_dependencies() -> None:
     assert "uv.lock" not in content
 
 
+def test_channel_core_workflow_validates_workflow_syntax() -> None:
+    content = _CORE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "workflow-syntax:" in content
+    assert "docker://rhysd/actionlint:1.7.7" in content
+    assert "docker://rhysd/actionlint:latest" not in content
+    assert ".github/workflows/channel-gateway-core.yml" in content
+    assert ".github/workflows/channel-gateway-frontend.yml" in content
+
+
 def test_channel_core_workflow_runs_resilient_adapter_contracts() -> None:
     content = _CORE_WORKFLOW.read_text(encoding="utf-8")
 
