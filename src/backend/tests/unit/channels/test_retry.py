@@ -1,3 +1,5 @@
+import math
+
 import httpx
 import pytest
 
@@ -7,6 +9,7 @@ from langflow.channels.services.retry import (
     channel_retry_policy_from_env,
     is_retryable_channel_error,
     retry_channel_operation,
+    retry_delay_seconds,
 )
 
 
@@ -114,3 +117,53 @@ def test_retryable_channel_error_statuses() -> None:
 def test_retry_policy_allows_disabling_jitter(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_HTTP_JITTER_RATIO", "0")
     assert channel_retry_policy_from_env().jitter_ratio == 0
+
+
+def test_retry_policy_rejects_non_finite_constructor_values() -> None:
+    with pytest.raises(ValueError, match="base_delay_seconds"):
+        ChannelRetryPolicy(base_delay_seconds=math.inf)
+    with pytest.raises(ValueError, match="max_delay_seconds"):
+        ChannelRetryPolicy(max_delay_seconds=math.nan)
+    with pytest.raises(ValueError, match="jitter_ratio"):
+        ChannelRetryPolicy(jitter_ratio=math.inf)
+
+
+def test_retry_policy_falls_back_for_non_finite_environment_values(monkeypatch) -> None:
+    monkeypatch.setenv("LANGFLOW_CHANNEL_HTTP_BASE_DELAY_SECONDS", "nan")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS", "inf")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_HTTP_JITTER_RATIO", "nan")
+
+    policy = channel_retry_policy_from_env()
+
+    assert policy.base_delay_seconds == 0.5
+    assert policy.max_delay_seconds == 8.0
+    assert policy.jitter_ratio == 0.2
+
+
+def test_retry_delay_clamps_out_of_range_random_values() -> None:
+    policy = ChannelRetryPolicy(
+        max_attempts=2,
+        base_delay_seconds=1,
+        max_delay_seconds=10,
+        jitter_ratio=0.5,
+    )
+    error = httpx.ConnectError("connection failed", request=httpx.Request("GET", "https://provider.example"))
+
+    assert retry_delay_seconds(error, attempt=1, policy=policy, random_value=lambda: -5) == 0.5
+    assert retry_delay_seconds(error, attempt=1, policy=policy, random_value=lambda: 5) == 1.5
+    assert retry_delay_seconds(error, attempt=1, policy=policy, random_value=lambda: math.nan) == 1.0
+
+
+def test_non_finite_retry_after_header_falls_back_to_backoff() -> None:
+    policy = ChannelRetryPolicy(
+        max_attempts=2,
+        base_delay_seconds=1,
+        max_delay_seconds=10,
+        jitter_ratio=0,
+    )
+
+    assert retry_delay_seconds(
+        _status_error(429, retry_after="nan"),
+        attempt=1,
+        policy=policy,
+    ) == 1.0
