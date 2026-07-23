@@ -308,9 +308,13 @@ class DingTalkStreamManager:
             async def process(self, callback):  # type: ignore[no-untyped-def]
                 started_at = time.perf_counter()
                 success = False
+                cancelled = False
                 try:
                     try:
                         await process_dingtalk_stream_payload(connection_id, callback.data)
+                    except asyncio.CancelledError:
+                        cancelled = True
+                        raise
                     except ValueError as exc:
                         await logger.awarning("Invalid DingTalk Stream payload: %s", exc)
                         return dingtalk_stream.AckMessage.STATUS_BAD_REQUEST, str(exc)
@@ -321,10 +325,11 @@ class DingTalkStreamManager:
                     success = True
                     return dingtalk_stream.AckMessage.STATUS_OK, "OK"
                 finally:
-                    record_stream_callback(
-                        success=success,
-                        duration_seconds=time.perf_counter() - started_at,
-                    )
+                    if not cancelled:
+                        record_stream_callback(
+                            success=success,
+                            duration_seconds=time.perf_counter() - started_at,
+                        )
 
         credential = dingtalk_stream.Credential(client_id, client_secret)
         client = dingtalk_stream.DingTalkStreamClient(credential)
