@@ -60,6 +60,11 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_stream_reconnect_attempts" in response.body
     assert b"openxflow_channel_stream_successful_syncs" in response.body
     assert b"openxflow_channel_stream_last_successful_sync_timestamp_seconds" in response.body
+    assert b"openxflow_channel_stream_callbacks_succeeded" in response.body
+    assert b"openxflow_channel_stream_callbacks_failed" in response.body
+    assert b"openxflow_channel_stream_callback_duration_seconds" in response.body
+    assert b"openxflow_channel_webhook_queue_wait_duration_seconds" in response.body
+    assert b"openxflow_channel_webhook_execution_duration_seconds" in response.body
     assert b"openxflow_channel_webhook_pending" in response.body
     assert b"openxflow_channel_webhook_pending_bytes" in response.body
     assert b"openxflow_channel_webhook_max_pending_bytes" in response.body
