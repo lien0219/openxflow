@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import Any
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -17,6 +16,15 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from langflow.channels.services.runtime_config import (
     durable_webhook_job_config,
     webhook_limiter_limits_from_env,
+)
+from langflow.channels.services.webhook_job_metrics import (
+    record_durable_webhook_claim_error,
+    record_durable_webhook_claimed,
+    record_durable_webhook_completed,
+    record_durable_webhook_failed,
+    record_durable_webhook_manager_started,
+    record_durable_webhook_manager_stopped,
+    record_durable_webhook_retried,
 )
 from langflow.channels.services.webhook_processing import process_provider_webhook
 from langflow.services.database.models.channel.model import utc_now
@@ -204,6 +212,7 @@ class DurableWebhookJobWorker:
             asyncio.create_task(self._consume(index), name=f"channel-webhook-job-{index}")
             for index in range(worker_count)
         ]
+        record_durable_webhook_manager_started(worker_count)
         try:
             await self._stop_event.wait()
         finally:
@@ -212,6 +221,7 @@ class DurableWebhookJobWorker:
             if self._tasks:
                 await asyncio.gather(*self._tasks, return_exceptions=True)
             self._tasks.clear()
+            record_durable_webhook_manager_stopped(worker_count)
 
     async def stop(self) -> None:
         self._stop_event.set()
@@ -231,12 +241,16 @@ class DurableWebhookJobWorker:
     async def _claim_one(self) -> ChannelWebhookJob | None:
         try:
             async with session_scope() as session:
-                return await claim_provider_webhook_job(session, worker_id=self.worker_id)
+                job = await claim_provider_webhook_job(session, worker_id=self.worker_id)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001
+            record_durable_webhook_claim_error()
             await logger.aexception("Unable to claim a durable channel webhook job")
             return None
+        if job is not None:
+            record_durable_webhook_claimed()
+        return job
 
     async def _process(self, job: ChannelWebhookJob) -> None:
         error = "Channel webhook processing failed"
@@ -256,18 +270,25 @@ class DurableWebhookJobWorker:
 
         async with session_scope() as session:
             if success:
-                await complete_provider_webhook_job(
+                updated = await complete_provider_webhook_job(
                     session,
                     job_id=job.id,
                     worker_id=self.worker_id,
                 )
+                if updated:
+                    record_durable_webhook_completed()
             else:
-                await fail_provider_webhook_job(
+                updated = await fail_provider_webhook_job(
                     session,
                     job=job,
                     worker_id=self.worker_id,
                     error=error,
                 )
+                if updated:
+                    if job.attempts >= job.max_attempts:
+                        record_durable_webhook_failed()
+                    else:
+                        record_durable_webhook_retried()
 
 
 @asynccontextmanager
