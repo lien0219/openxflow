@@ -17,8 +17,14 @@ class _FakeDB:
 
 
 class _FakeRequest:
-    def __init__(self, payload: bytes = b"{}", headers: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        payload: bytes = b"{}",
+        headers: dict[str, str] | None = None,
+        chunks: list[bytes] | None = None,
+    ) -> None:
         self.payload = payload
+        self.chunks = chunks or [payload]
         self.headers = headers or {
             "content-type": "application/json",
             "content-length": str(len(payload)),
@@ -26,6 +32,10 @@ class _FakeRequest:
 
     async def body(self) -> bytes:
         return self.payload
+
+    async def stream(self):
+        for chunk in self.chunks:
+            yield chunk
 
 
 class _FakeAdapter:
@@ -203,13 +213,45 @@ async def test_actual_oversized_webhook_is_rejected_without_content_length(monke
     with pytest.raises(HTTPException) as exc_info:
         await _validate_and_schedule_provider_event(
             connection_id=connection_id,
-            request=_FakeRequest(payload=b"12345", headers={"content-type": "application/json"}),
+            request=_FakeRequest(
+                payload=b"12345",
+                headers={"content-type": "application/json"},
+                chunks=[b"12", b"345"],
+            ),
             db=_FakeDB(connection),
             background_tasks=BackgroundTasks(),
             expected_channel_type="telegram",
         )
 
     assert exc_info.value.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_streamed_webhook_stops_before_reading_later_chunks(monkeypatch) -> None:
+    connection_id = uuid4()
+    connection = _connection(connection_id)
+    chunks_read = 0
+
+    class StreamingRequest(_FakeRequest):
+        async def stream(self):
+            nonlocal chunks_read
+            for chunk in [b"123", b"45", b"should-not-be-read"]:
+                chunks_read += 1
+                yield chunk
+
+    monkeypatch.setattr("langflow.api.v1.channel_webhooks.webhook_max_body_bytes", lambda: 4)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _validate_and_schedule_provider_event(
+            connection_id=connection_id,
+            request=StreamingRequest(headers={"content-type": "application/json"}),
+            db=_FakeDB(connection),
+            background_tasks=BackgroundTasks(),
+            expected_channel_type="telegram",
+        )
+
+    assert exc_info.value.status_code == 413
+    assert chunks_read == 2
 
 
 @pytest.mark.asyncio
