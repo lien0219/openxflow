@@ -1,4 +1,4 @@
-"""Process-local metrics for durable outbound reply idempotency."""
+"""Process-local metrics for durable outbound delivery idempotency."""
 
 from __future__ import annotations
 
@@ -6,6 +6,19 @@ from dataclasses import dataclass
 from threading import Lock
 
 from prometheus_client.core import CounterMetricFamily
+
+from langflow.services.database.models.channel.outbound_delivery_model import ChannelOutboundDeliveryKind
+
+_KINDS = tuple(kind.value for kind in ChannelOutboundDeliveryKind)
+
+
+@dataclass(frozen=True)
+class OutboundDeliveryKindMetricSnapshot:
+    reserved_total: int
+    suppressed_total: int
+    sent_total: int
+    failed_total: int
+    state_errors_total: int
 
 
 @dataclass(frozen=True)
@@ -15,54 +28,58 @@ class OutboundDeliveryMetricSnapshot:
     sent_total: int
     failed_total: int
     state_errors_total: int
+    by_kind: dict[str, OutboundDeliveryKindMetricSnapshot]
 
 
 class OutboundDeliveryMetrics:
     def __init__(self) -> None:
         self._lock = Lock()
-        self._reserved_total = 0
-        self._suppressed_total = 0
-        self._sent_total = 0
-        self._failed_total = 0
-        self._state_errors_total = 0
+        self._values = self._new_values()
 
-    def record_reserved(self) -> None:
-        with self._lock:
-            self._reserved_total += 1
+    @staticmethod
+    def _new_values() -> dict[str, dict[str, int]]:
+        return {
+            kind: {
+                "reserved_total": 0,
+                "suppressed_total": 0,
+                "sent_total": 0,
+                "failed_total": 0,
+                "state_errors_total": 0,
+            }
+            for kind in _KINDS
+        }
 
-    def record_suppressed(self) -> None:
-        with self._lock:
-            self._suppressed_total += 1
+    @staticmethod
+    def _normalize_kind(delivery_kind: ChannelOutboundDeliveryKind | str) -> str:
+        value = delivery_kind.value if isinstance(delivery_kind, ChannelOutboundDeliveryKind) else delivery_kind
+        if value not in _KINDS:
+            raise ValueError(f"Unsupported outbound delivery kind: {value}")
+        return value
 
-    def record_sent(self) -> None:
+    def record(self, delivery_kind: ChannelOutboundDeliveryKind | str, field: str) -> None:
+        kind = self._normalize_kind(delivery_kind)
         with self._lock:
-            self._sent_total += 1
-
-    def record_failed(self) -> None:
-        with self._lock:
-            self._failed_total += 1
-
-    def record_state_error(self) -> None:
-        with self._lock:
-            self._state_errors_total += 1
+            self._values[kind][field] += 1
 
     def snapshot(self) -> OutboundDeliveryMetricSnapshot:
         with self._lock:
-            return OutboundDeliveryMetricSnapshot(
-                reserved_total=self._reserved_total,
-                suppressed_total=self._suppressed_total,
-                sent_total=self._sent_total,
-                failed_total=self._failed_total,
-                state_errors_total=self._state_errors_total,
-            )
+            copied = {kind: dict(values) for kind, values in self._values.items()}
+        by_kind = {
+            kind: OutboundDeliveryKindMetricSnapshot(**values)
+            for kind, values in copied.items()
+        }
+        return OutboundDeliveryMetricSnapshot(
+            reserved_total=sum(item.reserved_total for item in by_kind.values()),
+            suppressed_total=sum(item.suppressed_total for item in by_kind.values()),
+            sent_total=sum(item.sent_total for item in by_kind.values()),
+            failed_total=sum(item.failed_total for item in by_kind.values()),
+            state_errors_total=sum(item.state_errors_total for item in by_kind.values()),
+            by_kind=by_kind,
+        )
 
     def reset(self) -> None:
         with self._lock:
-            self._reserved_total = 0
-            self._suppressed_total = 0
-            self._sent_total = 0
-            self._failed_total = 0
-            self._state_errors_total = 0
+            self._values = self._new_values()
 
 
 _metrics = OutboundDeliveryMetrics()
@@ -76,24 +93,24 @@ def reset_outbound_delivery_metrics_for_testing() -> None:
     _metrics.reset()
 
 
-def record_outbound_delivery_reserved() -> None:
-    _metrics.record_reserved()
+def record_outbound_delivery_reserved(delivery_kind: ChannelOutboundDeliveryKind | str) -> None:
+    _metrics.record(delivery_kind, "reserved_total")
 
 
-def record_outbound_delivery_suppressed() -> None:
-    _metrics.record_suppressed()
+def record_outbound_delivery_suppressed(delivery_kind: ChannelOutboundDeliveryKind | str) -> None:
+    _metrics.record(delivery_kind, "suppressed_total")
 
 
-def record_outbound_delivery_sent() -> None:
-    _metrics.record_sent()
+def record_outbound_delivery_sent(delivery_kind: ChannelOutboundDeliveryKind | str) -> None:
+    _metrics.record(delivery_kind, "sent_total")
 
 
-def record_outbound_delivery_failed() -> None:
-    _metrics.record_failed()
+def record_outbound_delivery_failed(delivery_kind: ChannelOutboundDeliveryKind | str) -> None:
+    _metrics.record(delivery_kind, "failed_total")
 
 
-def record_outbound_delivery_state_error() -> None:
-    _metrics.record_state_error()
+def record_outbound_delivery_state_error(delivery_kind: ChannelOutboundDeliveryKind | str) -> None:
+    _metrics.record(delivery_kind, "state_errors_total")
 
 
 class OutboundDeliveryMetricsCollector:
@@ -101,33 +118,34 @@ class OutboundDeliveryMetricsCollector:
 
     def collect(self):  # type: ignore[no-untyped-def]
         snapshot = outbound_delivery_metrics_snapshot()
-        for name, description, value in (
+        for name, description, field in (
             (
                 "openxflow_channel_outbound_delivery_reserved",
-                "Durable channel replies reserved for provider delivery by this process",
-                snapshot.reserved_total,
+                "Durable channel deliveries reserved for provider delivery by this process",
+                "reserved_total",
             ),
             (
                 "openxflow_channel_outbound_delivery_suppressed",
-                "Duplicate durable channel replies suppressed by this process",
-                snapshot.suppressed_total,
+                "Duplicate durable channel deliveries suppressed by this process",
+                "suppressed_total",
             ),
             (
                 "openxflow_channel_outbound_delivery_sent",
-                "Durable channel replies confirmed sent by this process",
-                snapshot.sent_total,
+                "Durable channel deliveries confirmed sent by this process",
+                "sent_total",
             ),
             (
                 "openxflow_channel_outbound_delivery_failed",
-                "Durable channel replies with an explicit provider failure in this process",
-                snapshot.failed_total,
+                "Durable channel deliveries with an explicit provider failure in this process",
+                "failed_total",
             ),
             (
                 "openxflow_channel_outbound_delivery_state_errors",
-                "Durable channel reply receipt state transition errors in this process",
-                snapshot.state_errors_total,
+                "Durable channel delivery receipt state transition errors in this process",
+                "state_errors_total",
             ),
         ):
-            metric = CounterMetricFamily(name, description)
-            metric.add_metric([], value)
+            metric = CounterMetricFamily(name, description, labels=["delivery_kind"])
+            for kind in _KINDS:
+                metric.add_metric([kind], getattr(snapshot.by_kind[kind], field))
             yield metric
