@@ -48,7 +48,7 @@ def _positive_float_env(name: str, default: float) -> float:
 
 
 def webhook_task_timeout_seconds() -> float:
-    """Maximum execution time for one accepted provider callback."""
+    """Maximum execution time for one provider callback after it starts running."""
     return _positive_float_env("LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS", 300.0)
 
 
@@ -148,10 +148,16 @@ class WebhookProcessingLimiter:
             return semaphore
 
 
-_webhook_limiter = WebhookProcessingLimiter(
-    max_concurrency=_positive_int_env("LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY", 16),
-    max_pending=_positive_int_env("LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING", 128),
-)
+def _webhook_limiter_from_env() -> WebhookProcessingLimiter:
+    max_concurrency = _positive_int_env("LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY", 16)
+    configured_max_pending = _positive_int_env("LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING", 128)
+    return WebhookProcessingLimiter(
+        max_concurrency=max_concurrency,
+        max_pending=max(max_concurrency, configured_max_pending),
+    )
+
+
+_webhook_limiter = _webhook_limiter_from_env()
 
 
 def reserve_provider_webhook_slot() -> bool:
@@ -166,6 +172,32 @@ def webhook_limiter_snapshot() -> WebhookLimiterSnapshot:
     return _webhook_limiter.snapshot()
 
 
+async def _process_provider_webhook_with_timeout(
+    *,
+    connection_id: UUID,
+    expected_channel_type: str,
+    headers: dict[str, str],
+    payload: bytes,
+) -> bool:
+    try:
+        return await asyncio.wait_for(
+            process_provider_webhook(
+                connection_id=connection_id,
+                expected_channel_type=expected_channel_type,
+                headers=headers,
+                payload=payload,
+            ),
+            timeout=webhook_task_timeout_seconds(),
+        )
+    except TimeoutError:
+        await logger.aerror(
+            "Background %s channel webhook timed out for connection %s",
+            expected_channel_type,
+            connection_id,
+        )
+        return False
+
+
 async def process_reserved_provider_webhook(
     *,
     connection_id: UUID,
@@ -178,21 +210,12 @@ async def process_reserved_provider_webhook(
     cancelled = False
     try:
         try:
-            success = await asyncio.wait_for(
-                _webhook_limiter.run(
-                    process_provider_webhook,
-                    connection_id=connection_id,
-                    expected_channel_type=expected_channel_type,
-                    headers=headers,
-                    payload=payload,
-                ),
-                timeout=webhook_task_timeout_seconds(),
-            )
-        except TimeoutError:
-            await logger.aerror(
-                "Background %s channel webhook timed out for connection %s",
-                expected_channel_type,
-                connection_id,
+            success = await _webhook_limiter.run(
+                _process_provider_webhook_with_timeout,
+                connection_id=connection_id,
+                expected_channel_type=expected_channel_type,
+                headers=headers,
+                payload=payload,
             )
         except asyncio.CancelledError:
             cancelled = True
