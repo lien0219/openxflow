@@ -196,8 +196,34 @@ class ChannelMetricsCollector:
                 "DingTalk Stream clients currently managed by this process",
                 stream_runtime.managed_clients,
             ),
+            (
+                "openxflow_channel_stream_last_successful_sync_timestamp_seconds",
+                "Unix timestamp of the last successful DingTalk Stream connection synchronization",
+                stream_runtime.last_successful_sync_timestamp_seconds,
+            ),
         ):
             metric = GaugeMetricFamily(name, description)
+            metric.add_metric([], value)
+            yield metric
+
+        for name, description, value in (
+            (
+                "openxflow_channel_stream_connection_errors",
+                "DingTalk Stream client connection failures in this process",
+                stream_runtime.connection_errors_total,
+            ),
+            (
+                "openxflow_channel_stream_reconnect_attempts",
+                "DingTalk Stream client attempts after the initial connection attempt",
+                stream_runtime.reconnect_attempts_total,
+            ),
+            (
+                "openxflow_channel_stream_successful_syncs",
+                "Successful DingTalk Stream database synchronization cycles",
+                stream_runtime.successful_sync_total,
+            ),
+        ):
+            metric = CounterMetricFamily(name, description)
             metric.add_metric([], value)
             yield metric
 
