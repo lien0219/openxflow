@@ -22,11 +22,14 @@ from langflow.channels.services.timing_metrics import record_webhook_execution
 from langflow.channels.services.webhook_job_metrics import (
     record_durable_webhook_claim_error,
     record_durable_webhook_claimed,
+    record_durable_webhook_cleaned,
     record_durable_webhook_completed,
     record_durable_webhook_failed,
+    record_durable_webhook_maintenance_error,
     record_durable_webhook_manager_started,
     record_durable_webhook_manager_stopped,
     record_durable_webhook_retried,
+    set_durable_webhook_queue_depths,
 )
 from langflow.channels.services.webhook_processing import process_provider_webhook
 from langflow.services.database.models.channel.model import (
@@ -230,6 +233,64 @@ async def fail_provider_webhook_job(
     return result.rowcount == 1
 
 
+async def durable_webhook_job_depths(session: AsyncSession) -> dict[str, int]:
+    """Return shared durable queue depth grouped by lifecycle status."""
+    rows = (
+        await session.exec(
+            select(ChannelWebhookJob.status, sa.func.count(ChannelWebhookJob.id)).group_by(ChannelWebhookJob.status)
+        )
+    ).all()
+    depths = {status.value: 0 for status in ChannelWebhookJobStatus}
+    for status, count in rows:
+        depths[str(status)] = int(count)
+    return depths
+
+
+async def cleanup_durable_webhook_jobs(session: AsyncSession) -> int:
+    """Delete one bounded batch of expired completed and terminally failed jobs."""
+    config = durable_webhook_job_config()
+    now = utc_now()
+    remaining = config.cleanup_batch_size
+    deleted = 0
+    retention_rules = (
+        (
+            ChannelWebhookJobStatus.COMPLETED.value,
+            ChannelWebhookJob.completed_at,
+            now - timedelta(days=config.completed_retention_days),
+        ),
+        (
+            ChannelWebhookJobStatus.FAILED.value,
+            ChannelWebhookJob.updated_at,
+            now - timedelta(days=config.failed_retention_days),
+        ),
+    )
+    for status, timestamp_column, cutoff in retention_rules:
+        if remaining <= 0:
+            break
+        ids = list(
+            (
+                await session.exec(
+                    select(ChannelWebhookJob.id)
+                    .where(
+                        ChannelWebhookJob.status == status,
+                        timestamp_column.is_not(None),
+                        timestamp_column <= cutoff,
+                    )
+                    .order_by(timestamp_column, ChannelWebhookJob.created_at)
+                    .limit(remaining)
+                )
+            ).all()
+        )
+        if not ids:
+            continue
+        result = await session.exec(sa.delete(ChannelWebhookJob).where(ChannelWebhookJob.id.in_(ids)))
+        removed = max(0, int(result.rowcount or 0))
+        deleted += removed
+        remaining -= removed
+    await session.commit()
+    return deleted
+
+
 class DurableWebhookJobWorker:
     """Run process-local consumers for the shared database webhook queue."""
 
@@ -237,6 +298,7 @@ class DurableWebhookJobWorker:
         self.worker_id = uuid4()
         self._stop_event = asyncio.Event()
         self._tasks: list[asyncio.Task[None]] = []
+        self._maintenance_task: asyncio.Task[None] | None = None
 
     async def run(self) -> None:
         config = durable_webhook_job_config()
@@ -248,15 +310,23 @@ class DurableWebhookJobWorker:
             asyncio.create_task(self._consume(index), name=f"channel-webhook-job-{index}")
             for index in range(worker_count)
         ]
+        self._maintenance_task = asyncio.create_task(
+            self._maintain(),
+            name="channel-webhook-job-maintenance",
+        )
         record_durable_webhook_manager_started(worker_count)
         try:
             await self._stop_event.wait()
         finally:
-            for task in self._tasks:
+            tasks = [*self._tasks]
+            if self._maintenance_task is not None:
+                tasks.append(self._maintenance_task)
+            for task in tasks:
                 task.cancel()
-            if self._tasks:
-                await asyncio.gather(*self._tasks, return_exceptions=True)
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
             self._tasks.clear()
+            self._maintenance_task = None
             record_durable_webhook_manager_stopped(worker_count)
 
     async def stop(self) -> None:
@@ -281,6 +351,33 @@ class DurableWebhookJobWorker:
                     "Durable channel webhook consumer failed while persisting job %s outcome",
                     job.id,
                 )
+
+    async def _maintain(self) -> None:
+        config = durable_webhook_job_config()
+        while not self._stop_event.is_set():
+            try:
+                async with session_scope() as session:
+                    deleted = await cleanup_durable_webhook_jobs(session)
+                    depths = await durable_webhook_job_depths(session)
+                record_durable_webhook_cleaned(deleted)
+                set_durable_webhook_queue_depths(
+                    pending=depths[ChannelWebhookJobStatus.PENDING.value],
+                    processing=depths[ChannelWebhookJobStatus.PROCESSING.value],
+                    completed=depths[ChannelWebhookJobStatus.COMPLETED.value],
+                    failed=depths[ChannelWebhookJobStatus.FAILED.value],
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                record_durable_webhook_maintenance_error()
+                await logger.aexception("Unable to maintain durable channel webhook jobs")
+            try:
+                await asyncio.wait_for(
+                    self._stop_event.wait(),
+                    timeout=config.cleanup_interval_seconds,
+                )
+            except TimeoutError:
+                pass
 
     async def _claim_one(self) -> ChannelWebhookJob | None:
         try:
