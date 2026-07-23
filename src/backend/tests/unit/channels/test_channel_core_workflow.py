@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-_WORKFLOW = Path(__file__).parents[4] / ".github" / "workflows" / "channel-gateway-core.yml"
+_WORKFLOW = Path(__file__).parents[5] / ".github" / "workflows" / "channel-gateway-core.yml"
 
 
 def test_channel_core_workflow_uses_isolated_dependencies() -> None:
