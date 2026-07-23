@@ -1,0 +1,67 @@
+name: Channel Gateway Core
+
+on:
+  push:
+    branches:
+      - feature/channel-gateway
+    paths:
+      - ".github/workflows/channel-gateway-core.yml"
+      - "src/backend/base/langflow/channels/**"
+      - "src/backend/tests/unit/channels/**"
+      - "src/backend/base/pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: channel-gateway-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Ruff channel code
+        run: >-
+          uvx ruff check
+          src/backend/base/langflow/channels
+          src/backend/tests/unit/channels
+
+      - name: Compile channel code
+        run: >-
+          python -m compileall -q
+          src/backend/base/langflow/channels
+          src/backend/tests/unit/channels
+
+      - name: Run isolated channel core tests
+        env:
+          PYTHONPATH: src/backend/base
+        run: >-
+          uv run --no-project
+          --with pytest==9.0.3
+          --with pytest-asyncio>=0.23
+          --with httpx>=0.27
+          --with prometheus-client>=0.20
+          pytest -q
+          src/backend/tests/unit/channels/test_loop_lock.py
+          src/backend/tests/unit/channels/test_keyed_loop_lock.py
+          src/backend/tests/unit/channels/test_token_cache.py
+          src/backend/tests/unit/channels/test_token_cache_config.py
+          src/backend/tests/unit/channels/test_token_cache_expiry_validation.py
+          src/backend/tests/unit/channels/test_token_cache_metrics.py
+          src/backend/tests/unit/channels/test_token_refresh.py
