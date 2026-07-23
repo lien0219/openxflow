@@ -7,7 +7,7 @@ from langflow.channels.adapters.dingtalk import DingTalkChannelAdapter
 from langflow.channels.adapters.feishu_encrypted import EncryptedFeishuChannelAdapter
 from langflow.channels.adapters.mock import MockChannelAdapter
 from langflow.channels.adapters.telegram import TelegramChannelAdapter
-from langflow.channels.adapters.wecom import WeComChannelAdapter
+from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdapter
 from langflow.channels.domain.models import ChannelType
 from langflow.channels.security.credentials import decrypt_credentials
 from langflow.services.database.models.channel.model import ChannelConnection
@@ -52,7 +52,7 @@ def build_channel_adapter(connection: ChannelConnection) -> ChannelAdapter:
             api_base_url=str(connection.settings_data.get("api_base_url", "https://api.dingtalk.com")),
         )
     if channel_type is ChannelType.WECOM:
-        return WeComChannelAdapter(
+        return ResilientWeComChannelAdapter(
             connection.id,
             corp_id=credentials.get("corp_id", ""),
             corp_secret=credentials.get("corp_secret", ""),
