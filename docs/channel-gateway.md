@@ -107,7 +107,7 @@ Authenticated users can inspect the current process at:
 GET /api/v1/channel-runtime/
 ```
 
-The JSON response includes the parsed `streams_enabled` state, queue and execution timeout configuration, active and queued jobs, retained payload bytes, capacity limits, accepted and aggregate rejected counts, the three mutually exclusive rejection-reason counters, succeeded, failed, queue-timed-out, externally cancelled, and client-disconnected counts, and the outbound retry policy.
+The JSON response separates Stream configuration intent from actual process state. `streams_enabled` shows the parsed environment setting, while `stream_runtime` reports the number of running lifecycle managers, managers currently holding the Stream leader lock, and DingTalk Stream clients currently managed by this process. The response also includes queue and execution timeout configuration, active and queued jobs, retained payload bytes, capacity limits, accepted and aggregate rejected counts, the three mutually exclusive rejection-reason counters, succeeded, failed, queue-timed-out, externally cancelled, and client-disconnected counts, and the outbound retry policy.
 
 Prometheus text exposition is available at:
 
@@ -117,6 +117,9 @@ GET /api/v1/channel-runtime/metrics
 
 This endpoint is also authenticated. It exports:
 
+- `openxflow_channel_stream_running_managers`
+- `openxflow_channel_stream_leader_managers`
+- `openxflow_channel_stream_managed_clients`
 - `openxflow_channel_webhook_pending`
 - `openxflow_channel_webhook_active`
 - `openxflow_channel_webhook_queued`
@@ -149,7 +152,7 @@ Metrics are process-local. In a multi-worker deployment, scrape every worker or 
 
 ## DingTalk Stream deployment
 
-DingTalk connections with `connection_mode=stream` are maintained by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream connections. Use `GET /api/v1/channel-runtime/` on each worker to confirm its parsed `streams_enabled` state. Stream callback replies use the same synchronized access-token recovery as HTTP callback replies.
+DingTalk connections with `connection_mode=stream` are maintained by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream connections. `streams_enabled=true` only means that the process is allowed to start Stream management; it does not prove that the process currently owns the leader lock. Inspect `stream_runtime.leader_managers` and `stream_runtime.managed_clients`, or the matching Prometheus Gauges, on every worker to identify the active leader and its managed clients. Stream callback replies use the same synchronized access-token recovery as HTTP callback replies.
 
 The runtime requires the official Python package:
 
@@ -184,4 +187,4 @@ Enterprise WeChat requires an HTTPS callback URL and Safe Mode encryption. Confi
 - Run database migrations before enabling provider callbacks.
 - Keep only one shared public callback URL per connection.
 - Disable `LANGFLOW_CHANNEL_STREAMS_ENABLED` on dedicated HTTP-only workers when Stream ownership is handled by another deployment.
-- Monitor `400`, `413`, and `503` callback responses, pending payload bytes, capacity-rejection reasons, queue timeouts, client disconnects, application cancellations, provider retries, token rejections, token refresh failures, webhook execution timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
+- Monitor Stream leader ownership, managed Stream client count, `400`, `413`, and `503` callback responses, pending payload bytes, capacity-rejection reasons, queue timeouts, client disconnects, application cancellations, provider retries, token rejections, token refresh failures, webhook execution timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
