@@ -49,6 +49,7 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
             rejected_token=rejected_token,
             lock=self._token_lock,
             fetch_new_token=self._fetch_access_token_entry,
+            provider="dingtalk",
         )
 
     async def _api_request(
@@ -83,6 +84,7 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
             refresh_token=self._refresh_rejected_access_token,
             send=send,
             is_rejected=is_rejected,
+            provider="dingtalk",
         )
         response.raise_for_status()
         if not response.content:
