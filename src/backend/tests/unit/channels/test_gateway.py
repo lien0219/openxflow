@@ -69,7 +69,7 @@ async def test_gateway_rejects_invalid_signature():
         await gateway.receive(connection_id, {}, b"{}", handler)
 
 
-async def test_gateway_accepts_minimal_internal_preverified_headers():
+async def test_gateway_accepts_explicit_preverified_callback():
     connection_id = uuid4()
     adapter = MockChannelAdapter(connection_id, verification_token="secret")
     gateway = ChannelGateway()
@@ -78,12 +78,8 @@ async def test_gateway_accepts_minimal_internal_preverified_headers():
     async def handler(event):
         return None
 
-    event = await gateway.receive(
+    event = await gateway.receive_verified(
         connection_id,
-        {
-            "x-openxflow-preverified": "1",
-            "content-type": "application/json",
-        },
         b'{"event_id":"event-preverified","text":"hello"}',
         handler,
     )
@@ -91,8 +87,8 @@ async def test_gateway_accepts_minimal_internal_preverified_headers():
     assert event.event_id == "event-preverified"
 
 
-@pytest.mark.parametrize("extra_header", ["authorization", "cookie", "x-forwarded-for"])
-async def test_gateway_rejects_preverified_marker_with_unapproved_headers(extra_header: str):
+@pytest.mark.parametrize("extra_header", [None, "authorization", "cookie", "x-forwarded-for"])
+async def test_gateway_never_trusts_preverified_marker_on_normal_receive(extra_header: str | None):
     connection_id = uuid4()
     adapter = MockChannelAdapter(connection_id, verification_token="secret")
     gateway = ChannelGateway()
@@ -102,13 +98,13 @@ async def test_gateway_rejects_preverified_marker_with_unapproved_headers(extra_
         del event
         return None
 
+    headers = {"x-openxflow-preverified": "1"}
+    if extra_header is not None:
+        headers[extra_header] = "sensitive"
     with pytest.raises(PermissionError):
         await gateway.receive(
             connection_id,
-            {
-                "x-openxflow-preverified": "1",
-                extra_header: "sensitive",
-            },
+            headers,
             b'{"event_id":"event-preverified"}',
             handler,
         )
