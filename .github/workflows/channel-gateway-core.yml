@@ -14,6 +14,19 @@ on:
       - "src/backend/base/langflow/services/database/models/channel/**"
       - "src/backend/tests/unit/channels/**"
       - "src/backend/base/pyproject.toml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/channel-gateway-core.yml"
+      - ".github/workflows/channel-gateway-frontend.yml"
+      - "src/backend/base/langflow/channels/**"
+      - "src/backend/base/langflow/alembic/versions/*channel*"
+      - "src/backend/base/langflow/alembic/versions/f7d0b5c3e4a6_add_channel_webhook_jobs.py"
+      - "src/backend/base/langflow/alembic/versions/a8e1c6d4f5b7_add_channel_outbound_delivery.py"
+      - "src/backend/base/langflow/services/database/models/channel/**"
+      - "src/backend/tests/unit/channels/**"
+      - "src/backend/base/pyproject.toml"
   workflow_dispatch:
 
 permissions:
