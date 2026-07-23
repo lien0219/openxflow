@@ -6,6 +6,7 @@ from langflow.channels.services.runtime_config import (
     DEFAULT_WEBHOOK_JOB_POLL_SECONDS,
     DEFAULT_WEBHOOK_JOB_RETRY_BASE_SECONDS,
     DEFAULT_WEBHOOK_JOB_RETRY_MAX_SECONDS,
+    DEFAULT_WEBHOOK_JOB_WORKERS,
     DEFAULT_WEBHOOK_MAX_BODY_BYTES,
     DEFAULT_WEBHOOK_MAX_CONCURRENCY,
     DEFAULT_WEBHOOK_MAX_PENDING,
@@ -31,6 +32,7 @@ def test_channel_runtime_config_defaults(monkeypatch) -> None:
         "LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS",
         "LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS",
         "LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED",
+        "LANGFLOW_CHANNEL_WEBHOOK_JOB_WORKERS",
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS",
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS",
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS",
@@ -50,6 +52,7 @@ def test_channel_runtime_config_defaults(monkeypatch) -> None:
     assert webhook_queue_timeout_seconds() == DEFAULT_WEBHOOK_QUEUE_TIMEOUT_SECONDS
     assert webhook_task_timeout_seconds() == DEFAULT_WEBHOOK_TASK_TIMEOUT_SECONDS
     assert durable.enabled is DEFAULT_WEBHOOK_DURABLE_ENABLED
+    assert durable.worker_count == DEFAULT_WEBHOOK_JOB_WORKERS
     assert durable.poll_seconds == DEFAULT_WEBHOOK_JOB_POLL_SECONDS
     assert durable.lease_seconds == DEFAULT_WEBHOOK_JOB_LEASE_SECONDS
     assert durable.max_attempts == DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS
@@ -66,6 +69,7 @@ def test_channel_runtime_config_accepts_valid_overrides(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS", "3.5")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS", "12.5")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED", "false")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_WORKERS", "3")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS", "0.25")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS", "45")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS", "9")
@@ -83,6 +87,7 @@ def test_channel_runtime_config_accepts_valid_overrides(monkeypatch) -> None:
     assert webhook_queue_timeout_seconds() == 3.5
     assert webhook_task_timeout_seconds() == 12.5
     assert durable.enabled is False
+    assert durable.worker_count == 3
     assert durable.poll_seconds == 0.25
     assert durable.lease_seconds == 45
     assert durable.max_attempts == 9
@@ -116,6 +121,15 @@ def test_webhook_runtime_config_clamps_pending_to_concurrency(monkeypatch) -> No
     assert limits.max_pending == 8
 
 
+def test_durable_webhook_worker_count_is_clamped_to_concurrency(monkeypatch) -> None:
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY", "3")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_WORKERS", "99")
+
+    durable = durable_webhook_job_config()
+
+    assert durable.worker_count == 3
+
+
 def test_webhook_runtime_config_invalid_integer_values_fall_back(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY", "invalid")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING", "0")
@@ -147,6 +161,7 @@ def test_webhook_runtime_config_non_finite_execution_timeout_falls_back(monkeypa
 
 def test_durable_webhook_config_invalid_values_fall_back_and_clamp(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED", "invalid")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_WORKERS", "0")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS", "0")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS", "nan")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS", "-1")
@@ -156,6 +171,7 @@ def test_durable_webhook_config_invalid_values_fall_back_and_clamp(monkeypatch) 
     durable = durable_webhook_job_config()
 
     assert durable.enabled is DEFAULT_WEBHOOK_DURABLE_ENABLED
+    assert durable.worker_count == DEFAULT_WEBHOOK_JOB_WORKERS
     assert durable.poll_seconds == DEFAULT_WEBHOOK_JOB_POLL_SECONDS
     assert durable.lease_seconds == DEFAULT_WEBHOOK_JOB_LEASE_SECONDS
     assert durable.max_attempts == DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS
