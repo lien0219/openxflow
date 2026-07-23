@@ -51,15 +51,16 @@ async def get_cached_provider_token(
 ) -> str:
     """Return one cached token while serializing refreshes only for the same credential key."""
     now = time.monotonic()
-    cached = cache.get(cache_key)
-    if not force_refresh and cached is not None and cached[1] > now:
-        return cached[0]
+    observed = cache.get(cache_key)
+    if not force_refresh and observed is not None and observed[1] > now:
+        return observed[0]
 
     async with lock_pool.hold(cache_key):
         now = time.monotonic()
         cached = cache.get(cache_key)
-        if not force_refresh and cached is not None and cached[1] > now:
-            return cached[0]
+        if cached is not None and cached[1] > now:
+            if not force_refresh or cached is not observed:
+                return cached[0]
         token, expires_at = await fetch_new_token()
         cache[cache_key] = (token, expires_at)
         return token
