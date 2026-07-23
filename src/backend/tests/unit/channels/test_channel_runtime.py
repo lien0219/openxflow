@@ -16,6 +16,10 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     result = await read_channel_runtime(object())
 
     assert result.streams_enabled is False
+    assert result.stream_runtime.running_managers >= 0
+    assert result.stream_runtime.leader_managers >= 0
+    assert result.stream_runtime.managed_clients >= 0
+    assert result.stream_runtime.leader_managers <= result.stream_runtime.running_managers
     assert result.webhook.max_concurrency > 0
     assert result.webhook.max_pending >= result.webhook.max_concurrency
     assert result.webhook.pending >= result.webhook.active
@@ -43,6 +47,9 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     response = await read_channel_prometheus_metrics(object())
 
     assert response.headers["content-type"] == "text/plain; version=0.0.4; charset=utf-8"
+    assert b"openxflow_channel_stream_running_managers" in response.body
+    assert b"openxflow_channel_stream_leader_managers" in response.body
+    assert b"openxflow_channel_stream_managed_clients" in response.body
     assert b"openxflow_channel_webhook_pending" in response.body
     assert b"openxflow_channel_webhook_pending_bytes" in response.body
     assert b"openxflow_channel_webhook_max_pending_bytes" in response.body
