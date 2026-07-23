@@ -1,4 +1,4 @@
-"""Environment-backed runtime configuration for channel webhooks."""
+"""Environment-backed runtime configuration for channel services."""
 
 from __future__ import annotations
 
@@ -6,11 +6,27 @@ import math
 import os
 from dataclasses import dataclass
 
+DEFAULT_CHANNEL_STREAMS_ENABLED = True
 DEFAULT_WEBHOOK_MAX_CONCURRENCY = 16
 DEFAULT_WEBHOOK_MAX_PENDING = 128
 DEFAULT_WEBHOOK_MAX_PENDING_BYTES = 64 * 1024 * 1024
 DEFAULT_WEBHOOK_MAX_BODY_BYTES = 1024 * 1024
 DEFAULT_WEBHOOK_TASK_TIMEOUT_SECONDS = 300.0
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
+
+
+def _boolean_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in _TRUE_VALUES:
+        return True
+    if normalized in _FALSE_VALUES:
+        return False
+    return default
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -40,6 +56,11 @@ class WebhookLimiterLimits:
     max_concurrency: int
     max_pending: int
     max_pending_bytes: int
+
+
+def channel_streams_enabled() -> bool:
+    """Whether lifecycle-managed channel Stream clients should run in this process."""
+    return _boolean_env("LANGFLOW_CHANNEL_STREAMS_ENABLED", DEFAULT_CHANNEL_STREAMS_ENABLED)
 
 
 def webhook_limiter_limits_from_env() -> WebhookLimiterLimits:
