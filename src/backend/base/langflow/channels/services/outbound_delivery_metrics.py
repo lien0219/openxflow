@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from threading import Lock
 
-from prometheus_client.core import CounterMetricFamily
+from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
 
 from langflow.services.database.models.channel.outbound_delivery_model import ChannelOutboundDeliveryKind
 
@@ -20,6 +20,9 @@ class OutboundDeliveryKindMetricSnapshot:
     failed_total: int
     state_errors_total: int
     cleaned_total: int
+    retained_reserved: int
+    retained_sent: int
+    retained_failed: int
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,9 @@ class OutboundDeliveryMetricSnapshot:
     failed_total: int
     state_errors_total: int
     cleaned_total: int
+    retained_reserved: int
+    retained_sent: int
+    retained_failed: int
     by_kind: dict[str, OutboundDeliveryKindMetricSnapshot]
 
 
@@ -48,6 +54,9 @@ class OutboundDeliveryMetrics:
                 "failed_total": 0,
                 "state_errors_total": 0,
                 "cleaned_total": 0,
+                "retained_reserved": 0,
+                "retained_sent": 0,
+                "retained_failed": 0,
             }
             for kind in _KINDS
         }
@@ -75,6 +84,22 @@ class OutboundDeliveryMetrics:
         with self._lock:
             self._values[kind][field] += amount
 
+    def set_retained(
+        self,
+        delivery_kind: ChannelOutboundDeliveryKind | str,
+        *,
+        reserved: int,
+        sent: int,
+        failed: int,
+    ) -> None:
+        if min(reserved, sent, failed) < 0:
+            raise ValueError("retained delivery depths must be non-negative")
+        kind = self._normalize_kind(delivery_kind)
+        with self._lock:
+            self._values[kind]["retained_reserved"] = reserved
+            self._values[kind]["retained_sent"] = sent
+            self._values[kind]["retained_failed"] = failed
+
     def snapshot(self) -> OutboundDeliveryMetricSnapshot:
         with self._lock:
             copied = {kind: dict(values) for kind, values in self._values.items()}
@@ -89,6 +114,9 @@ class OutboundDeliveryMetrics:
             failed_total=sum(item.failed_total for item in by_kind.values()),
             state_errors_total=sum(item.state_errors_total for item in by_kind.values()),
             cleaned_total=sum(item.cleaned_total for item in by_kind.values()),
+            retained_reserved=sum(item.retained_reserved for item in by_kind.values()),
+            retained_sent=sum(item.retained_sent for item in by_kind.values()),
+            retained_failed=sum(item.retained_failed for item in by_kind.values()),
             by_kind=by_kind,
         )
 
@@ -137,6 +165,21 @@ def record_outbound_delivery_cleaned(
     _metrics.record(delivery_kind, "cleaned_total", amount)
 
 
+def set_outbound_delivery_retained_depths(
+    delivery_kind: ChannelOutboundDeliveryKind | str,
+    *,
+    reserved: int,
+    sent: int,
+    failed: int,
+) -> None:
+    _metrics.set_retained(
+        delivery_kind,
+        reserved=reserved,
+        sent=sent,
+        failed=failed,
+    )
+
+
 class OutboundDeliveryMetricsCollector:
     """Expose durable outbound delivery outcomes through Prometheus."""
 
@@ -175,6 +218,28 @@ class OutboundDeliveryMetricsCollector:
             ),
         ):
             metric = CounterMetricFamily(name, description, labels=["delivery_kind"])
+            for kind in _KINDS:
+                metric.add_metric([kind], getattr(snapshot.by_kind[kind], field))
+            yield metric
+
+        for name, description, field in (
+            (
+                "openxflow_channel_outbound_delivery_retained_reserved",
+                "Current ambiguous reserved durable delivery receipts in the shared database",
+                "retained_reserved",
+            ),
+            (
+                "openxflow_channel_outbound_delivery_retained_sent",
+                "Current retained successful durable delivery receipts in the shared database",
+                "retained_sent",
+            ),
+            (
+                "openxflow_channel_outbound_delivery_retained_failed",
+                "Current retained failed durable delivery receipts in the shared database",
+                "retained_failed",
+            ),
+        ):
+            metric = GaugeMetricFamily(name, description, labels=["delivery_kind"])
             for kind in _KINDS:
                 metric.add_metric([kind], getattr(snapshot.by_kind[kind], field))
             yield metric
