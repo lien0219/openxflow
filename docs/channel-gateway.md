@@ -6,28 +6,29 @@ OpenXFlow Channel Gateway connects Telegram, Feishu, DingTalk, and Enterprise We
 
 | Variable | Default | Description |
 | --- | ---: | --- |
-| `LANGFLOW_CHANNEL_STREAMS_ENABLED` | `true` | Enables lifecycle-managed Stream clients such as DingTalk Stream. Accepted true values are `1`, `true`, `yes`, and `on`; accepted false values are `0`, `false`, `no`, and `off`. Unrecognized values fall back to `true`. |
-| `LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY` | `16` | Maximum provider webhook jobs executing concurrently in one application process. Durable worker count is independently configured but cannot exceed this value. |
-| `LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING` | `128` | Maximum accepted in-memory webhook jobs when durable processing is disabled. Values below the concurrency limit are automatically raised to match it. |
-| `LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING_BYTES` | `67108864` | Maximum retained callback-body bytes for the in-memory fallback path. |
-| `LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES` | `1048576` | Maximum accepted provider callback body size. Requests above this limit return HTTP `413` before signature parsing. |
-| `LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS` | `0` | Maximum wait for an execution slot in the in-memory fallback path. `0` disables queue timeout. |
-| `LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS` | `300` | Maximum execution time for one HTTP webhook job. Durable job leases are normalized to exceed this timeout by at least 30 seconds. |
-| `LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED` | `true` | Persists validated HTTP callbacks in the database before returning a successful provider acknowledgement. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_WORKERS` | `4` | Durable consumer tasks started per application process. Values above `MAX_CONCURRENCY` are reduced to that limit. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS` | `0.5` | Delay before an idle durable consumer polls the database again. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS` | `600` | Requested processing lease. Values shorter than task timeout plus 30 seconds are raised automatically. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS` | `5` | Maximum durable job processing attempts before terminal failure. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_BASE_SECONDS` | `2` | Initial durable job retry delay. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_MAX_SECONDS` | `300` | Maximum durable job retry delay. Values below the base delay are raised to the base delay. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS` | `60` | Interval between durable queue depth refresh and retention cleanup cycles. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS` | `7` | Number of days completed jobs remain available for diagnostics and duplicate-event history. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS` | `30` | Number of days terminally failed jobs remain available for investigation. |
-| `LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE` | `500` | Maximum terminal jobs deleted by one maintenance cycle across completed and failed statuses. |
-| `LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS` | `3` | Maximum attempts for transient outbound provider failures. |
-| `LANGFLOW_CHANNEL_HTTP_BASE_DELAY_SECONDS` | `0.5` | Initial exponential-backoff delay. |
-| `LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS` | `8` | Maximum retry delay, including provider `Retry-After` values. |
-| `LANGFLOW_CHANNEL_HTTP_JITTER_RATIO` | `0.2` | Random retry jitter from `0` to `1`; set to `0` for deterministic delays. |
+| `LANGFLOW_CHANNEL_STREAMS_ENABLED` | `true` | Enables lifecycle-managed Stream clients such as DingTalk Stream. |
+| `LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY` | `16` | Maximum webhook jobs executing concurrently in one process. |
+| `LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING` | `128` | Maximum accepted in-memory jobs when durable processing is disabled. |
+| `LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING_BYTES` | `67108864` | Maximum retained callback-body bytes for the in-memory fallback. |
+| `LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES` | `1048576` | Maximum accepted callback body size. |
+| `LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS` | `0` | Maximum in-memory queue wait; `0` disables it. |
+| `LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS` | `300` | Maximum execution time for one webhook job. |
+| `LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED` | `true` | Persists validated callbacks before returning a provider acknowledgement. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_WORKERS` | `4` | Durable consumers per process, capped by maximum concurrency. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS` | `0.5` | Idle database poll delay. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS` | `600` | Requested processing lease, raised to task timeout plus 30 seconds when needed. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS` | `5` | Maximum durable processing attempts. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_BASE_SECONDS` | `2` | Initial retry delay. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_MAX_SECONDS` | `300` | Maximum retry delay. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS` | `60` | Queue-depth refresh and cleanup interval. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS` | `7` | Completed-job retention. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS` | `30` | Terminal failed-job retention. |
+| `LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE` | `500` | Maximum rows removed by one cleanup cycle. |
+| `LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS` | `30` | Retention for terminal outbound delivery receipts. |
+| `LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS` | `3` | Maximum transient outbound attempts. |
+| `LANGFLOW_CHANNEL_HTTP_BASE_DELAY_SECONDS` | `0.5` | Initial outbound retry delay. |
+| `LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS` | `8` | Maximum outbound retry delay. |
+| `LANGFLOW_CHANNEL_HTTP_JITTER_RATIO` | `0.2` | Random retry jitter ratio. |
 
 Example:
 
@@ -47,6 +48,7 @@ export LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS=60
 export LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS=7
 export LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS=30
 export LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE=500
+export LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS=30
 export LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS=3
 export LANGFLOW_CHANNEL_HTTP_BASE_DELAY_SECONDS=0.5
 export LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS=8
@@ -55,58 +57,74 @@ export LANGFLOW_CHANNEL_HTTP_JITTER_RATIO=0.2
 
 ## Durable webhook acknowledgement model
 
-Durable processing is enabled by default. HTTP providers are handled in three stages:
+Durable processing is enabled by default:
 
-1. The request handler loads the enabled connection, enforces the callback body limit, verifies the provider signature, decrypts encrypted events when configured, and parses the normalized event.
-2. OpenXFlow inserts the event identifier, channel type, original payload, an internal preverified marker, and optional non-sensitive `content-type` into `channel_webhook_job`, then commits the transaction. Telegram secrets, DingTalk signatures, Enterprise WeChat signature parameters, authorization headers, cookies, and proxy headers are not persisted.
-3. Only after the insert or duplicate detection completes successfully does OpenXFlow return the provider acknowledgement. A unique constraint on `(connection_id, external_event_id)` turns provider retries into idempotent successful acknowledgements instead of duplicate jobs. Database errors propagate to the HTTP request, so the provider can retry rather than receiving a false success.
+1. The request handler enforces the body limit, verifies the provider signature, decrypts encrypted events when configured, and parses the normalized event.
+2. OpenXFlow commits the event identifier, channel type, original payload, an internal preverified marker, and optional non-sensitive `content-type` to `channel_webhook_job`.
+3. Only after insert or duplicate detection succeeds does OpenXFlow return the provider acknowledgement.
 
-Each application process starts the configured number of durable consumers. A consumer atomically changes one ready job from `pending` to `processing`, increments its one-based attempt count, and records a worker UUID with a lease expiry. Completion requires the same lease owner. Failed jobs return to `pending` with bounded exponential backoff until `max_attempts`; exhausted jobs enter terminal `failed` status.
+Provider verification secrets are not persisted. This includes Telegram secret tokens, DingTalk signatures, Enterprise WeChat signature parameters, authorization headers, cookies, and proxy headers.
 
-If a process exits while handling a callback, it does not write a completion or retry transition. After the lease expires, another worker can claim the job. A `ChannelEventReceipt` left in `processing` by the crashed process is reset to `failed` before replay, allowing the persistent event deduplicator to reclaim the same event.
+The job unique key is:
 
-The durable lease is normalized to at least:
+```text
+connection_id + external_event_id
+```
+
+Provider retries therefore return a successful acknowledgement without creating duplicate jobs. Database failures propagate to the HTTP request so the provider can retry.
+
+Each process starts the configured number of consumers. A consumer atomically changes a ready job to `processing`, increments the attempt count, and records a worker UUID and lease expiry. Failed jobs return to `pending` with bounded exponential backoff; exhausted jobs enter terminal `failed` status.
+
+If a process exits during execution, another worker may reclaim the job after the lease expires. A crash-left `ChannelEventReceipt` in `processing` is reset to `failed` before replay so the deduplicator can reclaim the event.
+
+The lease is normalized to at least:
 
 ```text
 LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS + 30 seconds
 ```
 
-This prevents a normally executing job from being reclaimed before its configured execution timeout. Durable execution uses the same task timeout and execution-duration Histogram as the in-memory path.
+Completed and terminal failed jobs are cleaned in bounded oldest-first batches. Pending and processing jobs are never removed by retention cleanup.
 
-A process-local maintenance task runs immediately at startup and then at the configured cleanup interval. It refreshes shared queue depths and deletes at most one configured batch of expired terminal jobs. Completed jobs and terminal failures use their latest `updated_at` value for retention. Pending and processing jobs are never removed by retention cleanup. Multiple application processes may run maintenance safely because deletes are idempotent and bounded.
+Run migration `f7d0b5c3e4a6` before enabling durable callbacks.
 
-Run migration `f7d0b5c3e4a6` before enabling durable provider callbacks. Returning a successful provider acknowledgement before this table exists is intentionally impossible because the database insert fails.
+## Durable outbound delivery guard
 
-## Durable outbound reply guard
+Durable jobs use at-least-once execution. Provider acknowledgements and business replies therefore need a separate at-most-once guard.
 
-Durable webhook jobs are replayed with at-least-once execution semantics. Without a separate guard, this failure sequence can produce duplicate provider replies:
+Migration `a8e1c6d4f5b7` creates `channel_outbound_delivery`. The unique key is:
 
 ```text
-provider accepts reply
-→ application exits before marking webhook job completed
-→ lease expires
-→ another worker replays the same event
-→ provider receives the reply again
+connection_id + external_event_id + delivery_kind
 ```
 
-Migration `a8e1c6d4f5b7` adds `channel_outbound_delivery`. Before a durable callback sends a response, OpenXFlow commits one event-level delivery receipt identified by `(connection_id, external_event_id)`:
+The bounded `delivery_kind` values are:
 
-- `reserved`: this event owns a provider reply slot;
-- `sent`: the provider call returned successfully and its message identifier was recorded when available;
-- `failed`: the provider call explicitly failed, so a later whole-event replay may reserve the same row again.
+```text
+acknowledgement
+response
+```
 
-A `reserved` or `sent` row suppresses later replies for the same event. The response digest is stored for diagnostics, but the event-level unique constraint is intentionally more conservative than response-level deduplication: a replay that generates different text still does not send a second reply after the first delivery became ambiguous or successful.
+This allows one provider interaction acknowledgement and one business response for the same inbound event while suppressing duplicates of either type.
 
-The unavoidable crash windows are handled with an at-most-once preference:
+Delivery states:
 
-- crash after Provider success but before `sent`: the row remains `reserved`; replay suppresses the duplicate reply;
-- crash after `reserved` but before the Provider request starts: replay also suppresses the reply, so one response may be lost;
-- explicit Provider failure followed by a successful `failed` state write: replay is allowed and increments the delivery attempt count;
-- failure to persist the delivery state is treated conservatively and surfaced as a state error rather than risking an automatic duplicate send.
+- `reserved`: this event and delivery kind own the provider-delivery slot;
+- `sent`: the provider call returned successfully;
+- `failed`: the provider call explicitly failed and a later replay may reserve it again.
 
-This trade-off is required because Telegram, Feishu, DingTalk, and Enterprise WeChat reply APIs do not expose one shared OpenXFlow-controlled idempotency key contract. Operators should monitor suppressed deliveries and state errors, and inspect retained delivery rows when a user reports a missing reply.
+A `reserved` or `sent` row suppresses a later duplicate delivery. A failed row is reacquired through a conditional update so only one competing worker can retry it.
 
-Run both migrations before enabling durable callbacks in production:
+Crash-window policy is deliberately conservative:
+
+- Provider succeeds, then the application exits before writing `sent`: the row remains `reserved`, so replay suppresses a duplicate;
+- the application exits after `reserved` but before the Provider request: replay also suppresses the delivery, so one message may be lost;
+- Provider explicitly fails and `failed` is committed: replay may retry;
+- writing the failed state also fails: the original Provider exception remains the primary error and the state failure is logged and counted;
+- writing `sent` fails after Provider success: the job fails, but the retained `reserved` row suppresses a duplicate Provider call on replay.
+
+Terminal `sent` and `failed` receipts are retained for `LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS` and then removed in bounded oldest-first batches. `reserved` receipts are never automatically deleted because they represent an ambiguous Provider outcome. Retention must cover the provider's maximum retry window and the desired investigation period. After a terminal receipt is deleted, an extremely late provider replay can acquire a new delivery slot.
+
+Run both migrations before enabling durable callbacks:
 
 ```text
 f7d0b5c3e4a6
@@ -121,125 +139,84 @@ Set:
 export LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED=false
 ```
 
-to use the previous process-local fallback. In that mode, each accepted callback receives an opaque limiter reservation token. Completion, cancellation, or background-task registration failure must consume that exact token. Tokens are single-use and scoped to their issuing limiter.
-
-When either the pending-job limit or retained-payload byte limit is full, the fallback returns:
+to restore the process-local reservation path. This path uses bounded pending-job and retained-payload capacity. When full it returns:
 
 ```http
 HTTP/1.1 503 Service Unavailable
 Retry-After: 1
 ```
 
-The provider event is not acknowledged as successful. Capacity rejections are classified once as pending-only, payload-bytes-only, or both. Queue timeout applies only to this fallback. Because in-memory tasks cannot survive process termination, this mode is intended for rollback and development rather than production reliability.
+The event is not acknowledged as successful. Queue timeout applies only to this fallback. In-memory tasks cannot survive process termination and are intended for development or emergency rollback.
 
 ## Request-body protection
 
-When the request body exceeds the configured limit, OpenXFlow returns:
-
-```http
-HTTP/1.1 413 Request Entity Too Large
-```
-
-The size is checked first from `Content-Length` when supplied and again while the body is streamed. Reading stops as soon as accumulated bytes exceed the configured limit, protecting deployments when clients omit or falsify `Content-Length`.
-
-When a client disconnects before the streamed request body is complete, OpenXFlow returns HTTP `400` where the transport still permits a response. The partial body is discarded before adapter construction, signature verification, durable insertion, reservation, or execution. The event increments `client_disconnected_total` but does not increment accepted, rejected-capacity, succeeded, or failed counters.
-
-## Capacity guidance
-
-A practical durable starting point is:
-
-```text
-job workers per process <= database connections allocated to channel work
-lease seconds >= task timeout seconds + 30
-max attempts = number of safe whole-event replays
-cleanup batch size sized to avoid long delete transactions
-```
-
-Every durable consumer uses short database sessions during claim and state transitions, while workflow execution may acquire additional sessions. Do not assign the entire application connection pool to channel consumers. Start with four consumers per process and lower the value for small database pools.
-
-For the in-memory fallback:
-
-```text
-max_pending = max_concurrency × 8
-max_pending_bytes = expected average callback size × max_pending × safety factor
-```
-
-Capacity is per application process. Durable Job rows are shared by all workers and protected by conditional lease updates; in-memory capacity counters remain process-local.
+Requests larger than the configured body limit return HTTP `413`. The limit is checked from `Content-Length` when present and again while streaming the body. A disconnected upload is discarded before signature verification, durable insertion, reservation, or execution and increments the client-disconnect counter.
 
 ## Outbound retry policy
 
-OpenXFlow retries only transient outbound errors:
+OpenXFlow retries only transient failures:
 
 - connection, DNS, and timeout failures;
 - HTTP `408`, `425`, and `429`;
-- HTTP `5xx` responses;
-- provider business errors that explicitly indicate rate limiting, temporary unavailability, system busy, or timeout.
+- HTTP `5xx`;
+- provider errors explicitly indicating rate limiting, temporary unavailability, system busy, or timeout.
 
-Authentication errors, permission errors, and normal `4xx` validation failures are not retried. Provider `Retry-After` headers and recognized business-error retry delays take precedence over exponential backoff, subject to the configured maximum delay.
+Authentication, permission, and normal validation errors are not retried. Provider `Retry-After` values take precedence over exponential backoff within the configured maximum.
 
-Access-token recovery is separate from transient retry. Feishu, DingTalk, and Enterprise WeChat responses that explicitly reject an access token trigger one synchronized token refresh and one replay. A second authentication rejection is returned immediately, unrelated business errors are not replayed by token recovery, and concurrent failures reuse the first successful refresh. The same behavior applies to Feishu resource downloads and Enterprise WeChat media downloads.
+Token recovery is separate from transient retry. Feishu, DingTalk, and Enterprise WeChat authentication rejections trigger one synchronized refresh and one replay. The same recovery applies to supported provider downloads.
 
 ## Runtime diagnostics and metrics
 
-Authenticated users can inspect the current process at:
+Authenticated diagnostics:
 
 ```text
 GET /api/v1/channel-runtime/
-```
-
-The response separates Stream configuration and runtime state, in-memory webhook limiter state, durable webhook configuration and process-local worker outcomes, outbound delivery guard outcomes, and outbound retry policy. `durable_webhook_jobs` includes worker, polling, lease, retry and retention configuration; running managers and consumers; the last observed shared queue depths; and claimed, completed, retried, terminally failed, cleaned, claim-error and maintenance-error totals. `outbound_delivery` includes reserved, suppressed, sent, explicitly failed and state-error totals.
-
-Prometheus text exposition is available at:
-
-```text
 GET /api/v1/channel-runtime/metrics
 ```
 
-Important durable worker metrics are:
+`durable_webhook_jobs` exposes worker, lease, retry, cleanup, and retention settings together with process-local outcomes and cached shared queue depths.
 
-- `openxflow_channel_webhook_job_running_managers`
-- `openxflow_channel_webhook_job_consumer_tasks`
-- `openxflow_channel_webhook_job_pending`
-- `openxflow_channel_webhook_job_processing`
-- `openxflow_channel_webhook_job_completed_retained`
-- `openxflow_channel_webhook_job_failed_retained`
-- `openxflow_channel_webhook_job_claimed_total`
-- `openxflow_channel_webhook_job_completed_total`
-- `openxflow_channel_webhook_job_retried_total`
-- `openxflow_channel_webhook_job_failed_total`
-- `openxflow_channel_webhook_job_claim_errors_total`
-- `openxflow_channel_webhook_job_cleaned_total`
-- `openxflow_channel_webhook_job_maintenance_errors_total`
+`outbound_delivery` exposes aggregate process totals:
 
-Important outbound reply guard metrics are:
+- `reserved_total`;
+- `suppressed_total`;
+- `sent_total`;
+- `failed_total`;
+- `state_errors_total`;
+- `cleaned_total`.
 
-- `openxflow_channel_outbound_delivery_reserved_total`
-- `openxflow_channel_outbound_delivery_suppressed_total`
-- `openxflow_channel_outbound_delivery_sent_total`
-- `openxflow_channel_outbound_delivery_failed_total`
-- `openxflow_channel_outbound_delivery_state_errors_total`
+Prometheus outbound delivery counters are:
 
-Other exported metrics include:
+- `openxflow_channel_outbound_delivery_reserved_total`;
+- `openxflow_channel_outbound_delivery_suppressed_total`;
+- `openxflow_channel_outbound_delivery_sent_total`;
+- `openxflow_channel_outbound_delivery_failed_total`;
+- `openxflow_channel_outbound_delivery_state_errors_total`;
+- `openxflow_channel_outbound_delivery_cleaned_total`.
 
-- Stream manager, leader, managed-client, synchronization, connection, reconnect and callback metrics;
-- `openxflow_channel_stream_callback_duration_seconds`;
-- `openxflow_channel_webhook_queue_wait_duration_seconds`;
-- `openxflow_channel_webhook_execution_duration_seconds`;
-- in-memory pending, active, retained-byte and rejection metrics;
-- outbound provider attempts, retries and failures;
-- provider token rejection, refresh and replay counters.
+Each uses the fixed label:
 
-Duration Histograms use fixed second-based buckets from `0.005` through `300`, plus `+Inf`, and expose standard `_bucket`, `_count`, and `_sum` series. They have no connection, user, message, URL, or provider labels. Token recovery metrics use only the bounded `provider` label.
+```text
+delivery_kind="acknowledgement|response"
+```
 
-Most metrics are process-local. Durable queue depth Gauges are cached snapshots of the shared database observed by each process's maintenance task. When scraping multiple workers, do not sum those depth Gauges because every worker may report the same database rows. Use one worker's recent sample or a Prometheus aggregation such as `max` after confirming maintenance is healthy. Outcome Counters remain process-local and should be summed across workers.
+No connection, event, user, or message identifiers are exported as labels.
+
+Other metrics include:
+
+- durable worker manager, consumer, depth, claim, retry, failure, cleanup, and maintenance metrics;
+- Stream manager, leader, client, synchronization, reconnect, and callback metrics;
+- Stream callback, webhook queue-wait, and webhook execution Histograms;
+- in-memory capacity and rejection metrics;
+- outbound retry and provider token-recovery metrics.
+
+Duration Histograms use fixed second buckets from `0.005` through `300`, plus `+Inf`. Durable queue-depth Gauges are cached snapshots of the shared database. Do not sum those Gauges across workers; use a recent sample or an aggregation such as `max`. Process-local outcome Counters should be summed across workers.
 
 ## DingTalk Stream deployment
 
-DingTalk connections with `connection_mode=stream` are maintained by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream connections. `streams_enabled=true` only means that the process may start Stream management; it does not prove that it owns the leader lock. Inspect `stream_runtime.leader_managers` and `stream_runtime.managed_clients`, or matching Prometheus Gauges, on every worker.
+DingTalk `connection_mode=stream` connections are owned by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream clients. Inspect Leader and managed-client runtime fields rather than treating `streams_enabled=true` as proof of ownership.
 
-A healthy Leader periodically increases `successful_sync_total` and keeps `last_successful_sync_timestamp_seconds` recent. Database failures increase `sync_errors_total` but no longer terminate the Manager. A growing `connection_errors_total` with `reconnect_attempts_total` indicates repeated SDK-client failures and exponential reconnect backoff.
-
-Stream callback success and failure counters represent provider-visible callback outcomes. Normal application shutdown cancellation is excluded. The callback duration Histogram covers event normalization, workflow dispatch, provider response work and connection-status update before returning the SDK acknowledgement.
+A healthy Leader advances successful synchronization counters and keeps the last-successful timestamp recent. Database synchronization failures do not terminate the Manager. SDK connection failures increase connection-error and reconnect counters.
 
 The runtime requires:
 
@@ -247,33 +224,23 @@ The runtime requires:
 pip install "dingtalk-stream>=0.24.3,<0.25.0"
 ```
 
-The dependency is declared in `src/backend/base/pyproject.toml`; the workspace `uv.lock` still must be regenerated in a network-enabled environment before release packaging.
+The dependency is declared in `src/backend/base/pyproject.toml`; regenerate `uv.lock` in a network-enabled environment before release packaging.
 
 ## Feishu encrypted events
 
-When Feishu event encryption is enabled, save:
-
-```json
-{
-  "app_id": "cli_xxx",
-  "app_secret": "xxx",
-  "verification_token": "xxx",
-  "encrypt_key": "xxx"
-}
-```
-
-OpenXFlow supports encrypted URL verification, message events, and card actions. Events are decrypted before token verification and normalization. Leaving `Verification Token` or `Encrypt Key` blank while editing preserves the stored encrypted credential.
+When Feishu encryption is enabled, configure `app_id`, `app_secret`, `verification_token`, and `encrypt_key`. Encrypted URL verification, message events, and card actions are decrypted before token verification and normalization.
 
 ## Enterprise WeChat callbacks
 
-Enterprise WeChat requires an HTTPS callback URL and Safe Mode encryption. Configure the callback URL shown in Channel Center together with the same callback Token and 43-character EncodingAESKey saved in OpenXFlow.
+Enterprise WeChat requires HTTPS and Safe Mode encryption. Configure the callback URL with the same callback Token and 43-character EncodingAESKey stored in OpenXFlow.
 
 ## Multi-worker recommendations
 
-- Run migrations `f7d0b5c3e4a6` and `a8e1c6d4f5b7` before enabling durable provider callbacks.
+- Run migrations `f7d0b5c3e4a6` and `a8e1c6d4f5b7` before enabling durable callbacks.
 - Reserve database-pool capacity for normal API and UI traffic.
+- Start with four durable consumers per process and reduce for small pools.
 - Keep one shared public callback URL per connection.
 - Keep durable processing enabled in production unless intentionally rolling back.
-- Tune `JOB_WORKERS`, polling interval and cleanup batch size for the database pool and callback rate.
-- Disable `LANGFLOW_CHANNEL_STREAMS_ENABLED` on HTTP-only workers when another deployment owns Stream connections.
-- Monitor durable queue depth, claim errors, maintenance errors, retries, terminal failures, stale processing leases, cleanup throughput, outbound delivery suppression, outbound state errors, Stream ownership, callback latency, provider retries, token refresh failures, database saturation and file-ingestion backlog.
+- Size outbound-delivery retention for provider retry windows and incident investigation.
+- Disable Stream management on HTTP-only workers when another deployment owns Stream connections.
+- Monitor queue depth, stale leases, retries, terminal failures, cleanup throughput, delivery suppression, state errors, Stream ownership, callback latency, provider retries, token refresh failures, database saturation, and file-ingestion backlog.
