@@ -31,6 +31,7 @@ interface ConnectionFormState {
   appId: string;
   appSecret: string;
   verificationToken: string;
+  encryptKey: string;
   clientId: string;
   clientSecret: string;
   robotCode: string;
@@ -45,7 +46,8 @@ interface ConnectionFormState {
   enabled: boolean;
 }
 
-const DEFAULT_EXTENSIONS = "pdf, docx, xlsx, csv, txt, md, json, html";
+const DEFAULT_EXTENSIONS =
+  "pdf, docx, xlsx, csv, txt, md, json, html, png, jpg, jpeg, webp, gif, mp3, wav, m4a, ogg, mp4";
 
 interface ChannelConnectionDialogProps {
   open: boolean;
@@ -75,6 +77,7 @@ function emptyForm(channelType: ConfigurableChannelType): ConnectionFormState {
     appId: "",
     appSecret: "",
     verificationToken: "",
+    encryptKey: "",
     clientId: "",
     clientSecret: "",
     robotCode: "",
@@ -197,6 +200,9 @@ export default function ChannelConnectionDialog({
       if (form.verificationToken.trim()) {
         credentials.verification_token = form.verificationToken.trim();
       }
+      if (form.encryptKey.trim()) {
+        credentials.encrypt_key = form.encryptKey.trim();
+      }
     } else if (form.channelType === "dingtalk") {
       if (form.clientId.trim()) credentials.client_id = form.clientId.trim();
       if (form.clientSecret.trim()) {
@@ -221,7 +227,8 @@ export default function ChannelConnectionDialog({
       max_file_size_mb: Math.max(1, Number(form.maxFileSizeMb) || 10),
       allowed_file_extensions: parseAllowedExtensions(form.allowedExtensions),
     };
-    const connectionMode = form.channelType === "dingtalk" ? "stream" : "webhook";
+    const connectionMode =
+      form.channelType === "dingtalk" ? "stream" : "webhook";
 
     const payload = isEditing
       ? {
@@ -293,7 +300,9 @@ export default function ChannelConnectionDialog({
                   type="password"
                   value={form.botToken}
                   onChange={(event) => setField("botToken", event.target.value)}
-                  placeholder={isEditing ? "留空保留已配置 Token" : "123456:ABC..."}
+                  placeholder={
+                    isEditing ? "留空保留已配置 Token" : "123456:ABC..."
+                  }
                   required={!isEditing}
                 />
               </label>
@@ -302,8 +311,12 @@ export default function ChannelConnectionDialog({
                 <Input
                   type="password"
                   value={form.webhookSecret}
-                  onChange={(event) => setField("webhookSecret", event.target.value)}
-                  placeholder={isEditing ? "留空保留原值" : "建议设置随机字符串"}
+                  onChange={(event) =>
+                    setField("webhookSecret", event.target.value)
+                  }
+                  placeholder={
+                    isEditing ? "留空保留原值" : "建议设置随机字符串"
+                  }
                 />
               </label>
             </>
@@ -311,6 +324,10 @@ export default function ChannelConnectionDialog({
 
           {form.channelType === "feishu" && (
             <>
+              <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+                飞书事件订阅可启用加密。启用后，Verification Token 和 Encrypt Key
+                必须与飞书开放平台中的事件订阅配置完全一致。
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium">
                   App ID
@@ -326,30 +343,54 @@ export default function ChannelConnectionDialog({
                   <Input
                     type="password"
                     value={form.appSecret}
-                    onChange={(event) => setField("appSecret", event.target.value)}
+                    onChange={(event) =>
+                      setField("appSecret", event.target.value)
+                    }
                     placeholder={isEditing ? "留空保留原值" : "飞书应用密钥"}
                     required={!isEditing}
                   />
                 </label>
               </div>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Verification Token
-                <Input
-                  type="password"
-                  value={form.verificationToken}
-                  onChange={(event) =>
-                    setField("verificationToken", event.target.value)
-                  }
-                  placeholder={isEditing ? "留空保留原值" : "事件订阅 Verification Token"}
-                />
-              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Verification Token
+                  <Input
+                    type="password"
+                    value={form.verificationToken}
+                    onChange={(event) =>
+                      setField("verificationToken", event.target.value)
+                    }
+                    placeholder={
+                      isEditing
+                        ? "留空保留原值"
+                        : "事件订阅 Verification Token"
+                    }
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Encrypt Key
+                  <Input
+                    type="password"
+                    value={form.encryptKey}
+                    onChange={(event) =>
+                      setField("encryptKey", event.target.value)
+                    }
+                    placeholder={
+                      isEditing
+                        ? "留空保留原值"
+                        : "可选，事件订阅 Encrypt Key"
+                    }
+                  />
+                </label>
+              </div>
             </>
           )}
 
           {form.channelType === "dingtalk" && (
             <>
               <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-                钉钉默认使用 Stream 长连接，不需要公网回调地址。服务会自动维护连接并在断线后重连。
+                钉钉默认使用 Stream
+                长连接，不需要公网回调地址。服务会自动维护连接并在断线后重连。
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium">
@@ -388,7 +429,8 @@ export default function ChannelConnectionDialog({
           {form.channelType === "wecom" && (
             <>
               <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-                企业微信要求使用 HTTPS 回调，并使用 Token 与 EncodingAESKey 对回调进行签名校验和 AES 解密。
+                企业微信要求使用 HTTPS 回调，并使用 Token 与 EncodingAESKey
+                对回调进行签名校验和 AES 解密。
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium">
@@ -396,7 +438,9 @@ export default function ChannelConnectionDialog({
                   <Input
                     value={form.corpId}
                     onChange={(event) => setField("corpId", event.target.value)}
-                    placeholder={isEditing ? "留空保留原值" : "wwxxxxxxxxxxxxxxxx"}
+                    placeholder={
+                      isEditing ? "留空保留原值" : "wwxxxxxxxxxxxxxxxx"
+                    }
                     required={!isEditing}
                   />
                 </label>
@@ -417,8 +461,12 @@ export default function ChannelConnectionDialog({
                 <Input
                   type="password"
                   value={form.corpSecret}
-                  onChange={(event) => setField("corpSecret", event.target.value)}
-                  placeholder={isEditing ? "留空保留原值" : "企业微信应用 Secret"}
+                  onChange={(event) =>
+                    setField("corpSecret", event.target.value)
+                  }
+                  placeholder={
+                    isEditing ? "留空保留原值" : "企业微信应用 Secret"
+                  }
                   required={!isEditing}
                 />
               </label>
@@ -431,7 +479,9 @@ export default function ChannelConnectionDialog({
                     onChange={(event) =>
                       setField("callbackToken", event.target.value)
                     }
-                    placeholder={isEditing ? "留空保留原值" : "企业微信回调 Token"}
+                    placeholder={
+                      isEditing ? "留空保留原值" : "企业微信回调 Token"
+                    }
                     required={!isEditing}
                   />
                 </label>
@@ -445,7 +495,9 @@ export default function ChannelConnectionDialog({
                     onChange={(event) =>
                       setField("encodingAesKey", event.target.value)
                     }
-                    placeholder={isEditing ? "留空保留原值" : "43 位 EncodingAESKey"}
+                    placeholder={
+                      isEditing ? "留空保留原值" : "43 位 EncodingAESKey"
+                    }
                     required={!isEditing}
                   />
                 </label>
@@ -458,7 +510,9 @@ export default function ChannelConnectionDialog({
             <Input
               type="url"
               value={form.publicBaseUrl}
-              onChange={(event) => setField("publicBaseUrl", event.target.value)}
+              onChange={(event) =>
+                setField("publicBaseUrl", event.target.value)
+              }
               placeholder="https://openxflow.example.com"
               required={form.channelType === "wecom"}
             />
@@ -478,7 +532,9 @@ export default function ChannelConnectionDialog({
                 type="number"
                 min={1}
                 value={form.maxFileSizeMb}
-                onChange={(event) => setField("maxFileSizeMb", event.target.value)}
+                onChange={(event) =>
+                  setField("maxFileSizeMb", event.target.value)
+                }
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium">
@@ -488,7 +544,7 @@ export default function ChannelConnectionDialog({
                 onChange={(event) =>
                   setField("allowedExtensions", event.target.value)
                 }
-                placeholder="pdf, docx, xlsx, txt"
+                placeholder="pdf, docx, xlsx, txt, png, jpg, mp3"
               />
             </label>
           </div>
