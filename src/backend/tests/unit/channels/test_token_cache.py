@@ -1,9 +1,13 @@
+import asyncio
 import math
+import time
 
 import pytest
 
+from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
 from langflow.channels.services.token_cache import (
     InvalidProviderTokenResponseError,
+    get_cached_provider_token,
     provider_token_cache_key,
     provider_token_lifetime_seconds,
 )
@@ -50,3 +54,79 @@ def test_provider_token_lifetime_accepts_numeric_values() -> None:
 def test_provider_token_lifetime_rejects_invalid_values(value) -> None:
     with pytest.raises(InvalidProviderTokenResponseError, match="Feishu"):
         provider_token_lifetime_seconds({"expire": value}, "expire", provider="Feishu")
+
+
+@pytest.mark.asyncio
+async def test_cached_provider_token_reuses_valid_entry() -> None:
+    cache = {"credential": ("cached-token", time.monotonic() + 60)}
+    fetch_calls = 0
+
+    async def fetch() -> tuple[str, float]:
+        nonlocal fetch_calls
+        fetch_calls += 1
+        return "new-token", time.monotonic() + 60
+
+    token = await get_cached_provider_token(
+        cache=cache,
+        cache_key="credential",
+        force_refresh=False,
+        lock_pool=LoopLocalKeyedLockPool(),
+        fetch_new_token=fetch,
+    )
+
+    assert token == "cached-token"
+    assert fetch_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_cached_provider_token_force_refresh_replaces_valid_entry() -> None:
+    cache = {"credential": ("cached-token", time.monotonic() + 60)}
+
+    async def fetch() -> tuple[str, float]:
+        return "new-token", time.monotonic() + 60
+
+    token = await get_cached_provider_token(
+        cache=cache,
+        cache_key="credential",
+        force_refresh=True,
+        lock_pool=LoopLocalKeyedLockPool(),
+        fetch_new_token=fetch,
+    )
+
+    assert token == "new-token"
+    assert cache["credential"][0] == "new-token"
+
+
+@pytest.mark.asyncio
+async def test_cached_provider_token_concurrent_miss_fetches_once() -> None:
+    cache: dict[str, tuple[str, float]] = {}
+    lock_pool = LoopLocalKeyedLockPool()
+    fetch_started = asyncio.Event()
+    release_fetch = asyncio.Event()
+    fetch_calls = 0
+
+    async def fetch() -> tuple[str, float]:
+        nonlocal fetch_calls
+        fetch_calls += 1
+        fetch_started.set()
+        await release_fetch.wait()
+        return "shared-token", time.monotonic() + 60
+
+    tasks = [
+        asyncio.create_task(
+            get_cached_provider_token(
+                cache=cache,
+                cache_key="credential",
+                force_refresh=False,
+                lock_pool=lock_pool,
+                fetch_new_token=fetch,
+            )
+        )
+        for _ in range(8)
+    ]
+    await fetch_started.wait()
+    await asyncio.sleep(0)
+    release_fetch.set()
+
+    assert await asyncio.gather(*tasks) == ["shared-token"] * 8
+    assert fetch_calls == 1
