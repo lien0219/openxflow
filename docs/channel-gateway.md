@@ -47,6 +47,8 @@ HTTP/1.1 413 Request Entity Too Large
 
 The size is checked first from `Content-Length` when supplied and again while the body is streamed. Reading stops as soon as the accumulated bytes exceed the configured limit, which protects deployments when clients omit or falsify `Content-Length`.
 
+When a client disconnects before the streamed request body is complete, OpenXFlow returns HTTP `400` where the transport still permits a response. The partial body is discarded before adapter construction, signature verification, queue reservation, or background execution.
+
 When either the pending-job limit or the pending-payload byte limit is full, OpenXFlow returns:
 
 ```http
@@ -160,4 +162,4 @@ Enterprise WeChat requires an HTTPS callback URL and Safe Mode encryption. Confi
 - Run database migrations before enabling provider callbacks.
 - Keep only one shared public callback URL per connection.
 - Disable `LANGFLOW_CHANNEL_STREAMS_ENABLED` on dedicated HTTP-only workers when Stream ownership is handled by another deployment.
-- Monitor `413` and `503` callback responses, pending payload bytes, provider retries, webhook timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
+- Monitor `400`, `413`, and `503` callback responses, pending payload bytes, provider retries, webhook timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
