@@ -51,6 +51,10 @@ class ChannelStreamRuntimeRead(BaseModel):
     running_managers: int
     leader_managers: int
     managed_clients: int
+    connection_errors_total: int
+    reconnect_attempts_total: int
+    successful_sync_total: int
+    last_successful_sync_timestamp_seconds: float
 
 
 class ChannelOutboundRetryRuntimeRead(BaseModel):
