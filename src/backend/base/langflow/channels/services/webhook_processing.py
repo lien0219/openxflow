@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import math
-import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from threading import Lock
@@ -19,38 +17,15 @@ from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.services.deduplication import ChannelEventDeduplicator
 from langflow.channels.services.dispatch import ChannelDispatchService
 from langflow.channels.services.gateway import ChannelGateway
+from langflow.channels.services.runtime_config import (
+    DEFAULT_WEBHOOK_MAX_PENDING_BYTES,
+    webhook_limiter_limits_from_env,
+    webhook_task_timeout_seconds,
+)
 from langflow.services.database.models.channel.model import ChannelConnection
 from langflow.services.deps import session_scope
 
 _T = TypeVar("_T")
-_DEFAULT_MAX_PENDING_BYTES = 64 * 1024 * 1024
-
-
-def _positive_int_env(name: str, default: int) -> int:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    try:
-        parsed = int(value)
-    except ValueError:
-        return default
-    return parsed if parsed > 0 else default
-
-
-def _positive_float_env(name: str, default: float) -> float:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    try:
-        parsed = float(value)
-    except ValueError:
-        return default
-    return parsed if math.isfinite(parsed) and parsed > 0 else default
-
-
-def webhook_task_timeout_seconds() -> float:
-    """Maximum execution time for one provider callback after it starts running."""
-    return _positive_float_env("LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS", 300.0)
 
 
 @dataclass(frozen=True)
@@ -76,7 +51,7 @@ class WebhookProcessingLimiter:
         *,
         max_concurrency: int,
         max_pending: int,
-        max_pending_bytes: int = _DEFAULT_MAX_PENDING_BYTES,
+        max_pending_bytes: int = DEFAULT_WEBHOOK_MAX_PENDING_BYTES,
     ) -> None:
         if max_concurrency <= 0:
             raise ValueError("max_concurrency must be positive")
@@ -175,15 +150,11 @@ class WebhookProcessingLimiter:
 
 
 def _webhook_limiter_from_env() -> WebhookProcessingLimiter:
-    max_concurrency = _positive_int_env("LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY", 16)
-    configured_max_pending = _positive_int_env("LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING", 128)
+    limits = webhook_limiter_limits_from_env()
     return WebhookProcessingLimiter(
-        max_concurrency=max_concurrency,
-        max_pending=max(max_concurrency, configured_max_pending),
-        max_pending_bytes=_positive_int_env(
-            "LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING_BYTES",
-            _DEFAULT_MAX_PENDING_BYTES,
-        ),
+        max_concurrency=limits.max_concurrency,
+        max_pending=limits.max_pending,
+        max_pending_bytes=limits.max_pending_bytes,
     )
 
 
