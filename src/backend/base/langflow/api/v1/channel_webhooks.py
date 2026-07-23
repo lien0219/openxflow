@@ -110,13 +110,15 @@ async def _validate_and_schedule_provider_event(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    if not reserve_provider_webhook_slot():
+    payload_size = len(payload)
+    if not reserve_provider_webhook_slot(payload_size):
         snapshot = webhook_limiter_snapshot()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "Channel webhook queue is full "
-                f"({snapshot.pending}/{snapshot.max_pending}); retry later"
+                "Channel webhook capacity is full "
+                f"(jobs {snapshot.pending}/{snapshot.max_pending}, "
+                f"bytes {snapshot.pending_bytes}/{snapshot.max_pending_bytes}); retry later"
             ),
             headers={"Retry-After": "1"},
         )
@@ -130,7 +132,7 @@ async def _validate_and_schedule_provider_event(
             payload=payload,
         )
     except Exception:
-        release_provider_webhook_slot()
+        release_provider_webhook_slot(payload_size)
         raise
     return {"ok": True}
 
