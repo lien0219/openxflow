@@ -11,6 +11,7 @@ from langflow.channels.adapters.dingtalk import DingTalkAPIError, DingTalkChanne
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
 from langflow.channels.services.token_cache import (
     InvalidProviderTokenResponseError,
+    get_cached_provider_token,
     provider_token_cache_key,
     provider_token_lifetime_seconds,
     response_json_object,
@@ -69,20 +70,13 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
         return str(token), time.monotonic() + max(30, expire_seconds - 60)
 
     async def _access_token(self, *, force_refresh: bool = False) -> str:
-        cache_key = self._token_cache_key
-        now = time.monotonic()
-        cached = self._token_cache.get(cache_key)
-        if not force_refresh and cached is not None and cached[1] > now:
-            return cached[0]
-
-        async with self._token_lock_pool.hold(cache_key):
-            now = time.monotonic()
-            cached = self._token_cache.get(cache_key)
-            if not force_refresh and cached is not None and cached[1] > now:
-                return cached[0]
-            token, expires_at = await self._fetch_access_token_entry()
-            self._token_cache[cache_key] = (token, expires_at)
-            return token
+        return await get_cached_provider_token(
+            cache=self._token_cache,
+            cache_key=self._token_cache_key,
+            force_refresh=force_refresh,
+            lock_pool=self._token_lock_pool,
+            fetch_new_token=self._fetch_access_token_entry,
+        )
 
     async def _refresh_rejected_access_token(self, rejected_token: str) -> str:
         return await refresh_rejected_cached_token(
