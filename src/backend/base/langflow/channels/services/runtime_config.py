@@ -19,6 +19,7 @@ DEFAULT_WEBHOOK_JOB_LEASE_SECONDS = 600.0
 DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS = 5
 DEFAULT_WEBHOOK_JOB_RETRY_BASE_SECONDS = 2.0
 DEFAULT_WEBHOOK_JOB_RETRY_MAX_SECONDS = 300.0
+WEBHOOK_JOB_LEASE_SAFETY_SECONDS = 30.0
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off"}
@@ -145,6 +146,11 @@ def durable_webhook_job_config() -> DurableWebhookJobConfig:
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_MAX_SECONDS",
         DEFAULT_WEBHOOK_JOB_RETRY_MAX_SECONDS,
     )
+    configured_lease = _positive_float_env(
+        "LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS",
+        DEFAULT_WEBHOOK_JOB_LEASE_SECONDS,
+    )
+    minimum_lease = webhook_task_timeout_seconds() + WEBHOOK_JOB_LEASE_SAFETY_SECONDS
     return DurableWebhookJobConfig(
         enabled=_boolean_env(
             "LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED",
@@ -154,10 +160,7 @@ def durable_webhook_job_config() -> DurableWebhookJobConfig:
             "LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS",
             DEFAULT_WEBHOOK_JOB_POLL_SECONDS,
         ),
-        lease_seconds=_positive_float_env(
-            "LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS",
-            DEFAULT_WEBHOOK_JOB_LEASE_SECONDS,
-        ),
+        lease_seconds=max(configured_lease, minimum_lease),
         max_attempts=_positive_int_env(
             "LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS",
             DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS,
