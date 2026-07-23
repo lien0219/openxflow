@@ -130,3 +130,49 @@ async def test_cached_provider_token_concurrent_miss_fetches_once() -> None:
 
     assert await asyncio.gather(*tasks) == ["shared-token"] * 8
     assert fetch_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_cached_provider_token_concurrent_force_refresh_fetches_once() -> None:
+    cache = {"credential": ("old-token", time.monotonic() + 60)}
+    lock_pool = LoopLocalKeyedLockPool()
+    fetch_started = asyncio.Event()
+    release_fetch = asyncio.Event()
+    fetch_calls = 0
+
+    async def fetch() -> tuple[str, float]:
+        nonlocal fetch_calls
+        fetch_calls += 1
+        fetch_started.set()
+        await release_fetch.wait()
+        return f"refreshed-{fetch_calls}", time.monotonic() + 60
+
+    tasks = [
+        asyncio.create_task(
+            get_cached_provider_token(
+                cache=cache,
+                cache_key="credential",
+                force_refresh=True,
+                lock_pool=lock_pool,
+                fetch_new_token=fetch,
+            )
+        )
+        for _ in range(6)
+    ]
+    await fetch_started.wait()
+    await asyncio.sleep(0)
+    release_fetch.set()
+
+    assert await asyncio.gather(*tasks) == ["refreshed-1"] * 6
+    assert fetch_calls == 1
+
+    next_token = await get_cached_provider_token(
+        cache=cache,
+        cache_key="credential",
+        force_refresh=True,
+        lock_pool=lock_pool,
+        fetch_new_token=fetch,
+    )
+
+    assert next_token == "refreshed-2"
+    assert fetch_calls == 2
