@@ -56,6 +56,8 @@ Token endpoint responses must be JSON objects and include a non-empty token. Lif
 
 Boolean, null, non-numeric, non-finite, zero, and negative lifetime values are rejected with the provider-specific API error rather than leaking `ValueError`, `TypeError`, or `OverflowError`.
 
+The absolute monotonic expiry returned by the Provider-specific fetch helper is also validated. `NaN`, infinity, zero, and an expiry that elapsed while the Provider request was running are rejected before the cache is modified.
+
 ## Rejected-token recovery
 
 An explicit access-token rejection triggers at most one synchronized refresh and one replay. Other requests waiting on the same credential key reuse the refresh winner. A second rejection is returned to the caller and is not replayed again.
@@ -74,7 +76,7 @@ The old process-local cache entry is unreachable from adapters constructed with 
 
 ## Metrics
 
-The authenticated channel metrics endpoint exposes two groups of provider-bounded counters.
+The authenticated channel metrics endpoint exposes provider-bounded counters and a process-local size Gauge.
 
 Token-cache behavior:
 
@@ -86,6 +88,7 @@ openxflow_channel_token_cache_coalesced_refreshes_total
 openxflow_channel_token_cache_refresh_succeeded_total
 openxflow_channel_token_cache_refresh_failed_total
 openxflow_channel_token_cache_evictions_total
+openxflow_channel_token_cache_entries
 ```
 
 The eviction counter uses the additional fixed label:
@@ -103,7 +106,7 @@ openxflow_channel_token_refresh_failed_total
 openxflow_channel_token_replays_total
 ```
 
-All counters use only bounded labels. No application identifier, connection identifier, cache key, secret fingerprint, or raw credential is exported.
+All metrics use only bounded labels. No application identifier, connection identifier, cache key, secret fingerprint, or raw credential is exported.
 
 Operational interpretation:
 
@@ -111,7 +114,7 @@ Operational interpretation:
 - A rising coalesced-refresh count is expected during bursts and demonstrates that duplicate Provider token requests were avoided.
 - Cache refresh failures indicate Provider, credential, DNS, network, or response-validation problems before a business API call can proceed.
 - Expired evictions are routine during long-running operation and secret rotation.
-- Sustained capacity evictions indicate more than 512 active or recently refreshed credential keys in one provider adapter process cache; review tenant distribution and worker sizing.
+- Sustained capacity evictions or a cache-size Gauge near 512 indicate many active or recently refreshed credential keys in one provider adapter process cache; review tenant distribution and worker sizing.
 - Rejection recovery failures indicate that a Provider explicitly rejected a cached token and the replacement-token request also failed.
 
-Process-local counters should be summed across application workers. Ratios such as hits divided by hits plus misses should use matching worker and time windows.
+Process-local counters should be summed across application workers. The cache-size Gauge is the latest observation for one process and should not be summed across workers; use per-instance inspection or an aggregation such as `max`. Ratios such as hits divided by hits plus misses should use matching worker and time windows.
