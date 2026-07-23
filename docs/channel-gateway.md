@@ -49,7 +49,7 @@ HTTP/1.1 413 Request Entity Too Large
 
 The size is checked first from `Content-Length` when supplied and again while the body is streamed. Reading stops as soon as the accumulated bytes exceed the configured limit, which protects deployments when clients omit or falsify `Content-Length`.
 
-When a client disconnects before the streamed request body is complete, OpenXFlow returns HTTP `400` where the transport still permits a response. The partial body is discarded before adapter construction, signature verification, queue reservation, or background execution.
+When a client disconnects before the streamed request body is complete, OpenXFlow returns HTTP `400` where the transport still permits a response. The partial body is discarded before adapter construction, signature verification, queue reservation, or background execution. The event increments `client_disconnected_total` but does not increment accepted, rejected-capacity, succeeded, or failed counters.
 
 When either the pending-job limit or the pending-payload byte limit is full, OpenXFlow returns:
 
@@ -60,7 +60,9 @@ Retry-After: 1
 
 The error detail includes both current job usage and current retained-body byte usage. The event is **not** acknowledged as successful in this case. The provider may retry it. This avoids accepting and silently dropping callbacks during overload.
 
-Queue wait time does not consume `LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS`. The timeout starts only after a job obtains a concurrency slot and begins provider-event processing. A running job that exceeds the limit is cancelled, counted as failed, and releases its pending count and retained payload bytes. External application cancellation also releases both capacities but is not counted as a business failure. Because the provider has already received its successful acknowledgement, timeout recovery still depends on provider retries or a future durable queue.
+Capacity rejections are classified exactly once as pending-only, payload-bytes-only, or both limits at the same time. The sum of those three counters equals the aggregate rejected-capacity counter.
+
+Queue wait time does not consume `LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS`. The timeout starts only after a job obtains a concurrency slot and begins provider-event processing. A running job that exceeds the limit is cancelled, counted as failed, and releases its pending count and retained payload bytes. External application cancellation also releases both capacities and increments `cancelled_total`, but is not counted as a business failure. Because the provider has already received its successful acknowledgement, timeout recovery still depends on provider retries or a future durable queue.
 
 ## Capacity guidance
 
@@ -101,7 +103,7 @@ Authenticated users can inspect the current process at:
 GET /api/v1/channel-runtime/
 ```
 
-The JSON response includes the parsed `streams_enabled` state for the current process, active, queued, accepted, rejected, succeeded, and failed webhook counts, current retained payload bytes, the pending-payload byte limit, the active per-request body-size and task-timeout limits, and the outbound retry policy.
+The JSON response includes the parsed `streams_enabled` state for the current process, active and queued jobs, retained payload bytes, capacity limits, accepted and aggregate rejected counts, the three mutually exclusive rejection-reason counters, succeeded, failed, externally cancelled, and client-disconnected counts, the active per-request body-size and task-timeout limits, and the outbound retry policy.
 
 Prometheus text exposition is available at:
 
@@ -120,8 +122,13 @@ This endpoint is also authenticated. It exports:
 - `openxflow_channel_webhook_max_concurrency`
 - `openxflow_channel_webhook_accepted_total`
 - `openxflow_channel_webhook_rejected_total`
+- `openxflow_channel_webhook_rejected_pending_total`
+- `openxflow_channel_webhook_rejected_bytes_total`
+- `openxflow_channel_webhook_rejected_both_total`
 - `openxflow_channel_webhook_succeeded_total`
 - `openxflow_channel_webhook_failed_total`
+- `openxflow_channel_webhook_cancelled_total`
+- `openxflow_channel_webhook_client_disconnected_total`
 - `openxflow_channel_outbound_attempts_total`
 - `openxflow_channel_outbound_succeeded_total`
 - `openxflow_channel_outbound_retries_total`
@@ -172,4 +179,4 @@ Enterprise WeChat requires an HTTPS callback URL and Safe Mode encryption. Confi
 - Run database migrations before enabling provider callbacks.
 - Keep only one shared public callback URL per connection.
 - Disable `LANGFLOW_CHANNEL_STREAMS_ENABLED` on dedicated HTTP-only workers when Stream ownership is handled by another deployment.
-- Monitor `400`, `413`, and `503` callback responses, pending payload bytes, provider retries, token rejections, token refresh failures, webhook timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
+- Monitor `400`, `413`, and `503` callback responses, pending payload bytes, capacity-rejection reasons, client disconnects, application cancellations, provider retries, token rejections, token refresh failures, webhook timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
