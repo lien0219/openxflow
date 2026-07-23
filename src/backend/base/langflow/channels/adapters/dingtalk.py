@@ -26,6 +26,7 @@ from langflow.channels.domain.models import (
     ChannelType,
     ChannelUser,
 )
+from langflow.channels.services.loop_lock import LoopLocalAsyncLock
 
 _DINGTALK_SIGNATURE_MAX_AGE_MS = 60 * 60 * 1000
 _DINGTALK_DOWNLOAD_HOST_SUFFIXES = (".aliyuncs.com", ".dingtalk.com")
@@ -38,6 +39,7 @@ class DingTalkAPIError(RuntimeError):
 class DingTalkChannelAdapter(ChannelAdapter):
     channel_type = ChannelType.DINGTALK
     _token_cache: ClassVar[dict[str, tuple[str, float]]] = {}
+    _token_lock: ClassVar[LoopLocalAsyncLock] = LoopLocalAsyncLock()
 
     def __init__(
         self,
@@ -70,22 +72,28 @@ class DingTalkChannelAdapter(ChannelAdapter):
         if not force_refresh and cached is not None and cached[1] > now:
             return cached[0]
 
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(
-                f"{self.api_base_url}/v1.0/oauth2/accessToken",
-                json={"clientId": self.client_id, "clientSecret": self.client_secret},
+        async with self._token_lock:
+            now = time.monotonic()
+            cached = self._token_cache.get(self._token_cache_key)
+            if not force_refresh and cached is not None and cached[1] > now:
+                return cached[0]
+
+            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                response = await client.post(
+                    f"{self.api_base_url}/v1.0/oauth2/accessToken",
+                    json={"clientId": self.client_id, "clientSecret": self.client_secret},
+                )
+            response.raise_for_status()
+            body = response.json()
+            token = body.get("accessToken")
+            if not token:
+                raise DingTalkAPIError(str(body.get("message") or body.get("msg") or "DingTalk access token missing"))
+            expire_seconds = max(60, int(body.get("expireIn", 7200)))
+            self._token_cache[self._token_cache_key] = (
+                str(token),
+                time.monotonic() + max(30, expire_seconds - 60),
             )
-        response.raise_for_status()
-        body = response.json()
-        token = body.get("accessToken")
-        if not token:
-            raise DingTalkAPIError(str(body.get("message") or body.get("msg") or "DingTalk access token missing"))
-        expire_seconds = max(60, int(body.get("expireIn", 7200)))
-        self._token_cache[self._token_cache_key] = (
-            str(token),
-            time.monotonic() + max(30, expire_seconds - 60),
-        )
-        return str(token)
+            return str(token)
 
     async def _api_request(
         self,
