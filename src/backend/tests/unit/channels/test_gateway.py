@@ -10,6 +10,19 @@ from langflow.channels.services import gateway as gateway_module
 from langflow.channels.services.gateway import ChannelGateway
 
 
+class AckRequiredMockAdapter(MockChannelAdapter):
+    def __init__(self, *args, order=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.order = order if order is not None else []
+
+    def requires_event_acknowledgement(self, event) -> bool:
+        del event
+        return True
+
+    async def acknowledge_event(self, event) -> None:
+        self.order.append(("provider_ack", event.event_id))
+
+
 class FakeDeduplicator:
     def __init__(self, *, duplicate: bool = False) -> None:
         self.duplicate = duplicate
@@ -70,17 +83,21 @@ async def test_gateway_rejects_invalid_signature():
         await gateway.receive(connection_id, {}, b"{}", handler)
 
 
-async def test_gateway_accepts_explicit_preverified_callback(monkeypatch):
+async def test_preverified_normal_message_skips_acknowledgement_guard(monkeypatch):
     connection_id = uuid4()
     adapter = MockChannelAdapter(connection_id, verification_token="secret")
     gateway = ChannelGateway()
     gateway.register_adapter(connection_id, adapter)
+    guarded = False
 
     async def guard_ack(event, sender):
-        await sender()
+        del event, sender
+        nonlocal guarded
+        guarded = True
         return True
 
     async def handler(event):
+        del event
         return None
 
     monkeypatch.setattr(gateway_module, "send_outbound_acknowledgement_once", guard_ack)
@@ -91,22 +108,27 @@ async def test_gateway_accepts_explicit_preverified_callback(monkeypatch):
     )
 
     assert event.event_id == "event-preverified"
+    assert guarded is False
 
 
-async def test_preverified_gateway_guards_acknowledgement_before_response(monkeypatch):
+async def test_preverified_gateway_guards_required_acknowledgement_before_response(monkeypatch):
     connection_id = uuid4()
-    adapter = MockChannelAdapter(connection_id, verification_token="secret")
+    order = []
+    adapter = AckRequiredMockAdapter(
+        connection_id,
+        verification_token="secret",
+        order=order,
+    )
     gateway = ChannelGateway()
     gateway.register_adapter(connection_id, adapter)
-    order = []
 
     async def guard_ack(event, sender):
-        order.append(("ack", event.event_id))
+        order.append(("ack_guard", event.event_id))
         await sender()
         return True
 
     async def guard_response(event, message, sender):
-        order.append(("response", event.event_id, message.text))
+        order.append(("response_guard", event.event_id, message.text))
         return await sender()
 
     async def handler(event):
@@ -123,9 +145,10 @@ async def test_preverified_gateway_guards_acknowledgement_before_response(monkey
     )
 
     assert order == [
-        ("ack", "event-guarded"),
+        ("ack_guard", "event-guarded"),
+        ("provider_ack", "event-guarded"),
         ("handler", "event-guarded"),
-        ("response", "event-guarded", "guarded response"),
+        ("response_guard", "event-guarded", "guarded response"),
     ]
     assert len(adapter.sent_messages) == 1
 
