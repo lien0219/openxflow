@@ -9,6 +9,8 @@ from langflow.channels.adapters.dingtalk_resilient import ResilientDingTalkChann
 from langflow.channels.adapters.feishu import FeishuAPIError
 from langflow.channels.adapters.feishu_resilient import ResilientEncryptedFeishuChannelAdapter
 
+_ORIGINAL_ASYNC_CLIENT = httpx.AsyncClient
+
 
 class _ClientFactory:
     def __init__(self, handler):
@@ -16,7 +18,7 @@ class _ClientFactory:
 
     def __call__(self, *args, **kwargs):
         kwargs["transport"] = self._transport
-        return httpx.AsyncClient(*args, **kwargs)
+        return _ORIGINAL_ASYNC_CLIENT(*args, **kwargs)
 
 
 @pytest.mark.asyncio
