@@ -20,7 +20,13 @@ Cache state is process-local. Multiple application processes may each hold a val
 
 ## Bounded cache retention
 
-Each provider adapter cache retains at most 512 token entries by default.
+Each provider adapter cache retains at most 512 token entries by default. Configure the per-process limit with:
+
+```bash
+export LANGFLOW_CHANNEL_TOKEN_CACHE_MAX_ENTRIES=512
+```
+
+Only positive integers are accepted. Missing, empty, non-numeric, zero, and negative values fall back to 512.
 
 After a successful token refresh, OpenXFlow:
 
@@ -31,6 +37,16 @@ After a successful token refresh, OpenXFlow:
 The current refresh winner is protected from the same pruning cycle. This prevents account deletion, repeated secret rotation, or dynamic tenant creation from growing a class-level process cache without a bound.
 
 Expired entries are removed before valid entries are considered for capacity eviction. Cache pruning does not revoke Provider tokens; it only removes the local process copy. A later request can obtain a fresh token normally.
+
+The authenticated runtime endpoint exposes the normalized value:
+
+```json
+{
+  "token_cache": {
+    "max_entries": 512
+  }
+}
+```
 
 ## Refresh synchronization
 
@@ -114,7 +130,7 @@ Operational interpretation:
 - A rising coalesced-refresh count is expected during bursts and demonstrates that duplicate Provider token requests were avoided.
 - Cache refresh failures indicate Provider, credential, DNS, network, or response-validation problems before a business API call can proceed.
 - Expired evictions are routine during long-running operation and secret rotation.
-- Sustained capacity evictions or a cache-size Gauge near 512 indicate many active or recently refreshed credential keys in one provider adapter process cache; review tenant distribution and worker sizing.
+- Sustained capacity evictions or a cache-size Gauge near the configured limit indicate many active or recently refreshed credential keys in one provider adapter process cache; review tenant distribution, worker sizing, and the configured capacity.
 - Rejection recovery failures indicate that a Provider explicitly rejected a cached token and the replacement-token request also failed.
 
 Process-local counters should be summed across application workers. The cache-size Gauge is the latest observation for one process and should not be summed across workers; use per-instance inspection or an aggregation such as `max`. Ratios such as hits divided by hits plus misses should use matching worker and time windows.
