@@ -30,6 +30,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("connection_id", sa.Uuid(), nullable=False),
         sa.Column("external_event_id", sa.String(length=255), nullable=False),
+        sa.Column("delivery_kind", sa.String(length=32), nullable=False),
         sa.Column("response_digest", sa.String(length=64), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("attempts", sa.Integer(), nullable=False),
@@ -43,7 +44,8 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "connection_id",
             "external_event_id",
-            name="uq_channel_outbound_delivery_event",
+            "delivery_kind",
+            name="uq_channel_outbound_delivery_event_kind",
         ),
     )
     op.create_index(
