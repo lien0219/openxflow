@@ -7,6 +7,7 @@ from uuid import UUID
 from langflow.channels.adapters.base import ChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelType
+from langflow.channels.services.retry import retry_channel_operation
 
 if TYPE_CHECKING:
     from langflow.channels.services.deduplication import ChannelEventDeduplicator
@@ -67,7 +68,10 @@ class ChannelGateway:
             await adapter.acknowledge_event(event)
             response = await handler(event)
             if response is not None:
-                await adapter.send_response(event, response)
+                await retry_channel_operation(
+                    lambda: adapter.send_response(event, response),
+                    operation_name=f"{adapter.channel_type.value}.send_response",
+                )
         except Exception as exc:
             if deduplicator is not None and receipt is not None:
                 await deduplicator.fail(receipt, exc)
@@ -78,10 +82,18 @@ class ChannelGateway:
         return event
 
     async def send(self, connection_id: UUID, target_id: str, message: ChannelMessage) -> str:
-        return await self.get_adapter(connection_id).send_message(target_id, message)
+        adapter = self.get_adapter(connection_id)
+        return await retry_channel_operation(
+            lambda: adapter.send_message(target_id, message),
+            operation_name=f"{adapter.channel_type.value}.send_message",
+        )
 
     async def healthcheck(self, connection_id: UUID) -> dict:
-        return await self.get_adapter(connection_id).healthcheck()
+        adapter = self.get_adapter(connection_id)
+        return await retry_channel_operation(
+            adapter.healthcheck,
+            operation_name=f"{adapter.channel_type.value}.healthcheck",
+        )
 
     def has_channel_type(self, channel_type: ChannelType) -> bool:
         return any(adapter.channel_type == channel_type for adapter in self._adapters.values())

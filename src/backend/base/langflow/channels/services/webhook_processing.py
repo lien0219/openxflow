@@ -36,8 +36,14 @@ def _positive_int_env(name: str, default: int) -> int:
 @dataclass(frozen=True)
 class WebhookLimiterSnapshot:
     pending: int
+    active: int
+    queued: int
     max_pending: int
     max_concurrency: int
+    accepted_total: int
+    rejected_total: int
+    succeeded_total: int
+    failed_total: int
 
 
 class WebhookProcessingLimiter:
@@ -51,35 +57,63 @@ class WebhookProcessingLimiter:
         self.max_concurrency = max_concurrency
         self.max_pending = max_pending
         self._pending = 0
-        self._pending_lock = Lock()
+        self._active = 0
+        self._accepted_total = 0
+        self._rejected_total = 0
+        self._succeeded_total = 0
+        self._failed_total = 0
+        self._state_lock = Lock()
         self._semaphore_lock = Lock()
         self._semaphores: dict[int, asyncio.Semaphore] = {}
 
     def try_reserve(self) -> bool:
         """Reserve one queue slot before returning a successful provider ACK."""
-        with self._pending_lock:
+        with self._state_lock:
             if self._pending >= self.max_pending:
+                self._rejected_total += 1
                 return False
             self._pending += 1
+            self._accepted_total += 1
             return True
 
-    def release(self) -> None:
-        with self._pending_lock:
+    def cancel_reservation(self) -> None:
+        with self._state_lock:
             self._pending = max(0, self._pending - 1)
 
+    def finish(self, *, success: bool) -> None:
+        with self._state_lock:
+            self._pending = max(0, self._pending - 1)
+            if success:
+                self._succeeded_total += 1
+            else:
+                self._failed_total += 1
+
     def snapshot(self) -> WebhookLimiterSnapshot:
-        with self._pending_lock:
+        with self._state_lock:
             pending = self._pending
-        return WebhookLimiterSnapshot(
-            pending=pending,
-            max_pending=self.max_pending,
-            max_concurrency=self.max_concurrency,
-        )
+            active = self._active
+            return WebhookLimiterSnapshot(
+                pending=pending,
+                active=active,
+                queued=max(0, pending - active),
+                max_pending=self.max_pending,
+                max_concurrency=self.max_concurrency,
+                accepted_total=self._accepted_total,
+                rejected_total=self._rejected_total,
+                succeeded_total=self._succeeded_total,
+                failed_total=self._failed_total,
+            )
 
     async def run(self, callback: Callable[..., Awaitable[_T]], /, *args, **kwargs) -> _T:
         semaphore = self._semaphore_for_current_loop()
         async with semaphore:
-            return await callback(*args, **kwargs)
+            with self._state_lock:
+                self._active += 1
+            try:
+                return await callback(*args, **kwargs)
+            finally:
+                with self._state_lock:
+                    self._active = max(0, self._active - 1)
 
     def _semaphore_for_current_loop(self) -> asyncio.Semaphore:
         loop_key = id(asyncio.get_running_loop())
@@ -102,7 +136,7 @@ def reserve_provider_webhook_slot() -> bool:
 
 
 def release_provider_webhook_slot() -> None:
-    _webhook_limiter.release()
+    _webhook_limiter.cancel_reservation()
 
 
 def webhook_limiter_snapshot() -> WebhookLimiterSnapshot:
@@ -117,8 +151,9 @@ async def process_reserved_provider_webhook(
     payload: bytes,
 ) -> None:
     """Run one reserved callback and always release its queue capacity."""
+    success = False
     try:
-        await _webhook_limiter.run(
+        success = await _webhook_limiter.run(
             process_provider_webhook,
             connection_id=connection_id,
             expected_channel_type=expected_channel_type,
@@ -126,7 +161,7 @@ async def process_reserved_provider_webhook(
             payload=payload,
         )
     finally:
-        release_provider_webhook_slot()
+        _webhook_limiter.finish(success=success)
 
 
 async def process_provider_webhook(
@@ -135,7 +170,7 @@ async def process_provider_webhook(
     expected_channel_type: str,
     headers: dict[str, str],
     payload: bytes,
-) -> None:
+) -> bool:
     """Process one already-validated provider callback in an isolated DB session."""
     async with session_scope() as session:
         connection = await session.get(ChannelConnection, connection_id)
@@ -144,7 +179,7 @@ async def process_provider_webhook(
                 "Skipping channel webhook for missing or disabled connection %s",
                 connection_id,
             )
-            return
+            return True
 
         adapter = build_channel_adapter(connection)
         gateway = ChannelGateway()
@@ -167,7 +202,7 @@ async def process_provider_webhook(
                 expected_channel_type,
                 connection_id,
             )
-            return
+            return True
         except Exception:  # noqa: BLE001
             await session.rollback()
             await logger.aexception(
@@ -175,6 +210,7 @@ async def process_provider_webhook(
                 expected_channel_type,
                 connection_id,
             )
-            return
+            return False
 
         await session.commit()
+        return True
