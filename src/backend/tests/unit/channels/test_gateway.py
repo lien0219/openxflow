@@ -70,15 +70,20 @@ async def test_gateway_rejects_invalid_signature():
         await gateway.receive(connection_id, {}, b"{}", handler)
 
 
-async def test_gateway_accepts_explicit_preverified_callback():
+async def test_gateway_accepts_explicit_preverified_callback(monkeypatch):
     connection_id = uuid4()
     adapter = MockChannelAdapter(connection_id, verification_token="secret")
     gateway = ChannelGateway()
     gateway.register_adapter(connection_id, adapter)
 
+    async def guard_ack(event, sender):
+        await sender()
+        return True
+
     async def handler(event):
         return None
 
+    monkeypatch.setattr(gateway_module, "send_outbound_acknowledgement_once", guard_ack)
     event = await gateway.receive_verified(
         connection_id,
         b'{"event_id":"event-preverified","text":"hello"}',
@@ -88,22 +93,28 @@ async def test_gateway_accepts_explicit_preverified_callback():
     assert event.event_id == "event-preverified"
 
 
-async def test_preverified_gateway_uses_outbound_delivery_guard(monkeypatch):
+async def test_preverified_gateway_guards_acknowledgement_before_response(monkeypatch):
     connection_id = uuid4()
     adapter = MockChannelAdapter(connection_id, verification_token="secret")
     gateway = ChannelGateway()
     gateway.register_adapter(connection_id, adapter)
-    guarded = []
+    order = []
 
-    async def guard(event, message, sender):
-        guarded.append((event.event_id, message.text))
+    async def guard_ack(event, sender):
+        order.append(("ack", event.event_id))
+        await sender()
+        return True
+
+    async def guard_response(event, message, sender):
+        order.append(("response", event.event_id, message.text))
         return await sender()
 
     async def handler(event):
-        del event
+        order.append(("handler", event.event_id))
         return ChannelMessage(text="guarded response")
 
-    monkeypatch.setattr(gateway_module, "send_outbound_response_once", guard)
+    monkeypatch.setattr(gateway_module, "send_outbound_acknowledgement_once", guard_ack)
+    monkeypatch.setattr(gateway_module, "send_outbound_response_once", guard_response)
 
     await gateway.receive_verified(
         connection_id,
@@ -111,7 +122,11 @@ async def test_preverified_gateway_uses_outbound_delivery_guard(monkeypatch):
         handler,
     )
 
-    assert guarded == [("event-guarded", "guarded response")]
+    assert order == [
+        ("ack", "event-guarded"),
+        ("handler", "event-guarded"),
+        ("response", "event-guarded", "guarded response"),
+    ]
     assert len(adapter.sent_messages) == 1
 
 
