@@ -52,6 +52,7 @@ class ResilientEncryptedFeishuChannelAdapter(EncryptedFeishuChannelAdapter):
             rejected_token=rejected_token,
             lock=self._token_lock,
             fetch_new_token=self._fetch_tenant_access_token_entry,
+            provider="feishu",
         )
 
     async def _request(
@@ -88,6 +89,7 @@ class ResilientEncryptedFeishuChannelAdapter(EncryptedFeishuChannelAdapter):
             refresh_token=self._refresh_rejected_tenant_access_token,
             send=send,
             is_rejected=is_rejected,
+            provider="feishu",
         )
         response.raise_for_status()
         if body is None:
