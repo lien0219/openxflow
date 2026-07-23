@@ -1,0 +1,86 @@
+name: Apply Channel Gateway Autofix
+
+on:
+  push:
+    branches:
+      - feature/channel-gateway
+    paths:
+      - ".github/workflows/channel-gateway-apply-autofix.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: channel-gateway-apply-autofix
+  cancel-in-progress: false
+
+jobs:
+  apply-autofix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/channel-gateway
+          fetch-depth: 0
+
+      - name: Download autofix artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/channel-autofix
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/8570510813/zip" > /tmp/channel-autofix/ruff.zip
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/8570554016/zip" > /tmp/channel-autofix/component-index.zip
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/8570532568/zip" > /tmp/channel-autofix/starter-projects.zip
+          for archive in /tmp/channel-autofix/*.zip; do
+            directory="${archive%.zip}"
+            mkdir -p "${directory}"
+            unzip -q "${archive}" -d "${directory}"
+          done
+
+      - name: Apply generated changes
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import json
+          from pathlib import Path
+
+          repo = Path.cwd()
+          artifacts = [
+              Path("/tmp/channel-autofix/ruff/autofix.json"),
+              Path("/tmp/channel-autofix/component-index/autofix.json"),
+              Path("/tmp/channel-autofix/starter-projects/autofix.json"),
+          ]
+
+          for artifact in artifacts:
+              payload = json.loads(artifact.read_text(encoding="utf-8"))
+              changes = payload.get("changes", {})
+              for addition in changes.get("additions", []):
+                  target = repo / addition["path"]
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(base64.b64decode(addition["contents"]))
+              for deletion in changes.get("deletions", []):
+                  relative_path = deletion["path"] if isinstance(deletion, dict) else deletion
+                  target = repo / relative_path
+                  if target.exists():
+                      target.unlink()
+          PY
+
+      - name: Commit generated changes
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/channel-gateway-apply-autofix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git commit -m "style(channels): apply generated autofix updates"
+          git push origin HEAD:feature/channel-gateway
