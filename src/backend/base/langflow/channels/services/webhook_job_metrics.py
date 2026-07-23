@@ -214,12 +214,12 @@ class DurableWebhookJobMetricsCollector:
                 snapshot.processing_jobs,
             ),
             (
-                "openxflow_channel_webhook_job_completed",
+                "openxflow_channel_webhook_job_completed_retained",
                 "Last observed retained completed durable channel webhook jobs",
                 snapshot.completed_jobs,
             ),
             (
-                "openxflow_channel_webhook_job_failed",
+                "openxflow_channel_webhook_job_failed_retained",
                 "Last observed retained terminally failed durable channel webhook jobs",
                 snapshot.failed_jobs,
             ),
@@ -235,7 +235,7 @@ class DurableWebhookJobMetricsCollector:
                 snapshot.claimed_total,
             ),
             (
-                "openxflow_channel_webhook_job_completed_total",
+                "openxflow_channel_webhook_job_completed",
                 "Durable channel webhook jobs completed by this process",
                 snapshot.completed_total,
             ),
@@ -245,7 +245,7 @@ class DurableWebhookJobMetricsCollector:
                 snapshot.retried_total,
             ),
             (
-                "openxflow_channel_webhook_job_failed_total",
+                "openxflow_channel_webhook_job_failed",
                 "Durable channel webhook jobs marked terminally failed by this process",
                 snapshot.failed_total,
             ),
