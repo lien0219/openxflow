@@ -10,10 +10,12 @@ from langflow.api.v1.channel_runtime import (
 async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_CHANNEL_STREAMS_ENABLED", "false")
     monkeypatch.setenv("LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS", "5")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY", "6")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES", "2048")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS", "3.5")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS", "12.5")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED", "true")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_WORKERS", "3")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS", "0.25")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS", "45")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS", "7")
@@ -29,7 +31,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.stream_runtime.reconnect_attempts_total >= 0
     assert result.stream_runtime.successful_sync_total >= 0
     assert result.stream_runtime.last_successful_sync_timestamp_seconds >= 0
-    assert result.webhook.max_concurrency > 0
+    assert result.webhook.max_concurrency == 6
     assert result.webhook.max_pending >= result.webhook.max_concurrency
     assert result.webhook.pending >= result.webhook.active
     assert result.webhook.queued == result.webhook.pending - result.webhook.active
@@ -49,6 +51,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.webhook.cancelled_total >= 0
     assert result.webhook.client_disconnected_total >= 0
     assert result.durable_webhook_jobs.enabled is True
+    assert result.durable_webhook_jobs.worker_count == 3
     assert result.durable_webhook_jobs.poll_seconds == 0.25
     assert result.durable_webhook_jobs.lease_seconds == 45
     assert result.durable_webhook_jobs.max_attempts == 7
