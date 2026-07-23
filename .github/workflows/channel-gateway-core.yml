@@ -24,6 +24,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  workflow-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate channel workflow syntax
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: >-
+            .github/workflows/channel-gateway-core.yml
+            .github/workflows/channel-gateway-frontend.yml
+
   core-services:
     runs-on: ubuntu-latest
     timeout-minutes: 15
