@@ -58,12 +58,12 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
     engine = sa.create_engine("sqlite://")
     with engine.begin() as connection:
         _create_parent_tables(connection)
-        operations = Operations(MigrationContext.configure(connection))
+        context = MigrationContext.configure(connection, opts={"render_as_batch": True})
+        operations = Operations(context)
         for migration in _MIGRATIONS:
             monkeypatch.setattr(migration, "op", operations)
             migration.upgrade()
 
-        inspector = sa.inspect(connection)
         expected_tables = {
             "channel_connection",
             "channel_identity",
@@ -74,20 +74,25 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
             "channel_webhook_job",
             "channel_outbound_delivery",
         }
+        inspector = sa.inspect(connection)
         assert expected_tables.issubset(set(inspector.get_table_names()))
 
-        file_columns = {column["name"]: column for column in inspector.get_columns("channel_file_asset")}
+        file_columns = {
+            column["name"]: column
+            for column in sa.inspect(connection).get_columns("channel_file_asset")
+        }
         assert file_columns["external_file_id"]["type"].length == 1024
 
         outbound_columns = {
-            column["name"]: column for column in inspector.get_columns("channel_outbound_delivery")
+            column["name"]: column
+            for column in sa.inspect(connection).get_columns("channel_outbound_delivery")
         }
         assert outbound_columns["delivery_kind"]["type"].length == 32
         assert outbound_columns["response_digest"]["type"].length == 64
 
         outbound_unique = {
             constraint["name"]: tuple(constraint["column_names"])
-            for constraint in inspector.get_unique_constraints("channel_outbound_delivery")
+            for constraint in sa.inspect(connection).get_unique_constraints("channel_outbound_delivery")
         }
         assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
             "connection_id",
@@ -97,7 +102,7 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
 
         outbound_indexes = {
             index["name"]: tuple(index["column_names"])
-            for index in inspector.get_indexes("channel_outbound_delivery")
+            for index in sa.inspect(connection).get_indexes("channel_outbound_delivery")
         }
         assert outbound_indexes["ix_channel_outbound_delivery_status_updated"] == (
             "status",
