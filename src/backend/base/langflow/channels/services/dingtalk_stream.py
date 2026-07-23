@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import os
 import tempfile
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
@@ -23,6 +22,7 @@ from langflow.channels.security.credentials import decrypt_credentials
 from langflow.channels.services.deduplication import ChannelEventDeduplicator
 from langflow.channels.services.dispatch import ChannelDispatchService
 from langflow.channels.services.gateway import ChannelGateway
+from langflow.channels.services.runtime_config import channel_streams_enabled
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelConnectionStatus,
@@ -87,7 +87,7 @@ class DingTalkStreamManager:
         self._stop_event = asyncio.Event()
 
     async def run(self) -> None:
-        if os.getenv("LANGFLOW_CHANNEL_STREAMS_ENABLED", "true").lower() in {"0", "false", "no"}:
+        if not channel_streams_enabled():
             await logger.adebug("Channel Stream clients disabled by LANGFLOW_CHANNEL_STREAMS_ENABLED")
             return
         try:
