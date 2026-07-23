@@ -64,13 +64,15 @@ def prune_provider_token_cache(
         raise ValueError("max_entries must be positive")
     current_time = time.monotonic() if now is None else now
 
+    expired_evictions = 0
     expired_keys = [
         key
         for key, (_token, expires_at) in cache.items()
         if key != protected_key and expires_at <= current_time
     ]
     for key in expired_keys:
-        cache.pop(key, None)
+        if cache.pop(key, None) is not None:
+            expired_evictions += 1
 
     capacity_evictions = 0
     if len(cache) > max_entries:
@@ -87,11 +89,11 @@ def prune_provider_token_cache(
             if cache.pop(key, None) is not None:
                 capacity_evictions += 1
 
-    if expired_keys:
-        record_token_cache_eviction(provider, "expired", len(expired_keys))
+    if expired_evictions:
+        record_token_cache_eviction(provider, "expired", expired_evictions)
     if capacity_evictions:
         record_token_cache_eviction(provider, "capacity", capacity_evictions)
-    return len(expired_keys), capacity_evictions
+    return expired_evictions, capacity_evictions
 
 
 async def get_cached_provider_token(
@@ -127,6 +129,11 @@ async def get_cached_provider_token(
                 return cached[0]
         try:
             token, expires_at = await fetch_new_token()
+            refreshed_at = time.monotonic()
+            if not math.isfinite(expires_at) or expires_at <= refreshed_at:
+                raise InvalidProviderTokenResponseError(
+                    f"Invalid {provider} access-token absolute expiry"
+                )
         except Exception:
             record_token_cache_refresh_failure(provider)
             raise
@@ -135,7 +142,7 @@ async def get_cached_provider_token(
             provider=provider,
             cache=cache,
             protected_key=cache_key,
-            now=now,
+            now=refreshed_at,
             max_entries=max_entries,
         )
         record_token_cache_refresh_success(provider)
