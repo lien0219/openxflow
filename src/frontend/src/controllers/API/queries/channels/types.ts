@@ -1,9 +1,21 @@
+import type {
+  UseMutationOptions,
+  UseMutationResult,
+} from "@tanstack/react-query";
+
 export type ChannelType =
   | "telegram"
   | "feishu"
   | "dingtalk"
   | "wecom"
   | "mock";
+
+export type ChannelMutationHook<Variables, Data, Error = unknown> = (
+  options?: Omit<
+    UseMutationOptions<Data, Error, Variables>,
+    "mutationFn" | "mutationKey"
+  >,
+) => UseMutationResult<Data, Error, Variables>;
 
 export interface ChannelConnection {
   id: string;
