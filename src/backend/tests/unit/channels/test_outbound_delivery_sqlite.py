@@ -20,6 +20,7 @@ from langflow.channels.domain.models import (
 from langflow.channels.services import outbound_delivery
 from langflow.services.database.models.channel.outbound_delivery_model import (
     ChannelOutboundDelivery,
+    ChannelOutboundDeliveryKind,
     ChannelOutboundDeliveryStatus,
 )
 
@@ -28,6 +29,7 @@ CREATE TABLE channel_outbound_delivery (
     id CHAR(32) NOT NULL PRIMARY KEY,
     connection_id CHAR(32) NOT NULL,
     external_event_id VARCHAR(255) NOT NULL,
+    delivery_kind VARCHAR(32) NOT NULL,
     response_digest VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL,
     attempts INTEGER NOT NULL,
@@ -36,7 +38,8 @@ CREATE TABLE channel_outbound_delivery (
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     sent_at DATETIME,
-    CONSTRAINT uq_channel_outbound_delivery_event UNIQUE (connection_id, external_event_id)
+    CONSTRAINT uq_channel_outbound_delivery_event_kind
+        UNIQUE (connection_id, external_event_id, delivery_kind)
 )
 """
 
@@ -57,7 +60,7 @@ def _event(connection_id) -> ChannelEvent:
     )
 
 
-async def test_outbound_delivery_receipt_prevents_duplicate_send_and_allows_known_failure_retry(
+async def test_outbound_delivery_receipts_separate_acknowledgement_and_response(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -78,32 +81,42 @@ async def test_outbound_delivery_receipt_prevents_duplicate_send_and_allows_know
     message = ChannelMessage(text="world")
 
     try:
-        first = await outbound_delivery.reserve_outbound_delivery(event, message)
-        assert first.should_send is True
-        assert first.delivery_id is not None
+        acknowledgement = await outbound_delivery.reserve_outbound_acknowledgement(event)
+        response = await outbound_delivery.reserve_outbound_delivery(event, message)
+        assert acknowledgement.should_send is True
+        assert response.should_send is True
+        assert acknowledgement.delivery_id != response.delivery_id
 
-        duplicate_reserved = await outbound_delivery.reserve_outbound_delivery(event, message)
-        assert duplicate_reserved.should_send is False
-        assert duplicate_reserved.delivery_id == first.delivery_id
+        duplicate_ack = await outbound_delivery.reserve_outbound_acknowledgement(event)
+        duplicate_response = await outbound_delivery.reserve_outbound_delivery(event, message)
+        assert duplicate_ack.should_send is False
+        assert duplicate_response.should_send is False
 
+        await outbound_delivery.mark_outbound_delivery_sent(acknowledgement.delivery_id, None)
         await outbound_delivery.mark_outbound_delivery_failed(
-            first.delivery_id,
+            response.delivery_id,
             RuntimeError("provider unavailable"),
         )
         retry = await outbound_delivery.reserve_outbound_delivery(event, message)
         assert retry.should_send is True
-        assert retry.delivery_id == first.delivery_id
-
+        assert retry.delivery_id == response.delivery_id
         await outbound_delivery.mark_outbound_delivery_sent(retry.delivery_id, "provider-message-1")
-        duplicate_sent = await outbound_delivery.reserve_outbound_delivery(event, message)
-        assert duplicate_sent.should_send is False
 
         async with factory() as session:
-            receipt = (await session.exec(select(ChannelOutboundDelivery))).one()
-        assert receipt.status == ChannelOutboundDeliveryStatus.SENT.value
-        assert receipt.attempts == 2
-        assert receipt.provider_message_id == "provider-message-1"
-        assert receipt.sent_at is not None
-        assert receipt.last_error is None
+            receipts = list((await session.exec(select(ChannelOutboundDelivery))).all())
+        assert len(receipts) == 2
+        by_kind = {receipt.delivery_kind: receipt for receipt in receipts}
+
+        ack_receipt = by_kind[ChannelOutboundDeliveryKind.ACKNOWLEDGEMENT.value]
+        assert ack_receipt.status == ChannelOutboundDeliveryStatus.SENT.value
+        assert ack_receipt.attempts == 1
+        assert ack_receipt.provider_message_id is None
+
+        response_receipt = by_kind[ChannelOutboundDeliveryKind.RESPONSE.value]
+        assert response_receipt.status == ChannelOutboundDeliveryStatus.SENT.value
+        assert response_receipt.attempts == 2
+        assert response_receipt.provider_message_id == "provider-message-1"
+        assert response_receipt.sent_at is not None
+        assert response_receipt.last_error is None
     finally:
         await engine.dispose()
