@@ -72,13 +72,23 @@ class DurableWebhookJobRuntimeRead(BaseModel):
     max_attempts: int
     retry_base_seconds: float
     retry_max_seconds: float
+    cleanup_interval_seconds: float
+    completed_retention_days: int
+    failed_retention_days: int
+    cleanup_batch_size: int
     running_managers: int
     consumer_tasks: int
+    pending_jobs: int
+    processing_jobs: int
+    completed_jobs: int
+    failed_jobs: int
     claimed_total: int
     completed_total: int
     retried_total: int
     failed_total: int
     claim_errors_total: int
+    cleaned_total: int
+    maintenance_errors_total: int
 
 
 class ChannelOutboundRetryRuntimeRead(BaseModel):
