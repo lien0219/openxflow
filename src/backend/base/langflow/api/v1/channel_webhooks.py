@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import AsyncExitStack, asynccontextmanager
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
@@ -13,7 +14,11 @@ from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.adapters.wecom import WeComChannelAdapter
 from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
-from langflow.channels.services.runtime_config import webhook_max_body_bytes
+from langflow.channels.services.runtime_config import durable_webhook_job_config, webhook_max_body_bytes
+from langflow.channels.services.webhook_jobs import (
+    durable_webhook_job_lifespan,
+    enqueue_provider_webhook_job,
+)
 from langflow.channels.services.webhook_processing import (
     process_reserved_provider_webhook,
     record_provider_webhook_client_disconnect,
@@ -23,10 +28,20 @@ from langflow.channels.services.webhook_processing import (
 )
 from langflow.services.database.models.channel.model import ChannelConnection
 
+
+@asynccontextmanager
+async def channel_webhook_lifespan(app):  # type: ignore[no-untyped-def]
+    """Run Stream ownership and durable HTTP callback consumers together."""
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(channel_stream_lifespan(app))
+        await stack.enter_async_context(durable_webhook_job_lifespan(app))
+        yield
+
+
 router = APIRouter(
     prefix="/channel-webhooks",
     tags=["Channel Webhooks"],
-    lifespan=channel_stream_lifespan,
+    lifespan=channel_webhook_lifespan,
 )
 
 
@@ -102,6 +117,17 @@ async def _validate_and_schedule_provider_event(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid channel webhook signature") from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if durable_webhook_job_config().enabled:
+        await enqueue_provider_webhook_job(
+            db,
+            connection_id=connection_id,
+            channel_type=expected_channel_type,
+            external_event_id=event.event_id,
+            headers=headers,
+            payload=payload,
+        )
+        return {"ok": True}
 
     reservation = reserve_provider_webhook_slot(len(payload))
     if reservation is None:
