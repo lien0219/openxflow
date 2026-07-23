@@ -27,6 +27,11 @@ class ChannelAdapter(ABC):
         """Reply to an inbound event, falling back to a new conversation message."""
         return await self.send_message(event.conversation.external_conversation_id, message)
 
+    def requires_event_acknowledgement(self, event: ChannelEvent) -> bool:
+        """Whether this event requires a provider-side interaction acknowledgement."""
+        del event
+        return False
+
     async def acknowledge_event(self, event: ChannelEvent) -> None:
         """Acknowledge provider-specific interactive events when required."""
 
