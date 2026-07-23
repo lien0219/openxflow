@@ -10,6 +10,7 @@ from prometheus_client.exposition import CONTENT_TYPE_LATEST
 from pydantic import BaseModel
 
 from langflow.api.utils import CurrentActiveUser
+from langflow.channels.services.dingtalk_stream import dingtalk_stream_runtime_snapshot
 from langflow.channels.services.metrics import ChannelMetricsCollector
 from langflow.channels.services.retry import channel_retry_policy_from_env
 from langflow.channels.services.runtime_config import (
@@ -46,6 +47,12 @@ class ChannelWebhookRuntimeRead(BaseModel):
     client_disconnected_total: int
 
 
+class ChannelStreamRuntimeRead(BaseModel):
+    running_managers: int
+    leader_managers: int
+    managed_clients: int
+
+
 class ChannelOutboundRetryRuntimeRead(BaseModel):
     max_attempts: int
     base_delay_seconds: float
@@ -55,6 +62,7 @@ class ChannelOutboundRetryRuntimeRead(BaseModel):
 
 class ChannelRuntimeRead(BaseModel):
     streams_enabled: bool
+    stream_runtime: ChannelStreamRuntimeRead
     webhook: ChannelWebhookRuntimeRead
     outbound_retry: ChannelOutboundRetryRuntimeRead
 
@@ -62,10 +70,12 @@ class ChannelRuntimeRead(BaseModel):
 @router.get("/", response_model=ChannelRuntimeRead)
 async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntimeRead:
     del current_user
+    stream_runtime = dingtalk_stream_runtime_snapshot()
     webhook = webhook_limiter_snapshot()
     retry_policy = channel_retry_policy_from_env()
     return ChannelRuntimeRead(
         streams_enabled=channel_streams_enabled(),
+        stream_runtime=ChannelStreamRuntimeRead(**asdict(stream_runtime)),
         webhook=ChannelWebhookRuntimeRead(
             **asdict(webhook),
             max_body_bytes=webhook_max_body_bytes(),
