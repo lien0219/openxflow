@@ -103,6 +103,9 @@ class OutboundDeliveryRuntimeRead(BaseModel):
     failed_total: int
     state_errors_total: int
     cleaned_total: int
+    retained_reserved: int
+    retained_sent: int
+    retained_failed: int
 
 
 class ChannelOutboundRetryRuntimeRead(BaseModel):
