@@ -9,6 +9,10 @@ OpenXFlow Channel Gateway connects Telegram, Feishu, DingTalk, and Enterprise We
 | `LANGFLOW_CHANNEL_STREAMS_ENABLED` | `true` | Enables lifecycle-managed Stream clients such as DingTalk Stream. Set to `false` for workers that should only serve HTTP. |
 | `LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY` | `16` | Maximum provider webhook jobs executing concurrently in one application process. |
 | `LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING` | `128` | Maximum accepted webhook jobs, including executing and waiting jobs, in one application process. Must be greater than or equal to the concurrency value. |
+| `LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS` | `3` | Maximum attempts for transient outbound provider failures. |
+| `LANGFLOW_CHANNEL_HTTP_BASE_DELAY_SECONDS` | `0.5` | Initial exponential-backoff delay. |
+| `LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS` | `8` | Maximum retry delay, including provider `Retry-After` values. |
+| `LANGFLOW_CHANNEL_HTTP_JITTER_RATIO` | `0.2` | Random retry jitter from `0` to `1`; set to `0` for deterministic delays. |
 
 Example:
 
@@ -16,6 +20,10 @@ Example:
 export LANGFLOW_CHANNEL_STREAMS_ENABLED=true
 export LANGFLOW_CHANNEL_WEBHOOK_MAX_CONCURRENCY=16
 export LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING=128
+export LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS=3
+export LANGFLOW_CHANNEL_HTTP_BASE_DELAY_SECONDS=0.5
+export LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS=8
+export LANGFLOW_CHANNEL_HTTP_JITTER_RATIO=0.2
 ```
 
 ## Webhook acknowledgement model
@@ -46,6 +54,48 @@ max_pending = max_concurrency × 8
 Decrease concurrency when workflows are database-heavy or when the deployment has a small connection pool. Increase pending capacity only when the process has enough memory for retained request payloads and the expected workflow latency is bounded.
 
 Capacity is per application process. With four HTTP workers and the defaults, the deployment can execute up to 64 channel jobs concurrently and retain up to 512 accepted jobs in total.
+
+## Outbound retry policy
+
+OpenXFlow retries only transient outbound errors:
+
+- connection, DNS, and timeout failures;
+- HTTP `408`, `425`, and `429`;
+- HTTP `5xx` responses.
+
+Authentication errors, permission errors, and normal `4xx` validation failures are not retried. Provider `Retry-After` headers take precedence over exponential backoff, subject to the configured maximum delay.
+
+## Runtime diagnostics and metrics
+
+Authenticated users can inspect the current process at:
+
+```text
+GET /api/v1/channel-runtime/
+```
+
+The JSON response includes active, queued, accepted, rejected, succeeded, and failed webhook counts together with the active outbound retry policy.
+
+Prometheus text exposition is available at:
+
+```text
+GET /api/v1/channel-runtime/metrics
+```
+
+This endpoint is also authenticated. It exports:
+
+- `openxflow_channel_webhook_pending`
+- `openxflow_channel_webhook_active`
+- `openxflow_channel_webhook_queued`
+- `openxflow_channel_webhook_accepted_total`
+- `openxflow_channel_webhook_rejected_total`
+- `openxflow_channel_webhook_succeeded_total`
+- `openxflow_channel_webhook_failed_total`
+- `openxflow_channel_outbound_attempts_total`
+- `openxflow_channel_outbound_succeeded_total`
+- `openxflow_channel_outbound_retries_total`
+- `openxflow_channel_outbound_failed_total`
+
+Metrics are process-local. In a multi-worker deployment, scrape every worker or aggregate them through the deployment's existing Prometheus multiprocess strategy.
 
 ## DingTalk Stream deployment
 
