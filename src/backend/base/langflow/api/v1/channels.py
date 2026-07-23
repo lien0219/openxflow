@@ -119,6 +119,15 @@ async def test_channel_connection_route(
     connection = await _owned_connection_or_404(db, current_user.id, connection_id)
     try:
         result = await build_channel_adapter(connection).healthcheck()
+        if (
+            connection.channel_type == "dingtalk"
+            and connection.connection_mode == "stream"
+            and result.get("stream_sdk_available") is False
+        ):
+            raise RuntimeError(
+                "DingTalk credentials are valid, but the Stream runtime is unavailable. "
+                "Install dingtalk-stream>=0.24.3 on the OpenXFlow server."
+            )
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
     except Exception as exc:
@@ -127,7 +136,7 @@ async def test_channel_connection_route(
         connection.updated_at = datetime.now(timezone.utc)
         db.add(connection)
         await db.commit()
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Channel connection test failed") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     connection.status = ChannelConnectionStatus.CONNECTED.value
     connection.last_error = None
