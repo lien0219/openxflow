@@ -25,6 +25,7 @@ from langflow.channels.services.deduplication import ChannelEventDeduplicator
 from langflow.channels.services.dispatch import ChannelDispatchService
 from langflow.channels.services.gateway import ChannelGateway
 from langflow.channels.services.runtime_config import channel_streams_enabled
+from langflow.channels.services.timing_metrics import record_stream_callback
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelConnectionStatus,
@@ -305,16 +306,25 @@ class DingTalkStreamManager:
 
         class OpenXFlowChatbotHandler(dingtalk_stream.ChatbotHandler):
             async def process(self, callback):  # type: ignore[no-untyped-def]
+                started_at = time.perf_counter()
+                success = False
                 try:
-                    await process_dingtalk_stream_payload(connection_id, callback.data)
-                except ValueError as exc:
-                    await logger.awarning("Invalid DingTalk Stream payload: %s", exc)
-                    return dingtalk_stream.AckMessage.STATUS_BAD_REQUEST, str(exc)
-                except Exception as exc:  # noqa: BLE001
-                    await logger.aexception("DingTalk Stream event processing failed")
-                    return dingtalk_stream.AckMessage.STATUS_SYSTEM_EXCEPTION, str(exc)
-                await manager._set_status(connection_id, ChannelConnectionStatus.CONNECTED)
-                return dingtalk_stream.AckMessage.STATUS_OK, "OK"
+                    try:
+                        await process_dingtalk_stream_payload(connection_id, callback.data)
+                    except ValueError as exc:
+                        await logger.awarning("Invalid DingTalk Stream payload: %s", exc)
+                        return dingtalk_stream.AckMessage.STATUS_BAD_REQUEST, str(exc)
+                    except Exception as exc:  # noqa: BLE001
+                        await logger.aexception("DingTalk Stream event processing failed")
+                        return dingtalk_stream.AckMessage.STATUS_SYSTEM_EXCEPTION, str(exc)
+                    await manager._set_status(connection_id, ChannelConnectionStatus.CONNECTED)
+                    success = True
+                    return dingtalk_stream.AckMessage.STATUS_OK, "OK"
+                finally:
+                    record_stream_callback(
+                        success=success,
+                        duration_seconds=time.perf_counter() - started_at,
+                    )
 
         credential = dingtalk_stream.Credential(client_id, client_secret)
         client = dingtalk_stream.DingTalkStreamClient(credential)
