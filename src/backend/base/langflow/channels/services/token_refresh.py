@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from contextlib import asynccontextmanager
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import httpx
 
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
-from langflow.channels.services.loop_lock import LoopLocalAsyncLock
 from langflow.channels.services.metrics import (
     record_token_rejection,
     record_token_refresh_failure,
@@ -23,26 +21,9 @@ _TResponse = TypeVar("_TResponse")
 TokenCache = dict[str, tuple[str, float]]
 
 
-@asynccontextmanager
-async def _refresh_lock_context(
-    *,
-    cache_key: str,
-    lock_pool: LoopLocalKeyedLockPool | None,
-    lock: LoopLocalAsyncLock | None,
-):  # type: ignore[no-untyped-def]
-    if lock_pool is not None:
-        async with lock_pool.hold(cache_key):
-            yield
-        return
-    if lock is None:
-        raise ValueError("lock_pool or lock is required")
-    async with lock:
-        yield
-
-
 def is_access_token_rejection(
     response: httpx.Response,
-    body: dict | None,
+    body: dict[str, Any] | None,
     *,
     known_codes: set[str],
     code_fields: tuple[str, ...] = ("code", "errcode"),
@@ -91,13 +72,12 @@ async def refresh_rejected_cached_token(
     cache: TokenCache,
     cache_key: str,
     rejected_token: str,
+    lock_pool: LoopLocalKeyedLockPool,
     fetch_new_token: Callable[[], Awaitable[tuple[str, float]]],
     provider: str = "unknown",
-    lock_pool: LoopLocalKeyedLockPool | None = None,
-    lock: LoopLocalAsyncLock | None = None,
 ) -> str:
     """Refresh a rejected token once while concurrent callers reuse the winner."""
-    async with _refresh_lock_context(cache_key=cache_key, lock_pool=lock_pool, lock=lock):
+    async with lock_pool.hold(cache_key):
         cached = cache.get(cache_key)
         if cached is not None and cached[0] != rejected_token and cached[1] > time.monotonic():
             return cached[0]
