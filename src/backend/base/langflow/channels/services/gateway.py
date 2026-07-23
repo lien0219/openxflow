@@ -51,7 +51,41 @@ class ChannelGateway:
         adapter = self.get_adapter(connection_id)
         if not await adapter.verify_event(headers, payload):
             raise PermissionError("Channel event signature verification failed")
+        return await self._receive_parsed(
+            connection_id,
+            headers,
+            payload,
+            handler,
+            deduplicator=deduplicator,
+        )
 
+    async def receive_verified(
+        self,
+        connection_id: UUID,
+        payload: bytes,
+        handler: ChannelHandler,
+        *,
+        deduplicator: ChannelEventDeduplicator | None = None,
+    ) -> ChannelEvent:
+        """Process a callback whose signature was verified before durable persistence."""
+        return await self._receive_parsed(
+            connection_id,
+            {},
+            payload,
+            handler,
+            deduplicator=deduplicator,
+        )
+
+    async def _receive_parsed(
+        self,
+        connection_id: UUID,
+        headers: dict[str, str],
+        payload: bytes,
+        handler: ChannelHandler,
+        *,
+        deduplicator: ChannelEventDeduplicator | None,
+    ) -> ChannelEvent:
+        adapter = self.get_adapter(connection_id)
         event = await adapter.parse_event(headers, payload)
         if event.connection_id != connection_id:
             raise ValueError("Parsed channel event belongs to another connection")
