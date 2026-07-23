@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import random
 import re
@@ -69,7 +70,7 @@ def _positive_float_env(name: str, default: float) -> float:
         parsed = float(value)
     except ValueError:
         return default
-    return parsed if parsed > 0 else default
+    return parsed if math.isfinite(parsed) and parsed > 0 else default
 
 
 def _non_negative_float_env(name: str, default: float) -> float:
@@ -80,7 +81,7 @@ def _non_negative_float_env(name: str, default: float) -> float:
         parsed = float(value)
     except ValueError:
         return default
-    return parsed if parsed >= 0 else default
+    return parsed if math.isfinite(parsed) and parsed >= 0 else default
 
 
 @dataclass(frozen=True)
@@ -93,12 +94,12 @@ class ChannelRetryPolicy:
     def __post_init__(self) -> None:
         if self.max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
-        if self.base_delay_seconds <= 0:
-            raise ValueError("base_delay_seconds must be positive")
-        if self.max_delay_seconds < self.base_delay_seconds:
-            raise ValueError("max_delay_seconds must be greater than or equal to base_delay_seconds")
-        if not 0 <= self.jitter_ratio <= 1:
-            raise ValueError("jitter_ratio must be between 0 and 1")
+        if not math.isfinite(self.base_delay_seconds) or self.base_delay_seconds <= 0:
+            raise ValueError("base_delay_seconds must be finite and positive")
+        if not math.isfinite(self.max_delay_seconds) or self.max_delay_seconds < self.base_delay_seconds:
+            raise ValueError("max_delay_seconds must be finite and greater than or equal to base_delay_seconds")
+        if not math.isfinite(self.jitter_ratio) or not 0 <= self.jitter_ratio <= 1:
+            raise ValueError("jitter_ratio must be finite and between 0 and 1")
 
 
 def channel_retry_policy_from_env() -> ChannelRetryPolicy:
@@ -194,7 +195,11 @@ def retry_delay_seconds(
         policy.max_delay_seconds,
         policy.base_delay_seconds * (2 ** max(0, attempt - 1)),
     )
-    jitter_multiplier = 1 + policy.jitter_ratio * (2 * random_value() - 1)
+    sample = random_value()
+    if not math.isfinite(sample):
+        sample = 0.5
+    sample = min(1.0, max(0.0, sample))
+    jitter_multiplier = 1 + policy.jitter_ratio * (2 * sample - 1)
     return min(policy.max_delay_seconds, max(0.0, base_delay * jitter_multiplier))
 
 
@@ -219,7 +224,9 @@ def _contains_any(value: str, hints: tuple[str, ...]) -> bool:
 def _retry_after_seconds(exc: Exception) -> float | None:
     attribute_value = getattr(exc, "retry_after", None)
     if isinstance(attribute_value, (int, float)):
-        return float(attribute_value)
+        parsed_attribute = float(attribute_value)
+        if math.isfinite(parsed_attribute):
+            return parsed_attribute
 
     if isinstance(exc, httpx.HTTPStatusError):
         raw_value = exc.response.headers.get("Retry-After")
@@ -231,15 +238,19 @@ def _retry_after_seconds(exc: Exception) -> float | None:
     if _is_provider_api_error(exc):
         match = _RETRY_AFTER_PATTERN.search(str(exc))
         if match is not None:
-            return float(match.group(1))
+            parsed_message = float(match.group(1))
+            if math.isfinite(parsed_message):
+                return parsed_message
     return None
 
 
 def _parse_retry_after_header(raw_value: str) -> float | None:
     try:
-        return float(raw_value)
+        parsed_seconds = float(raw_value)
     except ValueError:
         pass
+    else:
+        return parsed_seconds if math.isfinite(parsed_seconds) else None
     try:
         retry_at = parsedate_to_datetime(raw_value)
     except (TypeError, ValueError, OverflowError):
