@@ -81,6 +81,7 @@ async def test_webhook_validation_schedules_background_processing(monkeypatch) -
     connection_id = uuid4()
     connection = _connection(connection_id)
     adapter = _adapter(connection_id)
+    reserved_payload_sizes: list[int] = []
 
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.build_channel_adapter",
@@ -88,7 +89,7 @@ async def test_webhook_validation_schedules_background_processing(monkeypatch) -
     )
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.reserve_provider_webhook_slot",
-        lambda: True,
+        lambda payload_size: reserved_payload_sizes.append(payload_size) or True,
     )
 
     background_tasks = BackgroundTasks()
@@ -101,6 +102,7 @@ async def test_webhook_validation_schedules_background_processing(monkeypatch) -
     )
 
     assert response == {"ok": True}
+    assert reserved_payload_sizes == [2]
     assert len(background_tasks.tasks) == 1
 
 
@@ -116,11 +118,16 @@ async def test_webhook_queue_full_returns_retryable_503(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.reserve_provider_webhook_slot",
-        lambda: False,
+        lambda _payload_size: False,
     )
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.webhook_limiter_snapshot",
-        lambda: SimpleNamespace(pending=128, max_pending=128),
+        lambda: SimpleNamespace(
+            pending=128,
+            max_pending=128,
+            pending_bytes=67108864,
+            max_pending_bytes=67108864,
+        ),
     )
 
     with pytest.raises(HTTPException) as exc_info:
@@ -134,7 +141,8 @@ async def test_webhook_queue_full_returns_retryable_503(monkeypatch) -> None:
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.headers == {"Retry-After": "1"}
-    assert "128/128" in str(exc_info.value.detail)
+    assert "jobs 128/128" in str(exc_info.value.detail)
+    assert "bytes 67108864/67108864" in str(exc_info.value.detail)
 
 
 @pytest.mark.asyncio
@@ -149,7 +157,7 @@ async def test_invalid_webhook_is_rejected_before_queue_reservation(monkeypatch)
     adapter.verify_event = reject
     reserved = False
 
-    def reserve() -> bool:
+    def reserve(_payload_size: int) -> bool:
         nonlocal reserved
         reserved = True
         return True
@@ -255,19 +263,15 @@ async def test_streamed_webhook_stops_before_reading_later_chunks(monkeypatch) -
 
 
 @pytest.mark.asyncio
-async def test_background_task_registration_failure_releases_reservation(monkeypatch) -> None:
+async def test_background_task_registration_failure_releases_payload_reservation(monkeypatch) -> None:
     connection_id = uuid4()
     connection = _connection(connection_id)
     adapter = _adapter(connection_id)
-    released = False
+    released_payload_sizes: list[int] = []
 
     class FailingBackgroundTasks:
         def add_task(self, *_args, **_kwargs) -> None:
             raise RuntimeError("task registration failed")
-
-    def release() -> None:
-        nonlocal released
-        released = True
 
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.build_channel_adapter",
@@ -275,11 +279,11 @@ async def test_background_task_registration_failure_releases_reservation(monkeyp
     )
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.reserve_provider_webhook_slot",
-        lambda: True,
+        lambda _payload_size: True,
     )
     monkeypatch.setattr(
         "langflow.api.v1.channel_webhooks.release_provider_webhook_slot",
-        release,
+        released_payload_sizes.append,
     )
 
     with pytest.raises(RuntimeError, match="task registration failed"):
@@ -291,4 +295,4 @@ async def test_background_task_registration_failure_releases_reservation(monkeyp
             expected_channel_type="telegram",
         )
 
-    assert released is True
+    assert released_payload_sizes == [2]
