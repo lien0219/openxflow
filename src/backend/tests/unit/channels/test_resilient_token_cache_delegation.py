@@ -10,7 +10,7 @@ from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdap
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("module", "adapter", "method_name"),
+    ("module", "adapter", "method_name", "provider"),
     [
         (
             feishu_resilient,
@@ -20,6 +20,7 @@ from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdap
                 app_secret="feishu-secret",
             ),
             "_tenant_access_token",
+            "feishu",
         ),
         (
             dingtalk_resilient,
@@ -29,6 +30,7 @@ from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdap
                 client_secret="ding-secret",
             ),
             "_access_token",
+            "dingtalk",
         ),
         (
             wecom_resilient,
@@ -41,6 +43,7 @@ from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdap
                 encoding_aes_key="abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG",
             ),
             "_access_token",
+            "wecom",
         ),
     ],
 )
@@ -49,6 +52,7 @@ async def test_resilient_adapters_delegate_token_cache_flow(
     module,
     adapter,
     method_name: str,
+    provider: str,
 ) -> None:
     captured = {}
 
@@ -61,6 +65,7 @@ async def test_resilient_adapters_delegate_token_cache_flow(
     token = await getattr(adapter, method_name)(force_refresh=True)
 
     assert token == "shared-token"
+    assert captured["provider"] == provider
     assert captured["cache"] is adapter._token_cache
     assert captured["cache_key"] == adapter._token_cache_key
     assert captured["force_refresh"] is True
