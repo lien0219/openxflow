@@ -45,6 +45,7 @@ class ResilientWeComChannelAdapter(WeComChannelAdapter):
             rejected_token=rejected_token,
             lock=self._token_lock,
             fetch_new_token=self._fetch_access_token_entry,
+            provider="wecom",
         )
 
     async def _api_request(
@@ -81,6 +82,7 @@ class ResilientWeComChannelAdapter(WeComChannelAdapter):
             refresh_token=self._refresh_rejected_access_token,
             send=send,
             is_rejected=is_rejected,
+            provider="wecom",
         )
         response.raise_for_status()
         if body is None:
