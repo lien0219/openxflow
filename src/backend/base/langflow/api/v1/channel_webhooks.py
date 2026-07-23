@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
@@ -13,6 +12,7 @@ from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.adapters.wecom import WeComChannelAdapter
 from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
+from langflow.channels.services.runtime_config import webhook_max_body_bytes
 from langflow.channels.services.webhook_processing import (
     process_reserved_provider_webhook,
     release_provider_webhook_slot,
@@ -26,22 +26,6 @@ router = APIRouter(
     tags=["Channel Webhooks"],
     lifespan=channel_stream_lifespan,
 )
-
-
-def _positive_int_env(name: str, default: int) -> int:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    try:
-        parsed = int(value)
-    except ValueError:
-        return default
-    return parsed if parsed > 0 else default
-
-
-def webhook_max_body_bytes() -> int:
-    """Maximum accepted provider callback body size."""
-    return _positive_int_env("LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES", 1024 * 1024)
 
 
 async def _read_limited_body(request: Request) -> bytes:
