@@ -247,48 +247,37 @@ async def durable_webhook_job_depths(session: AsyncSession) -> dict[str, int]:
 
 
 async def cleanup_durable_webhook_jobs(session: AsyncSession) -> int:
-    """Delete one bounded batch of expired completed and terminally failed jobs."""
+    """Delete one oldest-first batch across both terminal job statuses."""
     config = durable_webhook_job_config()
     now = utc_now()
-    remaining = config.cleanup_batch_size
-    deleted = 0
-    retention_rules = (
-        (
-            ChannelWebhookJobStatus.COMPLETED.value,
-            ChannelWebhookJob.completed_at,
-            now - timedelta(days=config.completed_retention_days),
+    completed_cutoff = now - timedelta(days=config.completed_retention_days)
+    failed_cutoff = now - timedelta(days=config.failed_retention_days)
+    eligible = sa.or_(
+        sa.and_(
+            ChannelWebhookJob.status == ChannelWebhookJobStatus.COMPLETED.value,
+            ChannelWebhookJob.updated_at <= completed_cutoff,
         ),
-        (
-            ChannelWebhookJobStatus.FAILED.value,
-            ChannelWebhookJob.updated_at,
-            now - timedelta(days=config.failed_retention_days),
+        sa.and_(
+            ChannelWebhookJob.status == ChannelWebhookJobStatus.FAILED.value,
+            ChannelWebhookJob.updated_at <= failed_cutoff,
         ),
     )
-    for status, timestamp_column, cutoff in retention_rules:
-        if remaining <= 0:
-            break
-        ids = list(
-            (
-                await session.exec(
-                    select(ChannelWebhookJob.id)
-                    .where(
-                        ChannelWebhookJob.status == status,
-                        timestamp_column.is_not(None),
-                        timestamp_column <= cutoff,
-                    )
-                    .order_by(timestamp_column, ChannelWebhookJob.created_at)
-                    .limit(remaining)
-                )
-            ).all()
-        )
-        if not ids:
-            continue
-        result = await session.exec(sa.delete(ChannelWebhookJob).where(ChannelWebhookJob.id.in_(ids)))
-        removed = max(0, int(result.rowcount or 0))
-        deleted += removed
-        remaining -= removed
+    ids = list(
+        (
+            await session.exec(
+                select(ChannelWebhookJob.id)
+                .where(eligible)
+                .order_by(ChannelWebhookJob.updated_at, ChannelWebhookJob.created_at)
+                .limit(config.cleanup_batch_size)
+            )
+        ).all()
+    )
+    if not ids:
+        await session.rollback()
+        return 0
+    result = await session.exec(sa.delete(ChannelWebhookJob).where(ChannelWebhookJob.id.in_(ids)))
     await session.commit()
-    return deleted
+    return max(0, int(result.rowcount or 0))
 
 
 class DurableWebhookJobWorker:
