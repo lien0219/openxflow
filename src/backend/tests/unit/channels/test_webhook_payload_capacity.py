@@ -29,6 +29,9 @@ def test_webhook_limiter_rejects_payloads_beyond_byte_capacity() -> None:
     assert snapshot.pending_bytes == 5
     assert snapshot.max_pending_bytes == 5
     assert snapshot.rejected_total == 1
+    assert snapshot.rejected_pending_total == 0
+    assert snapshot.rejected_bytes_total == 1
+    assert snapshot.rejected_both_total == 0
 
     limiter.cancel_reservation(first)
     assert limiter.snapshot().pending_bytes == 2
@@ -37,6 +40,30 @@ def test_webhook_limiter_rejects_payloads_beyond_byte_capacity() -> None:
     limiter.cancel_reservation(second)
     limiter.cancel_reservation(third)
     assert limiter.snapshot().pending_bytes == 0
+
+
+def test_webhook_limiter_classifies_combined_capacity_rejection_once() -> None:
+    limiter = WebhookProcessingLimiter(
+        max_concurrency=1,
+        max_pending=1,
+        max_pending_bytes=5,
+    )
+    reservation = _reserve(limiter, 5)
+
+    assert limiter.try_reserve(1) is None
+
+    snapshot = limiter.snapshot()
+    assert snapshot.rejected_total == 1
+    assert snapshot.rejected_pending_total == 0
+    assert snapshot.rejected_bytes_total == 0
+    assert snapshot.rejected_both_total == 1
+    assert (
+        snapshot.rejected_pending_total
+        + snapshot.rejected_bytes_total
+        + snapshot.rejected_both_total
+        == snapshot.rejected_total
+    )
+    limiter.cancel_reservation(reservation)
 
 
 def test_webhook_limiter_rejects_negative_payload_sizes() -> None:
@@ -123,3 +150,4 @@ async def test_cancelled_webhook_releases_payload_bytes_without_failure(monkeypa
     assert snapshot.pending == 0
     assert snapshot.pending_bytes == 0
     assert snapshot.failed_total == 0
+    assert snapshot.cancelled_total == 1
