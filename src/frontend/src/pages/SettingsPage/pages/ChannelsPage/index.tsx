@@ -35,7 +35,10 @@ import {
   readConnectionSetting,
 } from "./utils";
 
-type SupportedChannelType = Extract<ChannelType, "telegram" | "feishu">;
+type SupportedChannelType = Extract<
+  ChannelType,
+  "telegram" | "feishu" | "dingtalk"
+>;
 type DeleteTarget =
   | { kind: "connection"; id: string; name: string }
   | { kind: "identity"; id: string; name: string }
@@ -49,9 +52,16 @@ const PROVIDERS: Array<{
 }> = [
   { id: "telegram", name: "Telegram", enabled: true, icon: "Send" },
   { id: "feishu", name: "飞书", enabled: true, icon: "MessagesSquare" },
-  { id: "dingtalk", name: "钉钉", enabled: false, icon: "MessageCircle" },
+  { id: "dingtalk", name: "钉钉", enabled: true, icon: "MessageCircle" },
   { id: "wecom", name: "企业微信", enabled: false, icon: "Building2" },
 ];
+
+function getConnectionModeLabel(connection: ChannelConnection): string {
+  if (connection.channel_type === "dingtalk" && connection.connection_mode === "stream") {
+    return "Stream 长连接";
+  }
+  return connection.connection_mode === "webhook" ? "Webhook" : connection.connection_mode;
+}
 
 export default function ChannelsPage() {
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
@@ -268,6 +278,9 @@ export default function ChannelsPage() {
   const webhookUrl = selectedConnection
     ? buildChannelWebhookUrl(selectedConnection)
     : null;
+  const showWebhookUrl =
+    selectedConnection?.channel_type !== "dingtalk" ||
+    selectedConnection?.connection_mode !== "stream";
 
   return (
     <div className="flex h-full w-full flex-col gap-6 overflow-y-auto pb-8 pr-1">
@@ -281,7 +294,7 @@ export default function ChannelsPage() {
             />
           </h2>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            在 Telegram 和飞书手机端运行工作流、查询知识库、上传文件并处理互动操作。钉钉和企业微信将在后续阶段接入。
+            在 Telegram、飞书和钉钉手机端运行工作流、查询知识库、上传文件并处理互动操作。企业微信将在后续阶段接入。
           </p>
         </div>
         <Button variant="primary" onClick={() => openNewConnection("telegram")}>
@@ -334,7 +347,7 @@ export default function ChannelsPage() {
           </div>
           {connections.length === 0 ? (
             <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              尚未创建连接。可从上方选择 Telegram 或飞书开始配置。
+              尚未创建连接。可从上方选择 Telegram、飞书或钉钉开始配置。
             </div>
           ) : (
             connections.map((connection) => {
@@ -355,7 +368,7 @@ export default function ChannelsPage() {
                     <div>
                       <div className="font-medium">{connection.name}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {connection.channel_type} · {connection.connection_mode}
+                        {connection.channel_type} · {getConnectionModeLabel(connection)}
                       </div>
                     </div>
                     <span
@@ -394,19 +407,27 @@ export default function ChannelsPage() {
                         "无"}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      最近连接：
+                      接入方式：{getConnectionModeLabel(selectedConnection)} · 最近连接：
                       {selectedConnection.last_connected_at
                         ? new Date(
                             selectedConnection.last_connected_at,
                           ).toLocaleString()
                         : "尚未测试"}
                     </p>
-                    {webhookUrl && (
+                    {selectedConnection.channel_type === "dingtalk" &&
+                      selectedConnection.connection_mode === "stream" && (
+                        <div className="mt-4 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+                          钉钉 Stream 模式由 OpenXFlow 服务端主动建立长连接，不需要配置公网回调地址。测试连接会同时检查服务器是否安装 Stream SDK。
+                        </div>
+                      )}
+                    {showWebhookUrl && webhookUrl && (
                       <div className="mt-4 rounded-lg bg-muted/60 p-3">
                         <div className="text-xs font-medium">
                           {selectedConnection.channel_type === "feishu"
                             ? "飞书事件订阅地址"
-                            : "Webhook 地址"}
+                            : selectedConnection.channel_type === "dingtalk"
+                              ? "钉钉 HTTP 回调兼容地址"
+                              : "Webhook 地址"}
                         </div>
                         <code className="mt-1 block break-all text-xs text-muted-foreground">
                           {webhookUrl}
