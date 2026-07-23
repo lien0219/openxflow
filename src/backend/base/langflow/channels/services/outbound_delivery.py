@@ -13,6 +13,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage
+from langflow.channels.services.outbound_delivery_metrics import (
+    record_outbound_delivery_failed,
+    record_outbound_delivery_reserved,
+    record_outbound_delivery_sent,
+    record_outbound_delivery_state_error,
+    record_outbound_delivery_suppressed,
+)
 from langflow.services.database.models.channel.model import utc_now
 from langflow.services.database.models.channel.outbound_delivery_model import (
     ChannelOutboundDelivery,
@@ -50,6 +57,7 @@ async def reserve_outbound_delivery(event: ChannelEvent, message: ChannelMessage
         ).first()
         if existing is not None:
             if existing.status != ChannelOutboundDeliveryStatus.FAILED.value:
+                record_outbound_delivery_suppressed()
                 return OutboundDeliveryDecision(should_send=False, delivery_id=existing.id)
             result = await session.exec(
                 sa.update(ChannelOutboundDelivery)
@@ -67,8 +75,10 @@ async def reserve_outbound_delivery(event: ChannelEvent, message: ChannelMessage
             )
             if result.rowcount != 1:
                 await session.rollback()
+                record_outbound_delivery_suppressed()
                 return OutboundDeliveryDecision(should_send=False, delivery_id=existing.id)
             await session.commit()
+            record_outbound_delivery_reserved()
             return OutboundDeliveryDecision(should_send=True, delivery_id=existing.id)
 
         delivery = ChannelOutboundDelivery(
@@ -90,52 +100,65 @@ async def reserve_outbound_delivery(event: ChannelEvent, message: ChannelMessage
                 )
             ).first()
             if concurrent is None:
+                record_outbound_delivery_state_error()
                 raise
+            record_outbound_delivery_suppressed()
             return OutboundDeliveryDecision(should_send=False, delivery_id=concurrent)
+        record_outbound_delivery_reserved()
         return OutboundDeliveryDecision(should_send=True, delivery_id=delivery.id)
 
 
 async def mark_outbound_delivery_sent(delivery_id: UUID, provider_message_id: str | None) -> None:
     now = utc_now()
-    async with session_scope() as session:
-        result = await session.exec(
-            sa.update(ChannelOutboundDelivery)
-            .where(
-                ChannelOutboundDelivery.id == delivery_id,
-                ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.RESERVED.value,
+    try:
+        async with session_scope() as session:
+            result = await session.exec(
+                sa.update(ChannelOutboundDelivery)
+                .where(
+                    ChannelOutboundDelivery.id == delivery_id,
+                    ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.RESERVED.value,
+                )
+                .values(
+                    status=ChannelOutboundDeliveryStatus.SENT.value,
+                    provider_message_id=provider_message_id,
+                    last_error=None,
+                    sent_at=now,
+                    updated_at=now,
+                )
             )
-            .values(
-                status=ChannelOutboundDeliveryStatus.SENT.value,
-                provider_message_id=provider_message_id,
-                last_error=None,
-                sent_at=now,
-                updated_at=now,
-            )
-        )
-        if result.rowcount != 1:
-            await session.rollback()
-            raise RuntimeError("Outbound delivery reservation is no longer active")
-        await session.commit()
+            if result.rowcount != 1:
+                await session.rollback()
+                raise RuntimeError("Outbound delivery reservation is no longer active")
+            await session.commit()
+    except Exception:
+        record_outbound_delivery_state_error()
+        raise
+    record_outbound_delivery_sent()
 
 
 async def mark_outbound_delivery_failed(delivery_id: UUID, error: Exception) -> None:
-    async with session_scope() as session:
-        result = await session.exec(
-            sa.update(ChannelOutboundDelivery)
-            .where(
-                ChannelOutboundDelivery.id == delivery_id,
-                ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.RESERVED.value,
+    try:
+        async with session_scope() as session:
+            result = await session.exec(
+                sa.update(ChannelOutboundDelivery)
+                .where(
+                    ChannelOutboundDelivery.id == delivery_id,
+                    ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.RESERVED.value,
+                )
+                .values(
+                    status=ChannelOutboundDeliveryStatus.FAILED.value,
+                    last_error=str(error)[:2000],
+                    updated_at=utc_now(),
+                )
             )
-            .values(
-                status=ChannelOutboundDeliveryStatus.FAILED.value,
-                last_error=str(error)[:2000],
-                updated_at=utc_now(),
-            )
-        )
-        if result.rowcount != 1:
-            await session.rollback()
-            raise RuntimeError("Outbound delivery reservation is no longer active")
-        await session.commit()
+            if result.rowcount != 1:
+                await session.rollback()
+                raise RuntimeError("Outbound delivery reservation is no longer active")
+            await session.commit()
+    except Exception:
+        record_outbound_delivery_state_error()
+        raise
+    record_outbound_delivery_failed()
 
 
 async def send_outbound_response_once(
