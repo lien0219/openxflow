@@ -18,14 +18,22 @@ import type {
 } from "@/controllers/API/queries/channels";
 import { parseAllowedExtensions, readConnectionSetting } from "../utils";
 
+type ConfigurableChannelType = Extract<
+  ChannelType,
+  "telegram" | "feishu" | "dingtalk"
+>;
+
 interface ConnectionFormState {
-  channelType: Extract<ChannelType, "telegram" | "feishu">;
+  channelType: ConfigurableChannelType;
   name: string;
   botToken: string;
   webhookSecret: string;
   appId: string;
   appSecret: string;
   verificationToken: string;
+  clientId: string;
+  clientSecret: string;
+  robotCode: string;
   publicBaseUrl: string;
   maxFileSizeMb: string;
   allowedExtensions: string;
@@ -38,12 +46,18 @@ interface ChannelConnectionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   connection?: ChannelConnection | null;
-  initialChannelType?: Extract<ChannelType, "telegram" | "feishu">;
+  initialChannelType?: ConfigurableChannelType;
   loading?: boolean;
   onSubmit: (value: {
     payload: ChannelConnectionCreate | ChannelConnectionUpdate;
     publicBaseUrl: string;
   }) => Promise<void>;
+}
+
+function getProviderName(channelType: ConfigurableChannelType): string {
+  if (channelType === "feishu") return "飞书";
+  if (channelType === "dingtalk") return "钉钉";
+  return "Telegram";
 }
 
 export default function ChannelConnectionDialog({
@@ -63,6 +77,9 @@ export default function ChannelConnectionDialog({
     appId: "",
     appSecret: "",
     verificationToken: "",
+    clientId: "",
+    clientSecret: "",
+    robotCode: "",
     publicBaseUrl: "",
     maxFileSizeMb: "10",
     allowedExtensions: DEFAULT_EXTENSIONS,
@@ -71,12 +88,13 @@ export default function ChannelConnectionDialog({
 
   useEffect(() => {
     if (!open) return;
-    const channelType =
-      connection?.channel_type === "feishu"
-        ? "feishu"
-        : connection?.channel_type === "telegram"
-          ? "telegram"
-          : initialChannelType;
+    const connectionType = connection?.channel_type;
+    const channelType: ConfigurableChannelType =
+      connectionType === "feishu" ||
+      connectionType === "telegram" ||
+      connectionType === "dingtalk"
+        ? connectionType
+        : initialChannelType;
     const allowed = readConnectionSetting<string[]>(
       connection,
       "allowed_file_extensions",
@@ -84,12 +102,15 @@ export default function ChannelConnectionDialog({
     );
     setForm({
       channelType,
-      name: connection?.name ?? (channelType === "feishu" ? "飞书" : "Telegram"),
+      name: connection?.name ?? getProviderName(channelType),
       botToken: "",
       webhookSecret: "",
       appId: "",
       appSecret: "",
       verificationToken: "",
+      clientId: "",
+      clientSecret: "",
+      robotCode: "",
       publicBaseUrl: readConnectionSetting(connection, "public_base_url", ""),
       maxFileSizeMb: String(
         readConnectionSetting(connection, "max_file_size_mb", 10),
@@ -105,27 +126,36 @@ export default function ChannelConnectionDialog({
     value: ConnectionFormState[K],
   ) => setForm((current) => ({ ...current, [key]: value }));
 
-  const changeChannelType = (channelType: "telegram" | "feishu") => {
-    setForm((current) => ({
-      ...current,
-      channelType,
-      name:
-        current.name === "Telegram" || current.name === "飞书"
-          ? channelType === "feishu"
-            ? "飞书"
-            : "Telegram"
+  const changeChannelType = (channelType: ConfigurableChannelType) => {
+    setForm((current) => {
+      const standardNames = ["Telegram", "飞书", "钉钉"];
+      return {
+        ...current,
+        channelType,
+        name: standardNames.includes(current.name)
+          ? getProviderName(channelType)
           : current.name,
-    }));
+      };
+    });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.name.trim()) return;
-    if (!isEditing && form.channelType === "telegram" && !form.botToken.trim()) return;
+    if (!isEditing && form.channelType === "telegram" && !form.botToken.trim()) {
+      return;
+    }
     if (
       !isEditing &&
       form.channelType === "feishu" &&
       (!form.appId.trim() || !form.appSecret.trim())
+    ) {
+      return;
+    }
+    if (
+      !isEditing &&
+      form.channelType === "dingtalk" &&
+      (!form.clientId.trim() || !form.clientSecret.trim())
     ) {
       return;
     }
@@ -136,12 +166,18 @@ export default function ChannelConnectionDialog({
       if (form.webhookSecret.trim()) {
         credentials.webhook_secret = form.webhookSecret.trim();
       }
-    } else {
+    } else if (form.channelType === "feishu") {
       if (form.appId.trim()) credentials.app_id = form.appId.trim();
       if (form.appSecret.trim()) credentials.app_secret = form.appSecret.trim();
       if (form.verificationToken.trim()) {
         credentials.verification_token = form.verificationToken.trim();
       }
+    } else {
+      if (form.clientId.trim()) credentials.client_id = form.clientId.trim();
+      if (form.clientSecret.trim()) {
+        credentials.client_secret = form.clientSecret.trim();
+      }
+      if (form.robotCode.trim()) credentials.robot_code = form.robotCode.trim();
     }
 
     const settingsData = {
@@ -150,12 +186,13 @@ export default function ChannelConnectionDialog({
       max_file_size_mb: Math.max(1, Number(form.maxFileSizeMb) || 10),
       allowed_file_extensions: parseAllowedExtensions(form.allowedExtensions),
     };
+    const connectionMode = form.channelType === "dingtalk" ? "stream" : "webhook";
 
     const payload = isEditing
       ? {
           name: form.name.trim(),
           enabled: form.enabled,
-          connection_mode: "webhook",
+          connection_mode: connectionMode,
           settings_data: settingsData,
           ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
         }
@@ -163,7 +200,7 @@ export default function ChannelConnectionDialog({
           name: form.name.trim(),
           channel_type: form.channelType,
           enabled: form.enabled,
-          connection_mode: "webhook",
+          connection_mode: connectionMode,
           settings_data: settingsData,
           credentials,
         };
@@ -171,7 +208,7 @@ export default function ChannelConnectionDialog({
     await onSubmit({ payload, publicBaseUrl: form.publicBaseUrl.trim() });
   };
 
-  const providerName = form.channelType === "feishu" ? "飞书" : "Telegram";
+  const providerName = getProviderName(form.channelType);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -181,7 +218,7 @@ export default function ChannelConnectionDialog({
             {isEditing ? `编辑${providerName}连接` : `新增${providerName}连接`}
           </DialogTitle>
           <DialogDescription>
-            保存应用凭证、公开访问地址以及手机文件上传限制。凭证仅加密存储，保存后不会回显。
+            保存应用凭证、接入方式以及手机文件上传限制。凭证仅加密存储，保存后不会回显。
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
@@ -201,17 +238,18 @@ export default function ChannelConnectionDialog({
                 className="primary-input h-10"
                 value={form.channelType}
                 onChange={(event) =>
-                  changeChannelType(event.target.value as "telegram" | "feishu")
+                  changeChannelType(event.target.value as ConfigurableChannelType)
                 }
                 disabled={isEditing}
               >
                 <option value="telegram">Telegram Bot</option>
                 <option value="feishu">飞书自建应用</option>
+                <option value="dingtalk">钉钉企业内部机器人</option>
               </select>
             </label>
           </div>
 
-          {form.channelType === "telegram" ? (
+          {form.channelType === "telegram" && (
             <>
               <label className="flex flex-col gap-2 text-sm font-medium">
                 Bot Token
@@ -240,7 +278,9 @@ export default function ChannelConnectionDialog({
                 />
               </label>
             </>
-          ) : (
+          )}
+
+          {form.channelType === "feishu" && (
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium">
@@ -280,6 +320,48 @@ export default function ChannelConnectionDialog({
             </>
           )}
 
+          {form.channelType === "dingtalk" && (
+            <>
+              <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+                钉钉默认使用 Stream 长连接接收机器人消息，不需要公网回调地址。服务会自动维护连接并在断线后重连。
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Client ID / AppKey
+                  <Input
+                    value={form.clientId}
+                    onChange={(event) => setField("clientId", event.target.value)}
+                    placeholder={isEditing ? "留空保留原值" : "dingxxxxxxxx"}
+                    required={!isEditing}
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Client Secret / AppSecret
+                  <Input
+                    type="password"
+                    value={form.clientSecret}
+                    onChange={(event) =>
+                      setField("clientSecret", event.target.value)
+                    }
+                    placeholder={isEditing ? "留空保留原值" : "钉钉应用密钥"}
+                    required={!isEditing}
+                  />
+                </label>
+              </div>
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                Robot Code
+                <Input
+                  value={form.robotCode}
+                  onChange={(event) => setField("robotCode", event.target.value)}
+                  placeholder="通常与 Client ID 相同，留空自动使用 Client ID"
+                />
+                <span className="text-xs font-normal text-muted-foreground">
+                  用于主动发送群聊、单聊消息以及换取文件下载地址。
+                </span>
+              </label>
+            </>
+          )}
+
           <label className="flex flex-col gap-2 text-sm font-medium">
             OpenXFlow 公开地址
             <Input
@@ -288,7 +370,9 @@ export default function ChannelConnectionDialog({
               placeholder="https://openxflow.example.com"
             />
             <span className="text-xs font-normal text-muted-foreground">
-              必须是外网可访问的 HTTPS 地址。保存后会生成对应平台的事件回调地址。
+              {form.channelType === "dingtalk"
+                ? "Stream 模式不需要该地址；仅在启用钉钉签名 HTTP 回调兼容模式时填写。"
+                : "必须是外网可访问的 HTTPS 地址，保存后会生成对应平台回调地址。"}
             </span>
           </label>
 
@@ -318,7 +402,7 @@ export default function ChannelConnectionDialog({
             <div>
               <div className="text-sm font-medium">启用连接</div>
               <div className="text-xs text-muted-foreground">
-                关闭后平台回调不再触发工作流和文件解析。
+                关闭后停止接收消息、运行工作流和解析文件。
               </div>
             </div>
             <Switch
