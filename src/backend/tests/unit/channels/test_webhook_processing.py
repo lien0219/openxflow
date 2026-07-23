@@ -7,26 +7,48 @@ from langflow.channels.services import webhook_processing
 from langflow.channels.services.webhook_processing import WebhookProcessingLimiter
 
 
+def _reserve(limiter: WebhookProcessingLimiter, payload_size: int = 0):
+    reservation = limiter.try_reserve(payload_size)
+    assert reservation is not None
+    return reservation
+
+
 def test_webhook_limiter_rejects_work_beyond_pending_capacity() -> None:
     limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=2)
 
-    assert limiter.try_reserve() is True
-    assert limiter.try_reserve() is True
-    assert limiter.try_reserve() is False
+    first = _reserve(limiter)
+    second = _reserve(limiter)
+    assert limiter.try_reserve() is None
     assert limiter.snapshot().pending == 2
 
-    limiter.release()
-    assert limiter.try_reserve() is True
-    limiter.release()
-    limiter.release()
+    limiter.cancel_reservation(first)
+    third = _reserve(limiter)
+    limiter.cancel_reservation(second)
+    limiter.cancel_reservation(third)
     assert limiter.snapshot().pending == 0
+
+
+def test_webhook_reservation_cannot_be_consumed_twice_or_by_another_limiter() -> None:
+    first_limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
+    second_limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
+    reservation = _reserve(first_limiter, 5)
+
+    with pytest.raises(ValueError, match="not active"):
+        second_limiter.cancel_reservation(reservation)
+
+    first_limiter.cancel_reservation(reservation)
+    with pytest.raises(ValueError, match="not active"):
+        first_limiter.cancel_reservation(reservation)
+
+    assert first_limiter.snapshot().pending == 0
+    assert first_limiter.snapshot().pending_bytes == 0
 
 
 @pytest.mark.asyncio
 async def test_webhook_limiter_caps_concurrent_callbacks() -> None:
     limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=2)
-    assert limiter.try_reserve() is True
-    assert limiter.try_reserve() is True
+    first_reservation = _reserve(limiter)
+    second_reservation = _reserve(limiter)
 
     first_started = asyncio.Event()
     allow_first_to_finish = asyncio.Event()
@@ -49,14 +71,14 @@ async def test_webhook_limiter_caps_concurrent_callbacks() -> None:
     await asyncio.gather(first_task, second_task)
     assert second_started.is_set() is True
 
-    limiter.release()
-    limiter.release()
+    limiter.cancel_reservation(first_reservation)
+    limiter.cancel_reservation(second_reservation)
 
 
 @pytest.mark.asyncio
 async def test_reserved_webhook_slot_is_released_after_failure(monkeypatch) -> None:
     limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
-    assert limiter.try_reserve() is True
+    reservation = _reserve(limiter, 2)
 
     async def fail(**_kwargs) -> None:
         raise RuntimeError("boom")
@@ -66,6 +88,7 @@ async def test_reserved_webhook_slot_is_released_after_failure(monkeypatch) -> N
 
     with pytest.raises(RuntimeError, match="boom"):
         await webhook_processing.process_reserved_provider_webhook(
+            reservation=reservation,
             connection_id=uuid4(),
             expected_channel_type="telegram",
             headers={},
@@ -73,14 +96,14 @@ async def test_reserved_webhook_slot_is_released_after_failure(monkeypatch) -> N
         )
 
     assert limiter.snapshot().pending == 0
-    assert limiter.try_reserve() is True
-    limiter.release()
+    replacement = _reserve(limiter)
+    limiter.cancel_reservation(replacement)
 
 
 @pytest.mark.asyncio
 async def test_reserved_webhook_timeout_releases_capacity(monkeypatch) -> None:
     limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
-    assert limiter.try_reserve() is True
+    reservation = _reserve(limiter, 2)
     never_finishes = asyncio.Event()
 
     async def block(**_kwargs) -> bool:
@@ -92,6 +115,7 @@ async def test_reserved_webhook_timeout_releases_capacity(monkeypatch) -> None:
     monkeypatch.setattr(webhook_processing, "webhook_task_timeout_seconds", lambda: 0.01)
 
     await webhook_processing.process_reserved_provider_webhook(
+        reservation=reservation,
         connection_id=uuid4(),
         expected_channel_type="telegram",
         headers={},
@@ -107,7 +131,7 @@ async def test_reserved_webhook_timeout_releases_capacity(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_queued_webhook_does_not_consume_execution_timeout(monkeypatch) -> None:
     limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
-    assert limiter.try_reserve() is True
+    reservation = _reserve(limiter, len(b"second"))
 
     blocker_started = asyncio.Event()
     release_blocker = asyncio.Event()
@@ -129,6 +153,7 @@ async def test_queued_webhook_does_not_consume_execution_timeout(monkeypatch) ->
     await blocker_started.wait()
     webhook_task = asyncio.create_task(
         webhook_processing.process_reserved_provider_webhook(
+            reservation=reservation,
             connection_id=uuid4(),
             expected_channel_type="telegram",
             headers={},
@@ -153,7 +178,7 @@ async def test_queued_webhook_does_not_consume_execution_timeout(monkeypatch) ->
 @pytest.mark.asyncio
 async def test_reserved_webhook_external_cancellation_propagates_without_failure(monkeypatch) -> None:
     limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
-    assert limiter.try_reserve() is True
+    reservation = _reserve(limiter, 2)
     started = asyncio.Event()
     never_finishes = asyncio.Event()
 
@@ -168,6 +193,7 @@ async def test_reserved_webhook_external_cancellation_propagates_without_failure
 
     task = asyncio.create_task(
         webhook_processing.process_reserved_provider_webhook(
+            reservation=reservation,
             connection_id=uuid4(),
             expected_channel_type="telegram",
             headers={},
