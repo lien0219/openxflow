@@ -312,9 +312,6 @@ class DingTalkStreamManager:
                 try:
                     try:
                         await process_dingtalk_stream_payload(connection_id, callback.data)
-                    except asyncio.CancelledError:
-                        cancelled = True
-                        raise
                     except ValueError as exc:
                         await logger.awarning("Invalid DingTalk Stream payload: %s", exc)
                         return dingtalk_stream.AckMessage.STATUS_BAD_REQUEST, str(exc)
@@ -324,6 +321,9 @@ class DingTalkStreamManager:
                     await manager._set_status(connection_id, ChannelConnectionStatus.CONNECTED)
                     success = True
                     return dingtalk_stream.AckMessage.STATUS_OK, "OK"
+                except asyncio.CancelledError:
+                    cancelled = True
+                    raise
                 finally:
                     if not cancelled:
                         record_stream_callback(
