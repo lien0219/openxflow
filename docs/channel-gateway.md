@@ -39,6 +39,8 @@ HTTP providers are handled in two stages:
 1. The request handler loads the enabled connection, checks the callback body size, verifies the provider signature, decrypts encrypted events when configured, and parses the normalized event structure.
 2. After validation, it atomically reserves both queue-count capacity and retained-payload byte capacity before returning the provider acknowledgement. Workflow execution, file download, knowledge-base ingestion, and the provider reply run in an isolated database session with a bounded execution timeout.
 
+Each accepted callback receives an opaque, limiter-issued reservation token. Completion, cancellation, or background-task registration failure must consume that exact token. Tokens are single-use and scoped to the limiter that issued them, so callers cannot release a different byte count, release the same callback twice, or release capacity owned by another limiter instance.
+
 When the request body exceeds the configured limit, OpenXFlow returns:
 
 ```http
