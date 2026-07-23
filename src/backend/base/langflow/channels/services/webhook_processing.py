@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import Lock
 from typing import TypeVar
 from uuid import UUID
@@ -26,6 +26,13 @@ from langflow.services.database.models.channel.model import ChannelConnection
 from langflow.services.deps import session_scope
 
 _T = TypeVar("_T")
+
+
+@dataclass(frozen=True)
+class WebhookReservation:
+    """Opaque capacity reservation issued by one webhook limiter instance."""
+
+    _token: object = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -69,37 +76,36 @@ class WebhookProcessingLimiter:
         self._rejected_total = 0
         self._succeeded_total = 0
         self._failed_total = 0
+        self._reservations: dict[object, int] = {}
         self._state_lock = Lock()
         self._semaphore_lock = Lock()
         self._semaphores: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = WeakKeyDictionary()
 
-    def try_reserve(self, payload_size: int = 0) -> bool:
+    def try_reserve(self, payload_size: int = 0) -> WebhookReservation | None:
         """Reserve queue count and retained-payload capacity before returning a successful ACK."""
         self._validate_payload_size(payload_size)
         with self._state_lock:
             if self._pending >= self.max_pending or self._pending_bytes + payload_size > self.max_pending_bytes:
                 self._rejected_total += 1
-                return False
+                return None
+            token = object()
+            self._reservations[token] = payload_size
             self._pending += 1
             self._pending_bytes += payload_size
             self._accepted_total += 1
-            return True
+            return WebhookReservation(token)
 
-    def cancel_reservation(self, payload_size: int = 0) -> None:
-        self._validate_payload_size(payload_size)
+    def cancel_reservation(self, reservation: WebhookReservation) -> None:
         with self._state_lock:
-            self._pending = max(0, self._pending - 1)
-            self._pending_bytes = max(0, self._pending_bytes - payload_size)
+            payload_size = self._consume_reservation_locked(reservation)
+            self._pending -= 1
+            self._pending_bytes -= payload_size
 
-    def release(self, payload_size: int = 0) -> None:
-        """Backward-compatible alias for cancelling a reserved queue slot."""
-        self.cancel_reservation(payload_size)
-
-    def finish(self, *, success: bool, payload_size: int = 0) -> None:
-        self._validate_payload_size(payload_size)
+    def finish(self, reservation: WebhookReservation, *, success: bool) -> None:
         with self._state_lock:
-            self._pending = max(0, self._pending - 1)
-            self._pending_bytes = max(0, self._pending_bytes - payload_size)
+            payload_size = self._consume_reservation_locked(reservation)
+            self._pending -= 1
+            self._pending_bytes -= payload_size
             if success:
                 self._succeeded_total += 1
             else:
@@ -132,12 +138,20 @@ class WebhookProcessingLimiter:
                 return await callback(*args, **kwargs)
             finally:
                 with self._state_lock:
-                    self._active = max(0, self._active - 1)
+                    self._active -= 1
 
     @staticmethod
     def _validate_payload_size(payload_size: int) -> None:
         if payload_size < 0:
             raise ValueError("payload_size must be non-negative")
+
+    def _consume_reservation_locked(self, reservation: WebhookReservation) -> int:
+        if not isinstance(reservation, WebhookReservation):
+            raise TypeError("reservation must be a WebhookReservation")
+        try:
+            return self._reservations.pop(reservation._token)
+        except KeyError as exc:
+            raise ValueError("Webhook reservation is not active for this limiter") from exc
 
     def _semaphore_for_current_loop(self) -> asyncio.Semaphore:
         loop = asyncio.get_running_loop()
@@ -161,12 +175,12 @@ def _webhook_limiter_from_env() -> WebhookProcessingLimiter:
 _webhook_limiter = _webhook_limiter_from_env()
 
 
-def reserve_provider_webhook_slot(payload_size: int = 0) -> bool:
+def reserve_provider_webhook_slot(payload_size: int = 0) -> WebhookReservation | None:
     return _webhook_limiter.try_reserve(payload_size)
 
 
-def release_provider_webhook_slot(payload_size: int = 0) -> None:
-    _webhook_limiter.cancel_reservation(payload_size)
+def release_provider_webhook_slot(reservation: WebhookReservation) -> None:
+    _webhook_limiter.cancel_reservation(reservation)
 
 
 def webhook_limiter_snapshot() -> WebhookLimiterSnapshot:
@@ -201,6 +215,7 @@ async def _process_provider_webhook_with_timeout(
 
 async def process_reserved_provider_webhook(
     *,
+    reservation: WebhookReservation,
     connection_id: UUID,
     expected_channel_type: str,
     headers: dict[str, str],
@@ -209,7 +224,6 @@ async def process_reserved_provider_webhook(
     """Run one reserved callback and always release its queue and payload capacity."""
     success = False
     cancelled = False
-    payload_size = len(payload)
     try:
         try:
             success = await _webhook_limiter.run(
@@ -224,9 +238,9 @@ async def process_reserved_provider_webhook(
             raise
     finally:
         if cancelled:
-            _webhook_limiter.cancel_reservation(payload_size)
+            _webhook_limiter.cancel_reservation(reservation)
         else:
-            _webhook_limiter.finish(success=success, payload_size=payload_size)
+            _webhook_limiter.finish(reservation, success=success)
 
 
 async def process_provider_webhook(
