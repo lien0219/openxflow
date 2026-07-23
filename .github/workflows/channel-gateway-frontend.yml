@@ -1,5 +1,6 @@
 name: Channel Gateway Frontend
 
+# Keep this workflow scoped to Channel Center changes so PR validation stays fast.
 on:
   pull_request:
     branches:
