@@ -79,6 +79,7 @@ jobs:
           --with 'prometheus-client>=0.20'
           pytest -q
           src/backend/tests/unit/channels/test_channel_core_workflow.py
+          src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
           src/backend/tests/unit/channels/test_loop_lock.py
           src/backend/tests/unit/channels/test_keyed_loop_lock.py
           src/backend/tests/unit/channels/test_token_cache.py
