@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import math
 from dataclasses import dataclass
 from threading import Lock
@@ -131,13 +130,6 @@ _timing_metrics = ChannelTimingMetrics()
 
 
 def record_stream_callback(*, success: bool, duration_seconds: float) -> None:
-    """Record a completed callback while excluding application-level task cancellation."""
-    try:
-        task = asyncio.current_task()
-    except RuntimeError:
-        task = None
-    if task is not None and task.cancelling():
-        return
     _timing_metrics.record_stream_callback(success=success, duration_seconds=duration_seconds)
 
 
