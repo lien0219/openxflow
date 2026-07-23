@@ -42,6 +42,7 @@ class DingTalkStreamRuntimeSnapshot:
     running_managers: int
     leader_managers: int
     managed_clients: int
+    sync_errors_total: int
     connection_errors_total: int
     reconnect_attempts_total: int
     successful_sync_total: int
@@ -54,6 +55,7 @@ class _DingTalkStreamRuntimeRegistry:
     def __init__(self) -> None:
         self._lock = Lock()
         self._states: dict[object, tuple[bool, int]] = {}
+        self._sync_errors_total = 0
         self._connection_errors_total = 0
         self._reconnect_attempts_total = 0
         self._successful_sync_total = 0
@@ -74,6 +76,10 @@ class _DingTalkStreamRuntimeRegistry:
         with self._lock:
             self._states.pop(token, None)
 
+    def record_sync_error(self) -> None:
+        with self._lock:
+            self._sync_errors_total += 1
+
     def record_connection_error(self) -> None:
         with self._lock:
             self._connection_errors_total += 1
@@ -93,6 +99,7 @@ class _DingTalkStreamRuntimeRegistry:
     def snapshot(self) -> DingTalkStreamRuntimeSnapshot:
         with self._lock:
             states = tuple(self._states.values())
+            sync_errors_total = self._sync_errors_total
             connection_errors_total = self._connection_errors_total
             reconnect_attempts_total = self._reconnect_attempts_total
             successful_sync_total = self._successful_sync_total
@@ -101,6 +108,7 @@ class _DingTalkStreamRuntimeRegistry:
             running_managers=len(states),
             leader_managers=sum(1 for leader, _managed in states if leader),
             managed_clients=sum(managed for _leader, managed in states),
+            sync_errors_total=sync_errors_total,
             connection_errors_total=connection_errors_total,
             reconnect_attempts_total=reconnect_attempts_total,
             successful_sync_total=successful_sync_total,
@@ -110,6 +118,7 @@ class _DingTalkStreamRuntimeRegistry:
     def reset(self) -> None:
         with self._lock:
             self._states.clear()
+            self._sync_errors_total = 0
             self._connection_errors_total = 0
             self._reconnect_attempts_total = 0
             self._successful_sync_total = 0
@@ -191,7 +200,13 @@ class DingTalkStreamManager:
                 if not self._has_leader_lock:
                     await self._try_become_leader()
                 if self._has_leader_lock:
-                    await self._sync_connections()
+                    try:
+                        await self._sync_connections()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:  # noqa: BLE001
+                        _stream_runtime_registry.record_sync_error()
+                        await logger.aexception("DingTalk Stream connection synchronization failed")
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=_REFRESH_SECONDS)
                 except TimeoutError:
