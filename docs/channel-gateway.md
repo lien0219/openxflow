@@ -107,7 +107,7 @@ Authenticated users can inspect the current process at:
 GET /api/v1/channel-runtime/
 ```
 
-The JSON response separates Stream configuration intent from actual process state. `streams_enabled` shows the parsed environment setting, while `stream_runtime` reports the number of running lifecycle managers, managers currently holding the Stream leader lock, and DingTalk Stream clients currently managed by this process. The response also includes queue and execution timeout configuration, active and queued jobs, retained payload bytes, capacity limits, accepted and aggregate rejected counts, the three mutually exclusive rejection-reason counters, succeeded, failed, queue-timed-out, externally cancelled, and client-disconnected counts, and the outbound retry policy.
+The JSON response separates Stream configuration intent from actual process state. `streams_enabled` shows the parsed environment setting, while `stream_runtime` reports current Manager, Leader and managed-client counts together with cumulative connection errors, reconnect attempts, successful database synchronization cycles, and the Unix timestamp of the last successful synchronization. The response also includes queue and execution timeout configuration, active and queued jobs, retained payload bytes, capacity limits, accepted and aggregate rejected counts, the three mutually exclusive rejection-reason counters, succeeded, failed, queue-timed-out, externally cancelled, and client-disconnected counts, and the outbound retry policy.
 
 Prometheus text exposition is available at:
 
@@ -120,6 +120,10 @@ This endpoint is also authenticated. It exports:
 - `openxflow_channel_stream_running_managers`
 - `openxflow_channel_stream_leader_managers`
 - `openxflow_channel_stream_managed_clients`
+- `openxflow_channel_stream_connection_errors_total`
+- `openxflow_channel_stream_reconnect_attempts_total`
+- `openxflow_channel_stream_successful_syncs_total`
+- `openxflow_channel_stream_last_successful_sync_timestamp_seconds`
 - `openxflow_channel_webhook_pending`
 - `openxflow_channel_webhook_active`
 - `openxflow_channel_webhook_queued`
@@ -154,6 +158,8 @@ Metrics are process-local. In a multi-worker deployment, scrape every worker or 
 
 DingTalk connections with `connection_mode=stream` are maintained by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream connections. `streams_enabled=true` only means that the process is allowed to start Stream management; it does not prove that the process currently owns the leader lock. Inspect `stream_runtime.leader_managers` and `stream_runtime.managed_clients`, or the matching Prometheus Gauges, on every worker to identify the active leader and its managed clients. Stream callback replies use the same synchronized access-token recovery as HTTP callback replies.
 
+A healthy Leader should periodically increase `successful_sync_total` and keep `last_successful_sync_timestamp_seconds` recent. A growing `connection_errors_total` accompanied by `reconnect_attempts_total` indicates that one or more Stream clients are repeatedly failing and entering exponential reconnect backoff. When the Leader Gauge is `1` but the last successful synchronization timestamp remains `0` or becomes stale, inspect database access and the Stream connection query. When synchronization remains healthy but connection errors increase, inspect SDK availability, credentials, network egress and provider-side connectivity.
+
 The runtime requires the official Python package:
 
 ```bash
@@ -187,4 +193,4 @@ Enterprise WeChat requires an HTTPS callback URL and Safe Mode encryption. Confi
 - Run database migrations before enabling provider callbacks.
 - Keep only one shared public callback URL per connection.
 - Disable `LANGFLOW_CHANNEL_STREAMS_ENABLED` on dedicated HTTP-only workers when Stream ownership is handled by another deployment.
-- Monitor Stream leader ownership, managed Stream client count, `400`, `413`, and `503` callback responses, pending payload bytes, capacity-rejection reasons, queue timeouts, client disconnects, application cancellations, provider retries, token rejections, token refresh failures, webhook execution timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
+- Monitor Stream leader ownership, managed Stream client count, successful synchronization freshness, connection errors, reconnect attempts, `400`, `413`, and `503` callback responses, pending payload bytes, capacity-rejection reasons, queue timeouts, client disconnects, application cancellations, provider retries, token rejections, token refresh failures, webhook execution timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
