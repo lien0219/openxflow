@@ -19,6 +19,7 @@ class OutboundDeliveryKindMetricSnapshot:
     sent_total: int
     failed_total: int
     state_errors_total: int
+    cleaned_total: int
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class OutboundDeliveryMetricSnapshot:
     sent_total: int
     failed_total: int
     state_errors_total: int
+    cleaned_total: int
     by_kind: dict[str, OutboundDeliveryKindMetricSnapshot]
 
 
@@ -45,6 +47,7 @@ class OutboundDeliveryMetrics:
                 "sent_total": 0,
                 "failed_total": 0,
                 "state_errors_total": 0,
+                "cleaned_total": 0,
             }
             for kind in _KINDS
         }
@@ -56,24 +59,24 @@ class OutboundDeliveryMetrics:
             raise ValueError(f"Unsupported outbound delivery kind: {value}")
         return value
 
-    def record(self, delivery_kind: ChannelOutboundDeliveryKind | str, field: str) -> None:
+    def record(self, delivery_kind: ChannelOutboundDeliveryKind | str, field: str, amount: int = 1) -> None:
+        if amount < 0:
+            raise ValueError("amount must be non-negative")
         kind = self._normalize_kind(delivery_kind)
         with self._lock:
-            self._values[kind][field] += 1
+            self._values[kind][field] += amount
 
     def snapshot(self) -> OutboundDeliveryMetricSnapshot:
         with self._lock:
             copied = {kind: dict(values) for kind, values in self._values.items()}
-        by_kind = {
-            kind: OutboundDeliveryKindMetricSnapshot(**values)
-            for kind, values in copied.items()
-        }
+        by_kind = {kind: OutboundDeliveryKindMetricSnapshot(**values) for kind, values in copied.items()}
         return OutboundDeliveryMetricSnapshot(
             reserved_total=sum(item.reserved_total for item in by_kind.values()),
             suppressed_total=sum(item.suppressed_total for item in by_kind.values()),
             sent_total=sum(item.sent_total for item in by_kind.values()),
             failed_total=sum(item.failed_total for item in by_kind.values()),
             state_errors_total=sum(item.state_errors_total for item in by_kind.values()),
+            cleaned_total=sum(item.cleaned_total for item in by_kind.values()),
             by_kind=by_kind,
         )
 
@@ -113,6 +116,10 @@ def record_outbound_delivery_state_error(delivery_kind: ChannelOutboundDeliveryK
     _metrics.record(delivery_kind, "state_errors_total")
 
 
+def record_outbound_delivery_cleaned(delivery_kind: ChannelOutboundDeliveryKind | str, amount: int) -> None:
+    _metrics.record(delivery_kind, "cleaned_total", amount)
+
+
 class OutboundDeliveryMetricsCollector:
     """Expose durable outbound delivery outcomes through Prometheus."""
 
@@ -143,6 +150,11 @@ class OutboundDeliveryMetricsCollector:
                 "openxflow_channel_outbound_delivery_state_errors",
                 "Durable channel delivery receipt state transition errors in this process",
                 "state_errors_total",
+            ),
+            (
+                "openxflow_channel_outbound_delivery_cleaned",
+                "Expired terminal durable channel delivery receipts removed by this process",
+                "cleaned_total",
             ),
         ):
             metric = CounterMetricFamily(name, description, labels=["delivery_kind"])
