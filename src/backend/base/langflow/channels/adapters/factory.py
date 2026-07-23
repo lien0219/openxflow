@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from langflow.channels.adapters.base import ChannelAdapter
-from langflow.channels.adapters.dingtalk import DingTalkChannelAdapter
-from langflow.channels.adapters.feishu_encrypted import EncryptedFeishuChannelAdapter
+from langflow.channels.adapters.dingtalk_resilient import ResilientDingTalkChannelAdapter
+from langflow.channels.adapters.feishu_resilient import ResilientEncryptedFeishuChannelAdapter
 from langflow.channels.adapters.mock import MockChannelAdapter
 from langflow.channels.adapters.telegram import TelegramChannelAdapter
 from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdapter
@@ -30,7 +30,7 @@ def build_channel_adapter(connection: ChannelConnection) -> ChannelAdapter:
             api_base_url=str(connection.settings_data.get("api_base_url", "https://api.telegram.org")),
         )
     if channel_type is ChannelType.FEISHU:
-        return EncryptedFeishuChannelAdapter(
+        return ResilientEncryptedFeishuChannelAdapter(
             connection.id,
             app_id=credentials.get("app_id", ""),
             app_secret=credentials.get("app_secret", ""),
@@ -44,7 +44,7 @@ def build_channel_adapter(connection: ChannelConnection) -> ChannelAdapter:
             ),
         )
     if channel_type is ChannelType.DINGTALK:
-        return DingTalkChannelAdapter(
+        return ResilientDingTalkChannelAdapter(
             connection.id,
             client_id=credentials.get("client_id", ""),
             client_secret=credentials.get("client_secret", ""),
