@@ -16,6 +16,7 @@ from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
 from langflow.channels.services.runtime_config import webhook_max_body_bytes
 from langflow.channels.services.webhook_processing import (
     process_reserved_provider_webhook,
+    record_provider_webhook_client_disconnect,
     release_provider_webhook_slot,
     reserve_provider_webhook_slot,
     webhook_limiter_snapshot,
@@ -64,6 +65,7 @@ async def _read_limited_body(request: Request) -> bytes:
                 )
             payload.extend(chunk)
     except ClientDisconnect as exc:
+        record_provider_webhook_client_disconnect()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Client disconnected before the channel webhook body was fully received",
