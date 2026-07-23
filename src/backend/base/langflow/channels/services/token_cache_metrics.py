@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Lock
+from typing import Literal
 
 from prometheus_client.core import CounterMetricFamily
+
+TokenCacheEvictionReason = Literal["expired", "capacity"]
 
 
 @dataclass(frozen=True)
@@ -16,6 +19,7 @@ class TokenCacheMetricSnapshot:
     coalesced_refreshes: dict[str, int]
     refresh_succeeded: dict[str, int]
     refresh_failed: dict[str, int]
+    evictions: dict[tuple[str, str], int]
 
 
 class ChannelTokenCacheMetrics:
@@ -29,6 +33,7 @@ class ChannelTokenCacheMetrics:
         self._coalesced_refreshes: dict[str, int] = {}
         self._refresh_succeeded: dict[str, int] = {}
         self._refresh_failed: dict[str, int] = {}
+        self._evictions: dict[tuple[str, str], int] = {}
 
     def record_hit(self, provider: str) -> None:
         self._increment(self._hits, provider)
@@ -48,6 +53,14 @@ class ChannelTokenCacheMetrics:
     def record_refresh_failure(self, provider: str) -> None:
         self._increment(self._refresh_failed, provider)
 
+    def record_eviction(self, provider: str, reason: TokenCacheEvictionReason, count: int = 1) -> None:
+        if count < 0:
+            raise ValueError("count must be non-negative")
+        normalized = provider.strip().lower() or "unknown"
+        with self._lock:
+            key = (normalized, reason)
+            self._evictions[key] = self._evictions.get(key, 0) + count
+
     def snapshot(self) -> TokenCacheMetricSnapshot:
         with self._lock:
             return TokenCacheMetricSnapshot(
@@ -57,6 +70,7 @@ class ChannelTokenCacheMetrics:
                 coalesced_refreshes=dict(self._coalesced_refreshes),
                 refresh_succeeded=dict(self._refresh_succeeded),
                 refresh_failed=dict(self._refresh_failed),
+                evictions=dict(self._evictions),
             )
 
     def reset(self) -> None:
@@ -67,6 +81,7 @@ class ChannelTokenCacheMetrics:
             self._coalesced_refreshes.clear()
             self._refresh_succeeded.clear()
             self._refresh_failed.clear()
+            self._evictions.clear()
 
     def _increment(self, target: dict[str, int], provider: str) -> None:
         normalized = provider.strip().lower() or "unknown"
@@ -99,6 +114,14 @@ def record_token_cache_refresh_success(provider: str) -> None:
 
 def record_token_cache_refresh_failure(provider: str) -> None:
     _token_cache_metrics.record_refresh_failure(provider)
+
+
+def record_token_cache_eviction(
+    provider: str,
+    reason: TokenCacheEvictionReason,
+    count: int = 1,
+) -> None:
+    _token_cache_metrics.record_eviction(provider, reason, count)
 
 
 def token_cache_metrics_snapshot() -> TokenCacheMetricSnapshot:
@@ -150,3 +173,12 @@ class TokenCacheMetricsCollector:
             for provider, value in sorted(values.items()):
                 metric.add_metric([provider], value)
             yield metric
+
+        evictions = CounterMetricFamily(
+            "openxflow_channel_token_cache_evictions",
+            "Provider access-token cache entries removed by expiry or capacity pruning",
+            labels=["provider", "reason"],
+        )
+        for (provider, reason), value in sorted(snapshot.evictions.items()):
+            evictions.add_metric([provider, reason], value)
+        yield evictions
