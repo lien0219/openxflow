@@ -72,7 +72,11 @@ export default function ChannelConnectionDialog({
   useEffect(() => {
     if (!open) return;
     const channelType =
-      connection?.channel_type === "feishu" ? "feishu" : initialChannelType;
+      connection?.channel_type === "feishu"
+        ? "feishu"
+        : connection?.channel_type === "telegram"
+          ? "telegram"
+          : initialChannelType;
     const allowed = readConnectionSetting<string[]>(
       connection,
       "allowed_file_extensions",
