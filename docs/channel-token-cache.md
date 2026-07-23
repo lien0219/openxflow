@@ -60,7 +60,20 @@ The old process-local cache entry expires naturally and is unreachable from adap
 
 ## Metrics
 
-The authenticated channel metrics endpoint exposes provider-bounded token recovery counters:
+The authenticated channel metrics endpoint exposes two groups of provider-bounded counters.
+
+Token-cache behavior:
+
+```text
+openxflow_channel_token_cache_hits_total
+openxflow_channel_token_cache_misses_total
+openxflow_channel_token_cache_forced_refreshes_total
+openxflow_channel_token_cache_coalesced_refreshes_total
+openxflow_channel_token_cache_refresh_succeeded_total
+openxflow_channel_token_cache_refresh_failed_total
+```
+
+Rejected-token recovery:
 
 ```text
 openxflow_channel_token_rejections_total
@@ -69,4 +82,13 @@ openxflow_channel_token_refresh_failed_total
 openxflow_channel_token_replays_total
 ```
 
-Use the fixed provider label to distinguish Feishu, DingTalk, and Enterprise WeChat. No credential identifiers or secrets are exported as labels.
+All counters use only the fixed `provider` label. No application identifier, connection identifier, cache key, secret fingerprint, or raw credential is exported.
+
+Operational interpretation:
+
+- A rising cache-miss rate with few hits can indicate short token lifetimes, frequent process restarts, or excessive forced health checks.
+- A rising coalesced-refresh count is expected during bursts and demonstrates that duplicate Provider token requests were avoided.
+- Cache refresh failures indicate Provider, credential, DNS, network, or response-validation problems before a business API call can proceed.
+- Rejection recovery failures indicate that a Provider explicitly rejected a cached token and the replacement-token request also failed.
+
+Process-local counters should be summed across application workers. Ratios such as hits divided by hits plus misses should use matching worker and time windows.
