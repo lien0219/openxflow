@@ -83,7 +83,8 @@ async def _reserve_outbound_delivery(
                 sa.update(ChannelOutboundDelivery)
                 .where(
                     ChannelOutboundDelivery.id == existing.id,
-                    ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.FAILED.value,
+                    ChannelOutboundDelivery.status
+                    == ChannelOutboundDeliveryStatus.FAILED.value,
                 )
                 .values(
                     status=ChannelOutboundDeliveryStatus.RESERVED.value,
@@ -130,7 +131,10 @@ async def _reserve_outbound_delivery(
         return OutboundDeliveryDecision(True, delivery.id, delivery_kind)
 
 
-async def reserve_outbound_delivery(event: ChannelEvent, message: ChannelMessage) -> OutboundDeliveryDecision:
+async def reserve_outbound_delivery(
+    event: ChannelEvent,
+    message: ChannelMessage,
+) -> OutboundDeliveryDecision:
     return await _reserve_outbound_delivery(
         event,
         delivery_kind=ChannelOutboundDeliveryKind.RESPONSE,
@@ -138,7 +142,9 @@ async def reserve_outbound_delivery(event: ChannelEvent, message: ChannelMessage
     )
 
 
-async def reserve_outbound_acknowledgement(event: ChannelEvent) -> OutboundDeliveryDecision:
+async def reserve_outbound_acknowledgement(
+    event: ChannelEvent,
+) -> OutboundDeliveryDecision:
     return await _reserve_outbound_delivery(
         event,
         delivery_kind=ChannelOutboundDeliveryKind.ACKNOWLEDGEMENT,
@@ -158,7 +164,8 @@ async def mark_outbound_delivery_sent(
                 sa.update(ChannelOutboundDelivery)
                 .where(
                     ChannelOutboundDelivery.id == delivery_id,
-                    ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.RESERVED.value,
+                    ChannelOutboundDelivery.status
+                    == ChannelOutboundDeliveryStatus.RESERVED.value,
                 )
                 .values(
                     status=ChannelOutboundDeliveryStatus.SENT.value,
@@ -189,7 +196,8 @@ async def mark_outbound_delivery_failed(
                 sa.update(ChannelOutboundDelivery)
                 .where(
                     ChannelOutboundDelivery.id == delivery_id,
-                    ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.RESERVED.value,
+                    ChannelOutboundDelivery.status
+                    == ChannelOutboundDeliveryStatus.RESERVED.value,
                 )
                 .values(
                     status=ChannelOutboundDeliveryStatus.FAILED.value,
@@ -207,6 +215,17 @@ async def mark_outbound_delivery_failed(
     record_outbound_delivery_failed(delivery_kind)
 
 
+def _delivery_kind_value(
+    delivery_kind: ChannelOutboundDeliveryKind | str,
+) -> str | None:
+    value = (
+        delivery_kind.value
+        if isinstance(delivery_kind, ChannelOutboundDeliveryKind)
+        else str(delivery_kind)
+    )
+    return value if value in {kind.value for kind in ChannelOutboundDeliveryKind} else None
+
+
 async def cleanup_outbound_deliveries(session: AsyncSession) -> dict[str, int]:
     """Delete one oldest-first batch of expired terminal delivery receipts."""
     config = durable_webhook_job_config()
@@ -214,12 +233,18 @@ async def cleanup_outbound_deliveries(session: AsyncSession) -> dict[str, int]:
     rows = list(
         (
             await session.exec(
-                select(ChannelOutboundDelivery.id, ChannelOutboundDelivery.delivery_kind)
+                select(
+                    ChannelOutboundDelivery.id,
+                    ChannelOutboundDelivery.delivery_kind,
+                )
                 .where(
                     ChannelOutboundDelivery.status.in_(_TERMINAL_STATUSES),
                     ChannelOutboundDelivery.updated_at <= cutoff,
                 )
-                .order_by(ChannelOutboundDelivery.updated_at, ChannelOutboundDelivery.created_at)
+                .order_by(
+                    ChannelOutboundDelivery.updated_at,
+                    ChannelOutboundDelivery.created_at,
+                )
                 .limit(config.cleanup_batch_size)
             )
         ).all()
@@ -229,10 +254,16 @@ async def cleanup_outbound_deliveries(session: AsyncSession) -> dict[str, int]:
         await session.rollback()
         return counts
     ids = [delivery_id for delivery_id, _kind in rows]
-    await session.exec(sa.delete(ChannelOutboundDelivery).where(ChannelOutboundDelivery.id.in_(ids)))
+    await session.exec(
+        sa.delete(ChannelOutboundDelivery).where(
+            ChannelOutboundDelivery.id.in_(ids)
+        )
+    )
     await session.commit()
-    for _delivery_id, kind in rows:
-        counts[str(kind)] += 1
+    for _delivery_id, raw_kind in rows:
+        kind = _delivery_kind_value(raw_kind)
+        if kind is not None:
+            counts[kind] += 1
     for kind, count in counts.items():
         record_outbound_delivery_cleaned(kind, count)
     return counts
@@ -260,7 +291,11 @@ async def send_outbound_acknowledgement_once(
                 event.event_id,
             )
         raise
-    await mark_outbound_delivery_sent(decision.delivery_id, decision.delivery_kind, None)
+    await mark_outbound_delivery_sent(
+        decision.delivery_id,
+        decision.delivery_kind,
+        None,
+    )
     return True
 
 
@@ -304,9 +339,14 @@ async def _run_outbound_delivery_cleanup(stop_event: asyncio.Event) -> None:
         except asyncio.CancelledError:
             raise
         except Exception:
-            await logger.aexception("Unable to clean durable outbound delivery receipts")
+            await logger.aexception(
+                "Unable to clean durable outbound delivery receipts"
+            )
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=config.cleanup_interval_seconds)
+            await asyncio.wait_for(
+                stop_event.wait(),
+                timeout=config.cleanup_interval_seconds,
+            )
         except TimeoutError:
             pass
 
