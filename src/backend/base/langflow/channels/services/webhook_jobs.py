@@ -63,9 +63,22 @@ def _claimable(now):  # type: ignore[no-untyped-def]
         ),
         sa.and_(
             ChannelWebhookJob.status == ChannelWebhookJobStatus.PROCESSING.value,
-            ChannelWebhookJob.lease_expires_at.is_not(None),
-            ChannelWebhookJob.lease_expires_at <= now,
+            sa.or_(
+                ChannelWebhookJob.lease_expires_at.is_(None),
+                ChannelWebhookJob.lease_expires_at <= now,
+            ),
         ),
+    )
+
+
+def retry_delay_seconds(attempts: int) -> float:
+    """Return bounded exponential retry delay for a one-based attempt count."""
+    if attempts <= 0:
+        raise ValueError("attempts must be positive")
+    config = durable_webhook_job_config()
+    return min(
+        config.retry_max_seconds,
+        config.retry_base_seconds * (2 ** (attempts - 1)),
     )
 
 
@@ -144,19 +157,14 @@ async def fail_provider_webhook_job(
     error: str,
 ) -> bool:
     """Schedule retry or mark the leased job terminally failed."""
-    config = durable_webhook_job_config()
     now = utc_now()
     exhausted = job.attempts >= job.max_attempts
     if exhausted:
         status = ChannelWebhookJobStatus.FAILED.value
         next_attempt_at = job.next_attempt_at
     else:
-        delay = min(
-            config.retry_max_seconds,
-            config.retry_base_seconds * (2 ** max(0, job.attempts - 1)),
-        )
         status = ChannelWebhookJobStatus.PENDING.value
-        next_attempt_at = now + timedelta(seconds=delay)
+        next_attempt_at = now + timedelta(seconds=retry_delay_seconds(job.attempts))
 
     result = await session.exec(
         sa.update(ChannelWebhookJob)
