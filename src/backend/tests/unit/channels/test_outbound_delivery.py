@@ -18,6 +18,7 @@ from langflow.channels.services.outbound_delivery import (
     send_outbound_acknowledgement_once,
     send_outbound_response_once,
 )
+from langflow.services.database.models.channel.outbound_delivery_model import ChannelOutboundDeliveryKind
 
 
 def _event() -> ChannelEvent:
@@ -54,13 +55,13 @@ async def test_send_outbound_acknowledgement_once_marks_success(monkeypatch) -> 
     marked = []
 
     async def reserve(_event):
-        return OutboundDeliveryDecision(should_send=True, delivery_id=delivery_id)
+        return OutboundDeliveryDecision(True, delivery_id, ChannelOutboundDeliveryKind.ACKNOWLEDGEMENT)
 
     async def sender() -> None:
         calls.append("acknowledged")
 
-    async def mark_sent(actual_delivery_id, provider_message_id):
-        marked.append((actual_delivery_id, provider_message_id))
+    async def mark_sent(actual_delivery_id, delivery_kind, provider_message_id):
+        marked.append((actual_delivery_id, delivery_kind, provider_message_id))
 
     monkeypatch.setattr(outbound_delivery, "reserve_outbound_acknowledgement", reserve)
     monkeypatch.setattr(outbound_delivery, "mark_outbound_delivery_sent", mark_sent)
@@ -69,7 +70,7 @@ async def test_send_outbound_acknowledgement_once_marks_success(monkeypatch) -> 
 
     assert result is True
     assert calls == ["acknowledged"]
-    assert marked == [(delivery_id, None)]
+    assert marked == [(delivery_id, ChannelOutboundDeliveryKind.ACKNOWLEDGEMENT, None)]
 
 
 @pytest.mark.asyncio
@@ -77,7 +78,7 @@ async def test_send_outbound_acknowledgement_once_skips_existing_reservation(mon
     called = False
 
     async def reserve(_event):
-        return OutboundDeliveryDecision(should_send=False, delivery_id=uuid4())
+        return OutboundDeliveryDecision(False, uuid4(), ChannelOutboundDeliveryKind.ACKNOWLEDGEMENT)
 
     async def sender() -> None:
         nonlocal called
@@ -98,14 +99,14 @@ async def test_send_outbound_response_once_marks_success(monkeypatch) -> None:
     marked = []
 
     async def reserve(_event, _message):
-        return OutboundDeliveryDecision(should_send=True, delivery_id=delivery_id)
+        return OutboundDeliveryDecision(True, delivery_id, ChannelOutboundDeliveryKind.RESPONSE)
 
     async def sender() -> str:
         sent.append(True)
         return "provider-message-1"
 
-    async def mark_sent(actual_delivery_id, provider_message_id):
-        marked.append((actual_delivery_id, provider_message_id))
+    async def mark_sent(actual_delivery_id, delivery_kind, provider_message_id):
+        marked.append((actual_delivery_id, delivery_kind, provider_message_id))
 
     monkeypatch.setattr(outbound_delivery, "reserve_outbound_delivery", reserve)
     monkeypatch.setattr(outbound_delivery, "mark_outbound_delivery_sent", mark_sent)
@@ -114,7 +115,7 @@ async def test_send_outbound_response_once_marks_success(monkeypatch) -> None:
 
     assert result == "provider-message-1"
     assert sent == [True]
-    assert marked == [(delivery_id, "provider-message-1")]
+    assert marked == [(delivery_id, ChannelOutboundDeliveryKind.RESPONSE, "provider-message-1")]
 
 
 @pytest.mark.asyncio
@@ -122,7 +123,7 @@ async def test_send_outbound_response_once_skips_existing_reservation(monkeypatc
     called = False
 
     async def reserve(_event, _message):
-        return OutboundDeliveryDecision(should_send=False, delivery_id=uuid4())
+        return OutboundDeliveryDecision(False, uuid4(), ChannelOutboundDeliveryKind.RESPONSE)
 
     async def sender() -> str:
         nonlocal called
@@ -143,13 +144,13 @@ async def test_send_outbound_response_once_marks_known_failure(monkeypatch) -> N
     failures = []
 
     async def reserve(_event, _message):
-        return OutboundDeliveryDecision(should_send=True, delivery_id=delivery_id)
+        return OutboundDeliveryDecision(True, delivery_id, ChannelOutboundDeliveryKind.RESPONSE)
 
     async def sender() -> str:
         raise RuntimeError("provider unavailable")
 
-    async def mark_failed(actual_delivery_id, error):
-        failures.append((actual_delivery_id, str(error)))
+    async def mark_failed(actual_delivery_id, delivery_kind, error):
+        failures.append((actual_delivery_id, delivery_kind, str(error)))
 
     monkeypatch.setattr(outbound_delivery, "reserve_outbound_delivery", reserve)
     monkeypatch.setattr(outbound_delivery, "mark_outbound_delivery_failed", mark_failed)
@@ -157,4 +158,24 @@ async def test_send_outbound_response_once_marks_known_failure(monkeypatch) -> N
     with pytest.raises(RuntimeError, match="provider unavailable"):
         await send_outbound_response_once(_event(), ChannelMessage(text="world"), sender)
 
-    assert failures == [(delivery_id, "provider unavailable")]
+    assert failures == [(delivery_id, ChannelOutboundDeliveryKind.RESPONSE, "provider unavailable")]
+
+
+@pytest.mark.asyncio
+async def test_provider_error_is_preserved_when_failure_state_write_also_fails(monkeypatch) -> None:
+    delivery_id = uuid4()
+
+    async def reserve(_event, _message):
+        return OutboundDeliveryDecision(True, delivery_id, ChannelOutboundDeliveryKind.RESPONSE)
+
+    async def sender() -> str:
+        raise RuntimeError("provider unavailable")
+
+    async def mark_failed(_delivery_id, _delivery_kind, _error):
+        raise OSError("database unavailable")
+
+    monkeypatch.setattr(outbound_delivery, "reserve_outbound_delivery", reserve)
+    monkeypatch.setattr(outbound_delivery, "mark_outbound_delivery_failed", mark_failed)
+
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        await send_outbound_response_once(_event(), ChannelMessage(text="world"), sender)
