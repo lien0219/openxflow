@@ -13,6 +13,7 @@ from langflow.api.utils import DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.adapters.wecom import WeComChannelAdapter
+from langflow.channels.security.webhook_headers import durable_webhook_headers
 from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
 from langflow.channels.services.runtime_config import durable_webhook_job_config, webhook_max_body_bytes
 from langflow.channels.services.webhook_jobs import (
@@ -124,7 +125,7 @@ async def _validate_and_schedule_provider_event(
             connection_id=connection_id,
             channel_type=expected_channel_type,
             external_event_id=event.event_id,
-            headers=headers,
+            headers=durable_webhook_headers(expected_channel_type, headers),
             payload=payload,
         )
         return {"ok": True}
