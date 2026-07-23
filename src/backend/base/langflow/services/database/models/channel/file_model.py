@@ -53,7 +53,7 @@ class ChannelFileAsset(SQLModel, table=True):  # type: ignore[call-arg]
     )
     external_conversation_id: str = Field(max_length=255, index=True)
     external_message_id: str = Field(max_length=255)
-    external_file_id: str = Field(max_length=255)
+    external_file_id: str = Field(max_length=1024)
     user_file_id: UUID | None = Field(
         default=None,
         sa_column=Column(sa.Uuid(), ForeignKey("file.id", ondelete="SET NULL"), nullable=True, index=True),
