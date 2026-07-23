@@ -13,7 +13,15 @@ if TYPE_CHECKING:
     from langflow.channels.services.deduplication import ChannelEventDeduplicator
 
 ChannelHandler = Callable[[ChannelEvent], Awaitable[ChannelMessage | None]]
-_PREVERIFIED_HEADERS = {"x-openxflow-preverified": "1"}
+_PREVERIFIED_HEADER = "x-openxflow-preverified"
+_PREVERIFIED_ALLOWED_HEADERS = frozenset({_PREVERIFIED_HEADER, "content-type"})
+
+
+def _is_preverified_headers(headers: dict[str, str]) -> bool:
+    return (
+        headers.get(_PREVERIFIED_HEADER) == "1"
+        and set(headers).issubset(_PREVERIFIED_ALLOWED_HEADERS)
+    )
 
 
 class ChannelGateway:
@@ -50,7 +58,7 @@ class ChannelGateway:
         deduplicator: ChannelEventDeduplicator | None = None,
     ) -> ChannelEvent:
         adapter = self.get_adapter(connection_id)
-        if headers != _PREVERIFIED_HEADERS and not await adapter.verify_event(headers, payload):
+        if not _is_preverified_headers(headers) and not await adapter.verify_event(headers, payload):
             raise PermissionError("Channel event signature verification failed")
         return await self._receive_parsed(
             connection_id,
