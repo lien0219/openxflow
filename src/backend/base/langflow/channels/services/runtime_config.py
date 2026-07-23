@@ -24,6 +24,7 @@ DEFAULT_WEBHOOK_JOB_CLEANUP_INTERVAL_SECONDS = 60.0
 DEFAULT_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS = 7
 DEFAULT_WEBHOOK_JOB_FAILED_RETENTION_DAYS = 30
 DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE = 500
+DEFAULT_OUTBOUND_DELIVERY_RETENTION_DAYS = 30
 WEBHOOK_JOB_LEASE_SAFETY_SECONDS = 30.0
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -95,6 +96,7 @@ class DurableWebhookJobConfig:
     completed_retention_days: int
     failed_retention_days: int
     cleanup_batch_size: int
+    outbound_delivery_retention_days: int
 
 
 def channel_streams_enabled() -> bool:
@@ -198,5 +200,9 @@ def durable_webhook_job_config() -> DurableWebhookJobConfig:
         cleanup_batch_size=_positive_int_env(
             "LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE",
             DEFAULT_WEBHOOK_JOB_CLEANUP_BATCH_SIZE,
+        ),
+        outbound_delivery_retention_days=_positive_int_env(
+            "LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS",
+            DEFAULT_OUTBOUND_DELIVERY_RETENTION_DAYS,
         ),
     )
