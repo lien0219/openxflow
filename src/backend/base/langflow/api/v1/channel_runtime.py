@@ -13,6 +13,7 @@ from langflow.api.utils import CurrentActiveUser
 from langflow.channels.services.metrics import ChannelMetricsCollector
 from langflow.channels.services.retry import channel_retry_policy_from_env
 from langflow.channels.services.runtime_config import (
+    channel_streams_enabled,
     webhook_max_body_bytes,
     webhook_task_timeout_seconds,
 )
@@ -45,6 +46,7 @@ class ChannelOutboundRetryRuntimeRead(BaseModel):
 
 
 class ChannelRuntimeRead(BaseModel):
+    streams_enabled: bool
     webhook: ChannelWebhookRuntimeRead
     outbound_retry: ChannelOutboundRetryRuntimeRead
 
@@ -55,6 +57,7 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
     webhook = webhook_limiter_snapshot()
     retry_policy = channel_retry_policy_from_env()
     return ChannelRuntimeRead(
+        streams_enabled=channel_streams_enabled(),
         webhook=ChannelWebhookRuntimeRead(
             **asdict(webhook),
             max_body_bytes=webhook_max_body_bytes(),
