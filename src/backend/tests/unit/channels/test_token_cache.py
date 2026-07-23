@@ -67,6 +67,7 @@ async def test_cached_provider_token_reuses_valid_entry() -> None:
         return "new-token", time.monotonic() + 60
 
     token = await get_cached_provider_token(
+        provider="feishu",
         cache=cache,
         cache_key="credential",
         force_refresh=False,
@@ -86,6 +87,7 @@ async def test_cached_provider_token_force_refresh_replaces_valid_entry() -> Non
         return "new-token", time.monotonic() + 60
 
     token = await get_cached_provider_token(
+        provider="feishu",
         cache=cache,
         cache_key="credential",
         force_refresh=True,
@@ -115,6 +117,7 @@ async def test_cached_provider_token_concurrent_miss_fetches_once() -> None:
     tasks = [
         asyncio.create_task(
             get_cached_provider_token(
+                provider="feishu",
                 cache=cache,
                 cache_key="credential",
                 force_refresh=False,
@@ -150,6 +153,7 @@ async def test_cached_provider_token_concurrent_force_refresh_fetches_once() -> 
     tasks = [
         asyncio.create_task(
             get_cached_provider_token(
+                provider="feishu",
                 cache=cache,
                 cache_key="credential",
                 force_refresh=True,
@@ -167,6 +171,7 @@ async def test_cached_provider_token_concurrent_force_refresh_fetches_once() -> 
     assert fetch_calls == 1
 
     next_token = await get_cached_provider_token(
+        provider="feishu",
         cache=cache,
         cache_key="credential",
         force_refresh=True,
