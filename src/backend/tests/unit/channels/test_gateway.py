@@ -6,6 +6,7 @@ import pytest
 from langflow.channels.adapters.mock import MockChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.domain.models import ChannelMessage
+from langflow.channels.services import gateway as gateway_module
 from langflow.channels.services.gateway import ChannelGateway
 
 
@@ -85,6 +86,33 @@ async def test_gateway_accepts_explicit_preverified_callback():
     )
 
     assert event.event_id == "event-preverified"
+
+
+async def test_preverified_gateway_uses_outbound_delivery_guard(monkeypatch):
+    connection_id = uuid4()
+    adapter = MockChannelAdapter(connection_id, verification_token="secret")
+    gateway = ChannelGateway()
+    gateway.register_adapter(connection_id, adapter)
+    guarded = []
+
+    async def guard(event, message, sender):
+        guarded.append((event.event_id, message.text))
+        return await sender()
+
+    async def handler(event):
+        del event
+        return ChannelMessage(text="guarded response")
+
+    monkeypatch.setattr(gateway_module, "send_outbound_response_once", guard)
+
+    await gateway.receive_verified(
+        connection_id,
+        b'{"event_id":"event-guarded","text":"hello"}',
+        handler,
+    )
+
+    assert guarded == [("event-guarded", "guarded response")]
+    assert len(adapter.sent_messages) == 1
 
 
 @pytest.mark.parametrize("extra_header", [None, "authorization", "cookie", "x-forwarded-for"])
