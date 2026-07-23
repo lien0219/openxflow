@@ -104,6 +104,51 @@ async def test_reserved_webhook_timeout_releases_capacity(monkeypatch) -> None:
     assert snapshot.failed_total == 1
 
 
+@pytest.mark.asyncio
+async def test_reserved_webhook_external_cancellation_propagates_without_failure(monkeypatch) -> None:
+    limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
+    assert limiter.try_reserve() is True
+    started = asyncio.Event()
+    never_finishes = asyncio.Event()
+
+    async def block(**_kwargs) -> bool:
+        started.set()
+        await never_finishes.wait()
+        return True
+
+    monkeypatch.setattr(webhook_processing, "_webhook_limiter", limiter)
+    monkeypatch.setattr(webhook_processing, "process_provider_webhook", block)
+    monkeypatch.setattr(webhook_processing, "webhook_task_timeout_seconds", lambda: 60.0)
+
+    task = asyncio.create_task(
+        webhook_processing.process_reserved_provider_webhook(
+            connection_id=uuid4(),
+            expected_channel_type="telegram",
+            headers={},
+            payload=b"{}",
+        )
+    )
+    await started.wait()
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    snapshot = limiter.snapshot()
+    assert snapshot.pending == 0
+    assert snapshot.active == 0
+    assert snapshot.failed_total == 0
+    assert snapshot.succeeded_total == 0
+
+
+def test_webhook_timeout_non_finite_values_fall_back(monkeypatch) -> None:
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS", "nan")
+    assert webhook_processing.webhook_task_timeout_seconds() == 300.0
+
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS", "inf")
+    assert webhook_processing.webhook_task_timeout_seconds() == 300.0
+
+
 def test_webhook_limiter_validates_configuration() -> None:
     with pytest.raises(ValueError, match="max_concurrency"):
         WebhookProcessingLimiter(max_concurrency=0, max_pending=1)
