@@ -37,15 +37,16 @@ import {
 
 type SupportedChannelType = Extract<
   ChannelType,
-  "telegram" | "feishu" | "dingtalk"
+  "telegram" | "feishu" | "dingtalk" | "wecom"
 >;
+
 type DeleteTarget =
   | { kind: "connection"; id: string; name: string }
   | { kind: "identity"; id: string; name: string }
   | null;
 
 const PROVIDERS: Array<{
-  id: ChannelType;
+  id: SupportedChannelType;
   name: string;
   enabled: boolean;
   icon: string;
@@ -53,14 +54,26 @@ const PROVIDERS: Array<{
   { id: "telegram", name: "Telegram", enabled: true, icon: "Send" },
   { id: "feishu", name: "飞书", enabled: true, icon: "MessagesSquare" },
   { id: "dingtalk", name: "钉钉", enabled: true, icon: "MessageCircle" },
-  { id: "wecom", name: "企业微信", enabled: false, icon: "Building2" },
+  { id: "wecom", name: "企业微信", enabled: true, icon: "Building2" },
 ];
 
 function getConnectionModeLabel(connection: ChannelConnection): string {
-  if (connection.channel_type === "dingtalk" && connection.connection_mode === "stream") {
+  if (
+    connection.channel_type === "dingtalk" &&
+    connection.connection_mode === "stream"
+  ) {
     return "Stream 长连接";
   }
-  return connection.connection_mode === "webhook" ? "Webhook" : connection.connection_mode;
+  return connection.connection_mode === "webhook"
+    ? "Webhook"
+    : connection.connection_mode;
+}
+
+function getWebhookLabel(connection: ChannelConnection): string {
+  if (connection.channel_type === "feishu") return "飞书事件订阅地址";
+  if (connection.channel_type === "wecom") return "企业微信接收消息服务器 URL";
+  if (connection.channel_type === "dingtalk") return "钉钉 HTTP 回调兼容地址";
+  return "Webhook 地址";
 }
 
 export default function ChannelsPage() {
@@ -82,8 +95,9 @@ export default function ChannelsPage() {
     useGetChannelConnections();
   const selectedConnection = useMemo(
     () =>
-      connections.find((connection) => connection.id === selectedConnectionId) ??
-      null,
+      connections.find(
+        (connection) => connection.id === selectedConnectionId,
+      ) ?? null,
     [connections, selectedConnectionId],
   );
 
@@ -147,7 +161,9 @@ export default function ChannelsPage() {
             connectionId: editingConnection.id,
             payload: payload as ChannelConnectionUpdate,
           })
-        : await createConnection.mutateAsync(payload as ChannelConnectionCreate);
+        : await createConnection.mutateAsync(
+            payload as ChannelConnectionCreate,
+          );
 
       if (connection.channel_type === "telegram" && publicBaseUrl) {
         await configureWebhook.mutateAsync({
@@ -294,7 +310,7 @@ export default function ChannelsPage() {
             />
           </h2>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            在 Telegram、飞书和钉钉手机端运行工作流、查询知识库、上传文件并处理互动操作。企业微信将在后续阶段接入。
+            在 Telegram、飞书、钉钉和企业微信移动端运行工作流、查询知识库、上传文件并处理互动操作。
           </p>
         </div>
         <Button variant="primary" onClick={() => openNewConnection("telegram")}>
@@ -309,10 +325,7 @@ export default function ChannelsPage() {
             type="button"
             key={provider.id}
             disabled={!provider.enabled}
-            onClick={() =>
-              provider.enabled &&
-              openNewConnection(provider.id as SupportedChannelType)
-            }
+            onClick={() => provider.enabled && openNewConnection(provider.id)}
             className="flex items-center justify-between rounded-xl border p-4 text-left transition-colors enabled:hover:bg-accent disabled:cursor-default"
           >
             <div className="flex items-center gap-3">
@@ -347,7 +360,7 @@ export default function ChannelsPage() {
           </div>
           {connections.length === 0 ? (
             <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              尚未创建连接。可从上方选择 Telegram、飞书或钉钉开始配置。
+              尚未创建连接。可从上方选择任一已开放渠道开始配置。
             </div>
           ) : (
             connections.map((connection) => {
@@ -368,7 +381,8 @@ export default function ChannelsPage() {
                     <div>
                       <div className="font-medium">{connection.name}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {connection.channel_type} · {getConnectionModeLabel(connection)}
+                        {connection.channel_type} ·{" "}
+                        {getConnectionModeLabel(connection)}
                       </div>
                     </div>
                     <span
@@ -407,27 +421,32 @@ export default function ChannelsPage() {
                         "无"}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      接入方式：{getConnectionModeLabel(selectedConnection)} · 最近连接：
+                      接入方式：{getConnectionModeLabel(selectedConnection)} ·
+                      最近连接：
                       {selectedConnection.last_connected_at
                         ? new Date(
                             selectedConnection.last_connected_at,
                           ).toLocaleString()
                         : "尚未测试"}
                     </p>
+
                     {selectedConnection.channel_type === "dingtalk" &&
                       selectedConnection.connection_mode === "stream" && (
                         <div className="mt-4 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
                           钉钉 Stream 模式由 OpenXFlow 服务端主动建立长连接，不需要配置公网回调地址。测试连接会同时检查服务器是否安装 Stream SDK。
                         </div>
                       )}
+
+                    {selectedConnection.channel_type === "wecom" && (
+                      <div className="mt-4 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+                        将下方 URL 填入企业微信应用“接收消息服务器”。Token 和 EncodingAESKey 必须与渠道连接中填写的值完全一致，消息加密模式请选择安全模式。
+                      </div>
+                    )}
+
                     {showWebhookUrl && webhookUrl && (
                       <div className="mt-4 rounded-lg bg-muted/60 p-3">
                         <div className="text-xs font-medium">
-                          {selectedConnection.channel_type === "feishu"
-                            ? "飞书事件订阅地址"
-                            : selectedConnection.channel_type === "dingtalk"
-                              ? "钉钉 HTTP 回调兼容地址"
-                              : "Webhook 地址"}
+                          {getWebhookLabel(selectedConnection)}
                         </div>
                         <code className="mt-1 block break-all text-xs text-muted-foreground">
                           {webhookUrl}
@@ -435,6 +454,7 @@ export default function ChannelsPage() {
                       </div>
                     )}
                   </div>
+
                   <div className="flex flex-wrap gap-2">
                     <Button
                       variant="outline"
@@ -489,7 +509,7 @@ export default function ChannelsPage() {
                   <div>
                     <h3 className="font-semibold">绑定手机账号</h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      用户私聊机器人发送 /bind 后，将收到 8 位绑定码；在此输入即可绑定当前登录账号。
+                      用户私聊机器人发送 /bind 后，将收到绑定码；在此输入即可绑定当前登录账号。
                     </p>
                   </div>
                   <div className="flex w-full gap-2 sm:w-auto">
@@ -542,7 +562,8 @@ export default function ChannelsPage() {
                               kind: "identity",
                               id: identity.id,
                               name:
-                                identity.display_name || identity.external_user_id,
+                                identity.display_name ||
+                                identity.external_user_id,
                             })
                           }
                         >
