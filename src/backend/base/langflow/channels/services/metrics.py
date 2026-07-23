@@ -35,12 +35,10 @@ class ChannelOutboundMetrics:
         self._failed: dict[tuple[str, str, str], int] = {}
 
     def record_attempt(self, operation_name: str) -> None:
-        key = split_operation_name(operation_name)
-        self._increment(self._attempts, key)
+        self._increment(self._attempts, split_operation_name(operation_name))
 
     def record_success(self, operation_name: str) -> None:
-        key = split_operation_name(operation_name)
-        self._increment(self._succeeded, key)
+        self._increment(self._succeeded, split_operation_name(operation_name))
 
     def record_retry(self, operation_name: str, reason: str) -> None:
         channel, operation = split_operation_name(operation_name)
@@ -205,11 +203,37 @@ class ChannelMetricsCollector:
             metric = GaugeMetricFamily(name, description)
             metric.add_metric([], value)
             yield metric
+
         for name, description, value in (
             ("openxflow_channel_webhook_accepted", "Accepted channel webhook callbacks", webhook.accepted_total),
             ("openxflow_channel_webhook_rejected", "Rejected channel webhook callbacks", webhook.rejected_total),
+            (
+                "openxflow_channel_webhook_rejected_pending",
+                "Channel webhooks rejected only because the pending-job limit was full",
+                webhook.rejected_pending_total,
+            ),
+            (
+                "openxflow_channel_webhook_rejected_bytes",
+                "Channel webhooks rejected only because retained payload-byte capacity was full",
+                webhook.rejected_bytes_total,
+            ),
+            (
+                "openxflow_channel_webhook_rejected_both",
+                "Channel webhooks rejected because both pending-job and payload-byte limits were full",
+                webhook.rejected_both_total,
+            ),
             ("openxflow_channel_webhook_succeeded", "Successfully processed channel webhooks", webhook.succeeded_total),
             ("openxflow_channel_webhook_failed", "Failed channel webhook background executions", webhook.failed_total),
+            (
+                "openxflow_channel_webhook_cancelled",
+                "Reserved channel webhook tasks cancelled by the application runtime",
+                webhook.cancelled_total,
+            ),
+            (
+                "openxflow_channel_webhook_client_disconnected",
+                "Channel webhook uploads disconnected before the request body completed",
+                webhook.client_disconnected_total,
+            ),
         ):
             metric = CounterMetricFamily(name, description)
             metric.add_metric([], value)
