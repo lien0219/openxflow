@@ -7,6 +7,7 @@ from langflow.channels.adapters.dingtalk import DingTalkChannelAdapter
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.adapters.mock import MockChannelAdapter
 from langflow.channels.adapters.telegram import TelegramChannelAdapter
+from langflow.channels.adapters.wecom import WeComChannelAdapter
 from langflow.channels.domain.models import ChannelType
 from langflow.channels.security.credentials import decrypt_credentials
 from langflow.services.database.models.channel.model import ChannelConnection
@@ -48,6 +49,16 @@ def build_channel_adapter(connection: ChannelConnection) -> ChannelAdapter:
             client_secret=credentials.get("client_secret", ""),
             robot_code=credentials.get("robot_code"),
             api_base_url=str(connection.settings_data.get("api_base_url", "https://api.dingtalk.com")),
+        )
+    if channel_type is ChannelType.WECOM:
+        return WeComChannelAdapter(
+            connection.id,
+            corp_id=credentials.get("corp_id", ""),
+            corp_secret=credentials.get("corp_secret", ""),
+            agent_id=credentials.get("agent_id", ""),
+            callback_token=credentials.get("callback_token", ""),
+            encoding_aes_key=credentials.get("encoding_aes_key", ""),
+            api_base_url=str(connection.settings_data.get("api_base_url", "https://qyapi.weixin.qq.com")),
         )
 
     msg = f"Channel adapter '{channel_type.value}' has not been implemented yet"
