@@ -63,8 +63,35 @@ async def test_keyed_lock_prunes_idle_entries() -> None:
         async with pool.hold(key):
             pass
 
-    loop = asyncio.get_running_loop()
-    assert len(pool._locks[loop]) <= 2
+    assert pool.retained_key_count_for_testing() <= 2
+
+
+@pytest.mark.asyncio
+async def test_cancelled_waiter_does_not_leak_key_usage() -> None:
+    pool = LoopLocalKeyedLockPool(max_keys_per_loop=1)
+    holder_entered = asyncio.Event()
+    release_holder = asyncio.Event()
+
+    async def holder() -> None:
+        async with pool.hold("shared"):
+            holder_entered.set()
+            await release_holder.wait()
+
+    holder_task = asyncio.create_task(holder())
+    await holder_entered.wait()
+
+    waiter_task = asyncio.create_task(pool.hold("shared").__aenter__())
+    await asyncio.sleep(0)
+    waiter_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiter_task
+
+    release_holder.set()
+    await holder_task
+    async with pool.hold("replacement"):
+        pass
+
+    assert pool.retained_key_count_for_testing() <= 1
 
 
 def test_keyed_lock_rejects_invalid_capacity() -> None:
