@@ -77,6 +77,59 @@ def _adapter(connection_id):
     return adapter
 
 
+@pytest.fixture(autouse=True)
+def disable_durable_webhook_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "langflow.api.v1.channel_webhooks.durable_webhook_job_config",
+        lambda: SimpleNamespace(enabled=False),
+    )
+
+
+@pytest.mark.asyncio
+async def test_durable_webhook_is_committed_without_background_task(monkeypatch) -> None:
+    connection_id = uuid4()
+    connection = _connection(connection_id)
+    adapter = _adapter(connection_id)
+    captured = {}
+
+    async def enqueue(session, **kwargs) -> bool:
+        captured["session"] = session
+        captured.update(kwargs)
+        return True
+
+    monkeypatch.setattr(
+        "langflow.api.v1.channel_webhooks.durable_webhook_job_config",
+        lambda: SimpleNamespace(enabled=True),
+    )
+    monkeypatch.setattr(
+        "langflow.api.v1.channel_webhooks.build_channel_adapter",
+        lambda _connection: adapter,
+    )
+    monkeypatch.setattr(
+        "langflow.api.v1.channel_webhooks.enqueue_provider_webhook_job",
+        enqueue,
+    )
+
+    db = _FakeDB(connection)
+    background_tasks = BackgroundTasks()
+    response = await _validate_and_schedule_provider_event(
+        connection_id=connection_id,
+        request=_FakeRequest(payload=b'{"message":"hello"}'),
+        db=db,
+        background_tasks=background_tasks,
+        expected_channel_type="telegram",
+    )
+
+    assert response == {"ok": True}
+    assert captured["session"] is db
+    assert captured["connection_id"] == connection_id
+    assert captured["channel_type"] == "telegram"
+    assert captured["external_event_id"] == "event-1"
+    assert captured["payload"] == b'{"message":"hello"}'
+    assert captured["headers"]["content-type"] == "application/json"
+    assert background_tasks.tasks == []
+
+
 @pytest.mark.asyncio
 async def test_webhook_validation_schedules_background_processing(monkeypatch) -> None:
     connection_id = uuid4()
