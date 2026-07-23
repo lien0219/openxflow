@@ -19,6 +19,7 @@ from langflow.channels.services.runtime_config import (
     webhook_queue_timeout_seconds,
     webhook_task_timeout_seconds,
 )
+from langflow.channels.services.timing_metrics import ChannelTimingMetricsCollector
 from langflow.channels.services.webhook_processing import webhook_limiter_snapshot
 
 router = APIRouter(prefix="/channel-runtime", tags=["Channels"])
@@ -102,6 +103,7 @@ async def read_channel_prometheus_metrics(current_user: CurrentActiveUser) -> Re
     del current_user
     registry = CollectorRegistry(auto_describe=True)
     registry.register(ChannelMetricsCollector())
+    registry.register(ChannelTimingMetricsCollector())
     return Response(
         content=generate_latest(registry),
         headers={"Content-Type": CONTENT_TYPE_LATEST},
