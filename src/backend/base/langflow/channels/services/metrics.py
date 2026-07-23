@@ -108,7 +108,17 @@ class ChannelMetricsCollector:
             ("openxflow_channel_webhook_pending", "Accepted channel webhooks not yet completed", webhook.pending),
             ("openxflow_channel_webhook_active", "Channel webhooks currently executing", webhook.active),
             ("openxflow_channel_webhook_queued", "Channel webhooks waiting for execution", webhook.queued),
+            (
+                "openxflow_channel_webhook_pending_bytes",
+                "Retained payload bytes for accepted channel webhooks",
+                webhook.pending_bytes,
+            ),
             ("openxflow_channel_webhook_max_pending", "Configured channel webhook pending capacity", webhook.max_pending),
+            (
+                "openxflow_channel_webhook_max_pending_bytes",
+                "Configured retained channel webhook payload-byte capacity",
+                webhook.max_pending_bytes,
+            ),
             (
                 "openxflow_channel_webhook_max_concurrency",
                 "Configured channel webhook execution concurrency",
@@ -118,7 +128,6 @@ class ChannelMetricsCollector:
             metric = GaugeMetricFamily(name, description)
             metric.add_metric([], value)
             yield metric
-
         for name, description, value in (
             ("openxflow_channel_webhook_accepted", "Accepted channel webhook callbacks", webhook.accepted_total),
             ("openxflow_channel_webhook_rejected", "Rejected channel webhook callbacks", webhook.rejected_total),
