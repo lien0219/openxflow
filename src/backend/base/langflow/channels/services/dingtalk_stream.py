@@ -243,15 +243,16 @@ class DingTalkStreamManager:
         return hashlib.sha256(raw.encode()).hexdigest()
 
 
-_manager = DingTalkStreamManager()
-
-
 @asynccontextmanager
 async def channel_stream_lifespan(_app):  # type: ignore[no-untyped-def]
-    task = asyncio.create_task(_manager.run(), name="channel-stream-manager")
+    # Create lifecycle state per FastAPI lifespan invocation. This keeps test
+    # clients, reloads, and repeated app factories from inheriting a stopped
+    # asyncio.Event or tasks bound to a previous event loop.
+    manager = DingTalkStreamManager()
+    task = asyncio.create_task(manager.run(), name="channel-stream-manager")
     try:
         yield
     finally:
-        await _manager.stop()
+        await manager.stop()
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
