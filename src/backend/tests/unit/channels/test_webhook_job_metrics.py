@@ -74,8 +74,8 @@ def test_durable_webhook_job_metrics_collector_exposes_gauges_and_counters() -> 
     assert "openxflow_channel_webhook_job_consumer_tasks 2.0" in rendered
     assert "openxflow_channel_webhook_job_pending 4.0" in rendered
     assert "openxflow_channel_webhook_job_processing 1.0" in rendered
-    assert "openxflow_channel_webhook_job_completed 8.0" in rendered
-    assert "openxflow_channel_webhook_job_failed 2.0" in rendered
+    assert "openxflow_channel_webhook_job_completed_retained 8.0" in rendered
+    assert "openxflow_channel_webhook_job_failed_retained 2.0" in rendered
     assert "openxflow_channel_webhook_job_claimed_total 1.0" in rendered
     assert "openxflow_channel_webhook_job_completed_total 1.0" in rendered
     assert "openxflow_channel_webhook_job_retried_total 0.0" in rendered
