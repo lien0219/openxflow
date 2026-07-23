@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
+from starlette.requests import ClientDisconnect
 
 from langflow.api.v1.channel_webhooks import _validate_and_schedule_provider_event
 from langflow.channels.domain.models import ChannelEvent, ChannelEventType, ChannelType
@@ -260,6 +261,46 @@ async def test_streamed_webhook_stops_before_reading_later_chunks(monkeypatch) -
 
     assert exc_info.value.status_code == 413
     assert chunks_read == 2
+
+
+@pytest.mark.asyncio
+async def test_disconnected_webhook_is_rejected_before_adapter_and_queue(monkeypatch) -> None:
+    connection_id = uuid4()
+    connection = _connection(connection_id)
+    adapter_built = False
+    reserved = False
+
+    class DisconnectedRequest(_FakeRequest):
+        async def stream(self):
+            yield b"partial"
+            raise ClientDisconnect
+
+    def build(_connection):
+        nonlocal adapter_built
+        adapter_built = True
+        return _adapter(connection_id)
+
+    def reserve(_payload_size: int) -> bool:
+        nonlocal reserved
+        reserved = True
+        return True
+
+    monkeypatch.setattr("langflow.api.v1.channel_webhooks.build_channel_adapter", build)
+    monkeypatch.setattr("langflow.api.v1.channel_webhooks.reserve_provider_webhook_slot", reserve)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _validate_and_schedule_provider_event(
+            connection_id=connection_id,
+            request=DisconnectedRequest(headers={"content-type": "application/json"}),
+            db=_FakeDB(connection),
+            background_tasks=BackgroundTasks(),
+            expected_channel_type="telegram",
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "disconnected" in str(exc_info.value.detail).lower()
+    assert adapter_built is False
+    assert reserved is False
 
 
 @pytest.mark.asyncio
