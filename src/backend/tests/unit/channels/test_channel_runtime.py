@@ -11,6 +11,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     monkeypatch.setenv("LANGFLOW_CHANNEL_STREAMS_ENABLED", "false")
     monkeypatch.setenv("LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS", "5")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_MAX_BODY_BYTES", "2048")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_QUEUE_TIMEOUT_SECONDS", "3.5")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS", "12.5")
     result = await read_channel_runtime(object())
 
@@ -23,6 +24,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.webhook.max_pending_bytes > 0
     assert result.webhook.pending_bytes <= result.webhook.max_pending_bytes
     assert result.webhook.max_body_bytes == 2048
+    assert result.webhook.queue_timeout_seconds == 3.5
     assert result.webhook.task_timeout_seconds == 12.5
     assert (
         result.webhook.rejected_pending_total
@@ -30,6 +32,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
         + result.webhook.rejected_both_total
         == result.webhook.rejected_total
     )
+    assert result.webhook.queue_timed_out_total >= 0
     assert result.webhook.cancelled_total >= 0
     assert result.webhook.client_disconnected_total >= 0
     assert result.outbound_retry.max_attempts == 5
@@ -46,6 +49,7 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_webhook_rejected_pending" in response.body
     assert b"openxflow_channel_webhook_rejected_bytes" in response.body
     assert b"openxflow_channel_webhook_rejected_both" in response.body
+    assert b"openxflow_channel_webhook_queue_timed_out" in response.body
     assert b"openxflow_channel_webhook_cancelled" in response.body
     assert b"openxflow_channel_webhook_client_disconnected" in response.body
     assert b"openxflow_channel_outbound_attempts" in response.body
