@@ -101,8 +101,8 @@ async def _validate_and_schedule_provider_event(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    payload_size = len(payload)
-    if not reserve_provider_webhook_slot(payload_size):
+    reservation = reserve_provider_webhook_slot(len(payload))
+    if reservation is None:
         snapshot = webhook_limiter_snapshot()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -117,13 +117,14 @@ async def _validate_and_schedule_provider_event(
     try:
         background_tasks.add_task(
             process_reserved_provider_webhook,
+            reservation=reservation,
             connection_id=connection_id,
             expected_channel_type=expected_channel_type,
             headers=headers,
             payload=payload,
         )
     except Exception:
-        release_provider_webhook_slot(payload_size)
+        release_provider_webhook_slot(reservation)
         raise
     return {"ok": True}
 
