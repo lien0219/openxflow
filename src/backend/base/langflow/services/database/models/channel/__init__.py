@@ -36,6 +36,7 @@ from langflow.services.database.models.channel.model import (
 )
 from langflow.services.database.models.channel.outbound_delivery_model import (
     ChannelOutboundDelivery,
+    ChannelOutboundDeliveryKind,
     ChannelOutboundDeliveryStatus,
 )
 from langflow.services.database.models.channel.webhook_job_model import (
@@ -62,6 +63,7 @@ __all__ = [
     "ChannelIdentityRead",
     "ChannelIdentityStatus",
     "ChannelOutboundDelivery",
+    "ChannelOutboundDeliveryKind",
     "ChannelOutboundDeliveryStatus",
     "ChannelReceiptStatus",
     "ChannelWebhookJob",
