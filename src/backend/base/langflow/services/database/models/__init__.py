@@ -17,6 +17,7 @@ from .channel import (
     ChannelEventReceipt,
     ChannelFileAsset,
     ChannelIdentity,
+    ChannelWebhookJob,
 )
 from .deployment import Deployment
 from .deployment_provider_account import DeploymentProviderAccount
@@ -50,6 +51,7 @@ __all__ = [
     "ChannelEventReceipt",
     "ChannelFileAsset",
     "ChannelIdentity",
+    "ChannelWebhookJob",
     "Deployment",
     "DeploymentProviderAccount",
     "File",
