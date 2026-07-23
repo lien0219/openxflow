@@ -19,7 +19,12 @@ def test_webhook_limiter_rejects_work_beyond_pending_capacity() -> None:
     first = _reserve(limiter)
     second = _reserve(limiter)
     assert limiter.try_reserve() is None
-    assert limiter.snapshot().pending == 2
+    snapshot = limiter.snapshot()
+    assert snapshot.pending == 2
+    assert snapshot.rejected_total == 1
+    assert snapshot.rejected_pending_total == 1
+    assert snapshot.rejected_bytes_total == 0
+    assert snapshot.rejected_both_total == 0
 
     limiter.cancel_reservation(first)
     third = _reserve(limiter)
@@ -126,6 +131,7 @@ async def test_reserved_webhook_timeout_releases_capacity(monkeypatch) -> None:
     assert snapshot.pending == 0
     assert snapshot.active == 0
     assert snapshot.failed_total == 1
+    assert snapshot.cancelled_total == 0
 
 
 @pytest.mark.asyncio
@@ -211,6 +217,7 @@ async def test_reserved_webhook_external_cancellation_propagates_without_failure
     assert snapshot.active == 0
     assert snapshot.failed_total == 0
     assert snapshot.succeeded_total == 0
+    assert snapshot.cancelled_total == 1
 
 
 def test_webhook_timeout_non_finite_values_fall_back(monkeypatch) -> None:
