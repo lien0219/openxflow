@@ -24,6 +24,14 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.webhook.pending_bytes <= result.webhook.max_pending_bytes
     assert result.webhook.max_body_bytes == 2048
     assert result.webhook.task_timeout_seconds == 12.5
+    assert (
+        result.webhook.rejected_pending_total
+        + result.webhook.rejected_bytes_total
+        + result.webhook.rejected_both_total
+        == result.webhook.rejected_total
+    )
+    assert result.webhook.cancelled_total >= 0
+    assert result.webhook.client_disconnected_total >= 0
     assert result.outbound_retry.max_attempts == 5
 
 
@@ -35,6 +43,11 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
     assert b"openxflow_channel_webhook_pending" in response.body
     assert b"openxflow_channel_webhook_pending_bytes" in response.body
     assert b"openxflow_channel_webhook_max_pending_bytes" in response.body
+    assert b"openxflow_channel_webhook_rejected_pending" in response.body
+    assert b"openxflow_channel_webhook_rejected_bytes" in response.body
+    assert b"openxflow_channel_webhook_rejected_both" in response.body
+    assert b"openxflow_channel_webhook_cancelled" in response.body
+    assert b"openxflow_channel_webhook_client_disconnected" in response.body
     assert b"openxflow_channel_outbound_attempts" in response.body
     assert b"openxflow_channel_token_rejections" in response.body
     assert b"openxflow_channel_token_refresh_succeeded" in response.body
