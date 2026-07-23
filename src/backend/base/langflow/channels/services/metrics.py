@@ -225,6 +225,11 @@ class ChannelMetricsCollector:
             ("openxflow_channel_webhook_succeeded", "Successfully processed channel webhooks", webhook.succeeded_total),
             ("openxflow_channel_webhook_failed", "Failed channel webhook background executions", webhook.failed_total),
             (
+                "openxflow_channel_webhook_queue_timed_out",
+                "Reserved channel webhooks that timed out before obtaining an execution slot",
+                webhook.queue_timed_out_total,
+            ),
+            (
                 "openxflow_channel_webhook_cancelled",
                 "Reserved channel webhook tasks cancelled by the application runtime",
                 webhook.cancelled_total,
