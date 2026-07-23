@@ -6,6 +6,7 @@ on:
       - feature/channel-gateway
     paths:
       - ".github/workflows/channel-gateway-core.yml"
+      - ".github/workflows/channel-gateway-frontend.yml"
       - "src/backend/base/langflow/channels/**"
       - "src/backend/tests/unit/channels/**"
       - "src/backend/base/pyproject.toml"
