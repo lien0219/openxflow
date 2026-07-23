@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hmac
 import json
 import time
@@ -24,6 +23,7 @@ from langflow.channels.domain.models import (
     ChannelType,
     ChannelUser,
 )
+from langflow.channels.services.loop_lock import LoopLocalAsyncLock
 
 
 class FeishuAPIError(RuntimeError):
@@ -33,7 +33,7 @@ class FeishuAPIError(RuntimeError):
 class FeishuChannelAdapter(ChannelAdapter):
     channel_type = ChannelType.FEISHU
     _token_cache: ClassVar[dict[str, tuple[str, float]]] = {}
-    _token_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+    _token_lock: ClassVar[LoopLocalAsyncLock] = LoopLocalAsyncLock()
 
     def __init__(
         self,
