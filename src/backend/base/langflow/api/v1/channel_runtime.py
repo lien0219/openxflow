@@ -65,5 +65,5 @@ async def read_channel_prometheus_metrics(current_user: CurrentActiveUser) -> Re
     registry.register(ChannelMetricsCollector())
     return Response(
         content=generate_latest(registry),
-        media_type=CONTENT_TYPE_LATEST,
+        headers={"Content-Type": CONTENT_TYPE_LATEST},
     )
