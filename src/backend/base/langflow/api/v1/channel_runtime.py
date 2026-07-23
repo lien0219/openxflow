@@ -25,6 +25,7 @@ from langflow.channels.services.runtime_config import (
     webhook_task_timeout_seconds,
 )
 from langflow.channels.services.timing_metrics import ChannelTimingMetricsCollector
+from langflow.channels.services.token_cache_metrics import TokenCacheMetricsCollector
 from langflow.channels.services.webhook_job_metrics import (
     DurableWebhookJobMetricsCollector,
     durable_webhook_job_metrics_snapshot,
@@ -167,6 +168,7 @@ async def read_channel_prometheus_metrics(current_user: CurrentActiveUser) -> Re
     registry.register(ChannelTimingMetricsCollector())
     registry.register(DurableWebhookJobMetricsCollector())
     registry.register(OutboundDeliveryMetricsCollector())
+    registry.register(TokenCacheMetricsCollector())
     return Response(
         content=generate_latest(registry),
         headers={"Content-Type": CONTENT_TYPE_LATEST},
