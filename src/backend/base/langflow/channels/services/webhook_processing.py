@@ -23,6 +23,7 @@ from langflow.services.database.models.channel.model import ChannelConnection
 from langflow.services.deps import session_scope
 
 _T = TypeVar("_T")
+_DEFAULT_MAX_PENDING_BYTES = 64 * 1024 * 1024
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -57,7 +58,9 @@ class WebhookLimiterSnapshot:
     pending: int
     active: int
     queued: int
+    pending_bytes: int
     max_pending: int
+    max_pending_bytes: int
     max_concurrency: int
     accepted_total: int
     rejected_total: int
@@ -68,14 +71,24 @@ class WebhookLimiterSnapshot:
 class WebhookProcessingLimiter:
     """Bound webhook background work without acknowledging events that would be dropped."""
 
-    def __init__(self, *, max_concurrency: int, max_pending: int) -> None:
+    def __init__(
+        self,
+        *,
+        max_concurrency: int,
+        max_pending: int,
+        max_pending_bytes: int = _DEFAULT_MAX_PENDING_BYTES,
+    ) -> None:
         if max_concurrency <= 0:
             raise ValueError("max_concurrency must be positive")
         if max_pending < max_concurrency:
             raise ValueError("max_pending must be greater than or equal to max_concurrency")
+        if max_pending_bytes <= 0:
+            raise ValueError("max_pending_bytes must be positive")
         self.max_concurrency = max_concurrency
         self.max_pending = max_pending
+        self.max_pending_bytes = max_pending_bytes
         self._pending = 0
+        self._pending_bytes = 0
         self._active = 0
         self._accepted_total = 0
         self._rejected_total = 0
@@ -85,27 +98,33 @@ class WebhookProcessingLimiter:
         self._semaphore_lock = Lock()
         self._semaphores: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = WeakKeyDictionary()
 
-    def try_reserve(self) -> bool:
-        """Reserve one queue slot before returning a successful provider ACK."""
+    def try_reserve(self, payload_size: int = 0) -> bool:
+        """Reserve queue count and retained-payload capacity before returning a successful ACK."""
+        self._validate_payload_size(payload_size)
         with self._state_lock:
-            if self._pending >= self.max_pending:
+            if self._pending >= self.max_pending or self._pending_bytes + payload_size > self.max_pending_bytes:
                 self._rejected_total += 1
                 return False
             self._pending += 1
+            self._pending_bytes += payload_size
             self._accepted_total += 1
             return True
 
-    def cancel_reservation(self) -> None:
+    def cancel_reservation(self, payload_size: int = 0) -> None:
+        self._validate_payload_size(payload_size)
         with self._state_lock:
             self._pending = max(0, self._pending - 1)
+            self._pending_bytes = max(0, self._pending_bytes - payload_size)
 
-    def release(self) -> None:
+    def release(self, payload_size: int = 0) -> None:
         """Backward-compatible alias for cancelling a reserved queue slot."""
-        self.cancel_reservation()
+        self.cancel_reservation(payload_size)
 
-    def finish(self, *, success: bool) -> None:
+    def finish(self, *, success: bool, payload_size: int = 0) -> None:
+        self._validate_payload_size(payload_size)
         with self._state_lock:
             self._pending = max(0, self._pending - 1)
+            self._pending_bytes = max(0, self._pending_bytes - payload_size)
             if success:
                 self._succeeded_total += 1
             else:
@@ -119,7 +138,9 @@ class WebhookProcessingLimiter:
                 pending=pending,
                 active=active,
                 queued=max(0, pending - active),
+                pending_bytes=self._pending_bytes,
                 max_pending=self.max_pending,
+                max_pending_bytes=self.max_pending_bytes,
                 max_concurrency=self.max_concurrency,
                 accepted_total=self._accepted_total,
                 rejected_total=self._rejected_total,
@@ -138,6 +159,11 @@ class WebhookProcessingLimiter:
                 with self._state_lock:
                     self._active = max(0, self._active - 1)
 
+    @staticmethod
+    def _validate_payload_size(payload_size: int) -> None:
+        if payload_size < 0:
+            raise ValueError("payload_size must be non-negative")
+
     def _semaphore_for_current_loop(self) -> asyncio.Semaphore:
         loop = asyncio.get_running_loop()
         with self._semaphore_lock:
@@ -154,18 +180,22 @@ def _webhook_limiter_from_env() -> WebhookProcessingLimiter:
     return WebhookProcessingLimiter(
         max_concurrency=max_concurrency,
         max_pending=max(max_concurrency, configured_max_pending),
+        max_pending_bytes=_positive_int_env(
+            "LANGFLOW_CHANNEL_WEBHOOK_MAX_PENDING_BYTES",
+            _DEFAULT_MAX_PENDING_BYTES,
+        ),
     )
 
 
 _webhook_limiter = _webhook_limiter_from_env()
 
 
-def reserve_provider_webhook_slot() -> bool:
-    return _webhook_limiter.try_reserve()
+def reserve_provider_webhook_slot(payload_size: int = 0) -> bool:
+    return _webhook_limiter.try_reserve(payload_size)
 
 
-def release_provider_webhook_slot() -> None:
-    _webhook_limiter.cancel_reservation()
+def release_provider_webhook_slot(payload_size: int = 0) -> None:
+    _webhook_limiter.cancel_reservation(payload_size)
 
 
 def webhook_limiter_snapshot() -> WebhookLimiterSnapshot:
@@ -205,9 +235,10 @@ async def process_reserved_provider_webhook(
     headers: dict[str, str],
     payload: bytes,
 ) -> None:
-    """Run one reserved callback and always release its queue capacity."""
+    """Run one reserved callback and always release its queue and payload capacity."""
     success = False
     cancelled = False
+    payload_size = len(payload)
     try:
         try:
             success = await _webhook_limiter.run(
@@ -222,9 +253,9 @@ async def process_reserved_provider_webhook(
             raise
     finally:
         if cancelled:
-            _webhook_limiter.cancel_reservation()
+            _webhook_limiter.cancel_reservation(payload_size)
         else:
-            _webhook_limiter.finish(success=success)
+            _webhook_limiter.finish(success=success, payload_size=payload_size)
 
 
 async def process_provider_webhook(
