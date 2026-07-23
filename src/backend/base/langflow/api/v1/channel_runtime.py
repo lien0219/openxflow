@@ -80,6 +80,7 @@ class DurableWebhookJobRuntimeRead(BaseModel):
     completed_retention_days: int
     failed_retention_days: int
     cleanup_batch_size: int
+    outbound_delivery_retention_days: int
     running_managers: int
     consumer_tasks: int
     pending_jobs: int
@@ -101,6 +102,7 @@ class OutboundDeliveryRuntimeRead(BaseModel):
     sent_total: int
     failed_total: int
     state_errors_total: int
+    cleaned_total: int
 
 
 class ChannelOutboundRetryRuntimeRead(BaseModel):
@@ -128,6 +130,8 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
     durable_runtime = durable_webhook_job_metrics_snapshot()
     outbound_delivery = outbound_delivery_metrics_snapshot()
     retry_policy = channel_retry_policy_from_env()
+    outbound_delivery_data = asdict(outbound_delivery)
+    outbound_delivery_data.pop("by_kind", None)
     return ChannelRuntimeRead(
         streams_enabled=channel_streams_enabled(),
         stream_runtime=ChannelStreamRuntimeRead(**asdict(stream_runtime)),
@@ -141,7 +145,7 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
             **asdict(durable_config),
             **asdict(durable_runtime),
         ),
-        outbound_delivery=OutboundDeliveryRuntimeRead(**asdict(outbound_delivery)),
+        outbound_delivery=OutboundDeliveryRuntimeRead(**outbound_delivery_data),
         outbound_retry=ChannelOutboundRetryRuntimeRead(
             max_attempts=retry_policy.max_attempts,
             base_delay_seconds=retry_policy.base_delay_seconds,
