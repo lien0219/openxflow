@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from threading import Lock
 
+from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
+
 
 @dataclass(frozen=True)
 class DurableWebhookJobMetricSnapshot:
@@ -122,3 +124,56 @@ def record_durable_webhook_failed() -> None:
 
 def record_durable_webhook_claim_error() -> None:
     _metrics.record_claim_error()
+
+
+class DurableWebhookJobMetricsCollector:
+    """Expose process-local durable queue worker state through Prometheus."""
+
+    def collect(self):  # type: ignore[no-untyped-def]
+        snapshot = durable_webhook_job_metrics_snapshot()
+        for name, description, value in (
+            (
+                "openxflow_channel_webhook_job_running_managers",
+                "Durable channel webhook job managers running in this process",
+                snapshot.running_managers,
+            ),
+            (
+                "openxflow_channel_webhook_job_consumer_tasks",
+                "Durable channel webhook consumer tasks running in this process",
+                snapshot.consumer_tasks,
+            ),
+        ):
+            metric = GaugeMetricFamily(name, description)
+            metric.add_metric([], value)
+            yield metric
+
+        for name, description, value in (
+            (
+                "openxflow_channel_webhook_job_claimed",
+                "Durable channel webhook jobs claimed by this process",
+                snapshot.claimed_total,
+            ),
+            (
+                "openxflow_channel_webhook_job_completed",
+                "Durable channel webhook jobs completed by this process",
+                snapshot.completed_total,
+            ),
+            (
+                "openxflow_channel_webhook_job_retried",
+                "Durable channel webhook jobs returned to pending retry by this process",
+                snapshot.retried_total,
+            ),
+            (
+                "openxflow_channel_webhook_job_failed",
+                "Durable channel webhook jobs marked terminally failed by this process",
+                snapshot.failed_total,
+            ),
+            (
+                "openxflow_channel_webhook_job_claim_errors",
+                "Durable channel webhook job claim errors in this process",
+                snapshot.claim_errors_total,
+            ),
+        ):
+            metric = CounterMetricFamily(name, description)
+            metric.add_metric([], value)
+            yield metric
