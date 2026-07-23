@@ -25,7 +25,9 @@ class ChannelWebhookRuntimeRead(BaseModel):
     pending: int
     active: int
     queued: int
+    pending_bytes: int
     max_pending: int
+    max_pending_bytes: int
     max_concurrency: int
     max_body_bytes: int
     task_timeout_seconds: float
