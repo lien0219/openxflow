@@ -17,6 +17,9 @@ async def test_channel_runtime_returns_webhook_and_retry_configuration(monkeypat
     assert result.webhook.max_pending >= result.webhook.max_concurrency
     assert result.webhook.pending >= result.webhook.active
     assert result.webhook.queued == result.webhook.pending - result.webhook.active
+    assert result.webhook.pending_bytes >= 0
+    assert result.webhook.max_pending_bytes > 0
+    assert result.webhook.pending_bytes <= result.webhook.max_pending_bytes
     assert result.webhook.max_body_bytes == 2048
     assert result.webhook.task_timeout_seconds == 12.5
     assert result.outbound_retry.max_attempts == 5
@@ -28,4 +31,6 @@ async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
 
     assert response.headers["content-type"] == "text/plain; version=0.0.4; charset=utf-8"
     assert b"openxflow_channel_webhook_pending" in response.body
+    assert b"openxflow_channel_webhook_pending_bytes" in response.body
+    assert b"openxflow_channel_webhook_max_pending_bytes" in response.body
     assert b"openxflow_channel_outbound_attempts" in response.body
