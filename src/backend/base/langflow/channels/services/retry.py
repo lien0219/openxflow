@@ -40,6 +40,17 @@ def _positive_float_env(name: str, default: float) -> float:
     return parsed if parsed > 0 else default
 
 
+def _non_negative_float_env(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    return parsed if parsed >= 0 else default
+
+
 @dataclass(frozen=True)
 class ChannelRetryPolicy:
     max_attempts: int = 3
@@ -65,7 +76,7 @@ def channel_retry_policy_from_env() -> ChannelRetryPolicy:
         max_delay_seconds=_positive_float_env("LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS", 8.0),
         jitter_ratio=min(
             1.0,
-            max(0.0, _positive_float_env("LANGFLOW_CHANNEL_HTTP_JITTER_RATIO", 0.2)),
+            _non_negative_float_env("LANGFLOW_CHANNEL_HTTP_JITTER_RATIO", 0.2),
         ),
     )
 
