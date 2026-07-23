@@ -1,7 +1,9 @@
 import asyncio
+from uuid import uuid4
 
 import pytest
 
+from langflow.channels.services import webhook_processing
 from langflow.channels.services.webhook_processing import WebhookProcessingLimiter
 
 
@@ -48,6 +50,30 @@ async def test_webhook_limiter_caps_concurrent_callbacks() -> None:
     assert second_started.is_set() is True
 
     limiter.release()
+    limiter.release()
+
+
+@pytest.mark.asyncio
+async def test_reserved_webhook_slot_is_released_after_failure(monkeypatch) -> None:
+    limiter = WebhookProcessingLimiter(max_concurrency=1, max_pending=1)
+    assert limiter.try_reserve() is True
+
+    async def fail(**_kwargs) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(webhook_processing, "_webhook_limiter", limiter)
+    monkeypatch.setattr(webhook_processing, "process_provider_webhook", fail)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await webhook_processing.process_reserved_provider_webhook(
+            connection_id=uuid4(),
+            expected_channel_type="telegram",
+            headers={},
+            payload=b"{}",
+        )
+
+    assert limiter.snapshot().pending == 0
+    assert limiter.try_reserve() is True
     limiter.release()
 
 
