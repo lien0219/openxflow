@@ -66,7 +66,17 @@ async def enqueue_provider_webhook_job(
         await session.commit()
     except IntegrityError:
         await session.rollback()
-        return False
+        duplicate = (
+            await session.exec(
+                select(ChannelWebhookJob.id).where(
+                    ChannelWebhookJob.connection_id == connection_id,
+                    ChannelWebhookJob.external_event_id == external_event_id,
+                )
+            )
+        ).first()
+        if duplicate is not None:
+            return False
+        raise
     return True
 
 
@@ -263,7 +273,15 @@ class DurableWebhookJobWorker:
                 except TimeoutError:
                     pass
                 continue
-            await self._process(job)
+            try:
+                await self._process(job)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                await logger.aexception(
+                    "Durable channel webhook consumer failed while persisting job %s outcome",
+                    job.id,
+                )
 
     async def _claim_one(self) -> ChannelWebhookJob | None:
         try:
