@@ -13,6 +13,7 @@ import httpx
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
 from langflow.channels.services.token_cache_metrics import (
     record_token_cache_coalesced_refresh,
+    record_token_cache_entries,
     record_token_cache_eviction,
     record_token_cache_forced_refresh,
     record_token_cache_hit,
@@ -93,6 +94,7 @@ def prune_provider_token_cache(
         record_token_cache_eviction(provider, "expired", expired_evictions)
     if capacity_evictions:
         record_token_cache_eviction(provider, "capacity", capacity_evictions)
+    record_token_cache_entries(provider, len(cache))
     return expired_evictions, capacity_evictions
 
 
@@ -113,6 +115,7 @@ async def get_cached_provider_token(
     observed = cache.get(cache_key)
     if not force_refresh and observed is not None and observed[1] > now:
         record_token_cache_hit(provider)
+        record_token_cache_entries(provider, len(cache))
         return observed[0]
 
     if force_refresh:
@@ -126,6 +129,7 @@ async def get_cached_provider_token(
         if cached is not None and cached[1] > now:
             if not force_refresh or cached is not observed:
                 record_token_cache_coalesced_refresh(provider)
+                record_token_cache_entries(provider, len(cache))
                 return cached[0]
         try:
             token, expires_at = await fetch_new_token()
