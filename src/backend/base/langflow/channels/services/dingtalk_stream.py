@@ -9,6 +9,7 @@ import tempfile
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 from typing import Any
 from uuid import UUID
 
@@ -31,6 +32,62 @@ from langflow.services.deps import session_scope
 
 _REFRESH_SECONDS = 15.0
 _MAX_RECONNECT_SECONDS = 60.0
+
+
+@dataclass(frozen=True)
+class DingTalkStreamRuntimeSnapshot:
+    """Process-local aggregate state for lifecycle-managed DingTalk Stream clients."""
+
+    running_managers: int
+    leader_managers: int
+    managed_clients: int
+
+
+class _DingTalkStreamRuntimeRegistry:
+    """Track scalar Stream state without retaining event-loop-bound tasks or managers."""
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._states: dict[object, tuple[bool, int]] = {}
+
+    def register(self, token: object) -> None:
+        with self._lock:
+            self._states[token] = (False, 0)
+
+    def update(self, token: object, *, leader: bool, managed_clients: int) -> None:
+        if managed_clients < 0:
+            raise ValueError("managed_clients must be non-negative")
+        with self._lock:
+            if token in self._states:
+                self._states[token] = (leader, managed_clients)
+
+    def unregister(self, token: object) -> None:
+        with self._lock:
+            self._states.pop(token, None)
+
+    def snapshot(self) -> DingTalkStreamRuntimeSnapshot:
+        with self._lock:
+            states = tuple(self._states.values())
+        return DingTalkStreamRuntimeSnapshot(
+            running_managers=len(states),
+            leader_managers=sum(1 for leader, _managed in states if leader),
+            managed_clients=sum(managed for _leader, managed in states),
+        )
+
+    def reset(self) -> None:
+        with self._lock:
+            self._states.clear()
+
+
+_stream_runtime_registry = _DingTalkStreamRuntimeRegistry()
+
+
+def dingtalk_stream_runtime_snapshot() -> DingTalkStreamRuntimeSnapshot:
+    return _stream_runtime_registry.snapshot()
+
+
+def reset_dingtalk_stream_runtime_for_testing() -> None:
+    _stream_runtime_registry.reset()
 
 
 @dataclass
@@ -85,11 +142,13 @@ class DingTalkStreamManager:
         self._has_leader_lock = False
         self._managed: dict[UUID, _ManagedStream] = {}
         self._stop_event = asyncio.Event()
+        self._runtime_token = object()
 
     async def run(self) -> None:
         if not channel_streams_enabled():
             await logger.adebug("Channel Stream clients disabled by LANGFLOW_CHANNEL_STREAMS_ENABLED")
             return
+        _stream_runtime_registry.register(self._runtime_token)
         try:
             while not self._stop_event.is_set():
                 if not self._has_leader_lock:
@@ -106,6 +165,8 @@ class DingTalkStreamManager:
                 with suppress(Exception):
                     await asyncio.to_thread(self._leader_lock.release)
                 self._has_leader_lock = False
+            self._publish_runtime_state()
+            _stream_runtime_registry.unregister(self._runtime_token)
 
     async def stop(self) -> None:
         self._stop_event.set()
@@ -117,6 +178,7 @@ class DingTalkStreamManager:
         except FileLockTimeout:
             return
         self._has_leader_lock = True
+        self._publish_runtime_state()
         await logger.ainfo("This worker is managing DingTalk Stream connections")
 
     async def _sync_connections(self) -> None:
@@ -146,6 +208,7 @@ class DingTalkStreamManager:
                     fingerprint=desired[connection.id],
                     task=task,
                 )
+        self._publish_runtime_state()
 
     async def _run_connection(self, connection_id: UUID) -> None:
         delay = 2.0
@@ -225,10 +288,18 @@ class DingTalkStreamManager:
     async def _cancel_all(self) -> None:
         tasks = [managed.task for managed in self._managed.values()]
         self._managed.clear()
+        self._publish_runtime_state()
         for task in tasks:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+    def _publish_runtime_state(self) -> None:
+        _stream_runtime_registry.update(
+            self._runtime_token,
+            leader=self._has_leader_lock,
+            managed_clients=len(self._managed),
+        )
 
     @staticmethod
     def _fingerprint(connection: ChannelConnection) -> str:
