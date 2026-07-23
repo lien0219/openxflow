@@ -14,6 +14,7 @@ DEFAULT_WEBHOOK_MAX_BODY_BYTES = 1024 * 1024
 DEFAULT_WEBHOOK_QUEUE_TIMEOUT_SECONDS = 0.0
 DEFAULT_WEBHOOK_TASK_TIMEOUT_SECONDS = 300.0
 DEFAULT_WEBHOOK_DURABLE_ENABLED = True
+DEFAULT_WEBHOOK_JOB_WORKERS = 4
 DEFAULT_WEBHOOK_JOB_POLL_SECONDS = 0.5
 DEFAULT_WEBHOOK_JOB_LEASE_SECONDS = 600.0
 DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS = 5
@@ -80,6 +81,7 @@ class WebhookLimiterLimits:
 @dataclass(frozen=True)
 class DurableWebhookJobConfig:
     enabled: bool
+    worker_count: int
     poll_seconds: float
     lease_seconds: float
     max_attempts: int
@@ -150,12 +152,18 @@ def durable_webhook_job_config() -> DurableWebhookJobConfig:
         "LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS",
         DEFAULT_WEBHOOK_JOB_LEASE_SECONDS,
     )
+    max_concurrency = webhook_limiter_limits_from_env().max_concurrency
+    configured_workers = _positive_int_env(
+        "LANGFLOW_CHANNEL_WEBHOOK_JOB_WORKERS",
+        DEFAULT_WEBHOOK_JOB_WORKERS,
+    )
     minimum_lease = webhook_task_timeout_seconds() + WEBHOOK_JOB_LEASE_SAFETY_SECONDS
     return DurableWebhookJobConfig(
         enabled=_boolean_env(
             "LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED",
             DEFAULT_WEBHOOK_DURABLE_ENABLED,
         ),
+        worker_count=min(configured_workers, max_concurrency),
         poll_seconds=_positive_float_env(
             "LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS",
             DEFAULT_WEBHOOK_JOB_POLL_SECONDS,
