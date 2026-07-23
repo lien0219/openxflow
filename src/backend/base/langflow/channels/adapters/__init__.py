@@ -5,6 +5,7 @@ from langflow.channels.adapters.feishu import FeishuAPIError, FeishuChannelAdapt
 from langflow.channels.adapters.mock import MockChannelAdapter
 from langflow.channels.adapters.telegram import TelegramAPIError, TelegramChannelAdapter
 from langflow.channels.adapters.wecom import WeComAPIError, WeComChannelAdapter
+from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdapter
 
 __all__ = [
     "ChannelAdapter",
@@ -13,6 +14,7 @@ __all__ = [
     "FeishuAPIError",
     "FeishuChannelAdapter",
     "MockChannelAdapter",
+    "ResilientWeComChannelAdapter",
     "TelegramAPIError",
     "TelegramChannelAdapter",
     "WeComAPIError",
