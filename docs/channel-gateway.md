@@ -25,6 +25,7 @@ OpenXFlow Channel Gateway connects Telegram, Feishu, DingTalk, and Enterprise We
 | `LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS` | `30` | Terminal failed-job retention. |
 | `LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE` | `500` | Maximum rows removed by one cleanup cycle. |
 | `LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS` | `30` | Retention for terminal outbound delivery receipts. |
+| `LANGFLOW_CHANNEL_TOKEN_CACHE_MAX_ENTRIES` | `512` | Maximum process-local access-token entries retained by each provider adapter cache. |
 | `LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS` | `3` | Maximum transient outbound attempts. |
 | `LANGFLOW_CHANNEL_HTTP_BASE_DELAY_SECONDS` | `0.5` | Initial outbound retry delay. |
 | `LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS` | `8` | Maximum outbound retry delay. |
@@ -49,6 +50,7 @@ export LANGFLOW_CHANNEL_WEBHOOK_JOB_COMPLETED_RETENTION_DAYS=7
 export LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS=30
 export LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE=500
 export LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS=30
+export LANGFLOW_CHANNEL_TOKEN_CACHE_MAX_ENTRIES=512
 export LANGFLOW_CHANNEL_HTTP_MAX_ATTEMPTS=3
 export LANGFLOW_CHANNEL_HTTP_BASE_DELAY_SECONDS=0.5
 export LANGFLOW_CHANNEL_HTTP_MAX_DELAY_SECONDS=8
@@ -165,6 +167,8 @@ Authentication, permission, and normal validation errors are not retried. Provid
 
 Token recovery is separate from transient retry. Feishu, DingTalk, and Enterprise WeChat authentication rejections trigger one synchronized refresh and one replay. The same recovery applies to supported provider downloads.
 
+Token caches are process-local and bounded. A process-wide reentrant lock protects only short dictionary reads, writes, and pruning. Provider network requests are performed outside that lock. Credential-keyed asyncio locks continue to serialize refreshes for the same account while allowing different provider applications to refresh concurrently.
+
 ## Runtime diagnostics and metrics
 
 Authenticated diagnostics:
@@ -175,6 +179,8 @@ GET /api/v1/channel-runtime/metrics
 ```
 
 `durable_webhook_jobs` exposes worker, lease, retry, cleanup, and retention settings together with process-local outcomes and cached shared queue depths.
+
+`token_cache.max_entries` exposes the normalized per-provider process cache capacity.
 
 `outbound_delivery` exposes aggregate process totals:
 
@@ -208,7 +214,7 @@ Other metrics include:
 - Stream manager, leader, client, synchronization, reconnect, and callback metrics;
 - Stream callback, webhook queue-wait, and webhook execution Histograms;
 - in-memory capacity and rejection metrics;
-- outbound retry and provider token-recovery metrics.
+- outbound retry, provider token-recovery, token-cache outcome, eviction, and size metrics.
 
 Duration Histograms use fixed second buckets from `0.005` through `300`, plus `+Inf`. Durable queue-depth Gauges are cached snapshots of the shared database. Do not sum those Gauges across workers; use a recent sample or an aggregation such as `max`. Process-local outcome Counters should be summed across workers.
 
@@ -242,5 +248,6 @@ Enterprise WeChat requires HTTPS and Safe Mode encryption. Configure the callbac
 - Keep one shared public callback URL per connection.
 - Keep durable processing enabled in production unless intentionally rolling back.
 - Size outbound-delivery retention for provider retry windows and incident investigation.
+- Size token-cache capacity for the number of active provider credential sets per worker.
 - Disable Stream management on HTTP-only workers when another deployment owns Stream connections.
-- Monitor queue depth, stale leases, retries, terminal failures, cleanup throughput, delivery suppression, state errors, Stream ownership, callback latency, provider retries, token refresh failures, database saturation, and file-ingestion backlog.
+- Monitor queue depth, stale leases, retries, terminal failures, cleanup throughput, delivery suppression, state errors, Stream ownership, callback latency, provider retries, token refresh failures, token-cache capacity evictions, database saturation, and file-ingestion backlog.
