@@ -13,6 +13,12 @@ DEFAULT_WEBHOOK_MAX_PENDING_BYTES = 64 * 1024 * 1024
 DEFAULT_WEBHOOK_MAX_BODY_BYTES = 1024 * 1024
 DEFAULT_WEBHOOK_QUEUE_TIMEOUT_SECONDS = 0.0
 DEFAULT_WEBHOOK_TASK_TIMEOUT_SECONDS = 300.0
+DEFAULT_WEBHOOK_DURABLE_ENABLED = True
+DEFAULT_WEBHOOK_JOB_POLL_SECONDS = 0.5
+DEFAULT_WEBHOOK_JOB_LEASE_SECONDS = 600.0
+DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS = 5
+DEFAULT_WEBHOOK_JOB_RETRY_BASE_SECONDS = 2.0
+DEFAULT_WEBHOOK_JOB_RETRY_MAX_SECONDS = 300.0
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off"}
@@ -70,6 +76,16 @@ class WebhookLimiterLimits:
     max_pending_bytes: int
 
 
+@dataclass(frozen=True)
+class DurableWebhookJobConfig:
+    enabled: bool
+    poll_seconds: float
+    lease_seconds: float
+    max_attempts: int
+    retry_base_seconds: float
+    retry_max_seconds: float
+
+
 def channel_streams_enabled() -> bool:
     """Whether lifecycle-managed channel Stream clients should run in this process."""
     return _boolean_env("LANGFLOW_CHANNEL_STREAMS_ENABLED", DEFAULT_CHANNEL_STREAMS_ENABLED)
@@ -116,4 +132,36 @@ def webhook_task_timeout_seconds() -> float:
     return _positive_float_env(
         "LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS",
         DEFAULT_WEBHOOK_TASK_TIMEOUT_SECONDS,
+    )
+
+
+def durable_webhook_job_config() -> DurableWebhookJobConfig:
+    """Return normalized settings for database-backed provider webhook processing."""
+    retry_base = _positive_float_env(
+        "LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_BASE_SECONDS",
+        DEFAULT_WEBHOOK_JOB_RETRY_BASE_SECONDS,
+    )
+    retry_max = _positive_float_env(
+        "LANGFLOW_CHANNEL_WEBHOOK_JOB_RETRY_MAX_SECONDS",
+        DEFAULT_WEBHOOK_JOB_RETRY_MAX_SECONDS,
+    )
+    return DurableWebhookJobConfig(
+        enabled=_boolean_env(
+            "LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED",
+            DEFAULT_WEBHOOK_DURABLE_ENABLED,
+        ),
+        poll_seconds=_positive_float_env(
+            "LANGFLOW_CHANNEL_WEBHOOK_JOB_POLL_SECONDS",
+            DEFAULT_WEBHOOK_JOB_POLL_SECONDS,
+        ),
+        lease_seconds=_positive_float_env(
+            "LANGFLOW_CHANNEL_WEBHOOK_JOB_LEASE_SECONDS",
+            DEFAULT_WEBHOOK_JOB_LEASE_SECONDS,
+        ),
+        max_attempts=_positive_int_env(
+            "LANGFLOW_CHANNEL_WEBHOOK_JOB_MAX_ATTEMPTS",
+            DEFAULT_WEBHOOK_JOB_MAX_ATTEMPTS,
+        ),
+        retry_base_seconds=retry_base,
+        retry_max_seconds=max(retry_base, retry_max),
     )
