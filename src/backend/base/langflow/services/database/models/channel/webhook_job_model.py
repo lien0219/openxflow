@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Index, LargeBinary, UniqueConstraint, func
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Index, LargeBinary, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -66,7 +66,7 @@ class ChannelWebhookJob(SQLModel, table=True):  # type: ignore[call-arg]
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
     )
-    last_error: str | None = Field(default=None, nullable=True)
+    last_error: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
