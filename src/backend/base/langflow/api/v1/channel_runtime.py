@@ -25,6 +25,7 @@ from langflow.channels.services.runtime_config import (
     webhook_task_timeout_seconds,
 )
 from langflow.channels.services.timing_metrics import ChannelTimingMetricsCollector
+from langflow.channels.services.token_cache import provider_token_cache_max_entries
 from langflow.channels.services.token_cache_metrics import TokenCacheMetricsCollector
 from langflow.channels.services.webhook_job_metrics import (
     DurableWebhookJobMetricsCollector,
@@ -116,6 +117,10 @@ class ChannelOutboundRetryRuntimeRead(BaseModel):
     jitter_ratio: float
 
 
+class ChannelTokenCacheRuntimeRead(BaseModel):
+    max_entries: int
+
+
 class ChannelRuntimeRead(BaseModel):
     streams_enabled: bool
     stream_runtime: ChannelStreamRuntimeRead
@@ -123,6 +128,7 @@ class ChannelRuntimeRead(BaseModel):
     durable_webhook_jobs: DurableWebhookJobRuntimeRead
     outbound_delivery: OutboundDeliveryRuntimeRead
     outbound_retry: ChannelOutboundRetryRuntimeRead
+    token_cache: ChannelTokenCacheRuntimeRead
 
 
 @router.get("/", response_model=ChannelRuntimeRead)
@@ -155,6 +161,9 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
             base_delay_seconds=retry_policy.base_delay_seconds,
             max_delay_seconds=retry_policy.max_delay_seconds,
             jitter_ratio=retry_policy.jitter_ratio,
+        ),
+        token_cache=ChannelTokenCacheRuntimeRead(
+            max_entries=provider_token_cache_max_entries(),
         ),
     )
 
