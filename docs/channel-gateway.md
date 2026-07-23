@@ -68,6 +68,8 @@ Capacity rejections are classified exactly once as pending-only, payload-bytes-o
 
 `LANGFLOW_CHANNEL_WEBHOOK_TASK_TIMEOUT_SECONDS` starts only after a job obtains a concurrency slot. A running job that exceeds this execution limit is cancelled, counted as failed, and releases its pending count and retained payload bytes. External application cancellation also releases both capacities and increments `cancelled_total`, but is not counted as a business failure. Because providers are acknowledged before queueing, recovery from queue or execution timeouts still depends on provider retries or a future durable queue.
 
+Webhook timing is exported in two separate cumulative histograms. Queue wait duration starts immediately before semaphore acquisition and ends when the execution slot is obtained. A queue timeout contributes to the queue-wait histogram but never to the execution histogram. Execution duration starts only after slot acquisition and includes the configured task-timeout wrapper. External task cancellation releases capacity but does not create a synthetic Stream callback failure sample.
+
 ## Capacity guidance
 
 A practical starting point is:
@@ -125,6 +127,11 @@ This endpoint is also authenticated. It exports:
 - `openxflow_channel_stream_reconnect_attempts_total`
 - `openxflow_channel_stream_successful_syncs_total`
 - `openxflow_channel_stream_last_successful_sync_timestamp_seconds`
+- `openxflow_channel_stream_callbacks_succeeded_total`
+- `openxflow_channel_stream_callbacks_failed_total`
+- `openxflow_channel_stream_callback_duration_seconds`
+- `openxflow_channel_webhook_queue_wait_duration_seconds`
+- `openxflow_channel_webhook_execution_duration_seconds`
 - `openxflow_channel_webhook_pending`
 - `openxflow_channel_webhook_active`
 - `openxflow_channel_webhook_queued`
@@ -151,7 +158,7 @@ This endpoint is also authenticated. It exports:
 - `openxflow_channel_token_refresh_failed_total`
 - `openxflow_channel_token_replays_total`
 
-Token recovery metrics use only the bounded `provider` label (`feishu`, `dingtalk`, or `wecom`). They do not include connection IDs, user IDs, message IDs, or URLs.
+The duration histograms use fixed second-based buckets from `0.005` through `300`, plus `+Inf`, and expose standard `_bucket`, `_count`, and `_sum` series. They have no connection, user, message, URL, or provider labels. Stream callback counters also have no dynamic labels. Token recovery metrics use only the bounded `provider` label (`feishu`, `dingtalk`, or `wecom`).
 
 Metrics are process-local. In a multi-worker deployment, scrape every worker or aggregate them through the deployment's existing Prometheus multiprocess strategy.
 
@@ -160,6 +167,8 @@ Metrics are process-local. In a multi-worker deployment, scrape every worker or 
 DingTalk connections with `connection_mode=stream` are maintained by one elected application worker. Other workers continue serving HTTP without opening duplicate Stream connections. `streams_enabled=true` only means that the process is allowed to start Stream management; it does not prove that the process currently owns the leader lock. Inspect `stream_runtime.leader_managers` and `stream_runtime.managed_clients`, or the matching Prometheus Gauges, on every worker to identify the active leader and its managed clients. Stream callback replies use the same synchronized access-token recovery as HTTP callback replies.
 
 A healthy Leader should periodically increase `successful_sync_total` and keep `last_successful_sync_timestamp_seconds` recent. Database or query failures increase `sync_errors_total`; they are logged, but no longer terminate the Stream Manager, so a later synchronization cycle can recover automatically. A growing `connection_errors_total` accompanied by `reconnect_attempts_total` indicates that one or more Stream clients are repeatedly failing and entering exponential reconnect backoff. When the Leader Gauge is `1` but synchronization errors grow or the last successful synchronization timestamp remains stale, inspect database access and the Stream connection query. When synchronization remains healthy but connection errors increase, inspect SDK availability, credentials, network egress and provider-side connectivity.
+
+Stream callback success and failure counters represent provider-visible callback outcomes. Normal application shutdown cancellation is excluded. The callback duration histogram covers event normalization, workflow dispatch, provider response work and connection-status update performed before returning the SDK acknowledgement.
 
 The runtime requires the official Python package:
 
@@ -194,4 +203,4 @@ Enterprise WeChat requires an HTTPS callback URL and Safe Mode encryption. Confi
 - Run database migrations before enabling provider callbacks.
 - Keep only one shared public callback URL per connection.
 - Disable `LANGFLOW_CHANNEL_STREAMS_ENABLED` on dedicated HTTP-only workers when Stream ownership is handled by another deployment.
-- Monitor Stream leader ownership, managed Stream client count, synchronization errors, successful synchronization freshness, connection errors, reconnect attempts, `400`, `413`, and `503` callback responses, pending payload bytes, capacity-rejection reasons, queue timeouts, client disconnects, application cancellations, provider retries, token rejections, token refresh failures, webhook execution timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
+- Monitor Stream leader ownership, managed Stream client count, synchronization errors, successful synchronization freshness, connection errors, reconnect attempts, Stream callback failures and latency, `400`, `413`, and `503` callback responses, webhook queue and execution latency, pending payload bytes, capacity-rejection reasons, queue timeouts, client disconnects, application cancellations, provider retries, token rejections, token refresh failures, webhook execution timeout failures, workflow duration, database-pool saturation, and file-ingestion backlog.
