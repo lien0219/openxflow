@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import Literal
 
-from prometheus_client.core import CounterMetricFamily
+from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
 
 TokenCacheEvictionReason = Literal["expired", "capacity"]
 
@@ -20,10 +20,11 @@ class TokenCacheMetricSnapshot:
     refresh_succeeded: dict[str, int]
     refresh_failed: dict[str, int]
     evictions: dict[tuple[str, str], int]
+    entries: dict[str, int]
 
 
 class ChannelTokenCacheMetrics:
-    """Thread-safe bounded-label counters for token-cache outcomes."""
+    """Thread-safe bounded-label counters and gauges for token-cache outcomes."""
 
     def __init__(self) -> None:
         self._lock = Lock()
@@ -34,6 +35,7 @@ class ChannelTokenCacheMetrics:
         self._refresh_succeeded: dict[str, int] = {}
         self._refresh_failed: dict[str, int] = {}
         self._evictions: dict[tuple[str, str], int] = {}
+        self._entries: dict[str, int] = {}
 
     def record_hit(self, provider: str) -> None:
         self._increment(self._hits, provider)
@@ -61,6 +63,13 @@ class ChannelTokenCacheMetrics:
             key = (normalized, reason)
             self._evictions[key] = self._evictions.get(key, 0) + count
 
+    def record_entries(self, provider: str, count: int) -> None:
+        if count < 0:
+            raise ValueError("count must be non-negative")
+        normalized = provider.strip().lower() or "unknown"
+        with self._lock:
+            self._entries[normalized] = count
+
     def snapshot(self) -> TokenCacheMetricSnapshot:
         with self._lock:
             return TokenCacheMetricSnapshot(
@@ -71,6 +80,7 @@ class ChannelTokenCacheMetrics:
                 refresh_succeeded=dict(self._refresh_succeeded),
                 refresh_failed=dict(self._refresh_failed),
                 evictions=dict(self._evictions),
+                entries=dict(self._entries),
             )
 
     def reset(self) -> None:
@@ -82,6 +92,7 @@ class ChannelTokenCacheMetrics:
             self._refresh_succeeded.clear()
             self._refresh_failed.clear()
             self._evictions.clear()
+            self._entries.clear()
 
     def _increment(self, target: dict[str, int], provider: str) -> None:
         normalized = provider.strip().lower() or "unknown"
@@ -124,6 +135,10 @@ def record_token_cache_eviction(
     _token_cache_metrics.record_eviction(provider, reason, count)
 
 
+def record_token_cache_entries(provider: str, count: int) -> None:
+    _token_cache_metrics.record_entries(provider, count)
+
+
 def token_cache_metrics_snapshot() -> TokenCacheMetricSnapshot:
     return _token_cache_metrics.snapshot()
 
@@ -133,7 +148,7 @@ def reset_token_cache_metrics_for_testing() -> None:
 
 
 class TokenCacheMetricsCollector:
-    """Expose token-cache counters through the Prometheus collector protocol."""
+    """Expose token-cache counters and gauges through the Prometheus collector protocol."""
 
     def collect(self):  # type: ignore[no-untyped-def]
         snapshot = token_cache_metrics_snapshot()
@@ -182,3 +197,12 @@ class TokenCacheMetricsCollector:
         for (provider, reason), value in sorted(snapshot.evictions.items()):
             evictions.add_metric([provider, reason], value)
         yield evictions
+
+        entries = GaugeMetricFamily(
+            "openxflow_channel_token_cache_entries",
+            "Provider access-token entries currently retained in this process cache",
+            labels=["provider"],
+        )
+        for provider, value in sorted(snapshot.entries.items()):
+            entries.add_metric([provider], value)
+        yield entries
