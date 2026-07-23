@@ -27,7 +27,11 @@ from langflow.channels.services.webhook_job_metrics import (
     record_durable_webhook_retried,
 )
 from langflow.channels.services.webhook_processing import process_provider_webhook
-from langflow.services.database.models.channel.model import utc_now
+from langflow.services.database.models.channel.model import (
+    ChannelEventReceipt,
+    ChannelReceiptStatus,
+    utc_now,
+)
 from langflow.services.database.models.channel.webhook_job_model import (
     ChannelWebhookJob,
     ChannelWebhookJobStatus,
@@ -88,6 +92,26 @@ def retry_delay_seconds(attempts: int) -> float:
         config.retry_max_seconds,
         config.retry_base_seconds * (2 ** (attempts - 1)),
     )
+
+
+async def recover_stale_event_receipt(session: AsyncSession, job: ChannelWebhookJob) -> bool:
+    """Reset a crash-left processing receipt so the deduplicator can reclaim the event."""
+    receipt = (
+        await session.exec(
+            select(ChannelEventReceipt).where(
+                ChannelEventReceipt.connection_id == job.connection_id,
+                ChannelEventReceipt.external_event_id == job.external_event_id,
+            )
+        )
+    ).first()
+    if receipt is None or receipt.status != ChannelReceiptStatus.PROCESSING.value:
+        return False
+    receipt.status = ChannelReceiptStatus.FAILED.value
+    receipt.error_message = "Recovered after durable webhook job lease expiration"
+    receipt.processed_at = utc_now()
+    session.add(receipt)
+    await session.commit()
+    return True
 
 
 async def claim_provider_webhook_job(
@@ -255,6 +279,8 @@ class DurableWebhookJobWorker:
     async def _process(self, job: ChannelWebhookJob) -> None:
         error = "Channel webhook processing failed"
         try:
+            async with session_scope() as session:
+                await recover_stale_event_receipt(session, job)
             success = await process_provider_webhook(
                 connection_id=job.connection_id,
                 expected_channel_type=job.channel_type,
