@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from uuid import UUID, uuid4
@@ -16,7 +17,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from langflow.channels.services.runtime_config import (
     durable_webhook_job_config,
     webhook_limiter_limits_from_env,
+    webhook_task_timeout_seconds,
 )
+from langflow.channels.services.timing_metrics import record_webhook_execution
 from langflow.channels.services.webhook_job_metrics import (
     record_durable_webhook_claim_error,
     record_durable_webhook_claimed,
@@ -276,23 +279,37 @@ class DurableWebhookJobWorker:
             record_durable_webhook_claimed()
         return job
 
+    async def _execute(self, job: ChannelWebhookJob) -> bool:
+        async with session_scope() as session:
+            await recover_stale_event_receipt(session, job)
+        return await process_provider_webhook(
+            connection_id=job.connection_id,
+            expected_channel_type=job.channel_type,
+            headers={str(key): str(value) for key, value in job.headers_data.items()},
+            payload=job.payload,
+        )
+
     async def _process(self, job: ChannelWebhookJob) -> None:
         error = "Channel webhook processing failed"
+        started_at = time.perf_counter()
         try:
-            async with session_scope() as session:
-                await recover_stale_event_receipt(session, job)
-            success = await process_provider_webhook(
-                connection_id=job.connection_id,
-                expected_channel_type=job.channel_type,
-                headers={str(key): str(value) for key, value in job.headers_data.items()},
-                payload=job.payload,
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            success = False
-            error = str(exc) or type(exc).__name__
-            await logger.aexception("Durable channel webhook job %s crashed", job.id)
+            try:
+                success = await asyncio.wait_for(
+                    self._execute(job),
+                    timeout=webhook_task_timeout_seconds(),
+                )
+            except TimeoutError:
+                success = False
+                error = "Channel webhook processing timed out"
+                await logger.aerror("Durable channel webhook job %s timed out", job.id)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                success = False
+                error = str(exc) or type(exc).__name__
+                await logger.aexception("Durable channel webhook job %s crashed", job.id)
+        finally:
+            record_webhook_execution(time.perf_counter() - started_at)
 
         async with session_scope() as session:
             if success:
