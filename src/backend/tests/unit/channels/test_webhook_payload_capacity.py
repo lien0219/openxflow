@@ -2,7 +2,6 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-
 from langflow.channels.services import webhook_processing
 from langflow.channels.services.webhook_processing import WebhookProcessingLimiter
 
@@ -58,9 +57,7 @@ def test_webhook_limiter_classifies_combined_capacity_rejection_once() -> None:
     assert snapshot.rejected_bytes_total == 0
     assert snapshot.rejected_both_total == 1
     assert (
-        snapshot.rejected_pending_total
-        + snapshot.rejected_bytes_total
-        + snapshot.rejected_both_total
+        snapshot.rejected_pending_total + snapshot.rejected_bytes_total + snapshot.rejected_both_total
         == snapshot.rejected_total
     )
     limiter.cancel_reservation(reservation)

@@ -2,7 +2,6 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-
 from langflow.channels.adapters import dingtalk as dingtalk_module
 from langflow.channels.adapters.dingtalk import DingTalkChannelAdapter
 

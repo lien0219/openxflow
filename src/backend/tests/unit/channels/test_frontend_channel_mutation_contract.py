@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 _MUTATIONS = (
     Path(__file__).parents[5]
     / "src"

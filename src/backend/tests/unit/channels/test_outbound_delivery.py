@@ -1,7 +1,6 @@
 from uuid import uuid4
 
 import pytest
-
 from langflow.channels.domain.models import (
     ChannelConversation,
     ChannelEvent,

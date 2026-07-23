@@ -1,7 +1,6 @@
 import inspect
 
 import pytest
-
 from langflow.channels.adapters.dingtalk_resilient import ResilientDingTalkChannelAdapter
 from langflow.channels.adapters.feishu_resilient import ResilientEncryptedFeishuChannelAdapter
 from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdapter

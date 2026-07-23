@@ -2,7 +2,6 @@ from uuid import uuid4
 
 import httpx
 import pytest
-
 from langflow.channels.adapters.dingtalk import DingTalkAPIError
 from langflow.channels.adapters.dingtalk_resilient import ResilientDingTalkChannelAdapter
 from langflow.channels.adapters.feishu import FeishuAPIError

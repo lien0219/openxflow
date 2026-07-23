@@ -5,10 +5,6 @@ from datetime import timedelta
 from uuid import uuid4
 
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from langflow.channels.domain.models import (
     ChannelConversation,
     ChannelEvent,
@@ -25,6 +21,9 @@ from langflow.services.database.models.channel.outbound_delivery_model import (
     ChannelOutboundDeliveryKind,
     ChannelOutboundDeliveryStatus,
 )
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 _CREATE_TABLE = """
 CREATE TABLE channel_outbound_delivery (

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Mapping
+from collections.abc import Mapping
 
 from langflow.services.auth import utils as auth_utils
 
@@ -34,7 +34,9 @@ def decrypt_credentials(encrypted_value: str) -> dict[str, str]:
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise ChannelCredentialError("Stored channel credentials could not be decrypted") from exc
 
-    if not isinstance(decoded, dict) or any(not isinstance(key, str) or not isinstance(value, str) for key, value in decoded.items()):
+    if not isinstance(decoded, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str) for key, value in decoded.items()
+    ):
         raise ChannelCredentialError("Stored channel credentials have an invalid shape")
     return decoded
 

@@ -19,7 +19,6 @@ from langflow.channels.domain.models import (
     ChannelEventType,
     ChannelIncomingMessage,
     ChannelMessage,
-    ChannelMessageType,
     ChannelType,
     ChannelUser,
 )
@@ -115,7 +114,9 @@ class TelegramChannelAdapter(ChannelAdapter):
         text = message.get("text") or message.get("caption")
         attachments, event_type = self._extract_attachments(message)
         if not attachments:
-            event_type = ChannelEventType.COMMAND if isinstance(text, str) and text.startswith("/") else ChannelEventType.TEXT
+            event_type = (
+                ChannelEventType.COMMAND if isinstance(text, str) and text.startswith("/") else ChannelEventType.TEXT
+            )
 
         reply = message.get("reply_to_message") or {}
         return ChannelEvent(

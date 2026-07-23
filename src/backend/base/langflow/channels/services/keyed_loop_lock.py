@@ -89,11 +89,7 @@ class LoopLocalKeyedLockPool:
     def _prune_idle_locks_locked(self, locks: OrderedDict[str, _LockEntry]) -> None:
         while len(locks) > self._max_keys_per_loop:
             idle_key = next(
-                (
-                    candidate
-                    for candidate, entry in locks.items()
-                    if entry.users == 0 and not entry.lock.locked()
-                ),
+                (candidate for candidate, entry in locks.items() if entry.users == 0 and not entry.lock.locked()),
                 None,
             )
             if idle_key is None:

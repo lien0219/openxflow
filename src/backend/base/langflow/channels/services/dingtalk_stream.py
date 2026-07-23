@@ -14,7 +14,8 @@ from threading import Lock
 from typing import Any
 from uuid import UUID
 
-from filelock import FileLock, Timeout as FileLockTimeout
+from filelock import FileLock
+from filelock import Timeout as FileLockTimeout
 from lfx.log.logger import logger
 from sqlmodel import select
 
@@ -290,9 +291,7 @@ class DingTalkStreamManager:
         try:
             import dingtalk_stream
         except ImportError as exc:
-            raise RuntimeError(
-                "DingTalk Stream SDK is not installed; install dingtalk-stream>=0.24.3"
-            ) from exc
+            raise RuntimeError("DingTalk Stream SDK is not installed; install dingtalk-stream>=0.24.3") from exc
 
         async with session_scope() as session:
             connection = await session.get(ChannelConnection, connection_id)

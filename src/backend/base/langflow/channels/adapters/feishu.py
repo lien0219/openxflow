@@ -132,7 +132,7 @@ class FeishuChannelAdapter(ChannelAdapter):
             header = body.get("header") or {}
             event_type = str(header.get("event_type") or "")
             event = body["event"]
-            if event_type == "card.action.trigger" or "action" in event and "message" not in event:
+            if event_type == "card.action.trigger" or ("action" in event and "message" not in event):
                 return self._parse_card_action(body, header, event)
             return self._parse_message_event(body, header, event)
         except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
@@ -154,10 +154,7 @@ class FeishuChannelAdapter(ChannelAdapter):
         text = self._strip_mention_placeholders(text, mentions)
         attachments = self._extract_attachments(message_type, content, str(message.get("message_id") or ""))
         normalized_event_type = self._event_type(message_type, text)
-        mention_ids = [
-            str(item.get("id", {}).get("open_id") or item.get("key") or "")
-            for item in mentions
-        ]
+        mention_ids = [str(item.get("id", {}).get("open_id") or item.get("key") or "") for item in mentions]
         chat_type = str(message.get("chat_type") or "p2p")
         return ChannelEvent(
             event_id=str(header.get("event_id") or message.get("message_id")),
@@ -391,11 +388,7 @@ class FeishuChannelAdapter(ChannelAdapter):
             return []
         resource_type = "image" if message_type == "image" else "file"
         default_extension = {"image": ".jpg", "audio": ".opus"}.get(message_type, "")
-        filename = str(
-            content.get("file_name")
-            or content.get("name")
-            or f"feishu-{message_type}{default_extension}"
-        )
+        filename = str(content.get("file_name") or content.get("name") or f"feishu-{message_type}{default_extension}")
         return [
             ChannelAttachment(
                 external_file_id=f"{message_id}:{file_key}:{resource_type}",

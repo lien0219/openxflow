@@ -3,7 +3,6 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-
 from langflow.alembic.versions import (
     a8e1c6d4f5b7_add_channel_outbound_delivery as outbound_delivery_migration,
 )
@@ -77,15 +76,11 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
         inspector = sa.inspect(connection)
         assert expected_tables.issubset(set(inspector.get_table_names()))
 
-        file_columns = {
-            column["name"]: column
-            for column in sa.inspect(connection).get_columns("channel_file_asset")
-        }
+        file_columns = {column["name"]: column for column in sa.inspect(connection).get_columns("channel_file_asset")}
         assert file_columns["external_file_id"]["type"].length == 1024
 
         outbound_columns = {
-            column["name"]: column
-            for column in sa.inspect(connection).get_columns("channel_outbound_delivery")
+            column["name"]: column for column in sa.inspect(connection).get_columns("channel_outbound_delivery")
         }
         assert outbound_columns["delivery_kind"]["type"].length == 32
         assert outbound_columns["response_digest"]["type"].length == 64

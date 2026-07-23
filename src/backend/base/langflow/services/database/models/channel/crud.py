@@ -69,7 +69,9 @@ async def create_channel_connection(
 
 
 async def list_channel_connections(session: AsyncSession, user_id: UUID) -> list[ChannelConnectionRead]:
-    statement = select(ChannelConnection).where(ChannelConnection.user_id == user_id).order_by(ChannelConnection.created_at)
+    statement = (
+        select(ChannelConnection).where(ChannelConnection.user_id == user_id).order_by(ChannelConnection.created_at)
+    )
     rows = (await session.exec(statement)).all()
     return [_connection_read(row) for row in rows]
 
@@ -116,7 +118,9 @@ async def list_channel_identities(
     session: AsyncSession,
     connection_id: UUID,
 ) -> list[ChannelIdentityRead]:
-    statement = select(ChannelIdentity).where(ChannelIdentity.connection_id == connection_id).order_by(ChannelIdentity.bound_at)
+    statement = (
+        select(ChannelIdentity).where(ChannelIdentity.connection_id == connection_id).order_by(ChannelIdentity.bound_at)
+    )
     rows = (await session.exec(statement)).all()
     return [ChannelIdentityRead.model_validate(row, from_attributes=True) for row in rows]
 

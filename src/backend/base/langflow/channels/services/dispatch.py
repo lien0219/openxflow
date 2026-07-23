@@ -217,11 +217,7 @@ class ChannelDispatchService:
             lines.append(f"{marker} {kb.name}（{kb.status}，{kb.chunks} 个分块）")
         return ChannelMessage(
             title="可用知识库",
-            text=(
-                "\n".join(lines)
-                + "\n\n使用 /use-kb <知识库名称> 绑定当前会话；"
-                "使用 /use-kb none 解除绑定。"
-            ),
+            text=("\n".join(lines) + "\n\n使用 /use-kb <知识库名称> 绑定当前会话；使用 /use-kb none 解除绑定。"),
         )
 
     async def _bind_knowledge_base(
@@ -261,10 +257,7 @@ class ChannelDispatchService:
         await self.session.flush()
         return ChannelMessage(
             title="知识库绑定成功",
-            text=(
-                f"当前会话已绑定：{kb.name}\n"
-                "之后上传的受支持文件会自动进入该知识库解析。"
-            ),
+            text=(f"当前会话已绑定：{kb.name}\n之后上传的受支持文件会自动进入该知识库解析。"),
         )
 
     async def _recent_files_message(self, event: ChannelEvent, user: User) -> ChannelMessage:
@@ -282,8 +275,7 @@ class ChannelDispatchService:
             "failed": "失败",
         }
         lines = [
-            f"• {asset.filename}｜{labels.get(asset.status, asset.status)}｜{str(asset.id)[:8]}"
-            for asset in assets
+            f"• {asset.filename}｜{labels.get(asset.status, asset.status)}｜{str(asset.id)[:8]}" for asset in assets
         ]
         return ChannelMessage(title="最近文件", text="\n".join(lines))
 

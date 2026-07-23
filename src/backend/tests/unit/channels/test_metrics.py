@@ -1,5 +1,3 @@
-from prometheus_client import CollectorRegistry, generate_latest
-
 from langflow.channels.services.metrics import (
     ChannelMetricsCollector,
     outbound_metrics_snapshot,
@@ -7,14 +5,15 @@ from langflow.channels.services.metrics import (
     record_outbound_failure,
     record_outbound_retry,
     record_outbound_success,
-    record_token_rejection,
     record_token_refresh_failure,
     record_token_refresh_success,
+    record_token_rejection,
     record_token_replay,
     reset_outbound_metrics_for_testing,
     reset_token_recovery_metrics_for_testing,
     token_recovery_metrics_snapshot,
 )
+from prometheus_client import CollectorRegistry, generate_latest
 
 
 def setup_function() -> None:

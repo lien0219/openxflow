@@ -1,9 +1,7 @@
 import base64
-import json
 from uuid import uuid4
 
 import pytest
-
 from langflow.channels.adapters.wecom import WeComChannelAdapter
 from langflow.channels.domain.models import (
     ChannelAction,

@@ -83,9 +83,7 @@ async def _run_outbound_delivery_maintenance(stop_event: asyncio.Event) -> None:
         except asyncio.CancelledError:
             raise
         except Exception:
-            await logger.aexception(
-                "Unable to maintain durable outbound delivery receipts"
-            )
+            await logger.aexception("Unable to maintain durable outbound delivery receipts")
         try:
             await asyncio.wait_for(
                 stop_event.wait(),

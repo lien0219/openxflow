@@ -4,7 +4,6 @@ import json
 
 import pytest
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
 from langflow.channels.security.feishu_crypto import (
     FeishuCryptoError,
     decrypt_feishu_event,

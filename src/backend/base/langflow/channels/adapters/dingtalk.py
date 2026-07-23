@@ -166,9 +166,7 @@ class DingTalkChannelAdapter(ChannelAdapter):
         conversation_type_value = str(body.get("conversationType") or "1")
         is_group = conversation_type_value == "2"
         raw_conversation_id = str(body.get("conversationId") or "").strip()
-        external_conversation_id = (
-            f"group:{raw_conversation_id}" if is_group else f"user:{sender_id}"
-        )
+        external_conversation_id = f"group:{raw_conversation_id}" if is_group else f"user:{sender_id}"
         if is_group and not raw_conversation_id:
             raise ValueError("DingTalk group conversation ID is missing")
 
@@ -425,10 +423,7 @@ class DingTalkChannelAdapter(ChannelAdapter):
     def _render_openapi_message(message: ChannelMessage) -> dict[str, str]:
         body = message.markdown or message.text or ""
         if message.actions:
-            action_lines = [
-                f"- **{action.label}**：`{action.value or action.action_id}`"
-                for action in message.actions
-            ]
+            action_lines = [f"- **{action.label}**：`{action.value or action.action_id}`" for action in message.actions]
             body = f"{body}\n\n" + "\n".join(action_lines)
         return {"title": message.title or "OpenXFlow", "text": body or message.title or "OpenXFlow"}
 

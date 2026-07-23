@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
 from langflow.channels.services import webhook_jobs
 from langflow.channels.services.timing_metrics import (
     channel_timing_metrics_snapshot,

@@ -67,7 +67,7 @@ def render_run_response(response: RunResponse) -> str:
     else:
         rendered = json.dumps(payload, ensure_ascii=False, default=str, indent=2)
     if len(rendered) > _TELEGRAM_SAFE_TEXT_LIMIT:
-        rendered = f"{rendered[:_TELEGRAM_SAFE_TEXT_LIMIT - 24]}\n\n[结果已截断]"
+        rendered = f"{rendered[: _TELEGRAM_SAFE_TEXT_LIMIT - 24]}\n\n[结果已截断]"
     return rendered
 
 
@@ -100,10 +100,7 @@ class ChannelWorkflowExecutor:
             workspace_id=getattr(flow, "workspace_id", None),
             folder_id=getattr(flow, "folder_id", None),
         )
-        normalized_attachments = [
-            attachment.model_dump(exclude_none=True)
-            for attachment in event.message.attachments
-        ]
+        normalized_attachments = [attachment.model_dump(exclude_none=True) for attachment in event.message.attachments]
         context_payload: dict[str, Any] = {
             "type": event.channel.value,
             "connection_id": str(event.connection_id),

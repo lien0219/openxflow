@@ -1,5 +1,3 @@
-from prometheus_client import CollectorRegistry, generate_latest
-
 from langflow.channels.services.webhook_job_metrics import (
     DurableWebhookJobMetricsCollector,
     durable_webhook_job_metrics_snapshot,
@@ -15,6 +13,7 @@ from langflow.channels.services.webhook_job_metrics import (
     reset_durable_webhook_job_metrics_for_testing,
     set_durable_webhook_queue_depths,
 )
+from prometheus_client import CollectorRegistry, generate_latest
 
 
 def setup_function() -> None:

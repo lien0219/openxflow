@@ -84,9 +84,7 @@ def prune_provider_token_cache(
     with _TOKEN_CACHE_STATE_LOCK:
         expired_evictions = 0
         expired_keys = [
-            key
-            for key, (_token, expires_at) in cache.items()
-            if key != protected_key and expires_at <= current_time
+            key for key, (_token, expires_at) in cache.items() if key != protected_key and expires_at <= current_time
         ]
         for key in expired_keys:
             if cache.pop(key, None) is not None:
@@ -95,11 +93,7 @@ def prune_provider_token_cache(
         capacity_evictions = 0
         if len(cache) > max_entries:
             candidates = sorted(
-                (
-                    (expires_at, key)
-                    for key, (_token, expires_at) in cache.items()
-                    if key != protected_key
-                ),
+                ((expires_at, key) for key, (_token, expires_at) in cache.items() if key != protected_key),
             )
             for _expires_at, key in candidates:
                 if len(cache) <= max_entries:
@@ -168,9 +162,7 @@ async def get_cached_provider_token(
             token, expires_at = await fetch_new_token()
             refreshed_at = time.monotonic()
             if not math.isfinite(expires_at) or expires_at <= refreshed_at:
-                raise InvalidProviderTokenResponseError(
-                    f"Invalid {provider} access-token absolute expiry"
-                )
+                raise InvalidProviderTokenResponseError(f"Invalid {provider} access-token absolute expiry")
         except Exception:
             record_token_cache_refresh_failure(provider)
             raise
@@ -209,17 +201,11 @@ def provider_token_lifetime_seconds(
     """Parse a positive finite token lifetime with a provider-safe error type."""
     raw_value = body.get(field, default)
     if isinstance(raw_value, bool):
-        raise InvalidProviderTokenResponseError(
-            f"Invalid {provider} access-token lifetime field '{field}'"
-        )
+        raise InvalidProviderTokenResponseError(f"Invalid {provider} access-token lifetime field '{field}'")
     try:
         parsed = float(raw_value)
     except (TypeError, ValueError) as exc:
-        raise InvalidProviderTokenResponseError(
-            f"Invalid {provider} access-token lifetime field '{field}'"
-        ) from exc
+        raise InvalidProviderTokenResponseError(f"Invalid {provider} access-token lifetime field '{field}'") from exc
     if not math.isfinite(parsed) or parsed <= 0:
-        raise InvalidProviderTokenResponseError(
-            f"Invalid {provider} access-token lifetime field '{field}'"
-        )
+        raise InvalidProviderTokenResponseError(f"Invalid {provider} access-token lifetime field '{field}'")
     return max(minimum, int(parsed))

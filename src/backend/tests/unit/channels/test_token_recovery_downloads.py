@@ -4,7 +4,6 @@ from uuid import uuid4
 
 import httpx
 import pytest
-
 from langflow.channels.adapters.feishu_resilient import ResilientEncryptedFeishuChannelAdapter
 from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdapter
 

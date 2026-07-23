@@ -3,10 +3,9 @@ from uuid import uuid4
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
-from starlette.requests import ClientDisconnect
-
 from langflow.api.v1.channel_webhooks import _validate_and_schedule_provider_event
 from langflow.channels.domain.models import ChannelEvent, ChannelEventType, ChannelType
+from starlette.requests import ClientDisconnect
 
 
 class _FakeDB:

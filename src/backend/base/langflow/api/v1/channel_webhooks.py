@@ -250,7 +250,9 @@ async def verify_wecom_callback(
             echo=echo,
         )
     except (PermissionError, ValueError) as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid WeCom callback verification") from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid WeCom callback verification"
+        ) from exc
     return PlainTextResponse(plaintext)
 
 

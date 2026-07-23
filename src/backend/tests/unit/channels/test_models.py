@@ -1,12 +1,11 @@
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
-
 from langflow.services.database.models.channel.model import (
     ChannelConnectionCreate,
     ChannelConversationBindingUpsert,
 )
+from pydantic import ValidationError
 
 
 def test_channel_connection_create_normalizes_provider():

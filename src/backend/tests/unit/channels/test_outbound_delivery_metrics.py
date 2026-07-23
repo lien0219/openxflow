@@ -1,5 +1,3 @@
-from prometheus_client import CollectorRegistry, generate_latest
-
 from langflow.channels.services.outbound_delivery_metrics import (
     OutboundDeliveryMetricsCollector,
     outbound_delivery_metrics_snapshot,
@@ -13,6 +11,7 @@ from langflow.channels.services.outbound_delivery_metrics import (
     set_outbound_delivery_retained_depths,
 )
 from langflow.services.database.models.channel.outbound_delivery_model import ChannelOutboundDeliveryKind
+from prometheus_client import CollectorRegistry, generate_latest
 
 
 def setup_function() -> None:

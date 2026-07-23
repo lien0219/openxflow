@@ -1,7 +1,6 @@
 import asyncio
 
 import pytest
-
 from langflow.channels.services.timing_metrics import (
     channel_timing_metrics_snapshot,
     reset_channel_timing_metrics_for_testing,

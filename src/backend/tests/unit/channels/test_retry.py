@@ -2,7 +2,6 @@ import math
 
 import httpx
 import pytest
-
 from langflow.channels.services.metrics import outbound_metrics_snapshot, reset_outbound_metrics_for_testing
 from langflow.channels.services.retry import (
     ChannelRetryPolicy,
@@ -162,8 +161,11 @@ def test_non_finite_retry_after_header_falls_back_to_backoff() -> None:
         jitter_ratio=0,
     )
 
-    assert retry_delay_seconds(
-        _status_error(429, retry_after="nan"),
-        attempt=1,
-        policy=policy,
-    ) == 1.0
+    assert (
+        retry_delay_seconds(
+            _status_error(429, retry_after="nan"),
+            attempt=1,
+            policy=policy,
+        )
+        == 1.0
+    )

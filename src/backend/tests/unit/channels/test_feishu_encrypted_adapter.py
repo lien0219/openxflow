@@ -5,7 +5,6 @@ from uuid import uuid4
 
 import pytest
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
 from langflow.channels.adapters.feishu_encrypted import EncryptedFeishuChannelAdapter
 from langflow.channels.domain.models import ChannelEventType
 

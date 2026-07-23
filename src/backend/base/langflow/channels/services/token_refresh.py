@@ -10,12 +10,11 @@ import httpx
 
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
 from langflow.channels.services.metrics import (
-    record_token_rejection,
     record_token_refresh_failure,
     record_token_refresh_success,
+    record_token_rejection,
     record_token_replay,
 )
-from langflow.channels.services.token_cache import response_json_object
 
 _TResponse = TypeVar("_TResponse")
 TokenCache = dict[str, tuple[str, float]]

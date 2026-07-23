@@ -2,8 +2,6 @@ import asyncio
 import time
 
 import pytest
-from prometheus_client import CollectorRegistry, generate_latest
-
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
 from langflow.channels.services.token_cache import get_cached_provider_token, prune_provider_token_cache
 from langflow.channels.services.token_cache_metrics import (
@@ -13,6 +11,7 @@ from langflow.channels.services.token_cache_metrics import (
     reset_token_cache_metrics_for_testing,
     token_cache_metrics_snapshot,
 )
+from prometheus_client import CollectorRegistry, generate_latest
 
 
 @pytest.fixture(autouse=True)

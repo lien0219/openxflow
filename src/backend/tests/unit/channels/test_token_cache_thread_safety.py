@@ -9,10 +9,7 @@ from langflow.channels.services.token_cache_metrics import (
 
 def test_provider_token_cache_pruning_is_thread_safe() -> None:
     reset_token_cache_metrics_for_testing()
-    cache = {
-        f"credential-{index}": (f"token-{index}", float(index + 1))
-        for index in range(1000)
-    }
+    cache = {f"credential-{index}": (f"token-{index}", float(index + 1)) for index in range(1000)}
 
     def prune(index: int) -> tuple[int, int]:
         return prune_provider_token_cache(

@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 _WORKFLOW_DIR = Path(__file__).parents[5] / ".github" / "workflows"
 _CORE_WORKFLOW = _WORKFLOW_DIR / "channel-gateway-core.yml"
 _FRONTEND_WORKFLOW = _WORKFLOW_DIR / "channel-gateway-frontend.yml"

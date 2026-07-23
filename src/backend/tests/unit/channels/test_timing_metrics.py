@@ -1,8 +1,6 @@
 import math
 
 import pytest
-from prometheus_client import CollectorRegistry, generate_latest
-
 from langflow.channels.services.timing_metrics import (
     ChannelTimingMetricsCollector,
     channel_timing_metrics_snapshot,
@@ -11,6 +9,7 @@ from langflow.channels.services.timing_metrics import (
     record_webhook_queue_wait,
     reset_channel_timing_metrics_for_testing,
 )
+from prometheus_client import CollectorRegistry, generate_latest
 
 
 def setup_function() -> None:

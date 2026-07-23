@@ -29,9 +29,7 @@ def test_outbound_delivery_model_schema_contract() -> None:
     assert table.columns.provider_message_id.type.length == 255
 
     unique = next(
-        constraint
-        for constraint in table.constraints
-        if constraint.name == "uq_channel_outbound_delivery_event_kind"
+        constraint for constraint in table.constraints if constraint.name == "uq_channel_outbound_delivery_event_kind"
     )
     assert [column.name for column in unique.columns] == [
         "connection_id",
@@ -39,10 +37,7 @@ def test_outbound_delivery_model_schema_contract() -> None:
         "delivery_kind",
     ]
 
-    indexes = {
-        index.name: [column.name for column in index.columns]
-        for index in table.indexes
-    }
+    indexes = {index.name: [column.name for column in index.columns] for index in table.indexes}
     assert indexes["ix_channel_outbound_delivery_status_updated"] == [
         "status",
         "updated_at",

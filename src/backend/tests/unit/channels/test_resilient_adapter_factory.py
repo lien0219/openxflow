@@ -12,7 +12,6 @@ from langflow.channels.adapters.wecom import WeComChannelAdapter
 from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdapter
 from langflow.channels.security.credentials import encrypt_credentials
 
-
 _REPOSITORY_ROOT = Path(__file__).parents[5]
 _FACTORY_SOURCE = _REPOSITORY_ROOT / "src/backend/base/langflow/channels/adapters/factory.py"
 _STREAM_SOURCE = _REPOSITORY_ROOT / "src/backend/base/langflow/channels/services/dingtalk_stream.py"

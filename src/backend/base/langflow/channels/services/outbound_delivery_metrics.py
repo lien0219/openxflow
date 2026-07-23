@@ -63,11 +63,7 @@ class OutboundDeliveryMetrics:
 
     @staticmethod
     def _normalize_kind(delivery_kind: ChannelOutboundDeliveryKind | str) -> str:
-        value = (
-            delivery_kind.value
-            if isinstance(delivery_kind, ChannelOutboundDeliveryKind)
-            else delivery_kind
-        )
+        value = delivery_kind.value if isinstance(delivery_kind, ChannelOutboundDeliveryKind) else delivery_kind
         if value not in _KINDS:
             raise ValueError(f"Unsupported outbound delivery kind: {value}")
         return value
@@ -103,10 +99,7 @@ class OutboundDeliveryMetrics:
     def snapshot(self) -> OutboundDeliveryMetricSnapshot:
         with self._lock:
             copied = {kind: dict(values) for kind, values in self._values.items()}
-        by_kind = {
-            kind: OutboundDeliveryKindMetricSnapshot(**values)
-            for kind, values in copied.items()
-        }
+        by_kind = {kind: OutboundDeliveryKindMetricSnapshot(**values) for kind, values in copied.items()}
         return OutboundDeliveryMetricSnapshot(
             reserved_total=sum(item.reserved_total for item in by_kind.values()),
             suppressed_total=sum(item.suppressed_total for item in by_kind.values()),

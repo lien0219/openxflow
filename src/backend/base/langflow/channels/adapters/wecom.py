@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import time
 from datetime import datetime, timezone
@@ -292,9 +291,7 @@ class WeComChannelAdapter(ChannelAdapter):
         if msg_type == "location":
             label = message.get("Label", "").strip()
             coordinates = ", ".join(
-                value
-                for value in (message.get("Location_X", ""), message.get("Location_Y", ""))
-                if value
+                value for value in (message.get("Location_X", ""), message.get("Location_Y", "")) if value
             )
             text = label or coordinates
             return text or None, [], ChannelEventType.TEXT

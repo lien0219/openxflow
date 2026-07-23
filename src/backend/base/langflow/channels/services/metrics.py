@@ -242,7 +242,11 @@ class ChannelMetricsCollector:
                 "Retained payload bytes for accepted channel webhooks",
                 webhook.pending_bytes,
             ),
-            ("openxflow_channel_webhook_max_pending", "Configured channel webhook pending capacity", webhook.max_pending),
+            (
+                "openxflow_channel_webhook_max_pending",
+                "Configured channel webhook pending capacity",
+                webhook.max_pending,
+            ),
             (
                 "openxflow_channel_webhook_max_pending_bytes",
                 "Configured retained channel webhook payload-byte capacity",

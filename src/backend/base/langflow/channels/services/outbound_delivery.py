@@ -83,8 +83,7 @@ async def _reserve_outbound_delivery(
                 sa.update(ChannelOutboundDelivery)
                 .where(
                     ChannelOutboundDelivery.id == existing.id,
-                    ChannelOutboundDelivery.status
-                    == ChannelOutboundDeliveryStatus.FAILED.value,
+                    ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.FAILED.value,
                 )
                 .values(
                     status=ChannelOutboundDeliveryStatus.RESERVED.value,
@@ -164,8 +163,7 @@ async def mark_outbound_delivery_sent(
                 sa.update(ChannelOutboundDelivery)
                 .where(
                     ChannelOutboundDelivery.id == delivery_id,
-                    ChannelOutboundDelivery.status
-                    == ChannelOutboundDeliveryStatus.RESERVED.value,
+                    ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.RESERVED.value,
                 )
                 .values(
                     status=ChannelOutboundDeliveryStatus.SENT.value,
@@ -196,8 +194,7 @@ async def mark_outbound_delivery_failed(
                 sa.update(ChannelOutboundDelivery)
                 .where(
                     ChannelOutboundDelivery.id == delivery_id,
-                    ChannelOutboundDelivery.status
-                    == ChannelOutboundDeliveryStatus.RESERVED.value,
+                    ChannelOutboundDelivery.status == ChannelOutboundDeliveryStatus.RESERVED.value,
                 )
                 .values(
                     status=ChannelOutboundDeliveryStatus.FAILED.value,
@@ -218,11 +215,7 @@ async def mark_outbound_delivery_failed(
 def _delivery_kind_value(
     delivery_kind: ChannelOutboundDeliveryKind | str,
 ) -> str | None:
-    value = (
-        delivery_kind.value
-        if isinstance(delivery_kind, ChannelOutboundDeliveryKind)
-        else str(delivery_kind)
-    )
+    value = delivery_kind.value if isinstance(delivery_kind, ChannelOutboundDeliveryKind) else str(delivery_kind)
     return value if value in {kind.value for kind in ChannelOutboundDeliveryKind} else None
 
 
@@ -254,11 +247,7 @@ async def cleanup_outbound_deliveries(session: AsyncSession) -> dict[str, int]:
         await session.rollback()
         return counts
     ids = [delivery_id for delivery_id, _kind in rows]
-    await session.exec(
-        sa.delete(ChannelOutboundDelivery).where(
-            ChannelOutboundDelivery.id.in_(ids)
-        )
-    )
+    await session.exec(sa.delete(ChannelOutboundDelivery).where(ChannelOutboundDelivery.id.in_(ids)))
     await session.commit()
     for _delivery_id, raw_kind in rows:
         kind = _delivery_kind_value(raw_kind)
@@ -339,9 +328,7 @@ async def _run_outbound_delivery_cleanup(stop_event: asyncio.Event) -> None:
         except asyncio.CancelledError:
             raise
         except Exception:
-            await logger.aexception(
-                "Unable to clean durable outbound delivery receipts"
-            )
+            await logger.aexception("Unable to clean durable outbound delivery receipts")
         try:
             await asyncio.wait_for(
                 stop_event.wait(),

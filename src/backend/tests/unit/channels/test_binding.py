@@ -1,5 +1,4 @@
 import pytest
-
 from langflow.channels.domain.exceptions import ChannelBindingCodeInvalidError
 from langflow.channels.services.binding import generate_binding_code, hash_binding_code, normalize_binding_code
 

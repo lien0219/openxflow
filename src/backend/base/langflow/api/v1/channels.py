@@ -159,10 +159,7 @@ async def configure_telegram_webhook(
     if not isinstance(adapter, TelegramChannelAdapter):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a Telegram channel")
 
-    webhook_url = (
-        f"{str(payload.public_base_url).rstrip('/')}"
-        f"/api/v1/channel-webhooks/telegram/{connection_id}"
-    )
+    webhook_url = f"{str(payload.public_base_url).rstrip('/')}/api/v1/channel-webhooks/telegram/{connection_id}"
     try:
         configured = await adapter.set_webhook(
             webhook_url,
@@ -174,7 +171,9 @@ async def configure_telegram_webhook(
         connection.updated_at = datetime.now(timezone.utc)
         db.add(connection)
         await db.commit()
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Telegram webhook configuration failed") from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="Telegram webhook configuration failed"
+        ) from exc
 
     connection.status = ChannelConnectionStatus.CONNECTED.value
     connection.last_error = None

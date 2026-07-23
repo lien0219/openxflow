@@ -7,9 +7,6 @@ from uuid import uuid4
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from langflow.channels.domain.models import (
     ChannelConversation,
     ChannelEvent,
@@ -20,6 +17,8 @@ from langflow.channels.domain.models import (
     ChannelUser,
 )
 from langflow.channels.services import outbound_delivery
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("LANGFLOW_CHANNEL_TEST_POSTGRES_DSN"),

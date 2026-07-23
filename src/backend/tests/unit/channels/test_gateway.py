@@ -2,7 +2,6 @@ import json
 from uuid import uuid4
 
 import pytest
-
 from langflow.channels.adapters.mock import MockChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.domain.models import ChannelMessage
@@ -77,7 +76,6 @@ async def test_gateway_rejects_invalid_signature():
 
     async def handler(event):
         del event
-        return None
 
     with pytest.raises(PermissionError):
         await gateway.receive(connection_id, {}, b"{}", handler)
@@ -98,7 +96,6 @@ async def test_preverified_normal_message_skips_acknowledgement_guard(monkeypatc
 
     async def handler(event):
         del event
-        return None
 
     monkeypatch.setattr(gateway_module, "send_outbound_acknowledgement_once", guard_ack)
     event = await gateway.receive_verified(
@@ -162,7 +159,6 @@ async def test_gateway_never_trusts_preverified_marker_on_normal_receive(extra_h
 
     async def handler(event):
         del event
-        return None
 
     headers = {"x-openxflow-preverified": "1"}
     if extra_header is not None:
@@ -183,7 +179,6 @@ async def test_gateway_rejects_duplicate_event():
 
     async def handler(event):
         del event
-        return None
 
     with pytest.raises(DuplicateChannelEventError):
         await gateway.receive(

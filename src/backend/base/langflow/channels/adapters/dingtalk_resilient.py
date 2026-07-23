@@ -56,9 +56,7 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
             raise DingTalkAPIError("Invalid DingTalk access-token response")
         token = body.get("accessToken")
         if not token:
-            raise DingTalkAPIError(
-                str(body.get("message") or body.get("msg") or "DingTalk access token missing")
-            )
+            raise DingTalkAPIError(str(body.get("message") or body.get("msg") or "DingTalk access token missing"))
         try:
             expire_seconds = provider_token_lifetime_seconds(
                 body,
@@ -129,7 +127,5 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
         if body is None:
             raise DingTalkAPIError("Invalid DingTalk API response")
         if body.get("code") not in {None, "", 0, "0"}:
-            raise DingTalkAPIError(
-                str(body.get("message") or body.get("msg") or body["code"])
-            )
+            raise DingTalkAPIError(str(body.get("message") or body.get("msg") or body["code"]))
         return body

@@ -1,7 +1,6 @@
 from uuid import uuid4
 
 import pytest
-
 from langflow.channels.adapters import dingtalk_resilient, feishu_resilient, wecom_resilient
 from langflow.channels.adapters.dingtalk_resilient import ResilientDingTalkChannelAdapter
 from langflow.channels.adapters.feishu_resilient import ResilientEncryptedFeishuChannelAdapter

@@ -1,5 +1,4 @@
 import pytest
-
 from langflow.api.v1.channel_runtime import (
     read_channel_prometheus_metrics,
     read_channel_runtime,
@@ -47,9 +46,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     assert result.webhook.queue_timeout_seconds == 3.5
     assert result.webhook.task_timeout_seconds == 12.5
     assert (
-        result.webhook.rejected_pending_total
-        + result.webhook.rejected_bytes_total
-        + result.webhook.rejected_both_total
+        result.webhook.rejected_pending_total + result.webhook.rejected_bytes_total + result.webhook.rejected_both_total
         == result.webhook.rejected_total
     )
     assert result.webhook.queue_timed_out_total >= 0

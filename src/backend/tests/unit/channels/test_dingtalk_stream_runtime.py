@@ -1,7 +1,6 @@
 import asyncio
 
 import pytest
-
 from langflow.channels.services import dingtalk_stream
 
 
@@ -127,7 +126,6 @@ async def test_stream_manager_retries_sync_after_failure(monkeypatch: pytest.Mon
         del timeout
         if hasattr(awaitable, "close"):
             awaitable.close()
-        return None
 
     monkeypatch.setattr(manager, "_try_become_leader", become_leader)
     monkeypatch.setattr(manager, "_sync_connections", fail_then_stop)
@@ -161,7 +159,6 @@ async def test_stream_connection_failure_records_error_and_next_attempt(monkeypa
         del timeout
         if hasattr(awaitable, "close"):
             awaitable.close()
-        return None
 
     monkeypatch.setattr(manager, "_run_sdk_client", fail_then_stop)
     monkeypatch.setattr(manager, "_set_status", ignore_status)
