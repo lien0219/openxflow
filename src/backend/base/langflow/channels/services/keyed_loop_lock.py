@@ -5,8 +5,15 @@ from __future__ import annotations
 import asyncio
 from collections import OrderedDict
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from threading import Lock
 from weakref import WeakKeyDictionary
+
+
+@dataclass
+class _LockEntry:
+    lock: asyncio.Lock
+    users: int = 0
 
 
 class LoopLocalKeyedLockPool:
@@ -19,7 +26,7 @@ class LoopLocalKeyedLockPool:
         self._registry_guard = Lock()
         self._locks: WeakKeyDictionary[
             asyncio.AbstractEventLoop,
-            OrderedDict[str, asyncio.Lock],
+            OrderedDict[str, _LockEntry],
         ] = WeakKeyDictionary()
 
     @asynccontextmanager
@@ -27,40 +34,65 @@ class LoopLocalKeyedLockPool:
         """Acquire the loop-local lock for one stable provider cache key."""
         if not key:
             raise ValueError("key must not be empty")
-        lock = self._lock_for_key(key)
-        await lock.acquire()
+        loop = asyncio.get_running_loop()
+        entry = self._entry_for_key(loop, key)
+        await entry.lock.acquire()
         try:
             yield
         finally:
-            lock.release()
-            self._prune_idle_locks()
+            entry.lock.release()
+            self._release_entry(loop, key, entry)
 
-    def _lock_for_key(self, key: str) -> asyncio.Lock:
+    def retained_key_count_for_testing(self) -> int:
+        """Return the current loop's retained key count for deterministic tests."""
         loop = asyncio.get_running_loop()
+        with self._registry_guard:
+            locks = self._locks.get(loop)
+            return len(locks) if locks is not None else 0
+
+    def _entry_for_key(self, loop: asyncio.AbstractEventLoop, key: str) -> _LockEntry:
         with self._registry_guard:
             locks = self._locks.get(loop)
             if locks is None:
                 locks = OrderedDict()
                 self._locks[loop] = locks
-            lock = locks.get(key)
-            if lock is None:
-                lock = asyncio.Lock()
-                locks[key] = lock
+            entry = locks.get(key)
+            if entry is None:
+                entry = _LockEntry(lock=asyncio.Lock())
+                locks[key] = entry
             else:
                 locks.move_to_end(key)
-            return lock
+            entry.users += 1
+            return entry
 
-    def _prune_idle_locks(self) -> None:
-        loop = asyncio.get_running_loop()
+    def _release_entry(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        key: str,
+        entry: _LockEntry,
+    ) -> None:
         with self._registry_guard:
             locks = self._locks.get(loop)
             if locks is None:
                 return
-            while len(locks) > self._max_keys_per_loop:
-                idle_key = next(
-                    (candidate for candidate, lock in locks.items() if not lock.locked()),
-                    None,
-                )
-                if idle_key is None:
-                    return
-                locks.pop(idle_key, None)
+            current = locks.get(key)
+            if current is not entry:
+                return
+            entry.users -= 1
+            if entry.users < 0:
+                raise RuntimeError("Keyed lock user count became negative")
+            self._prune_idle_locks_locked(locks)
+
+    def _prune_idle_locks_locked(self, locks: OrderedDict[str, _LockEntry]) -> None:
+        while len(locks) > self._max_keys_per_loop:
+            idle_key = next(
+                (
+                    candidate
+                    for candidate, entry in locks.items()
+                    if entry.users == 0 and not entry.lock.locked()
+                ),
+                None,
+            )
+            if idle_key is None:
+                return
+            locks.pop(idle_key, None)
