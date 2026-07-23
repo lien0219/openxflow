@@ -7,7 +7,10 @@ from uuid import UUID
 from langflow.channels.adapters.base import ChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelType
-from langflow.channels.services.outbound_delivery import send_outbound_response_once
+from langflow.channels.services.outbound_delivery import (
+    send_outbound_acknowledgement_once,
+    send_outbound_response_once,
+)
 from langflow.channels.services.retry import retry_channel_operation
 
 if TYPE_CHECKING:
@@ -69,7 +72,7 @@ class ChannelGateway:
         *,
         deduplicator: ChannelEventDeduplicator | None = None,
     ) -> ChannelEvent:
-        """Process a callback verified before durable persistence with guarded replies."""
+        """Process a callback verified before durable persistence with guarded deliveries."""
         return await self._receive_parsed(
             connection_id,
             {},
@@ -103,17 +106,22 @@ class ChannelGateway:
                 raise DuplicateChannelEventError(event.event_id)
 
         try:
-            await adapter.acknowledge_event(event)
+            acknowledgement_sender = lambda: adapter.acknowledge_event(event)
+            if guard_outbound:
+                await send_outbound_acknowledgement_once(event, acknowledgement_sender)
+            else:
+                await acknowledgement_sender()
+
             response = await handler(event)
             if response is not None:
-                sender = lambda: retry_channel_operation(
+                response_sender = lambda: retry_channel_operation(
                     lambda: adapter.send_response(event, response),
                     operation_name=f"{adapter.channel_type.value}.send_response",
                 )
                 if guard_outbound:
-                    await send_outbound_response_once(event, response, sender)
+                    await send_outbound_response_once(event, response, response_sender)
                 else:
-                    await sender()
+                    await response_sender()
         except Exception as exc:
             if deduplicator is not None and receipt is not None:
                 await deduplicator.fail(receipt, exc)
