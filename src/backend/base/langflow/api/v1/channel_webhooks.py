@@ -12,7 +12,12 @@ from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.adapters.wecom import WeComChannelAdapter
 from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
-from langflow.channels.services.webhook_processing import process_provider_webhook
+from langflow.channels.services.webhook_processing import (
+    process_reserved_provider_webhook,
+    release_provider_webhook_slot,
+    reserve_provider_webhook_slot,
+    webhook_limiter_snapshot,
+)
 from langflow.services.database.models.channel.model import ChannelConnection
 
 router = APIRouter(
@@ -51,13 +56,28 @@ async def _validate_and_schedule_provider_event(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    background_tasks.add_task(
-        process_provider_webhook,
-        connection_id=connection_id,
-        expected_channel_type=expected_channel_type,
-        headers=headers,
-        payload=payload,
-    )
+    if not reserve_provider_webhook_slot():
+        snapshot = webhook_limiter_snapshot()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Channel webhook queue is full "
+                f"({snapshot.pending}/{snapshot.max_pending}); retry later"
+            ),
+            headers={"Retry-After": "1"},
+        )
+
+    try:
+        background_tasks.add_task(
+            process_reserved_provider_webhook,
+            connection_id=connection_id,
+            expected_channel_type=expected_channel_type,
+            headers=headers,
+            payload=payload,
+        )
+    except Exception:
+        release_provider_webhook_slot()
+        raise
     return {"ok": True}
 
 
