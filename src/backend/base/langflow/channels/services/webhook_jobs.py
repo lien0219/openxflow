@@ -390,6 +390,7 @@ class DurableWebhookJobWorker:
             expected_channel_type=job.channel_type,
             headers={str(key): str(value) for key, value in job.headers_data.items()},
             payload=job.payload,
+            preverified=True,
         )
 
     async def _process(self, job: ChannelWebhookJob) -> None:
