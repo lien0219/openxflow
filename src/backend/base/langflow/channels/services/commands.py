@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -24,7 +25,7 @@ from langflow.services.database.models.channel.command_model import (
 from langflow.services.database.models.channel.model import ChannelConnection, ChannelConversationBinding
 from langflow.services.database.models.user.model import User
 
-_COMMAND_PATTERN = re.compile(r"^/[A-Za-z0-9_\-\u4e00-\u9fff]{1,32}$")
+_COMMAND_PATTERN = re.compile(r"^/[A-Za-z0-9_\u4e00-\u9fff-]{1,32}$")
 _RESERVED_COMMANDS = {
     "/start",
     "/help",
@@ -83,7 +84,10 @@ def build_scope_key(
         return f"conversation:{conversation_binding_id}"
     if scope_type == ChannelCommandScope.IDENTITY_CONNECTION.value:
         if owner_user_id is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Command owner is required")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Command owner is required",
+            )
         return f"identity:{owner_user_id}"
     if scope_type == ChannelCommandScope.IDENTITY_CONVERSATION.value:
         if owner_user_id is None or conversation_binding_id is None:
@@ -92,7 +96,10 @@ def build_scope_key(
                 detail="Command owner and conversation are required",
             )
         return f"identity-conversation:{owner_user_id}:{conversation_binding_id}"
-    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported command scope")
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="Unsupported command scope",
+    )
 
 
 async def _validate_conversation(
@@ -108,7 +115,10 @@ async def _validate_conversation(
     )
     conversation = (await session.exec(statement)).first()
     if conversation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel conversation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Channel conversation not found",
+        )
     return conversation
 
 
@@ -116,7 +126,11 @@ def _can_manage_shared(connection: ChannelConnection, user: User) -> bool:
     return user.is_superuser or connection.user_id == user.id
 
 
-def _assert_scope_permission(connection: ChannelConnection, user: User, scope_type: str) -> UUID | None:
+def _assert_scope_permission(
+    connection: ChannelConnection,
+    user: User,
+    scope_type: str,
+) -> UUID | None:
     if scope_type in {
         ChannelCommandScope.CONNECTION_SHARED.value,
         ChannelCommandScope.CONVERSATION_SHARED.value,
@@ -222,7 +236,7 @@ async def list_workflow_commands(
 ) -> ChannelWorkflowCommandPage:
     normalized_page = max(1, page)
     normalized_page_size = min(100, max(1, page_size))
-    filters: list = [ChannelWorkflowCommand.connection_id == connection.id]
+    filters: list[Any] = [ChannelWorkflowCommand.connection_id == connection.id]
     if not _can_manage_shared(connection, user):
         filters.append(
             sa.or_(
@@ -279,13 +293,23 @@ async def get_workflow_command(
     return (await session.exec(statement)).first()
 
 
-def _assert_command_edit_permission(connection: ChannelConnection, user: User, command: ChannelWorkflowCommand) -> None:
+def _assert_command_edit_permission(
+    connection: ChannelConnection,
+    user: User,
+    command: ChannelWorkflowCommand,
+) -> None:
     if command.owner_user_id is not None:
         if command.owner_user_id != user.id and not user.is_superuser:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot edit another user's command")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot edit another user's command",
+            )
         return
     if not _can_manage_shared(connection, user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot edit shared command")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot edit shared command",
+        )
 
 
 async def update_workflow_command(
@@ -427,7 +451,13 @@ async def list_available_workflow_commands(
         current = best_by_name.get(row.normalized_command)
         if current is None or priority < current[0]:
             best_by_name[row.normalized_command] = (priority, row)
-    return [item[1] for item in sorted(best_by_name.values(), key=lambda value: value[1].normalized_command)]
+    return [
+        item[1]
+        for item in sorted(
+            best_by_name.values(),
+            key=lambda value: value[1].normalized_command,
+        )
+    ]
 
 
 def render_command_input(
