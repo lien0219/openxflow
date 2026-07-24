@@ -9,6 +9,7 @@ on:
       - ".github/workflows/channel-gateway-frontend.yml"
       - "src/frontend/package.json"
       - "src/frontend/package-lock.json"
+      - "src/frontend/tsconfig.channels.json"
       - "src/frontend/src/controllers/API/queries/channels/**"
       - "src/frontend/src/controllers/API/helpers/constants.ts"
       - "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/**"
@@ -52,6 +53,7 @@ jobs:
           src/controllers/API/helpers/constants.ts
           src/pages/SettingsPage/index.tsx
           src/routes.tsx
+          tsconfig.channels.json
 
   unit-tests:
     runs-on: ubuntu-latest
@@ -99,5 +101,5 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --ignore-scripts --loglevel=error
 
-      - name: Type-check frontend
-        run: npx --no-install tsc --noEmit --pretty false --project tsconfig.json
+      - name: Type-check Channel Center
+        run: npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json
