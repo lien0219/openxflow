@@ -168,6 +168,7 @@ def test_help_message_exposes_interactive_actions() -> None:
     assert message.message_type == ChannelMessageType.CARD
     assert [action.value for action in message.actions] == ["/bind", "/commands"]
 
+
 class CommitTrackingSession:
     def __init__(self) -> None:
         self.commits = 0

@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from langflow.services.database.models.channel.crud import (
     _derive_conversation_status,
     delete_legacy_channel_conversation_binding,
@@ -74,6 +73,7 @@ def test_disabled_and_ignored_states_take_precedence() -> None:
     assert (
         _derive_conversation_status(_connection(default_flow=True), ignored) == ChannelConversationStatus.IGNORED.value
     )
+
 
 @pytest.mark.asyncio
 async def test_legacy_manual_conversation_can_be_deleted() -> None:

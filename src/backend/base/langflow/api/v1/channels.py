@@ -323,6 +323,7 @@ async def patch_channel_conversation(
     await db.commit()
     return result
 
+
 @router.delete("/{connection_id}/conversations/{binding_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_legacy_channel_conversation(
     connection_id: UUID,
