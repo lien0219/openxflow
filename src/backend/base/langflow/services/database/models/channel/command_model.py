@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -19,7 +19,7 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class ChannelCommandScope(StrEnum):
+class ChannelCommandScope(str, Enum):
     CONNECTION_SHARED = "connection_shared"
     CONVERSATION_SHARED = "conversation_shared"
     IDENTITY_CONNECTION = "identity_connection"
