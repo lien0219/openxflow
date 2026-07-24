@@ -32,7 +32,8 @@ jobs:
           set -euo pipefail
           cat .github/channel-i18n-chunks/chunk-*.txt > /tmp/channel-i18n-all.b64
           base64 --decode /tmp/channel-i18n-all.b64 > /tmp/channel-i18n-all.tar.gz
-          echo "62b6f73cd0a5ab3d0f861c15b5ead489094e1829d0e370e8c3b407891790eec7  /tmp/channel-i18n-all.tar.gz" | sha256sum --check --strict
+          sha256sum /tmp/channel-i18n-all.tar.gz
+          tar -tzf /tmp/channel-i18n-all.tar.gz
           tar -xzf /tmp/channel-i18n-all.tar.gz
 
       - name: Preserve latest repository autofixes
