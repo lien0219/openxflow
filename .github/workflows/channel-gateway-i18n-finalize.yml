@@ -30,13 +30,46 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .github/channel-i18n-chunks/chunk-*.txt > /tmp/channel-i18n-all.b64
-          base64 --decode /tmp/channel-i18n-all.b64 > /tmp/channel-i18n-all.tar.gz
-          sha256sum /tmp/channel-i18n-all.tar.gz
-          tar -tzf /tmp/channel-i18n-all.tar.gz
-          tar -xzf /tmp/channel-i18n-all.tar.gz
+          python - <<'PY'
+          from __future__ import annotations
 
-      - name: Preserve latest repository autofixes
+          import base64
+          import hashlib
+          import tarfile
+          from pathlib import Path
+
+          chunk_dir = Path(".github/channel-i18n-chunks")
+          chunks = sorted(chunk_dir.glob("chunk-*.txt"))
+          if not chunks:
+              raise SystemExit("No localization chunks were found")
+
+          encoded = "".join("".join(path.read_text(encoding="utf-8").split()) for path in chunks)
+          print(f"Reconstructing localization archive from {len(chunks)} chunks and {len(encoded)} base64 characters")
+          try:
+              archive_bytes = base64.b64decode(encoded, validate=True)
+          except ValueError as exc:
+              raise SystemExit(f"Localization archive base64 is invalid: {exc}") from exc
+
+          archive = Path("/tmp/channel-i18n-all.tar.gz")
+          archive.write_bytes(archive_bytes)
+          print(f"Localization archive sha256={hashlib.sha256(archive_bytes).hexdigest()}")
+
+          repository_root = Path.cwd().resolve()
+          with tarfile.open(archive, mode="r:gz") as bundle:
+              members = bundle.getmembers()
+              if not members:
+                  raise SystemExit("Localization archive is empty")
+              for member in members:
+                  target = (repository_root / member.name).resolve()
+                  if repository_root not in target.parents and target != repository_root:
+                      raise SystemExit(f"Unsafe localization archive path: {member.name}")
+              print("Localization archive members:")
+              for member in members:
+                  print(f"- {member.name}")
+              bundle.extractall(repository_root, filter="data")
+          PY
+
+      - name: Preserve latest repository fixes
         shell: bash
         run: |
           python - <<'PY'
@@ -84,6 +117,19 @@ jobs:
           if marker in text:
               text = text.replace(marker, replacement, 1)
           autofix.write_text(text, encoding="utf-8")
+
+          conversations = Path(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/"
+              "components/ConversationsTab.tsx"
+          )
+          text = conversations.read_text(encoding="utf-8")
+          text = text.replace(
+              'className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 '
+              'text-[11px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"',
+              'className="mt-1 inline-flex rounded-full border border-border bg-muted '
+              'px-2 py-0.5 text-[11px] text-muted-foreground"',
+          )
+          conversations.write_text(text, encoding="utf-8")
           PY
 
       - name: Set up Node.js
