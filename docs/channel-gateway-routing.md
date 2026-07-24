@@ -19,7 +19,7 @@ Provider conversation types are normalized as follows:
 | DingTalk | `private`, `group` |
 | Enterprise WeChat | `private` |
 
-The platform conversation ID and type are discovered values and are read-only in the settings UI. Historical manually entered records are labeled separately so administrators can distinguish them from provider-discovered conversations and replace them after the real platform conversation appears.
+The platform conversation ID and type are discovered values and are read-only in the settings UI. Historical manually entered records are labeled separately so administrators can distinguish them from provider-discovered conversations and replace them after the real platform conversation appears. Only records labeled as historical manual entries can be permanently deleted; provider-discovered conversations use ignore or disable actions instead.
 
 ## Default routing
 
@@ -39,6 +39,8 @@ Each discovered conversation uses one of three route modes:
 - `disabled`: do not execute a workflow for ordinary messages.
 
 Conversation states include `pending`, `inherited`, `overridden`, `ignored`, `disabled`, and `unavailable`.
+
+Before invoking a workflow, the dispatcher commits conversation discovery and the running execution record. The workflow job service uses a separate database session, so this boundary prevents a pending channel write from blocking job creation on local SQLite databases. The final execution status is committed after the workflow finishes.
 
 ## Custom commands
 
@@ -98,6 +100,8 @@ Each channel connection exposes the same tabs:
 - Execution logs
 
 Provider capability metadata controls which conversation types and feature settings appear. This keeps the product model consistent while preserving provider-specific behavior. Channel management labels, dialogs, filters, empty states, pagination controls, and validation messages use the existing localization layer so Chinese and English interfaces remain consistent.
+
+The reusable AG Grid table uses the current `GridApi` column methods when columns are moved. It falls back safely when a grid instance is being destroyed, avoiding the legacy `columnApi` undefined error in the browser console.
 
 ## Runtime compatibility
 
