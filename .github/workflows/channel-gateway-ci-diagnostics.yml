@@ -22,6 +22,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Collect failing job logs
         shell: bash
         run: |
@@ -56,6 +59,26 @@ jobs:
             echo >> "$summary"
           done
           cat "$summary"
+
+      - name: Create channel source snapshot
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf /tmp/channel-ci-diagnostics/channel-source.tar.gz \
+            .github/workflows/channel-gateway-core.yml \
+            .github/workflows/channel-gateway-frontend.yml \
+            src/backend/base/langflow/alembic/versions/*channel* \
+            src/backend/base/langflow/api/v1/channel*.py \
+            src/backend/base/langflow/channels \
+            src/backend/base/langflow/services/database/models/channel \
+            src/backend/tests/unit/channels \
+            src/frontend/biome.json \
+            src/frontend/package.json \
+            src/frontend/tsconfig.channels.json \
+            src/frontend/src/controllers/API/queries/channels \
+            src/frontend/src/locales/channelTranslations.ts \
+            src/frontend/src/pages/SettingsPage/pages/ChannelsPage
 
       - name: Upload diagnostics
         if: always()
