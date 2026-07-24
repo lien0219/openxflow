@@ -99,6 +99,10 @@ Each channel connection exposes the same tabs:
 
 Provider capability metadata controls which conversation types and feature settings appear. This keeps the product model consistent while preserving provider-specific behavior. Channel management labels, dialogs, filters, empty states, pagination controls, and validation messages use the existing localization layer so Chinese and English interfaces remain consistent.
 
+## Runtime compatibility
+
+Channel routing models remain importable on the repository's supported Python matrix, including Python 3.10. Branded Playwright assertions use the OpenXFlow product name and documentation destinations, while the LFX upgrade-flow regression fixture is refreshed from the current Basic Prompting starter project.
+
 ## Database migrations
 
 Run both channel routing migrations before enabling the updated UI and command routing:
