@@ -15,10 +15,12 @@ from .channel import (
     ChannelConnection,
     ChannelConversationBinding,
     ChannelEventReceipt,
+    ChannelExecutionLog,
     ChannelFileAsset,
     ChannelIdentity,
     ChannelOutboundDelivery,
     ChannelWebhookJob,
+    ChannelWorkflowCommand,
 )
 from .deployment import Deployment
 from .deployment_provider_account import DeploymentProviderAccount
@@ -50,10 +52,12 @@ __all__ = [
     "ChannelConnection",
     "ChannelConversationBinding",
     "ChannelEventReceipt",
+    "ChannelExecutionLog",
     "ChannelFileAsset",
     "ChannelIdentity",
     "ChannelOutboundDelivery",
     "ChannelWebhookJob",
+    "ChannelWorkflowCommand",
     "Deployment",
     "DeploymentProviderAccount",
     "File",
