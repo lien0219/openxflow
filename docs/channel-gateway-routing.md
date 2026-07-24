@@ -101,7 +101,7 @@ Provider capability metadata controls which conversation types and feature setti
 
 ## Runtime compatibility
 
-Channel routing models remain importable on the repository's supported Python matrix, including Python 3.10. Branded Playwright assertions use the OpenXFlow product name and documentation destinations, while the LFX upgrade-flow regression fixture is refreshed from the current Basic Prompting starter project.
+Channel routing models remain importable on the repository's supported Python matrix, including Python 3.10. All channel string enums use the portable `str, Enum` form rather than the Python 3.11-only standard-library `StrEnum`. Branded Playwright assertions use the OpenXFlow product name and documentation destinations, while the LFX upgrade-flow regression fixture is refreshed from the current Basic Prompting starter project.
 
 ## Database migrations
 
