@@ -11,12 +11,16 @@ import type {
   ChannelHealthResult,
   ChannelIdentity,
   ChannelMutationHook,
+  ChannelWorkflowCommand,
+  ChannelWorkflowCommandCreate,
+  ChannelWorkflowCommandUpdate,
   TelegramWebhookConfigure,
   TelegramWebhookResult,
 } from "./types";
 
 const CONNECTIONS_QUERY_KEY = ["useGetChannelConnections"];
 const CONVERSATIONS_QUERY_KEY = ["useGetChannelConversations"];
+const COMMANDS_QUERY_KEY = ["useGetChannelCommands"];
 
 export const useCreateChannelConnection: ChannelMutationHook<
   ChannelConnectionCreate,
@@ -260,6 +264,97 @@ export const useUpdateChannelConversation: ChannelMutationHook<
     ...options,
     onSettled: async (...args) => {
       await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      await userOnSettled?.(...args);
+    },
+  });
+};
+
+export const useCreateChannelCommand: ChannelMutationHook<
+  { connectionId: string; payload: ChannelWorkflowCommandCreate },
+  ChannelWorkflowCommand
+> = (options) => {
+  const queryClient = useQueryClient();
+  const userOnSettled = options?.onSettled;
+
+  return useMutation<
+    ChannelWorkflowCommand,
+    unknown,
+    { connectionId: string; payload: ChannelWorkflowCommandCreate }
+  >({
+    mutationKey: ["useCreateChannelCommand"],
+    mutationFn: async ({ connectionId, payload }) => {
+      const response = await api.post<ChannelWorkflowCommand>(
+        `${getURL("CHANNELS")}/${connectionId}/commands`,
+        payload,
+      );
+      return response.data;
+    },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: COMMANDS_QUERY_KEY });
+      await userOnSettled?.(...args);
+    },
+  });
+};
+
+export const useUpdateChannelCommand: ChannelMutationHook<
+  {
+    connectionId: string;
+    commandId: string;
+    payload: ChannelWorkflowCommandUpdate;
+  },
+  ChannelWorkflowCommand
+> = (options) => {
+  const queryClient = useQueryClient();
+  const userOnSettled = options?.onSettled;
+
+  return useMutation<
+    ChannelWorkflowCommand,
+    unknown,
+    {
+      connectionId: string;
+      commandId: string;
+      payload: ChannelWorkflowCommandUpdate;
+    }
+  >({
+    mutationKey: ["useUpdateChannelCommand"],
+    mutationFn: async ({ connectionId, commandId, payload }) => {
+      const response = await api.patch<ChannelWorkflowCommand>(
+        `${getURL("CHANNELS")}/${connectionId}/commands/${commandId}`,
+        payload,
+      );
+      return response.data;
+    },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: COMMANDS_QUERY_KEY });
+      await userOnSettled?.(...args);
+    },
+  });
+};
+
+export const useDeleteChannelCommand: ChannelMutationHook<
+  { connectionId: string; commandId: string },
+  boolean
+> = (options) => {
+  const queryClient = useQueryClient();
+  const userOnSettled = options?.onSettled;
+
+  return useMutation<
+    boolean,
+    unknown,
+    { connectionId: string; commandId: string }
+  >({
+    mutationKey: ["useDeleteChannelCommand"],
+    mutationFn: async ({ connectionId, commandId }) => {
+      await api.delete(
+        `${getURL("CHANNELS")}/${connectionId}/commands/${commandId}`,
+      );
+      return true;
+    },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: COMMANDS_QUERY_KEY });
       await userOnSettled?.(...args);
     },
   });
