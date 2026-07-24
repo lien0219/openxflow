@@ -10,13 +10,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import type {
-  ChannelCommandScope,
-  ChannelWorkflowCommand,
-  ChannelWorkflowCommandCreate,
-  ChannelWorkflowCommandUpdate,
+import {
+  type ChannelCommandScope,
+  type ChannelWorkflowCommand,
+  type ChannelWorkflowCommandCreate,
+  type ChannelWorkflowCommandUpdate,
+  useGetChannelConversations,
 } from "@/controllers/API/queries/channels";
-import { useGetChannelConversations } from "@/controllers/API/queries/channels";
 import type { FlowType } from "@/types/flow";
 import { formatWorkflowOptionLabel } from "../utils";
 
@@ -285,8 +285,10 @@ export default function CommandDialog({
               }
             />
             <span className="text-xs font-normal text-muted-foreground">
-              支持 {{"{{input}}"}}、{{"{{sender_name}}"}}、
-              {{"{{conversation_name}}"}}、{{"{{conversation_type}}"}}。
+              支持 <code>{"{{input}}"}</code>、
+              <code>{"{{sender_name}}"}</code>、
+              <code>{"{{conversation_name}}"}</code>、
+              <code>{"{{conversation_type}}"}</code>。
             </span>
           </label>
 
