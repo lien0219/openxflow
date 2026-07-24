@@ -272,14 +272,17 @@ class FeishuChannelAdapter(ChannelAdapter):
         return str((data or {}).get("message_id") or "")
 
     async def update_message(self, external_message_id: str, message: ChannelMessage) -> None:
-        msg_type, content = self._render_message(message)
+        updateable_message = message.model_copy(
+            update={
+                "message_type": ChannelMessageType.CARD,
+                "metadata": {**message.metadata, "feishu_update_multi": True},
+            }
+        )
+        _, content = self._render_message(updateable_message)
         await self._request(
             "PATCH",
             f"im/v1/messages/{external_message_id}",
-            payload={
-                "msg_type": msg_type,
-                "content": json.dumps(content, ensure_ascii=False),
-            },
+            payload={"content": json.dumps(content, ensure_ascii=False)},
         )
 
     async def download_file(self, external_file_id: str) -> tuple[bytes, dict[str, Any]]:
@@ -415,8 +418,11 @@ class FeishuChannelAdapter(ChannelAdapter):
                         "actions": [cls._render_action(action) for action in message.actions],
                     }
                 )
+            config: dict[str, Any] = {"wide_screen_mode": True}
+            if message.metadata.get("feishu_update_multi"):
+                config["update_multi"] = True
             card: dict[str, Any] = {
-                "config": {"wide_screen_mode": True},
+                "config": config,
                 "elements": elements,
             }
             if message.title:
