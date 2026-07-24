@@ -1,4 +1,4 @@
-import type { TFunction } from "i18next";
+import type { useTranslation } from "react-i18next";
 import type { ChannelConnection } from "@/controllers/API/queries/channels";
 import {
   buildChannelWebhookUrl,
@@ -6,11 +6,13 @@ import {
   parseAllowedExtensions,
 } from "../utils";
 
+type TranslationFunction = ReturnType<typeof useTranslation>["t"];
+
 const translations: Record<string, string> = {
   "channels.status.configuring": "Not configured",
   "channels.status.connected": "Connected",
 };
-const t = ((key: string) => translations[key] ?? key) as TFunction;
+const t = ((key: string) => translations[key] ?? key) as TranslationFunction;
 
 describe("channel settings helpers", () => {
   it("normalizes and deduplicates file extensions", () => {
