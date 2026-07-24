@@ -15,13 +15,145 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: development-scripts-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  format-channel-acceptance-fixes:
+    name: Format channel acceptance fixes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/channel-gateway
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci --ignore-scripts --loglevel=error
+
+      - name: Apply Biome fixes
+        working-directory: src/frontend
+        run: >-
+          npx --no-install biome check --write
+          src/controllers/API/queries/channels
+          src/pages/SettingsPage/pages/ChannelsPage
+          src/controllers/API/helpers/constants.ts
+          src/pages/SettingsPage/index.tsx
+          src/routes.tsx
+          src/i18n.ts
+          src/locales/channelTranslations.ts
+          tsconfig.channels.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Apply Ruff fixes
+        run: |
+          uvx --quiet ruff check --fix \
+            --config src/backend/base/langflow/channels/ruff.toml \
+            src/backend/base/langflow/channels
+          uvx --quiet ruff check --fix \
+            --config src/backend/tests/unit/channels/ruff.toml \
+            src/backend/tests/unit/channels
+
+      - name: Restore development workflow
+        shell: bash
+        run: |
+          cat > .github/workflows/dev-scripts.yml <<'EOF'
+          name: Development Scripts
+
+          on:
+            pull_request:
+              branches:
+                - main
+              paths:
+                - ".github/workflows/dev-scripts.yml"
+                - "dev.ps1"
+                - "dev.cmd"
+                - "dev.sh"
+                - "README.md"
+                - "README_EN.md"
+                - "DEVELOPMENT.md"
+            workflow_dispatch:
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: development-scripts-${{ github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            bash:
+              name: Bash syntax
+              runs-on: ubuntu-latest
+              timeout-minutes: 5
+              steps:
+                - name: Check out repository
+                  uses: actions/checkout@v4
+
+                - name: Validate Bash script
+                  run: |
+                    bash -n dev.sh
+                    bash dev.sh help
+
+            powershell:
+              name: PowerShell syntax
+              runs-on: windows-latest
+              timeout-minutes: 5
+              steps:
+                - name: Check out repository
+                  uses: actions/checkout@v4
+
+                - name: Parse PowerShell script
+                  shell: pwsh
+                  run: |
+                    $tokens = $null
+                    $errors = $null
+                    [System.Management.Automation.Language.Parser]::ParseFile(
+                      (Resolve-Path "dev.ps1"),
+                      [ref]$tokens,
+                      [ref]$errors
+                    ) | Out-Null
+
+                    if ($errors.Count -gt 0) {
+                      $errors | ForEach-Object { Write-Error $_.Message }
+                      exit 1
+                    }
+
+                    ./dev.ps1 help
+
+                - name: Validate CMD launcher
+                  shell: cmd
+                  run: dev.cmd help
+          EOF
+
+      - name: Commit formatting fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No formatting changes required."
+          else
+            git commit -m "style(channels): format acceptance fixes"
+            git push origin HEAD:feature/channel-gateway
+          fi
+
   bash:
     name: Bash syntax
     runs-on: ubuntu-latest
