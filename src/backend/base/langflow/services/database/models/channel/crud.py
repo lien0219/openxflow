@@ -304,6 +304,22 @@ async def get_channel_conversation_binding(
     return (await session.exec(statement)).first()
 
 
+async def delete_legacy_channel_conversation_binding(
+    session: AsyncSession,
+    connection_id: UUID,
+    binding_id: UUID,
+) -> bool:
+    binding = await get_channel_conversation_binding(session, connection_id, binding_id)
+    if binding is None:
+        return False
+    if binding.source != ChannelConversationSource.LEGACY_MANUAL.value:
+        msg = "Only legacy manual channel conversations can be deleted"
+        raise ValueError(msg)
+    await session.delete(binding)
+    await session.flush()
+    return True
+
+
 async def discover_channel_conversation(
     session: AsyncSession,
     connection: ChannelConnection,

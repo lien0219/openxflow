@@ -358,6 +358,11 @@ class ChannelDispatchService:
             channel_context = await self._build_bound_context(binding)
             if command_name:
                 channel_context["command_name"] = command_name
+            # The workflow job service persists through its own database session. Commit
+            # conversation discovery and the running audit row first so SQLite does not
+            # keep a write lock while that session creates the workflow job.
+            if self.session is not None:
+                await self.session.commit()
             response = await self.workflow_executor.execute(
                 event=event,
                 user=user,
@@ -386,6 +391,7 @@ class ChannelDispatchService:
                         succeeded=succeeded,
                         error_message=error_message,
                     )
+                    await self.session.commit()
                 except Exception:  # noqa: BLE001
                     await logger.aexception("Unable to finish channel execution log %s", execution.id)
 

@@ -273,6 +273,33 @@ export const useUpdateChannelConversation: ChannelMutationHook<
   });
 };
 
+export const useDeleteChannelConversation: ChannelMutationHook<
+  { connectionId: string; bindingId: string },
+  boolean
+> = (options) => {
+  const queryClient = useQueryClient();
+  const userOnSettled = options?.onSettled;
+
+  return useMutation<
+    boolean,
+    unknown,
+    { connectionId: string; bindingId: string }
+  >({
+    mutationKey: ["useDeleteChannelConversation"],
+    mutationFn: async ({ connectionId, bindingId }) => {
+      await api.delete(
+        `${getURL("CHANNELS")}/${connectionId}/conversations/${bindingId}`,
+      );
+      return true;
+    },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      await userOnSettled?.(...args);
+    },
+  });
+};
+
 export const useCreateChannelCommand: ChannelMutationHook<
   { connectionId: string; payload: ChannelWorkflowCommandCreate },
   ChannelWorkflowCommand

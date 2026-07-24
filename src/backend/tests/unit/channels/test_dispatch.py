@@ -167,3 +167,42 @@ def test_help_message_exposes_interactive_actions() -> None:
 
     assert message.message_type == ChannelMessageType.CARD
     assert [action.value for action in message.actions] == ["/bind", "/commands"]
+
+class CommitTrackingSession:
+    def __init__(self) -> None:
+        self.commits = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+
+class CommitAwareWorkflowExecutor:
+    def __init__(self, session: CommitTrackingSession) -> None:
+        self.session = session
+
+    async def execute(self, **kwargs) -> ChannelMessage:
+        del kwargs
+        assert self.session.commits == 1
+        return ChannelMessage(title="Workflow", markdown="final answer")
+
+
+async def test_private_and_group_workflows_commit_channel_state_before_execution() -> None:
+    for conversation_type in ("private", "group"):
+        event = _event(text="hello", conversation_type=conversation_type)
+        adapter = MockChannelAdapter(event.connection_id)
+        service = _dispatch_service(adapter)
+        session = CommitTrackingSession()
+        service.session = session
+        service.workflow_executor = CommitAwareWorkflowExecutor(session)
+
+        response = await service._execute_workflow(
+            event,
+            SimpleNamespace(id=uuid4()),
+            "flow-id",
+            "hello",
+            binding=None,
+            trigger_type="default",
+        )
+
+        assert response == ChannelMessage(title="Workflow", markdown="final answer")
+        assert session.commits == 1

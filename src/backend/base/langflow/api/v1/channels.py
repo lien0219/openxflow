@@ -26,6 +26,7 @@ from langflow.services.database.models.channel.crud import (
     create_channel_connection,
     delete_channel_connection,
     delete_channel_identity,
+    delete_legacy_channel_conversation_binding,
     get_channel_conversation_binding,
     get_owned_channel_connection,
     list_channel_connections,
@@ -45,6 +46,7 @@ from langflow.services.database.models.channel.model import (
     ChannelConversationBindingRead,
     ChannelConversationBindingUpdate,
     ChannelConversationBindingUpsert,
+    ChannelConversationSource,
     ChannelIdentityCreate,
     ChannelIdentityRead,
 )
@@ -320,3 +322,23 @@ async def patch_channel_conversation(
     result = await update_channel_conversation_binding(db, connection, binding, payload)
     await db.commit()
     return result
+
+@router.delete("/{connection_id}/conversations/{binding_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_legacy_channel_conversation(
+    connection_id: UUID,
+    binding_id: UUID,
+    db: DbSession,
+    current_user: CurrentActiveUser,
+) -> Response:
+    await _owned_connection_or_404(db, current_user.id, connection_id)
+    binding = await get_channel_conversation_binding(db, connection_id, binding_id)
+    if binding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel conversation not found")
+    if binding.source != ChannelConversationSource.LEGACY_MANUAL.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only legacy manual channel conversations can be deleted",
+        )
+    await delete_legacy_channel_conversation_binding(db, connection_id, binding_id)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

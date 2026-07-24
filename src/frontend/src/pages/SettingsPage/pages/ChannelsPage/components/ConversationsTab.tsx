@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Loading from "@/components/ui/loading";
+import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import {
   type ChannelConnection,
   type ChannelConversationBatchAction,
@@ -12,6 +13,7 @@ import {
   type ChannelConversationStatus,
   type ChannelProviderCapabilities,
   useBatchUpdateChannelConversations,
+  useDeleteChannelConversation,
   useGetChannelConversations,
   useUpdateChannelConversation,
 } from "@/controllers/API/queries/channels";
@@ -57,6 +59,8 @@ export default function ConversationsTab({
   const [batchFlowId, setBatchFlowId] = useState("");
   const [editingConversation, setEditingConversation] =
     useState<ChannelConversationBinding | null>(null);
+  const [deletingConversation, setDeletingConversation] =
+    useState<ChannelConversationBinding | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -86,6 +90,7 @@ export default function ConversationsTab({
     { enabled: Boolean(connection.id) },
   );
   const updateConversation = useUpdateChannelConversation();
+  const deleteConversation = useDeleteChannelConversation();
   const batchUpdate = useBatchUpdateChannelConversations();
   const conversations = result?.items ?? [];
   const pageIds = useMemo(
@@ -116,6 +121,26 @@ export default function ConversationsTab({
     } catch (error) {
       showError(t("channels.toast.conversationSaveFailed"), error);
       throw error;
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!deletingConversation) return;
+    try {
+      await deleteConversation.mutateAsync({
+        connectionId: connection.id,
+        bindingId: deletingConversation.id,
+      });
+      if (conversations.length === 1 && page > 1) {
+        setPage((current) => Math.max(1, current - 1));
+      }
+      setSelectedIds((current) =>
+        current.filter((id) => id !== deletingConversation.id),
+      );
+      setDeletingConversation(null);
+      setSuccessData({ title: copy("历史手工会话已删除") });
+    } catch (error) {
+      showError(copy("删除历史手工会话失败"), error);
     }
   };
 
@@ -354,13 +379,25 @@ export default function ConversationsTab({
                     )}
                   </td>
                   <td className="px-3 py-3 text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditingConversation(conversation)}
-                    >
-                      {t("channels.actions.edit")}
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingConversation(conversation)}
+                      >
+                        {t("channels.actions.edit")}
+                      </Button>
+                      {conversation.source === "legacy_manual" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeletingConversation(conversation)}
+                        >
+                          {copy("删除")}
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -407,6 +444,19 @@ export default function ConversationsTab({
           </Button>
         </div>
       </div>
+
+      <DeleteConfirmationModal
+        open={Boolean(deletingConversation)}
+        setOpen={(open) => {
+          if (!open) setDeletingConversation(null);
+        }}
+        description={
+          deletingConversation?.display_name ||
+          deletingConversation?.external_conversation_id ||
+          ""
+        }
+        onConfirm={handleDeleteConversation}
+      />
 
       <ConversationBindingDialog
         open={Boolean(editingConversation)}

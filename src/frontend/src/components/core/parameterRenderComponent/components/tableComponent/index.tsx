@@ -303,10 +303,15 @@ const TableComponent = forwardRef<
       if (props.onGridReady) props.onGridReady(params);
     };
     const onColumnMoved = (params) => {
-      const updatedColumnDefs = cloneDeep(
-        params.columnApi.getAllGridColumns().map((col) => col.getColDef()),
-      );
-      params.api.setGridOption("columnDefs", updatedColumnDefs);
+      const gridApi = params?.api ?? realRef.current?.api;
+      const columns =
+        gridApi?.getAllGridColumns?.() ?? gridApi?.getColumns?.() ?? [];
+      if (columns.length > 0) {
+        const updatedColumnDefs = cloneDeep(
+          columns.map((col) => col.getColDef()),
+        );
+        gridApi.setGridOption("columnDefs", updatedColumnDefs);
+      }
       if (props.onColumnMoved) props.onColumnMoved(params);
     };
     const onColumnResized = (params) => {
