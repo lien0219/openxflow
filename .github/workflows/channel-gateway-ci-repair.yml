@@ -31,59 +31,66 @@ jobs:
           from pathlib import Path
           from shutil import copyfile
 
-          def replace_exact(path: str, old: str, new: str, expected: int = 1) -> None:
+          def ensure_replaced(path: str, old: str, new: str) -> None:
               file_path = Path(path)
               text = file_path.read_text(encoding="utf-8")
-              actual = text.count(old)
-              if actual != expected:
+              if old in text:
+                  text = text.replace(old, new)
+                  file_path.write_text(text, encoding="utf-8")
+                  print(f"updated {path}: {old!r} -> {new!r}")
+              elif new in text:
+                  print(f"already updated {path}: {new!r}")
+              else:
                   raise SystemExit(
-                      f"Expected {expected} occurrence(s) in {path}, found {actual}: {old!r}"
+                      f"Neither old nor new value exists in {path}: {old!r} / {new!r}"
                   )
-              file_path.write_text(text.replace(old, new), encoding="utf-8")
 
           command_model = (
               "src/backend/base/langflow/services/database/models/channel/command_model.py"
           )
-          replace_exact(command_model, "from enum import StrEnum", "from enum import Enum")
-          replace_exact(
+          ensure_replaced(command_model, "from enum import StrEnum", "from enum import Enum")
+          ensure_replaced(
               command_model,
               "class ChannelCommandScope(StrEnum):",
               "class ChannelCommandScope(str, Enum):",
           )
 
-          texts = "src/frontend/tests/utils/constants/texts.ts"
-          replace_exact(
-              texts,
+          ensure_replaced(
+              "src/frontend/tests/utils/constants/texts.ts",
               'authSignInHeader: "sign in to langflow"',
               'authSignInHeader: "Sign in to OpenXFlow"',
           )
-
-          auto_login = "src/frontend/tests/core/features/auto-login-off.spec.ts"
-          replace_exact(auto_login, '"Welcome to LangFlow"', '"Welcome to OpenXFlow"')
-
-          mcp_test = "src/frontend/tests/extended/features/mcp-server-tab.spec.ts"
-          replace_exact(
-              mcp_test,
+          ensure_replaced(
+              "src/frontend/tests/core/features/auto-login-off.spec.ts",
+              '"Welcome to LangFlow"',
+              '"Welcome to OpenXFlow"',
+          )
+          ensure_replaced(
+              "src/frontend/tests/extended/features/mcp-server-tab.spec.ts",
               '"https://docs.langflow.org/mcp-server#connect-clients-to-use-the-servers-actions"',
               '"https://github.com/lien0219/openxflow#readme"',
           )
-
-          settings_test = "src/frontend/tests/extended/features/userSettings.spec.ts"
-          replace_exact(
-              settings_test,
+          ensure_replaced(
+              "src/frontend/tests/extended/features/userSettings.spec.ts",
               'await page.getByText("Langflow API").first().click();',
               'await page.getByRole("link", { name: "OpenXFlow API Keys" }).click();',
           )
-          replace_exact(
-              settings_test,
+          ensure_replaced(
+              "src/frontend/tests/extended/features/userSettings.spec.ts",
               'page.getByText("Langflow API Keys", { exact: true }).nth(1)',
               'page.getByText("OpenXFlow API Keys", { exact: true }).nth(1)',
           )
 
-          copyfile(
-              "src/backend/base/langflow/initial_setup/starter_projects/Basic Prompting.json",
-              "src/lfx/tests/fixtures/starter_flows/v1.9.0/basic_prompting.json",
+          source = Path(
+              "src/backend/base/langflow/initial_setup/starter_projects/Basic Prompting.json"
           )
+          destination = Path(
+              "src/lfx/tests/fixtures/starter_flows/v1.9.0/basic_prompting.json"
+          )
+          if not source.is_file():
+              raise SystemExit(f"Missing current starter flow: {source}")
+          copyfile(source, destination)
+          print(f"refreshed {destination} from {source}")
           PY
 
       - name: Set up Node.js
