@@ -39,7 +39,8 @@ def test_inherited_conversation_uses_connection_default_state() -> None:
         == ChannelConversationStatus.INHERITED.value
     )
     assert (
-        _derive_conversation_status(_connection(default_flow=False), binding) == ChannelConversationStatus.PENDING.value
+        _derive_conversation_status(_connection(default_flow=False), binding)
+        == ChannelConversationStatus.PENDING.value
     )
 
 
@@ -65,5 +66,6 @@ def test_disabled_and_ignored_states_take_precedence() -> None:
         == ChannelConversationStatus.DISABLED.value
     )
     assert (
-        _derive_conversation_status(_connection(default_flow=True), ignored) == ChannelConversationStatus.IGNORED.value
+        _derive_conversation_status(_connection(default_flow=True), ignored)
+        == ChannelConversationStatus.IGNORED.value
     )

@@ -57,7 +57,9 @@ async def finish_channel_execution(
     error_message: str | None = None,
 ) -> None:
     completed_at = _utc_now()
-    execution.status = ChannelExecutionStatus.SUCCEEDED.value if succeeded else ChannelExecutionStatus.FAILED.value
+    execution.status = (
+        ChannelExecutionStatus.SUCCEEDED.value if succeeded else ChannelExecutionStatus.FAILED.value
+    )
     execution.completed_at = completed_at
     execution.duration_ms = max(0, int((completed_at - execution.created_at).total_seconds() * 1000))
     execution.error_message = error_message[:4000] if error_message else None

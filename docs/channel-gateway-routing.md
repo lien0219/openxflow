@@ -19,7 +19,7 @@ Provider conversation types are normalized as follows:
 | DingTalk | `private`, `group` |
 | Enterprise WeChat | `private` |
 
-The platform conversation ID and type are discovered values and are read-only in the settings UI. Historical manually entered records are labeled separately so administrators can distinguish them from provider-discovered conversations and replace them with the real platform conversation when it first appears.
+The platform conversation ID and type are discovered values and are read-only in the settings UI.
 
 ## Default routing
 

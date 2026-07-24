@@ -320,7 +320,7 @@ export default function ConversationsTab({
                       {conversation.external_conversation_id}
                     </div>
                     {conversation.source === "legacy_manual" && (
-                      <span className="mt-1 inline-flex rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                      <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
                         {t("channels.conversations.legacyManual")}
                       </span>
                     )}
