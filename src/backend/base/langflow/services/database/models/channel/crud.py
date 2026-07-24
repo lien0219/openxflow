@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -305,17 +306,13 @@ async def discover_channel_conversation(
     connection: ChannelConnection,
     event: ChannelEvent,
 ) -> ChannelConversationBinding | None:
-    if not connection.auto_discover_conversations:
-        statement = select(ChannelConversationBinding).where(
-            ChannelConversationBinding.connection_id == connection.id,
-            ChannelConversationBinding.external_conversation_id == event.conversation.external_conversation_id,
-        )
-        return (await session.exec(statement)).first()
-
     statement = select(ChannelConversationBinding).where(
         ChannelConversationBinding.connection_id == connection.id,
         ChannelConversationBinding.external_conversation_id == event.conversation.external_conversation_id,
     )
+    if not connection.auto_discover_conversations:
+        return (await session.exec(statement)).first()
+
     binding = (await session.exec(statement)).first()
     now = _utc_now()
 
