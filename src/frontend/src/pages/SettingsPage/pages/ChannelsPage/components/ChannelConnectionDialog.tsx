@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,17 +62,20 @@ interface ChannelConnectionDialogProps {
   }) => Promise<void>;
 }
 
-function getProviderName(channelType: ConfigurableChannelType): string {
-  if (channelType === "feishu") return "飞书";
-  if (channelType === "dingtalk") return "钉钉";
-  if (channelType === "wecom") return "企业微信";
-  return "Telegram";
-}
+const PROVIDER_KEYS: Record<ConfigurableChannelType, string> = {
+  telegram: "channels.provider.telegram",
+  feishu: "channels.provider.feishu",
+  dingtalk: "channels.provider.dingtalk",
+  wecom: "channels.provider.wecom",
+};
 
-function emptyForm(channelType: ConfigurableChannelType): ConnectionFormState {
+function emptyForm(
+  channelType: ConfigurableChannelType,
+  providerName: string,
+): ConnectionFormState {
   return {
     channelType,
-    name: getProviderName(channelType),
+    name: providerName,
     botToken: "",
     webhookSecret: "",
     appId: "",
@@ -101,9 +105,12 @@ export default function ChannelConnectionDialog({
   loading = false,
   onSubmit,
 }: ChannelConnectionDialogProps) {
+  const { t } = useTranslation();
+  const providerNameFor = (channelType: ConfigurableChannelType) =>
+    t(PROVIDER_KEYS[channelType]);
   const isEditing = Boolean(connection);
   const [form, setForm] = useState<ConnectionFormState>(() =>
-    emptyForm(initialChannelType),
+    emptyForm(initialChannelType, providerNameFor(initialChannelType)),
   );
 
   useEffect(() => {
@@ -121,9 +128,10 @@ export default function ChannelConnectionDialog({
       "allowed_file_extensions",
       [],
     );
+    const providerName = providerNameFor(channelType);
     setForm({
-      ...emptyForm(channelType),
-      name: connection?.name ?? getProviderName(channelType),
+      ...emptyForm(channelType, providerName),
+      name: connection?.name ?? providerName,
       publicBaseUrl: readConnectionSetting(connection, "public_base_url", ""),
       maxFileSizeMb: String(
         readConnectionSetting(connection, "max_file_size_mb", 10),
@@ -132,7 +140,7 @@ export default function ChannelConnectionDialog({
         allowed.length > 0 ? allowed.join(", ") : DEFAULT_EXTENSIONS,
       enabled: connection?.enabled ?? true,
     });
-  }, [connection, initialChannelType, open]);
+  }, [connection, initialChannelType, open, t]);
 
   const setField = <K extends keyof ConnectionFormState>(
     key: K,
@@ -141,11 +149,19 @@ export default function ChannelConnectionDialog({
 
   const changeChannelType = (channelType: ConfigurableChannelType) => {
     setForm((current) => {
-      const standardNames = ["Telegram", "飞书", "钉钉", "企业微信"];
+      const standardNames = [
+        "Telegram",
+        "Feishu",
+        "DingTalk",
+        "WeCom",
+        "飞书",
+        "钉钉",
+        "企业微信",
+      ];
       return {
-        ...emptyForm(channelType),
+        ...emptyForm(channelType, providerNameFor(channelType)),
         name: standardNames.includes(current.name)
-          ? getProviderName(channelType)
+          ? providerNameFor(channelType)
           : current.name,
         publicBaseUrl: current.publicBaseUrl,
         maxFileSizeMb: current.maxFileSizeMb,
@@ -215,8 +231,9 @@ export default function ChannelConnectionDialog({
       if (form.robotCode.trim()) credentials.robot_code = form.robotCode.trim();
     } else {
       if (form.corpId.trim()) credentials.corp_id = form.corpId.trim();
-      if (form.corpSecret.trim())
+      if (form.corpSecret.trim()) {
         credentials.corp_secret = form.corpSecret.trim();
+      }
       if (form.agentId.trim()) credentials.agent_id = form.agentId.trim();
       if (form.callbackToken.trim()) {
         credentials.callback_token = form.callbackToken.trim();
@@ -234,7 +251,6 @@ export default function ChannelConnectionDialog({
     };
     const connectionMode =
       form.channelType === "dingtalk" ? "stream" : "webhook";
-
     const payload = isEditing
       ? {
           name: form.name.trim(),
@@ -255,32 +271,42 @@ export default function ChannelConnectionDialog({
     await onSubmit({ payload, publicBaseUrl: form.publicBaseUrl.trim() });
   };
 
-  const providerName = getProviderName(form.channelType);
+  const providerName = providerNameFor(form.channelType);
+  const keepValuePlaceholder = isEditing
+    ? t("channels.connectionDialog.keepValue")
+    : undefined;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? `编辑${providerName}连接` : `新增${providerName}连接`}
+            {t(
+              isEditing
+                ? "channels.connectionDialog.editTitle"
+                : "channels.connectionDialog.createTitle",
+              { provider: providerName },
+            )}
           </DialogTitle>
           <DialogDescription>
-            保存应用凭证、接入方式以及手机文件上传限制。凭证加密存储，保存后不会回显。
+            {t("channels.connectionDialog.description")}
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-medium">
-              连接名称
+              {t("channels.connectionDialog.name")}
               <Input
                 value={form.name}
                 onChange={(event) => setField("name", event.target.value)}
-                placeholder={`例如：生产环境${providerName}`}
+                placeholder={t("channels.connectionDialog.namePlaceholder", {
+                  provider: providerName,
+                })}
                 required
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium">
-              渠道类型
+              {t("channels.connectionDialog.channelType")}
               <select
                 className="primary-input h-10"
                 value={form.channelType}
@@ -291,10 +317,18 @@ export default function ChannelConnectionDialog({
                 }
                 disabled={isEditing}
               >
-                <option value="telegram">Telegram Bot</option>
-                <option value="feishu">飞书自建应用</option>
-                <option value="dingtalk">钉钉企业内部机器人</option>
-                <option value="wecom">企业微信自建应用</option>
+                <option value="telegram">
+                  {t("channels.connectionDialog.telegramOption")}
+                </option>
+                <option value="feishu">
+                  {t("channels.connectionDialog.feishuOption")}
+                </option>
+                <option value="dingtalk">
+                  {t("channels.connectionDialog.dingtalkOption")}
+                </option>
+                <option value="wecom">
+                  {t("channels.connectionDialog.wecomOption")}
+                </option>
               </select>
             </label>
           </div>
@@ -308,7 +342,9 @@ export default function ChannelConnectionDialog({
                   value={form.botToken}
                   onChange={(event) => setField("botToken", event.target.value)}
                   placeholder={
-                    isEditing ? "留空保留已配置 Token" : "123456:ABC..."
+                    isEditing
+                      ? t("channels.connectionDialog.keepToken")
+                      : "123456:ABC..."
                   }
                   required={!isEditing}
                 />
@@ -322,7 +358,8 @@ export default function ChannelConnectionDialog({
                     setField("webhookSecret", event.target.value)
                   }
                   placeholder={
-                    isEditing ? "留空保留原值" : "建议设置随机字符串"
+                    keepValuePlaceholder ??
+                    t("channels.connectionDialog.randomSecret")
                   }
                 />
               </label>
@@ -332,8 +369,7 @@ export default function ChannelConnectionDialog({
           {form.channelType === "feishu" && (
             <>
               <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-                飞书事件订阅可启用加密。启用后，Verification Token 和 Encrypt
-                Key 必须与飞书开放平台中的事件订阅配置完全一致。
+                {t("channels.connectionDialog.feishuHelp")}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium">
@@ -341,7 +377,7 @@ export default function ChannelConnectionDialog({
                   <Input
                     value={form.appId}
                     onChange={(event) => setField("appId", event.target.value)}
-                    placeholder={isEditing ? "留空保留原值" : "cli_xxxxxxxxx"}
+                    placeholder={keepValuePlaceholder ?? "cli_xxxxxxxxx"}
                     required={!isEditing}
                   />
                 </label>
@@ -353,7 +389,10 @@ export default function ChannelConnectionDialog({
                     onChange={(event) =>
                       setField("appSecret", event.target.value)
                     }
-                    placeholder={isEditing ? "留空保留原值" : "飞书应用密钥"}
+                    placeholder={
+                      keepValuePlaceholder ??
+                      t("channels.connectionDialog.feishuSecret")
+                    }
                     required={!isEditing}
                   />
                 </label>
@@ -368,7 +407,10 @@ export default function ChannelConnectionDialog({
                       setField("verificationToken", event.target.value)
                     }
                     placeholder={
-                      isEditing ? "留空保留原值" : "事件订阅 Verification Token"
+                      keepValuePlaceholder ??
+                      t(
+                        "channels.connectionDialog.verificationTokenPlaceholder",
+                      )
                     }
                   />
                 </label>
@@ -381,7 +423,8 @@ export default function ChannelConnectionDialog({
                       setField("encryptKey", event.target.value)
                     }
                     placeholder={
-                      isEditing ? "留空保留原值" : "可选，事件订阅 Encrypt Key"
+                      keepValuePlaceholder ??
+                      t("channels.connectionDialog.encryptKeyPlaceholder")
                     }
                   />
                 </label>
@@ -392,8 +435,7 @@ export default function ChannelConnectionDialog({
           {form.channelType === "dingtalk" && (
             <>
               <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-                钉钉默认使用 Stream
-                长连接，不需要公网回调地址。服务会自动维护连接并在断线后重连。
+                {t("channels.connectionDialog.dingtalkHelp")}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium">
@@ -403,7 +445,7 @@ export default function ChannelConnectionDialog({
                     onChange={(event) =>
                       setField("clientId", event.target.value)
                     }
-                    placeholder={isEditing ? "留空保留原值" : "dingxxxxxxxx"}
+                    placeholder={keepValuePlaceholder ?? "dingxxxxxxxx"}
                     required={!isEditing}
                   />
                 </label>
@@ -415,7 +457,10 @@ export default function ChannelConnectionDialog({
                     onChange={(event) =>
                       setField("clientSecret", event.target.value)
                     }
-                    placeholder={isEditing ? "留空保留原值" : "钉钉应用密钥"}
+                    placeholder={
+                      keepValuePlaceholder ??
+                      t("channels.connectionDialog.dingtalkSecret")
+                    }
                     required={!isEditing}
                   />
                 </label>
@@ -427,7 +472,9 @@ export default function ChannelConnectionDialog({
                   onChange={(event) =>
                     setField("robotCode", event.target.value)
                   }
-                  placeholder="通常与 Client ID 相同，留空自动使用 Client ID"
+                  placeholder={t(
+                    "channels.connectionDialog.robotCodePlaceholder",
+                  )}
                 />
               </label>
             </>
@@ -436,23 +483,20 @@ export default function ChannelConnectionDialog({
           {form.channelType === "wecom" && (
             <>
               <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-                企业微信要求使用 HTTPS 回调，并使用 Token 与 EncodingAESKey
-                对回调进行签名校验和 AES 解密。
+                {t("channels.connectionDialog.wecomHelp")}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium">
-                  企业 ID（CorpID）
+                  {t("channels.connectionDialog.corpId")}
                   <Input
                     value={form.corpId}
                     onChange={(event) => setField("corpId", event.target.value)}
-                    placeholder={
-                      isEditing ? "留空保留原值" : "wwxxxxxxxxxxxxxxxx"
-                    }
+                    placeholder={keepValuePlaceholder ?? "wwxxxxxxxxxxxxxxxx"}
                     required={!isEditing}
                   />
                 </label>
                 <label className="flex flex-col gap-2 text-sm font-medium">
-                  应用 AgentID
+                  {t("channels.connectionDialog.agentId")}
                   <Input
                     type="number"
                     min={1}
@@ -460,13 +504,13 @@ export default function ChannelConnectionDialog({
                     onChange={(event) =>
                       setField("agentId", event.target.value)
                     }
-                    placeholder={isEditing ? "留空保留原值" : "1000002"}
+                    placeholder={keepValuePlaceholder ?? "1000002"}
                     required={!isEditing}
                   />
                 </label>
               </div>
               <label className="flex flex-col gap-2 text-sm font-medium">
-                应用 Secret
+                {t("channels.connectionDialog.corpSecret")}
                 <Input
                   type="password"
                   value={form.corpSecret}
@@ -474,14 +518,15 @@ export default function ChannelConnectionDialog({
                     setField("corpSecret", event.target.value)
                   }
                   placeholder={
-                    isEditing ? "留空保留原值" : "企业微信应用 Secret"
+                    keepValuePlaceholder ??
+                    t("channels.connectionDialog.corpSecretPlaceholder")
                   }
                   required={!isEditing}
                 />
               </label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium">
-                  回调 Token
+                  {t("channels.connectionDialog.callbackToken")}
                   <Input
                     type="password"
                     value={form.callbackToken}
@@ -489,7 +534,8 @@ export default function ChannelConnectionDialog({
                       setField("callbackToken", event.target.value)
                     }
                     placeholder={
-                      isEditing ? "留空保留原值" : "企业微信回调 Token"
+                      keepValuePlaceholder ??
+                      t("channels.connectionDialog.callbackTokenPlaceholder")
                     }
                     required={!isEditing}
                   />
@@ -505,7 +551,8 @@ export default function ChannelConnectionDialog({
                       setField("encodingAesKey", event.target.value)
                     }
                     placeholder={
-                      isEditing ? "留空保留原值" : "43 位 EncodingAESKey"
+                      keepValuePlaceholder ??
+                      t("channels.connectionDialog.encodingKeyPlaceholder")
                     }
                     required={!isEditing}
                   />
@@ -515,7 +562,7 @@ export default function ChannelConnectionDialog({
           )}
 
           <label className="flex flex-col gap-2 text-sm font-medium">
-            OpenXFlow 公开地址
+            {t("channels.connectionDialog.publicUrl")}
             <Input
               type="url"
               value={form.publicBaseUrl}
@@ -527,16 +574,16 @@ export default function ChannelConnectionDialog({
             />
             <span className="text-xs font-normal text-muted-foreground">
               {form.channelType === "dingtalk"
-                ? "Stream 模式不需要该地址；仅在启用签名 HTTP 回调时填写。"
+                ? t("channels.connectionDialog.publicUrlStreamHelp")
                 : form.channelType === "wecom"
-                  ? "企业微信必须配置外网可访问的 HTTPS 地址，用于保存接收消息服务器。"
-                  : "必须是外网可访问的 HTTPS 地址，保存后会生成平台回调地址。"}
+                  ? t("channels.connectionDialog.publicUrlWecomHelp")
+                  : t("channels.connectionDialog.publicUrlHelp")}
             </span>
           </label>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-medium">
-              单文件大小限制（MB）
+              {t("channels.connectionDialog.maxFileSize")}
               <Input
                 type="number"
                 min={1}
@@ -547,7 +594,7 @@ export default function ChannelConnectionDialog({
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium">
-              允许的扩展名
+              {t("channels.connectionDialog.allowedExtensions")}
               <Input
                 value={form.allowedExtensions}
                 onChange={(event) =>
@@ -560,9 +607,11 @@ export default function ChannelConnectionDialog({
 
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div>
-              <div className="text-sm font-medium">启用连接</div>
+              <div className="text-sm font-medium">
+                {t("channels.connectionDialog.enable")}
+              </div>
               <div className="text-xs text-muted-foreground">
-                关闭后停止接收消息、运行工作流和解析文件。
+                {t("channels.connectionDialog.enableHelp")}
               </div>
             </div>
             <Switch
@@ -577,10 +626,14 @@ export default function ChannelConnectionDialog({
               type="button"
               onClick={() => onOpenChange(false)}
             >
-              取消
+              {t("channels.actions.cancel")}
             </Button>
             <Button type="submit" loading={loading}>
-              {isEditing ? "保存连接" : "创建连接"}
+              {t(
+                isEditing
+                  ? "channels.actions.saveConnection"
+                  : "channels.actions.createConnection",
+              )}
             </Button>
           </DialogFooter>
         </form>
