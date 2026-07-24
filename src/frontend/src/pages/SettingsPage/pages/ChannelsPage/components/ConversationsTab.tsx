@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Loading from "@/components/ui/loading";
-import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import {
   type ChannelConnection,
   type ChannelConversationBatchAction,
@@ -17,6 +16,7 @@ import {
   useGetChannelConversations,
   useUpdateChannelConversation,
 } from "@/controllers/API/queries/channels";
+import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import useAlertStore from "@/stores/alertStore";
 import useChannelCopy from "../use-channel-copy";
 import ChannelResourceSelect from "./ChannelResourceSelect";

@@ -294,7 +294,9 @@ export const useDeleteChannelConversation: ChannelMutationHook<
     },
     ...options,
     onSettled: async (...args) => {
-      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      await queryClient.invalidateQueries({
+        queryKey: CONVERSATIONS_QUERY_KEY,
+      });
       await userOnSettled?.(...args);
     },
   });
