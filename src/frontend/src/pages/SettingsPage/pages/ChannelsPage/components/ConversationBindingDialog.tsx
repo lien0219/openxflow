@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,6 +47,7 @@ export default function ConversationBindingDialog({
   loading = false,
   onSubmit,
 }: ConversationBindingDialogProps) {
+  const { t } = useTranslation();
   const [form, setForm] = useState<ConversationFormState>({
     externalConversationId: "",
     conversationType: "private",
@@ -93,28 +95,33 @@ export default function ConversationBindingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{binding ? "编辑会话绑定" : "新增会话绑定"}</DialogTitle>
+          <DialogTitle>
+            {binding
+              ? t("channels.conversationDialog.editTitle")
+              : t("channels.conversationDialog.createTitle")}
+          </DialogTitle>
           <DialogDescription>
-            将 Telegram
-            私聊或群聊绑定到默认工作流和知识库，用户可直接在手机端提问和上传资料。
+            {t("channels.conversationDialog.description")}
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-medium">
-              Telegram Chat ID
+              {t("channels.conversationDialog.chatId")}
               <Input
                 value={form.externalConversationId}
                 onChange={(event) =>
                   setField("externalConversationId", event.target.value)
                 }
-                placeholder="例如：-1001234567890"
+                placeholder={t(
+                  "channels.conversationDialog.chatIdPlaceholder",
+                )}
                 disabled={Boolean(binding)}
                 required
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium">
-              会话类型
+              {t("channels.conversationDialog.type")}
               <select
                 className="primary-input h-10"
                 value={form.conversationType}
@@ -122,25 +129,35 @@ export default function ConversationBindingDialog({
                   setField("conversationType", event.target.value)
                 }
               >
-                <option value="private">私聊</option>
-                <option value="group">群聊</option>
-                <option value="supergroup">超级群组</option>
-                <option value="channel">频道</option>
+                <option value="private">
+                  {t("channels.conversationDialog.private")}
+                </option>
+                <option value="group">
+                  {t("channels.conversationDialog.group")}
+                </option>
+                <option value="supergroup">
+                  {t("channels.conversationDialog.supergroup")}
+                </option>
+                <option value="channel">
+                  {t("channels.conversationDialog.channel")}
+                </option>
               </select>
             </label>
           </div>
 
           <label className="flex flex-col gap-2 text-sm font-medium">
-            显示名称
+            {t("channels.conversationDialog.displayName")}
             <Input
               value={form.displayName}
               onChange={(event) => setField("displayName", event.target.value)}
-              placeholder="例如：研发项目群"
+              placeholder={t(
+                "channels.conversationDialog.displayNamePlaceholder",
+              )}
             />
           </label>
 
           <label className="flex flex-col gap-2 text-sm font-medium">
-            默认工作流
+            {t("channels.conversationDialog.defaultWorkflow")}
             <select
               className="primary-input h-10"
               value={form.defaultFlowId}
@@ -148,7 +165,9 @@ export default function ConversationBindingDialog({
                 setField("defaultFlowId", event.target.value)
               }
             >
-              <option value="">不绑定默认工作流</option>
+              <option value="">
+                {t("channels.conversationDialog.noWorkflow")}
+              </option>
               {flows.map((flow) => (
                 <option key={flow.id} value={flow.id}>
                   {flow.name}
@@ -159,7 +178,7 @@ export default function ConversationBindingDialog({
           </label>
 
           <label className="flex flex-col gap-2 text-sm font-medium">
-            默认知识库
+            {t("channels.conversationDialog.defaultKnowledgeBase")}
             <select
               className="primary-input h-10"
               value={form.knowledgeBaseId}
@@ -167,32 +186,40 @@ export default function ConversationBindingDialog({
                 setField("knowledgeBaseId", event.target.value)
               }
             >
-              <option value="">不绑定知识库</option>
+              <option value="">
+                {t("channels.conversationDialog.noKnowledgeBase")}
+              </option>
               {knowledgeBases.map((knowledgeBase) => (
                 <option key={knowledgeBase.id} value={knowledgeBase.id}>
-                  {knowledgeBase.name}（{knowledgeBase.chunks} 个分块）
+                  {knowledgeBase.name} ({t("channels.conversationDialog.chunks", { count: knowledgeBase.chunks })})
                 </option>
               ))}
             </select>
           </label>
 
           <label className="flex flex-col gap-2 text-sm font-medium">
-            群聊响应模式
+            {t("channels.conversationDialog.responseMode")}
             <select
               className="primary-input h-10"
               value={form.responseMode}
               onChange={(event) => setField("responseMode", event.target.value)}
             >
-              <option value="mentions_only">仅 @机器人或命令</option>
-              <option value="all_messages">处理全部消息</option>
+              <option value="mentions_only">
+                {t("channels.conversationDialog.mentionsOnly")}
+              </option>
+              <option value="all_messages">
+                {t("channels.conversationDialog.allMessages")}
+              </option>
             </select>
           </label>
 
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div>
-              <div className="text-sm font-medium">允许手机上传文件</div>
+              <div className="text-sm font-medium">
+                {t("channels.conversationDialog.allowUpload")}
+              </div>
               <div className="text-xs text-muted-foreground">
-                开启后文件会保存到用户文件区；绑定知识库时还会自动解析入库。
+                {t("channels.conversationDialog.allowUploadHelp")}
               </div>
             </div>
             <Switch
@@ -209,10 +236,10 @@ export default function ConversationBindingDialog({
               variant="outline"
               onClick={() => onOpenChange(false)}
             >
-              取消
+              {t("channels.actions.cancel")}
             </Button>
             <Button type="submit" loading={loading}>
-              保存绑定
+              {t("channels.actions.saveBinding")}
             </Button>
           </DialogFooter>
         </form>
