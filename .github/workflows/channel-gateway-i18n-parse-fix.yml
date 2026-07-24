@@ -1,0 +1,106 @@
+name: Channel Gateway I18n Parse Fix
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/channel-gateway-i18n-parse-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Repair localized pagination values
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path("src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components")
+          targets = [
+              root / "AccountsTab.tsx",
+              root / "CommandsTab.tsx",
+              root / "ConversationsTab.tsx",
+              root / "ExecutionLogsTab.tsx",
+          ]
+          total = 0
+          for path in targets:
+              text = path.read_text(encoding="utf-8")
+              count = text.count("value={Page(1);}")
+              if count != 1:
+                  raise SystemExit(f"Expected one broken pagination value in {path}, found {count}")
+              path.write_text(text.replace("value={Page(1);}", "value={pageSize}"), encoding="utf-8")
+              total += count
+          print(f"Repaired {total} localized pagination values")
+          PY
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci --ignore-scripts --loglevel=error
+
+      - name: Format and lint Channel Center
+        working-directory: src/frontend
+        run: >-
+          npx --no-install biome check --write --unsafe
+          src/pages/SettingsPage/pages/ChannelsPage
+
+      - name: Verify Channel Center formatting
+        working-directory: src/frontend
+        run: >-
+          npx --no-install biome check
+          src/pages/SettingsPage/pages/ChannelsPage
+
+      - name: Run Channel Center unit tests
+        working-directory: src/frontend
+        run: >-
+          npm test --
+          --runInBand
+          src/pages/SettingsPage/pages/ChannelsPage/__tests__/utils.test.ts
+
+      - name: Capture Channel Center type diagnostics
+        working-directory: src/frontend
+        shell: bash
+        run: |
+          set +e
+          npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json \
+            2>&1 | tee /tmp/channel-i18n-parse-tsc.log
+          exit 0
+
+      - name: Upload type diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-i18n-parse-diagnostics
+          path: /tmp/channel-i18n-parse-tsc.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Remove one-time workflow and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/channel-gateway-i18n-parse-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/frontend/src/pages/SettingsPage/pages/ChannelsPage
+          git commit -m "fix(channels): repair localized pagination controls"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
