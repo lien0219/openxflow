@@ -108,4 +108,4 @@ b9f2d7e6c4a1
 c0a3e8f7d5b2
 ```
 
-The first migration adds connection and conversation routing/discovery fields. The second adds custom command and execution audit tables.
+The first migration adds connection and conversation routing/discovery fields. The second adds custom command and execution audit tables. Apply both migrations and restart the backend before beginning provider-level manual acceptance.
