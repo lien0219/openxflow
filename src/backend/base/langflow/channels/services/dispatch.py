@@ -10,7 +10,13 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.channels.adapters.base import ChannelAdapter
-from langflow.channels.domain.models import ChannelEvent, ChannelEventType, ChannelMessage, ChannelType
+from langflow.channels.domain.models import (
+    ChannelEvent,
+    ChannelEventType,
+    ChannelMessage,
+    ChannelMessageType,
+    ChannelType,
+)
 from langflow.channels.services.binding import issue_channel_binding_code, resolve_channel_identity
 from langflow.channels.services.files import (
     ChannelFileService,
@@ -184,9 +190,14 @@ class ChannelDispatchService:
     async def _send_processing_message(self, event: ChannelEvent) -> str | None:
         if event.channel != ChannelType.FEISHU:
             return None
+        processing_message = ChannelMessage(
+            message_type=ChannelMessageType.CARD,
+            text="⏳ 正在处理中，请稍候…",
+            metadata={"feishu_update_multi": True},
+        )
         try:
             return await retry_channel_operation(
-                lambda: self.adapter.send_response(event, ChannelMessage(text="⏳ 正在处理中，请稍候…")),
+                lambda: self.adapter.send_response(event, processing_message),
                 operation_name="feishu.send_processing_message",
             )
         except Exception:  # noqa: BLE001
