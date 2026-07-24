@@ -10,13 +10,14 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.channels.adapters.base import ChannelAdapter
-from langflow.channels.domain.models import ChannelEvent, ChannelEventType, ChannelMessage
+from langflow.channels.domain.models import ChannelEvent, ChannelEventType, ChannelMessage, ChannelType
 from langflow.channels.services.binding import issue_channel_binding_code, resolve_channel_identity
 from langflow.channels.services.files import (
     ChannelFileService,
     list_owned_knowledge_bases,
     resolve_owned_knowledge_base,
 )
+from langflow.channels.services.retry import retry_channel_operation
 from langflow.channels.services.workflow import ChannelWorkflowExecutor
 from langflow.services.authorization import KnowledgeBaseAction, ensure_knowledge_base_permission
 from langflow.services.database.models.channel.model import ChannelConnection, ChannelConversationBinding
@@ -145,10 +146,11 @@ class ChannelDispatchService:
         input_value: str | None,
         *,
         binding: ChannelConversationBinding | None,
-    ) -> ChannelMessage:
+    ) -> ChannelMessage | None:
+        processing_message_id = await self._send_processing_message(event)
         try:
             channel_context = await self._build_bound_context(binding)
-            return await self.workflow_executor.execute(
+            response = await self.workflow_executor.execute(
                 event=event,
                 user=user,
                 flow_identifier=flow_identifier,
@@ -157,12 +159,39 @@ class ChannelDispatchService:
             )
         except HTTPException as exc:
             if exc.status_code in {403, 404}:
-                return ChannelMessage(text="工作流不存在，或当前绑定账号没有执行权限。")
-            await logger.aexception("Channel workflow HTTP error for flow %s", flow_identifier)
-            return ChannelMessage(text="工作流执行失败，请稍后重试。")
+                response = ChannelMessage(text="工作流不存在，或当前绑定账号没有执行权限。")
+            else:
+                await logger.aexception("Channel workflow HTTP error for flow %s", flow_identifier)
+                response = ChannelMessage(text="工作流执行失败，请稍后重试。")
         except Exception:  # noqa: BLE001
             await logger.aexception("Channel workflow execution failed for flow %s", flow_identifier)
-            return ChannelMessage(text="工作流执行失败，请在 OpenXFlow 运行记录中查看错误详情。")
+            response = ChannelMessage(text="工作流执行失败，请在 OpenXFlow 运行记录中查看错误详情。")
+
+        if processing_message_id is not None:
+            try:
+                await retry_channel_operation(
+                    lambda: self.adapter.update_message(processing_message_id, response),
+                    operation_name=f"{self.adapter.channel_type.value}.update_processing_message",
+                )
+                return None
+            except Exception:  # noqa: BLE001
+                await logger.aexception(
+                    "Unable to update Feishu processing message %s; falling back to a new response",
+                    processing_message_id,
+                )
+        return response
+
+    async def _send_processing_message(self, event: ChannelEvent) -> str | None:
+        if event.channel != ChannelType.FEISHU:
+            return None
+        try:
+            return await retry_channel_operation(
+                lambda: self.adapter.send_response(event, ChannelMessage(text="⏳ 正在处理中，请稍候…")),
+                operation_name="feishu.send_processing_message",
+            )
+        except Exception:  # noqa: BLE001
+            await logger.aexception("Unable to send Feishu processing message; continuing without it")
+            return None
 
     async def _binding_required_message(self, event: ChannelEvent) -> ChannelMessage:
         if event.conversation.conversation_type != "private":
