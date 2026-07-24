@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type {
   ChannelConversationBinding,
-  ChannelConversationBindingUpsert,
+  ChannelConversationBindingUpdate,
+  ChannelConversationRouteMode,
 } from "@/controllers/API/queries/channels";
 import type { KnowledgeBaseInfo } from "@/controllers/API/queries/knowledge-bases/use-get-knowledge-bases";
 import type { FlowType } from "@/types/flow";
@@ -25,18 +26,20 @@ interface ConversationBindingDialogProps {
   binding?: ChannelConversationBinding | null;
   flows: FlowType[];
   knowledgeBases: KnowledgeBaseInfo[];
+  supportsMentions?: boolean;
+  supportsFileUpload?: boolean;
   loading?: boolean;
-  onSubmit: (payload: ChannelConversationBindingUpsert) => Promise<void>;
+  onSubmit: (payload: ChannelConversationBindingUpdate) => Promise<void>;
 }
 
 interface ConversationFormState {
-  externalConversationId: string;
-  conversationType: string;
   displayName: string;
+  routeMode: ChannelConversationRouteMode;
   responseMode: string;
   defaultFlowId: string;
   knowledgeBaseId: string;
   allowFileUpload: boolean;
+  ignored: boolean;
 }
 
 export default function ConversationBindingDialog({
@@ -45,30 +48,32 @@ export default function ConversationBindingDialog({
   binding,
   flows,
   knowledgeBases,
+  supportsMentions = true,
+  supportsFileUpload = true,
   loading = false,
   onSubmit,
 }: ConversationBindingDialogProps) {
   const { t } = useTranslation();
   const [form, setForm] = useState<ConversationFormState>({
-    externalConversationId: "",
-    conversationType: "private",
     displayName: "",
+    routeMode: "inherit",
     responseMode: "mentions_only",
     defaultFlowId: "",
     knowledgeBaseId: "",
     allowFileUpload: true,
+    ignored: false,
   });
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !binding) return;
     setForm({
-      externalConversationId: binding?.external_conversation_id ?? "",
-      conversationType: binding?.conversation_type ?? "private",
-      displayName: binding?.display_name ?? "",
-      responseMode: binding?.response_mode ?? "mentions_only",
-      defaultFlowId: binding?.default_flow_id ?? "",
-      knowledgeBaseId: binding?.knowledge_base_id ?? "",
-      allowFileUpload: binding?.allow_file_upload ?? true,
+      displayName: binding.display_name ?? "",
+      routeMode: binding.route_mode,
+      responseMode: binding.response_mode,
+      defaultFlowId: binding.default_flow_id ?? "",
+      knowledgeBaseId: binding.knowledge_base_id ?? "",
+      allowFileUpload: binding.allow_file_upload,
+      ignored: binding.status === "ignored",
     });
   }, [binding, open]);
 
@@ -79,68 +84,48 @@ export default function ConversationBindingDialog({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form.externalConversationId.trim()) return;
+    if (!binding) return;
     await onSubmit({
-      external_conversation_id: form.externalConversationId.trim(),
-      conversation_type: form.conversationType,
       display_name: form.displayName.trim() || null,
+      route_mode: form.routeMode,
       response_mode: form.responseMode,
       allow_file_upload: form.allowFileUpload,
-      settings_data: binding?.settings_data ?? {},
-      default_flow_id: form.defaultFlowId || null,
+      settings_data: binding.settings_data,
+      default_flow_id:
+        form.routeMode === "override" ? form.defaultFlowId || null : null,
       knowledge_base_id: form.knowledgeBaseId || null,
+      status: form.ignored ? "ignored" : undefined,
     });
   };
+
+  if (!binding) return null;
+
+  const isGroupConversation = binding.conversation_type !== "private";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>
-            {binding
-              ? t("channels.conversationDialog.editTitle")
-              : t("channels.conversationDialog.createTitle")}
-          </DialogTitle>
+          <DialogTitle>{t("channels.conversationDialog.editTitle")}</DialogTitle>
           <DialogDescription>
-            {t("channels.conversationDialog.description")}
+            会话由渠道消息自动发现，平台会话 ID 和会话类型不可手工修改。
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-medium">
               {t("channels.conversationDialog.chatId")}
-              <Input
-                value={form.externalConversationId}
-                onChange={(event) =>
-                  setField("externalConversationId", event.target.value)
-                }
-                placeholder={t("channels.conversationDialog.chatIdPlaceholder")}
-                disabled={Boolean(binding)}
-                required
-              />
+              <Input value={binding.external_conversation_id} disabled />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium">
               {t("channels.conversationDialog.type")}
-              <select
-                className="primary-input h-10"
-                value={form.conversationType}
-                onChange={(event) =>
-                  setField("conversationType", event.target.value)
-                }
-              >
-                <option value="private">
-                  {t("channels.conversationDialog.private")}
-                </option>
-                <option value="group">
-                  {t("channels.conversationDialog.group")}
-                </option>
-                <option value="supergroup">
-                  {t("channels.conversationDialog.supergroup")}
-                </option>
-                <option value="channel">
-                  {t("channels.conversationDialog.channel")}
-                </option>
-              </select>
+              <Input
+                value={t(
+                  `channels.conversationDialog.${binding.conversation_type}`,
+                  { defaultValue: binding.conversation_type },
+                )}
+                disabled
+              />
             </label>
           </div>
 
@@ -156,24 +141,45 @@ export default function ConversationBindingDialog({
           </label>
 
           <label className="flex flex-col gap-2 text-sm font-medium">
-            {t("channels.conversationDialog.defaultWorkflow")}
+            默认路由方式
             <select
               className="primary-input h-10"
-              value={form.defaultFlowId}
+              value={form.routeMode}
               onChange={(event) =>
-                setField("defaultFlowId", event.target.value)
+                setField(
+                  "routeMode",
+                  event.target.value as ChannelConversationRouteMode,
+                )
               }
             >
-              <option value="">
-                {t("channels.conversationDialog.noWorkflow")}
-              </option>
-              {flows.map((flow) => (
-                <option key={flow.id} value={flow.id}>
-                  {formatWorkflowOptionLabel(flow)}
-                </option>
-              ))}
+              <option value="inherit">继承渠道连接默认工作流</option>
+              <option value="override">使用此会话独立工作流</option>
+              <option value="disabled">禁用普通消息工作流</option>
             </select>
           </label>
+
+          {form.routeMode === "override" && (
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              {t("channels.conversationDialog.defaultWorkflow")}
+              <select
+                className="primary-input h-10"
+                value={form.defaultFlowId}
+                onChange={(event) =>
+                  setField("defaultFlowId", event.target.value)
+                }
+                required
+              >
+                <option value="">
+                  {t("channels.conversationDialog.noWorkflow")}
+                </option>
+                {flows.map((flow) => (
+                  <option key={flow.id} value={flow.id}>
+                    {formatWorkflowOptionLabel(flow)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="flex flex-col gap-2 text-sm font-medium">
             {t("channels.conversationDialog.defaultKnowledgeBase")}
@@ -199,36 +205,55 @@ export default function ConversationBindingDialog({
             </select>
           </label>
 
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            {t("channels.conversationDialog.responseMode")}
-            <select
-              className="primary-input h-10"
-              value={form.responseMode}
-              onChange={(event) => setField("responseMode", event.target.value)}
-            >
-              <option value="mentions_only">
-                {t("channels.conversationDialog.mentionsOnly")}
-              </option>
-              <option value="all_messages">
-                {t("channels.conversationDialog.allMessages")}
-              </option>
-            </select>
-          </label>
+          {isGroupConversation && supportsMentions && (
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              {t("channels.conversationDialog.responseMode")}
+              <select
+                className="primary-input h-10"
+                value={form.responseMode}
+                onChange={(event) =>
+                  setField("responseMode", event.target.value)
+                }
+              >
+                <option value="mentions_only">
+                  {t("channels.conversationDialog.mentionsOnly")}
+                </option>
+                <option value="all_messages">
+                  {t("channels.conversationDialog.allMessages")}
+                </option>
+              </select>
+            </label>
+          )}
+
+          {supportsFileUpload && (
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <div className="text-sm font-medium">
+                  {t("channels.conversationDialog.allowUpload")}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {t("channels.conversationDialog.allowUploadHelp")}
+                </div>
+              </div>
+              <Switch
+                checked={form.allowFileUpload}
+                onCheckedChange={(checked) =>
+                  setField("allowFileUpload", checked)
+                }
+              />
+            </div>
+          )}
 
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div>
-              <div className="text-sm font-medium">
-                {t("channels.conversationDialog.allowUpload")}
-              </div>
+              <div className="text-sm font-medium">忽略当前会话</div>
               <div className="text-xs text-muted-foreground">
-                {t("channels.conversationDialog.allowUploadHelp")}
+                开启后保留会话记录和配置，但机器人不再响应此会话。
               </div>
             </div>
             <Switch
-              checked={form.allowFileUpload}
-              onCheckedChange={(checked) =>
-                setField("allowFileUpload", checked)
-              }
+              checked={form.ignored}
+              onCheckedChange={(checked) => setField("ignored", checked)}
             />
           </div>
 
