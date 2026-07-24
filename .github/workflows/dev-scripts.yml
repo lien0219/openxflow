@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - ".github/workflows/dev-scripts.yml"
-      - ".github/scripts/apply_channel_round2.py"
       - "dev.ps1"
       - "dev.cmd"
       - "dev.sh"
@@ -23,10 +22,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apply-channel-acceptance-fixes:
-    name: Apply channel acceptance fixes
+  finalize-channel-acceptance-fixes:
+    name: Finalize channel acceptance fixes
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 35
     steps:
       - name: Check out feature branch
         uses: actions/checkout@v4
@@ -34,10 +33,99 @@ jobs:
           ref: feature/channel-gateway
           fetch-depth: 0
 
-      - name: Apply source patches
-        run: python .github/scripts/apply_channel_round2.py
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Restore one-shot workflow changes
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Update acceptance contracts and clean one-shot resources
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          mutation_test = Path("src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py")
+          content = mutation_test.read_text(encoding="utf-8")
+          content = content.replace('content.count("ChannelMutationHook<") == 12', 'content.count("ChannelMutationHook<") == 13')
+          content = content.replace('content.count("return useMutation<") == 12', 'content.count("return useMutation<") == 13')
+          content = content.replace('content.count("const userOnSettled = options?.onSettled;") == 12', 'content.count("const userOnSettled = options?.onSettled;") == 13')
+          content = content.replace('content.count("await userOnSettled?.(...args);") == 12', 'content.count("await userOnSettled?.(...args);") == 13')
+          content = content.replace('content.count("queryClient.invalidateQueries(") == 13', 'content.count("queryClient.invalidateQueries(") == 14')
+          mutation_test.write_text(content, encoding="utf-8")
+
+          delivery_test = Path("src/backend/tests/unit/channels/test_outbound_delivery_model.py")
+          content = delivery_test.read_text(encoding="utf-8")
+          content = content.replace(
+              '        "acknowledgement",\n        "response",',
+              '        "acknowledgement",\n        "processing",\n        "response",',
+          )
+          delivery_test.write_text(content, encoding="utf-8")
+
+          frontend_workflow = Path(".github/workflows/channel-gateway-frontend.yml")
+          content = frontend_workflow.read_text(encoding="utf-8")
+          if '      - "src/frontend/src/i18n.ts"' not in content:
+              content = content.replace(
+                  '      - "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/**"\n',
+                  '      - "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/**"\n'
+                  '      - "src/frontend/src/i18n.ts"\n'
+                  '      - "src/frontend/src/locales/channelTranslations.ts"\n',
+              )
+          if '          src/i18n.ts\n' not in content:
+              content = content.replace(
+                  '          src/pages/SettingsPage/pages/ChannelsPage\n',
+                  '          src/pages/SettingsPage/pages/ChannelsPage\n'
+                  '          src/i18n.ts\n'
+                  '          src/locales/channelTranslations.ts\n',
+              )
+          if '          src/pages/SettingsPage/pages/ChannelsPage/__tests__/i18n.test.ts\n' not in content:
+              content = content.replace(
+                  '          src/pages/SettingsPage/pages/ChannelsPage/__tests__/utils.test.ts\n',
+                  '          src/pages/SettingsPage/pages/ChannelsPage/__tests__/utils.test.ts\n'
+                  '          src/pages/SettingsPage/pages/ChannelsPage/__tests__/i18n.test.ts\n',
+              )
+          frontend_workflow.write_text(content, encoding="utf-8")
+          PY
+
+          rm -f .github/workflows/channel-acceptance-round2-fixes.yml
+          rm -f .github/scripts/apply_channel_round2.py
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci --ignore-scripts --loglevel=error
+
+      - name: Apply Biome fixes
+        working-directory: src/frontend
+        run: >-
+          npx --no-install biome check --write
+          src/controllers/API/queries/channels
+          src/pages/SettingsPage/pages/ChannelsPage
+          src/controllers/API/helpers/constants.ts
+          src/pages/SettingsPage/index.tsx
+          src/routes.tsx
+          src/i18n.ts
+          src/locales/channelTranslations.ts
+          tsconfig.channels.json
+
+      - name: Apply Ruff fixes
+        run: |
+          uvx --quiet ruff check --fix \
+            --config src/backend/base/langflow/channels/ruff.toml \
+            src/backend/base/langflow/channels
+          uvx --quiet ruff check --fix \
+            --config src/backend/tests/unit/channels/ruff.toml \
+            src/backend/tests/unit/channels
+
+      - name: Restore development workflow
         shell: bash
         run: |
           cat > .github/workflows/dev-scripts.yml <<'EOF'
@@ -109,19 +197,36 @@ jobs:
                   run: dev.cmd help
           EOF
 
-      - name: Validate patched Python syntax
+      - name: Validate targeted fixes
+        shell: bash
+        env:
+          PYTHONPATH: src/backend/base
         run: |
           python -m compileall -q \
-            src/backend/base/langflow/channels/services \
-            src/backend/base/langflow/services/database/models/channel \
+            src/backend/base/langflow/channels \
             src/backend/tests/unit/channels
+          uv sync --quiet --frozen --project src/backend/base --group dev
+          uv run --frozen --project src/backend/base --group dev \
+            pytest -q --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_workflow_response.py \
+            src/backend/tests/unit/channels/test_outbound_delivery.py \
+            src/backend/tests/unit/channels/test_outbound_delivery_model.py \
+            src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py \
+            src/backend/tests/unit/channels/test_dispatch.py
+          cd src/frontend
+          npm test -- --runInBand \
+            src/pages/SettingsPage/pages/ChannelsPage/__tests__/utils.test.ts \
+            src/pages/SettingsPage/pages/ChannelsPage/__tests__/i18n.test.ts
+          npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json
 
       - name: Commit fixes
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "fix(channels): address second acceptance findings"
+          git commit -m "fix(channels): complete second acceptance fixes"
           git push origin HEAD:feature/channel-gateway
 
   bash:
