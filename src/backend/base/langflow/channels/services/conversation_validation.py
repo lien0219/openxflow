@@ -1,6 +1,8 @@
-"""Validation for workflow and knowledge-base resources attached to channel conversations."""
+"""Validation for workflow and knowledge-base resources attached to channel routing."""
 
 from __future__ import annotations
+
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -12,24 +14,32 @@ from langflow.services.authorization import (
     ensure_flow_permission,
     ensure_knowledge_base_permission,
 )
-from langflow.services.database.models.channel.model import ChannelConversationBindingUpsert
+from langflow.services.database.models.channel.model import (
+    ChannelConnectionCreate,
+    ChannelConnectionUpdate,
+    ChannelConversationBindingUpdate,
+    ChannelConversationBindingUpsert,
+)
 from langflow.services.database.models.knowledge_base.model import KnowledgeBaseRecord
 from langflow.services.database.models.user.model import User
 
 
-async def validate_conversation_binding_resources(
+async def validate_channel_routing_resources(
     session: AsyncSession,
     user: User,
-    payload: ChannelConversationBindingUpsert,
+    *,
+    flow_id: UUID | None,
+    knowledge_base_id: UUID | None,
+    allow_file_upload: bool,
 ) -> None:
     """Reject resource IDs that the connection owner cannot safely use."""
-    if payload.default_flow_id is not None:
+    if flow_id is not None:
         flow = await get_flow_by_id_or_endpoint_name(
-            str(payload.default_flow_id),
+            str(flow_id),
             user.id,
             widen_for_shares=True,
         )
-        if flow.id != payload.default_flow_id:
+        if flow.id != flow_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Workflow not found",
@@ -43,12 +53,10 @@ async def validate_conversation_binding_resources(
             folder_id=getattr(flow, "folder_id", None),
         )
 
-    if payload.knowledge_base_id is None:
+    if knowledge_base_id is None:
         return
 
-    knowledge_base = await session.get(KnowledgeBaseRecord, payload.knowledge_base_id)
-    # Knowledge bases are currently user-scoped and do not have the shared-resource
-    # lookup path that flows have. Returning 404 avoids leaking another user's UUID.
+    knowledge_base = await session.get(KnowledgeBaseRecord, knowledge_base_id)
     if knowledge_base is None or knowledge_base.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -62,7 +70,7 @@ async def validate_conversation_binding_resources(
         kb_user_id=knowledge_base.user_id,
         kb_name=knowledge_base.name,
     )
-    if payload.allow_file_upload:
+    if allow_file_upload:
         await ensure_knowledge_base_permission(
             user,
             KnowledgeBaseAction.INGEST,
@@ -70,3 +78,37 @@ async def validate_conversation_binding_resources(
             kb_user_id=knowledge_base.user_id,
             kb_name=knowledge_base.name,
         )
+
+
+async def validate_connection_routing_resources(
+    session: AsyncSession,
+    user: User,
+    payload: ChannelConnectionCreate | ChannelConnectionUpdate,
+    *,
+    current_allow_file_upload: bool = True,
+) -> None:
+    changes = payload.model_dump(exclude_unset=True)
+    await validate_channel_routing_resources(
+        session,
+        user,
+        flow_id=changes.get("default_flow_id"),
+        knowledge_base_id=changes.get("default_knowledge_base_id"),
+        allow_file_upload=changes.get("default_allow_file_upload", current_allow_file_upload),
+    )
+
+
+async def validate_conversation_binding_resources(
+    session: AsyncSession,
+    user: User,
+    payload: ChannelConversationBindingUpsert | ChannelConversationBindingUpdate,
+    *,
+    current_allow_file_upload: bool = True,
+) -> None:
+    changes = payload.model_dump(exclude_unset=True)
+    await validate_channel_routing_resources(
+        session,
+        user,
+        flow_id=changes.get("default_flow_id"),
+        knowledge_base_id=changes.get("knowledge_base_id"),
+        allow_file_upload=changes.get("allow_file_upload", current_allow_file_upload),
+    )
