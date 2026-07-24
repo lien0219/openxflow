@@ -7,13 +7,16 @@ on:
     paths:
       - ".github/workflows/channel-gateway-core.yml"
       - ".github/workflows/channel-gateway-frontend.yml"
+      - "uv.lock"
+      - "pyproject.toml"
+      - "src/backend/base/pyproject.toml"
       - "src/backend/base/langflow/channels/**"
+      - "src/backend/base/langflow/api/v1/channel*.py"
       - "src/backend/base/langflow/alembic/versions/*channel*"
       - "src/backend/base/langflow/alembic/versions/f7d0b5c3e4a6_add_channel_webhook_jobs.py"
       - "src/backend/base/langflow/alembic/versions/a8e1c6d4f5b7_add_channel_outbound_delivery.py"
       - "src/backend/base/langflow/services/database/models/channel/**"
       - "src/backend/tests/unit/channels/**"
-      - "src/backend/base/pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -38,9 +41,11 @@ jobs:
             .github/workflows/channel-gateway-core.yml
             .github/workflows/channel-gateway-frontend.yml
 
-  core-services:
+  channel-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: src/backend/base
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -54,6 +59,13 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            pyproject.toml
+            src/backend/base/pyproject.toml
+
+      - name: Sync locked backend test environment
+        run: uv sync --frozen --project src/backend/base --group dev
 
       - name: Ruff production channel code
         run: >-
@@ -75,21 +87,10 @@ jobs:
           src/backend/base/langflow/channels
           src/backend/tests/unit/channels
 
-      - name: Run isolated channel core tests
-        env:
-          PYTHONPATH: src/backend/base
+      - name: Run channel core contracts
         run: >-
-          uv run --quiet --no-project
-          --with 'lfx==1.10.2'
-          --with 'pytest==9.0.3'
-          --with 'pytest-asyncio>=0.23'
-          --with 'pytest-timeout>=2.3.1'
-          --with 'httpx>=0.27'
-          --with 'prometheus-client>=0.20'
-          --with 'opentelemetry-api>=1.30,<2.0'
-          --with 'opentelemetry-sdk>=1.30,<2.0'
-          --with 'opentelemetry-exporter-prometheus>=0.50b0,<1.0'
-          pytest -q -x --tb=short
+          uv run --frozen --project src/backend/base --group dev
+          pytest -q --tb=short
           --confcutdir=src/backend/tests/unit/channels
           src/backend/tests/unit/channels/test_channel_core_workflow.py
           src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
@@ -101,83 +102,19 @@ jobs:
           src/backend/tests/unit/channels/test_token_cache_metrics.py
           src/backend/tests/unit/channels/test_token_refresh.py
 
-  adapter-contracts:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-
       - name: Run resilient adapter contracts
-        env:
-          PYTHONPATH: src/backend/base
         run: >-
-          uv run --quiet --no-project
-          --with 'lfx==1.10.2'
-          --with 'pytest==9.0.3'
-          --with 'pytest-asyncio>=0.23'
-          --with 'pytest-timeout>=2.3.1'
-          --with 'httpx>=0.27,<1.0.0'
-          --with 'prometheus-client>=0.20,<1.0.0'
-          --with 'cryptography>=48.0.1'
-          --with 'defusedxml>=0.7.1,<1.0.0'
-          --with 'sqlalchemy>=2.0.38,<3.0.0'
-          --with 'sqlmodel==0.0.37'
-          --with 'pydantic>=2.13,<3.0.0'
-          --with 'opentelemetry-api>=1.30,<2.0'
-          --with 'opentelemetry-sdk>=1.30,<2.0'
-          --with 'opentelemetry-exporter-prometheus>=0.50b0,<1.0'
-          pytest -q -x --tb=short
+          uv run --frozen --project src/backend/base --group dev
+          pytest -q --tb=short
           --confcutdir=src/backend/tests/unit/channels
           src/backend/tests/unit/channels/test_resilient_adapter_factory.py
           src/backend/tests/unit/channels/test_resilient_token_cache_delegation.py
           src/backend/tests/unit/channels/test_resilient_token_contracts.py
 
-  database-contracts:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-
       - name: Run SQLite migration and model contracts
-        env:
-          PYTHONPATH: src/backend/base
         run: >-
-          uv run --quiet --no-project
-          --with 'lfx==1.10.2'
-          --with 'pytest==9.0.3'
-          --with 'pytest-asyncio>=0.23'
-          --with 'pytest-timeout>=2.3.1'
-          --with 'sqlalchemy>=2.0.38,<3.0.0'
-          --with 'sqlmodel==0.0.37'
-          --with 'alembic>=1.13,<2.0.0'
-          --with 'aiosqlite>=0.20,<1.0.0'
-          --with 'pydantic>=2.13,<3.0.0'
-          --with 'opentelemetry-api>=1.30,<2.0'
-          --with 'opentelemetry-sdk>=1.30,<2.0'
-          --with 'opentelemetry-exporter-prometheus>=0.50b0,<1.0'
-          pytest -q -x --tb=short
+          uv run --frozen --project src/backend/base --group dev
+          pytest -q --tb=short
           --confcutdir=src/backend/tests/unit/channels
           src/backend/tests/unit/channels/test_channel_migrations_sqlite.py
           src/backend/tests/unit/channels/test_outbound_delivery_model.py
