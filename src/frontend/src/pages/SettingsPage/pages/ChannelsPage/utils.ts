@@ -1,5 +1,7 @@
-import type { TFunction } from "i18next";
+import type { useTranslation } from "react-i18next";
 import type { ChannelConnection } from "@/controllers/API/queries/channels";
+
+type TranslationFunction = ReturnType<typeof useTranslation>["t"];
 
 export function parseAllowedExtensions(value: string): string[] {
   return Array.from(
@@ -35,7 +37,7 @@ export function buildChannelWebhookUrl(
 
 export function getChannelStatusMeta(
   status: string,
-  t: TFunction,
+  t: TranslationFunction,
 ): {
   label: string;
   className: string;
