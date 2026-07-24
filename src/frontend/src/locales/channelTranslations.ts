@@ -50,7 +50,8 @@ const en: ChannelTranslationMap = {
     "Send /bind to the bot in a private chat to receive a binding code, then enter it here to bind the current OpenXFlow account.",
   "channels.binding.placeholder": "Enter binding code",
   "channels.binding.empty": "No account bindings yet.",
-  "channels.binding.channelUser": "Channel user: {{channelUser}} · OpenXFlow: {{openxflowUser}}",
+  "channels.binding.channelUser":
+    "Channel user: {{channelUser}} · OpenXFlow: {{openxflowUser}}",
   "channels.conversations.title": "Conversations and workflows",
   "channels.conversations.description":
     "Configure a default workflow, knowledge base, and file-upload permission for private chats or groups.",
@@ -63,7 +64,8 @@ const en: ChannelTranslationMap = {
   "channels.conversations.fileAllowed": "Allowed",
   "channels.conversations.fileDisabled": "Disabled",
   "channels.deleteFallback": "Channel configuration",
-  "channels.toast.telegramConfigured": "Telegram connection and Webhook configured",
+  "channels.toast.telegramConfigured":
+    "Telegram connection and Webhook configured",
   "channels.toast.connectionSaved": "{{name}} connection saved",
   "channels.toast.connectionSaveFailed": "Failed to save channel connection",
   "channels.toast.connectionSucceeded": "Connection succeeded: {{name}}",
@@ -76,7 +78,8 @@ const en: ChannelTranslationMap = {
   "channels.toast.accountBound": "Channel account bound",
   "channels.toast.bindingCodeFailed": "Failed to redeem binding code",
   "channels.toast.conversationSaved": "Conversation binding saved",
-  "channels.toast.conversationSaveFailed": "Failed to save conversation binding",
+  "channels.toast.conversationSaveFailed":
+    "Failed to save conversation binding",
   "channels.toast.connectionDeleted": "Channel connection deleted",
   "channels.toast.accountUnbound": "Channel account unbound",
   "channels.toast.deleteFailed": "Delete failed",
@@ -86,20 +89,25 @@ const en: ChannelTranslationMap = {
   "channels.connectionDialog.description":
     "Save application credentials, connection settings, and mobile file-upload limits. Credentials are encrypted and are not shown again after saving.",
   "channels.connectionDialog.name": "Connection name",
-  "channels.connectionDialog.namePlaceholder": "For example: Production {{provider}}",
+  "channels.connectionDialog.namePlaceholder":
+    "For example: Production {{provider}}",
   "channels.connectionDialog.channelType": "Channel type",
   "channels.connectionDialog.telegramOption": "Telegram Bot",
   "channels.connectionDialog.feishuOption": "Feishu custom app",
   "channels.connectionDialog.dingtalkOption": "DingTalk internal bot",
   "channels.connectionDialog.wecomOption": "WeCom custom app",
-  "channels.connectionDialog.keepToken": "Leave blank to keep the configured token",
-  "channels.connectionDialog.keepValue": "Leave blank to keep the current value",
+  "channels.connectionDialog.keepToken":
+    "Leave blank to keep the configured token",
+  "channels.connectionDialog.keepValue":
+    "Leave blank to keep the current value",
   "channels.connectionDialog.randomSecret": "Use a random string",
   "channels.connectionDialog.feishuHelp":
     "Feishu event subscriptions can be encrypted. When enabled, Verification Token and Encrypt Key must exactly match the event subscription settings in the Feishu developer console.",
   "channels.connectionDialog.feishuSecret": "Feishu app secret",
-  "channels.connectionDialog.verificationTokenPlaceholder": "Event subscription Verification Token",
-  "channels.connectionDialog.encryptKeyPlaceholder": "Optional event subscription Encrypt Key",
+  "channels.connectionDialog.verificationTokenPlaceholder":
+    "Event subscription Verification Token",
+  "channels.connectionDialog.encryptKeyPlaceholder":
+    "Optional event subscription Encrypt Key",
   "channels.connectionDialog.dingtalkHelp":
     "DingTalk uses a Stream connection by default and does not require a public callback URL. OpenXFlow maintains the connection and reconnects automatically.",
   "channels.connectionDialog.dingtalkSecret": "DingTalk app secret",
@@ -113,7 +121,8 @@ const en: ChannelTranslationMap = {
   "channels.connectionDialog.corpSecretPlaceholder": "WeCom application Secret",
   "channels.connectionDialog.callbackToken": "Callback Token",
   "channels.connectionDialog.callbackTokenPlaceholder": "WeCom callback Token",
-  "channels.connectionDialog.encodingKeyPlaceholder": "43-character EncodingAESKey",
+  "channels.connectionDialog.encodingKeyPlaceholder":
+    "43-character EncodingAESKey",
   "channels.connectionDialog.publicUrl": "Public OpenXFlow URL",
   "channels.connectionDialog.publicUrlStreamHelp":
     "Stream mode does not require this URL. Enter it only when using a signed HTTP callback.",
@@ -131,14 +140,16 @@ const en: ChannelTranslationMap = {
   "channels.conversationDialog.description":
     "Bind a private chat or group to a default workflow and knowledge base so users can ask questions and upload files from mobile clients.",
   "channels.conversationDialog.chatId": "Channel conversation ID",
-  "channels.conversationDialog.chatIdPlaceholder": "For example: -1001234567890",
+  "channels.conversationDialog.chatIdPlaceholder":
+    "For example: -1001234567890",
   "channels.conversationDialog.type": "Conversation type",
   "channels.conversationDialog.private": "Private chat",
   "channels.conversationDialog.group": "Group",
   "channels.conversationDialog.supergroup": "Supergroup",
   "channels.conversationDialog.channel": "Channel",
   "channels.conversationDialog.displayName": "Display name",
-  "channels.conversationDialog.displayNamePlaceholder": "For example: Engineering project group",
+  "channels.conversationDialog.displayNamePlaceholder":
+    "For example: Engineering project group",
   "channels.conversationDialog.defaultWorkflow": "Default workflow",
   "channels.conversationDialog.noWorkflow": "No default workflow",
   "channels.conversationDialog.defaultKnowledgeBase": "Default knowledge base",
@@ -149,7 +160,7 @@ const en: ChannelTranslationMap = {
   "channels.conversationDialog.allMessages": "Process all messages",
   "channels.conversationDialog.allowUpload": "Allow mobile file uploads",
   "channels.conversationDialog.allowUploadHelp":
-    "Files are saved to the user's file area. If a knowledge base is bound, files are also parsed and ingested automatically."
+    "Files are saved to the user's file area. If a knowledge base is bound, files are also parsed and ingested automatically.",
 };
 
 const zhHans: ChannelTranslationMap = {
@@ -159,7 +170,8 @@ const zhHans: ChannelTranslationMap = {
     "在 Telegram、飞书、钉钉和企业微信移动端运行工作流、查询知识库、上传文件并处理互动操作。",
   "channels.addConnection": "新增连接",
   "channels.connections": "渠道连接",
-  "channels.emptyConnections": "尚未创建连接。可从上方选择任一已开放渠道开始配置。",
+  "channels.emptyConnections":
+    "尚未创建连接。可从上方选择任一已开放渠道开始配置。",
   "channels.selectConnection": "选择一个连接查看配置详情。",
   "channels.provider.telegram": "Telegram",
   "channels.provider.feishu": "飞书",
@@ -201,9 +213,11 @@ const zhHans: ChannelTranslationMap = {
     "用户私聊机器人发送 /bind 后，将收到绑定码；在此输入即可绑定当前登录账号。",
   "channels.binding.placeholder": "输入绑定码",
   "channels.binding.empty": "还没有账号绑定记录。",
-  "channels.binding.channelUser": "渠道用户：{{channelUser}} · OpenXFlow：{{openxflowUser}}",
+  "channels.binding.channelUser":
+    "渠道用户：{{channelUser}} · OpenXFlow：{{openxflowUser}}",
   "channels.conversations.title": "会话与工作流",
-  "channels.conversations.description": "为私聊或群聊配置默认工作流、知识库以及文件上传权限。",
+  "channels.conversations.description":
+    "为私聊或群聊配置默认工作流、知识库以及文件上传权限。",
   "channels.conversations.empty":
     "机器人收到已绑定用户的消息或文件后，也会自动创建基础会话记录。",
   "channels.conversations.conversationId": "{{type}} · 会话 ID：{{id}}",
@@ -248,8 +262,10 @@ const zhHans: ChannelTranslationMap = {
   "channels.connectionDialog.feishuHelp":
     "飞书事件订阅可启用加密。启用后，Verification Token 和 Encrypt Key 必须与飞书开放平台中的事件订阅配置完全一致。",
   "channels.connectionDialog.feishuSecret": "飞书应用密钥",
-  "channels.connectionDialog.verificationTokenPlaceholder": "事件订阅 Verification Token",
-  "channels.connectionDialog.encryptKeyPlaceholder": "可选，事件订阅 Encrypt Key",
+  "channels.connectionDialog.verificationTokenPlaceholder":
+    "事件订阅 Verification Token",
+  "channels.connectionDialog.encryptKeyPlaceholder":
+    "可选，事件订阅 Encrypt Key",
   "channels.connectionDialog.dingtalkHelp":
     "钉钉默认使用 Stream 长连接，不需要公网回调地址。服务会自动维护连接并在断线后重连。",
   "channels.connectionDialog.dingtalkSecret": "钉钉应用密钥",
@@ -274,7 +290,8 @@ const zhHans: ChannelTranslationMap = {
   "channels.connectionDialog.maxFileSize": "单文件大小限制（MB）",
   "channels.connectionDialog.allowedExtensions": "允许的扩展名",
   "channels.connectionDialog.enable": "启用连接",
-  "channels.connectionDialog.enableHelp": "关闭后停止接收消息、运行工作流和解析文件。",
+  "channels.connectionDialog.enableHelp":
+    "关闭后停止接收消息、运行工作流和解析文件。",
   "channels.conversationDialog.editTitle": "编辑会话绑定",
   "channels.conversationDialog.createTitle": "新增会话绑定",
   "channels.conversationDialog.description":
@@ -298,7 +315,7 @@ const zhHans: ChannelTranslationMap = {
   "channels.conversationDialog.allMessages": "处理全部消息",
   "channels.conversationDialog.allowUpload": "允许手机上传文件",
   "channels.conversationDialog.allowUploadHelp":
-    "开启后文件会保存到用户文件区；绑定知识库时还会自动解析入库。"
+    "开启后文件会保存到用户文件区；绑定知识库时还会自动解析入库。",
 };
 
 export const channelTranslations: Record<string, ChannelTranslationMap> = {
