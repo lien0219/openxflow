@@ -6,23 +6,33 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import AnyHttpUrl, BaseModel
 from sqlalchemy.exc import IntegrityError
 
 from langflow.api.utils import CurrentActiveUser, DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.telegram import TelegramChannelAdapter
-from langflow.channels.services.conversation_validation import validate_conversation_binding_resources
+from langflow.channels.services.capabilities import (
+    ChannelProviderCapabilities,
+    get_provider_capabilities,
+    validate_provider_conversation_type,
+)
+from langflow.channels.services.conversation_validation import (
+    validate_connection_routing_resources,
+    validate_conversation_binding_resources,
+)
 from langflow.services.database.models.channel.crud import (
     create_channel_connection,
     delete_channel_connection,
     delete_channel_identity,
+    get_channel_conversation_binding,
     get_owned_channel_connection,
     list_channel_connections,
     list_channel_identities,
     list_conversation_bindings,
     update_channel_connection,
+    update_channel_conversation_binding,
     upsert_channel_conversation_binding,
     upsert_channel_identity,
 )
@@ -31,7 +41,9 @@ from langflow.services.database.models.channel.model import (
     ChannelConnectionRead,
     ChannelConnectionStatus,
     ChannelConnectionUpdate,
+    ChannelConversationBindingPage,
     ChannelConversationBindingRead,
+    ChannelConversationBindingUpdate,
     ChannelConversationBindingUpsert,
     ChannelIdentityCreate,
     ChannelIdentityRead,
@@ -56,6 +68,11 @@ async def _owned_connection_or_404(db: DbSession, user_id: UUID, connection_id: 
     return connection
 
 
+@router.get("/providers/capabilities", response_model=dict[str, ChannelProviderCapabilities])
+async def read_provider_capabilities() -> dict[str, ChannelProviderCapabilities]:
+    return get_provider_capabilities()
+
+
 @router.get("/", response_model=list[ChannelConnectionRead])
 async def read_channel_connections(
     db: DbSession,
@@ -70,6 +87,7 @@ async def create_channel_connection_route(
     db: DbSession,
     current_user: CurrentActiveUser,
 ) -> ChannelConnectionRead:
+    await validate_connection_routing_resources(db, current_user, payload)
     try:
         result = await create_channel_connection(db, current_user.id, payload)
     except IntegrityError as exc:
@@ -91,6 +109,12 @@ async def update_channel_connection_route(
     current_user: CurrentActiveUser,
 ) -> ChannelConnectionRead:
     connection = await _owned_connection_or_404(db, current_user.id, connection_id)
+    await validate_connection_routing_resources(
+        db,
+        current_user,
+        payload,
+        current_allow_file_upload=connection.default_allow_file_upload,
+    )
     try:
         result = await update_channel_connection(db, connection, payload)
     except IntegrityError as exc:
@@ -229,14 +253,31 @@ async def remove_channel_identity(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/{connection_id}/conversations", response_model=list[ChannelConversationBindingRead])
+@router.get("/{connection_id}/conversations", response_model=ChannelConversationBindingPage)
 async def read_channel_conversations(
     connection_id: UUID,
     db: DbSession,
     current_user: CurrentActiveUser,
-) -> list[ChannelConversationBindingRead]:
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    query: str | None = Query(default=None, max_length=255),
+    conversation_type: str | None = Query(default=None, max_length=32),
+    status_filter: str | None = Query(default=None, alias="status", max_length=32),
+    route_mode: str | None = Query(default=None, max_length=32),
+    sort: str = Query(default="-last_message_at", max_length=64),
+) -> ChannelConversationBindingPage:
     await _owned_connection_or_404(db, current_user.id, connection_id)
-    return await list_conversation_bindings(db, connection_id)
+    return await list_conversation_bindings(
+        db,
+        connection_id,
+        page=page,
+        page_size=page_size,
+        query=query,
+        conversation_type=conversation_type,
+        status=status_filter,
+        route_mode=route_mode,
+        sort=sort,
+    )
 
 
 @router.put("/{connection_id}/conversations", response_model=ChannelConversationBindingRead)
@@ -246,8 +287,36 @@ async def put_channel_conversation(
     db: DbSession,
     current_user: CurrentActiveUser,
 ) -> ChannelConversationBindingRead:
-    await _owned_connection_or_404(db, current_user.id, connection_id)
+    connection = await _owned_connection_or_404(db, current_user.id, connection_id)
+    if not validate_provider_conversation_type(connection.channel_type, payload.conversation_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Conversation type {payload.conversation_type!r} is not supported by {connection.channel_type}",
+        )
     await validate_conversation_binding_resources(db, current_user, payload)
     result = await upsert_channel_conversation_binding(db, connection_id, payload)
+    await db.commit()
+    return result
+
+
+@router.patch("/{connection_id}/conversations/{binding_id}", response_model=ChannelConversationBindingRead)
+async def patch_channel_conversation(
+    connection_id: UUID,
+    binding_id: UUID,
+    payload: ChannelConversationBindingUpdate,
+    db: DbSession,
+    current_user: CurrentActiveUser,
+) -> ChannelConversationBindingRead:
+    connection = await _owned_connection_or_404(db, current_user.id, connection_id)
+    binding = await get_channel_conversation_binding(db, connection_id, binding_id)
+    if binding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel conversation not found")
+    await validate_conversation_binding_resources(
+        db,
+        current_user,
+        payload,
+        current_allow_file_upload=binding.allow_file_upload,
+    )
+    result = await update_channel_conversation_binding(db, connection, binding, payload)
     await db.commit()
     return result
