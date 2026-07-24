@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,36 +48,45 @@ type DeleteTarget =
 
 const PROVIDERS: Array<{
   id: SupportedChannelType;
-  name: string;
+  nameKey: string;
   enabled: boolean;
   icon: string;
 }> = [
-  { id: "telegram", name: "Telegram", enabled: true, icon: "Send" },
-  { id: "feishu", name: "飞书", enabled: true, icon: "MessagesSquare" },
-  { id: "dingtalk", name: "钉钉", enabled: true, icon: "MessageCircle" },
-  { id: "wecom", name: "企业微信", enabled: true, icon: "Building2" },
+  {
+    id: "telegram",
+    nameKey: "channels.provider.telegram",
+    enabled: true,
+    icon: "Send",
+  },
+  {
+    id: "feishu",
+    nameKey: "channels.provider.feishu",
+    enabled: true,
+    icon: "MessagesSquare",
+  },
+  {
+    id: "dingtalk",
+    nameKey: "channels.provider.dingtalk",
+    enabled: true,
+    icon: "MessageCircle",
+  },
+  {
+    id: "wecom",
+    nameKey: "channels.provider.wecom",
+    enabled: true,
+    icon: "Building2",
+  },
 ];
 
-function getConnectionModeLabel(connection: ChannelConnection): string {
-  if (
-    connection.channel_type === "dingtalk" &&
-    connection.connection_mode === "stream"
-  ) {
-    return "Stream 长连接";
-  }
-  return connection.connection_mode === "webhook"
-    ? "Webhook"
-    : connection.connection_mode;
-}
-
-function getWebhookLabel(connection: ChannelConnection): string {
-  if (connection.channel_type === "feishu") return "飞书事件订阅地址";
-  if (connection.channel_type === "wecom") return "企业微信接收消息服务器 URL";
-  if (connection.channel_type === "dingtalk") return "钉钉 HTTP 回调兼容地址";
-  return "Webhook 地址";
-}
+const PROVIDER_KEYS: Record<SupportedChannelType, string> = {
+  telegram: "channels.provider.telegram",
+  feishu: "channels.provider.feishu",
+  dingtalk: "channels.provider.dingtalk",
+  wecom: "channels.provider.wecom",
+};
 
 export default function ChannelsPage() {
+  const { t, i18n } = useTranslation();
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
   const setErrorData = useAlertStore((state) => state.setErrorData);
   const [selectedConnectionId, setSelectedConnectionId] = useState("");
@@ -140,7 +150,56 @@ export default function ChannelsPage() {
   const upsertConversation = useUpsertChannelConversation();
 
   const showError = (title: string, error: unknown) =>
-    setErrorData({ title, list: [getApiErrorMessage(error)] });
+    setErrorData({
+      title,
+      list: [
+        getApiErrorMessage(error, t("channels.error.requestFailed")),
+      ],
+    });
+
+  const getProviderName = (channelType: string) => {
+    if (channelType in PROVIDER_KEYS) {
+      return t(PROVIDER_KEYS[channelType as SupportedChannelType]);
+    }
+    return channelType;
+  };
+
+  const getConnectionModeLabel = (connection: ChannelConnection): string => {
+    if (
+      connection.channel_type === "dingtalk" &&
+      connection.connection_mode === "stream"
+    ) {
+      return t("channels.mode.stream");
+    }
+    return connection.connection_mode === "webhook"
+      ? "Webhook"
+      : connection.connection_mode;
+  };
+
+  const getWebhookLabel = (connection: ChannelConnection): string => {
+    if (connection.channel_type === "feishu") {
+      return t("channels.webhook.feishu");
+    }
+    if (connection.channel_type === "wecom") {
+      return t("channels.webhook.wecom");
+    }
+    if (connection.channel_type === "dingtalk") {
+      return t("channels.webhook.dingtalk");
+    }
+    return t("channels.webhook.default");
+  };
+
+  const getConversationTypeLabel = (conversationType: string) => {
+    const keyByType: Record<string, string> = {
+      private: "channels.conversationDialog.private",
+      group: "channels.conversationDialog.group",
+      supergroup: "channels.conversationDialog.supergroup",
+      channel: "channels.conversationDialog.channel",
+    };
+    return keyByType[conversationType]
+      ? t(keyByType[conversationType])
+      : conversationType;
+  };
 
   const openNewConnection = (channelType: SupportedChannelType) => {
     setNewChannelType(channelType);
@@ -181,11 +240,11 @@ export default function ChannelsPage() {
       setSuccessData({
         title:
           connection.channel_type === "telegram" && publicBaseUrl
-            ? "Telegram 连接与 Webhook 已配置"
-            : `${connection.name}连接已保存`,
+            ? t("channels.toast.telegramConfigured")
+            : t("channels.toast.connectionSaved", { name: connection.name }),
       });
     } catch (error) {
-      showError("保存渠道连接失败", error);
+      showError(t("channels.toast.connectionSaveFailed"), error);
       throw error;
     }
   };
@@ -196,10 +255,12 @@ export default function ChannelsPage() {
         connectionId: connection.id,
       });
       setSuccessData({
-        title: `连接成功：${result.username ?? result.display_name ?? connection.name}`,
+        title: t("channels.toast.connectionSucceeded", {
+          name: result.username ?? result.display_name ?? connection.name,
+        }),
       });
     } catch (error) {
-      showError("渠道连接测试失败", error);
+      showError(t("channels.toast.connectionTestFailed"), error);
     }
   };
 
@@ -215,8 +276,8 @@ export default function ChannelsPage() {
       setEditingConnection(connection);
       setConnectionDialogOpen(true);
       setErrorData({
-        title: "请先填写 OpenXFlow 公开地址",
-        list: ["编辑连接后保存，系统会自动配置 Telegram Webhook。"],
+        title: t("channels.toast.publicUrlRequired"),
+        list: [t("channels.toast.publicUrlRequiredDetail")],
       });
       return;
     }
@@ -228,9 +289,13 @@ export default function ChannelsPage() {
           drop_pending_updates: false,
         },
       });
-      setSuccessData({ title: `Webhook 已配置：${result.webhook_url}` });
+      setSuccessData({
+        title: t("channels.toast.webhookConfigured", {
+          url: result.webhook_url,
+        }),
+      });
     } catch (error) {
-      showError("Webhook 配置失败", error);
+      showError(t("channels.toast.webhookFailed"), error);
     }
   };
 
@@ -239,9 +304,9 @@ export default function ChannelsPage() {
     try {
       await redeemBinding.mutateAsync({ code: bindingCode.trim() });
       setBindingCode("");
-      setSuccessData({ title: "渠道账号绑定成功" });
+      setSuccessData({ title: t("channels.toast.accountBound") });
     } catch (error) {
-      showError("绑定码兑换失败", error);
+      showError(t("channels.toast.bindingCodeFailed"), error);
     }
   };
 
@@ -256,9 +321,9 @@ export default function ChannelsPage() {
       });
       setConversationDialogOpen(false);
       setEditingConversation(null);
-      setSuccessData({ title: "会话绑定已保存" });
+      setSuccessData({ title: t("channels.toast.conversationSaved") });
     } catch (error) {
-      showError("保存会话绑定失败", error);
+      showError(t("channels.toast.conversationSaveFailed"), error);
       throw error;
     }
   };
@@ -268,16 +333,16 @@ export default function ChannelsPage() {
     try {
       if (deleteTarget.kind === "connection") {
         await deleteConnection.mutateAsync({ connectionId: deleteTarget.id });
-        setSuccessData({ title: "渠道连接已删除" });
+        setSuccessData({ title: t("channels.toast.connectionDeleted") });
       } else {
         await deleteIdentity.mutateAsync({
           connectionId: selectedConnection.id,
           identityId: deleteTarget.id,
         });
-        setSuccessData({ title: "渠道账号已解除绑定" });
+        setSuccessData({ title: t("channels.toast.accountUnbound") });
       }
     } catch (error) {
-      showError("删除失败", error);
+      showError(t("channels.toast.deleteFailed"), error);
     } finally {
       setDeleteTarget(null);
     }
@@ -303,20 +368,19 @@ export default function ChannelsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-            渠道中心
+            {t("channels.title")}
             <ForwardedIconComponent
               name="RadioTower"
               className="h-5 w-5 text-primary"
             />
           </h2>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            在
-            Telegram、飞书、钉钉和企业微信移动端运行工作流、查询知识库、上传文件并处理互动操作。
+            {t("channels.description")}
           </p>
         </div>
         <Button variant="primary" onClick={() => openNewConnection("telegram")}>
           <ForwardedIconComponent name="Plus" className="h-4 w-4" />
-          新增连接
+          {t("channels.addConnection")}
         </Button>
       </div>
 
@@ -337,9 +401,15 @@ export default function ChannelsPage() {
                 />
               </div>
               <div>
-                <div className="text-sm font-medium">{provider.name}</div>
+                <div className="text-sm font-medium">
+                  {t(provider.nameKey)}
+                </div>
                 <div className="text-xs text-muted-foreground">
-                  {provider.enabled ? "已开放，点击创建" : "后续阶段接入"}
+                  {t(
+                    provider.enabled
+                      ? "channels.provider.available"
+                      : "channels.provider.comingSoon",
+                  )}
                 </div>
               </div>
             </div>
@@ -357,15 +427,15 @@ export default function ChannelsPage() {
       <div className="grid min-h-0 gap-6 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.8fr)]">
         <section className="flex flex-col gap-3">
           <div className="text-sm font-medium text-muted-foreground">
-            渠道连接
+            {t("channels.connections")}
           </div>
           {connections.length === 0 ? (
             <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              尚未创建连接。可从上方选择任一已开放渠道开始配置。
+              {t("channels.emptyConnections")}
             </div>
           ) : (
             connections.map((connection) => {
-              const status = getChannelStatusMeta(connection.status);
+              const status = getChannelStatusMeta(connection.status, t);
               const selected = selectedConnectionId === connection.id;
               return (
                 <button
@@ -380,7 +450,7 @@ export default function ChannelsPage() {
                     <div>
                       <div className="font-medium">{connection.name}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {connection.channel_type} ·{" "}
+                        {getProviderName(connection.channel_type)} ·{" "}
                         {getConnectionModeLabel(connection)}
                       </div>
                     </div>
@@ -404,7 +474,7 @@ export default function ChannelsPage() {
         <section className="flex min-w-0 flex-col gap-5">
           {!selectedConnection ? (
             <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
-              选择一个连接查看配置详情。
+              {t("channels.selectConnection")}
             </div>
           ) : (
             <>
@@ -415,35 +485,37 @@ export default function ChannelsPage() {
                       {selectedConnection.name}
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      已配置凭证：
-                      {selectedConnection.configured_credential_keys.join(
-                        ", ",
-                      ) || "无"}
+                      {t("channels.credentialsConfigured", {
+                        keys:
+                          selectedConnection.configured_credential_keys.join(
+                            ", ",
+                          ) || t("channels.none"),
+                      })}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      接入方式：{getConnectionModeLabel(selectedConnection)} ·
-                      最近连接：
-                      {selectedConnection.last_connected_at
-                        ? new Date(
-                            selectedConnection.last_connected_at,
-                          ).toLocaleString()
-                        : "尚未测试"}
+                      {t("channels.accessMode", {
+                        mode: getConnectionModeLabel(selectedConnection),
+                      })}{" "}
+                      ·{" "}
+                      {t("channels.lastConnected", {
+                        time: selectedConnection.last_connected_at
+                          ? new Date(
+                              selectedConnection.last_connected_at,
+                            ).toLocaleString(i18n.language)
+                          : t("channels.notTested"),
+                      })}
                     </p>
 
                     {selectedConnection.channel_type === "dingtalk" &&
                       selectedConnection.connection_mode === "stream" && (
                         <div className="mt-4 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
-                          钉钉 Stream 模式由 OpenXFlow
-                          服务端主动建立长连接，不需要配置公网回调地址。测试连接会同时检查服务器是否安装
-                          Stream SDK。
+                          {t("channels.instructions.dingtalkStream")}
                         </div>
                       )}
 
                     {selectedConnection.channel_type === "wecom" && (
                       <div className="mt-4 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-                        将下方 URL 填入企业微信应用“接收消息服务器”。Token 和
-                        EncodingAESKey
-                        必须与渠道连接中填写的值完全一致，消息加密模式请选择安全模式。
+                        {t("channels.instructions.wecom")}
                       </div>
                     )}
 
@@ -466,7 +538,7 @@ export default function ChannelsPage() {
                       onClick={() => handleTestConnection(selectedConnection)}
                       loading={testConnection.isPending}
                     >
-                      测试连接
+                      {t("channels.actions.testConnection")}
                     </Button>
                     {selectedConnection.channel_type === "telegram" && (
                       <Button
@@ -477,7 +549,7 @@ export default function ChannelsPage() {
                         }
                         loading={configureWebhook.isPending}
                       >
-                        配置 Webhook
+                        {t("channels.actions.configureWebhook")}
                       </Button>
                     )}
                     <Button
@@ -488,7 +560,7 @@ export default function ChannelsPage() {
                         setConnectionDialogOpen(true);
                       }}
                     >
-                      编辑
+                      {t("channels.actions.edit")}
                     </Button>
                     <Button
                       variant="ghost"
@@ -502,7 +574,7 @@ export default function ChannelsPage() {
                         })
                       }
                     >
-                      删除
+                      {t("channels.actions.delete")}
                     </Button>
                   </div>
                 </div>
@@ -511,10 +583,11 @@ export default function ChannelsPage() {
               <div className="rounded-xl border p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h3 className="font-semibold">绑定手机账号</h3>
+                    <h3 className="font-semibold">
+                      {t("channels.binding.title")}
+                    </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      用户私聊机器人发送 /bind
-                      后，将收到绑定码；在此输入即可绑定当前登录账号。
+                      {t("channels.binding.description")}
                     </p>
                   </div>
                   <div className="flex w-full gap-2 sm:w-auto">
@@ -523,7 +596,7 @@ export default function ChannelsPage() {
                       onChange={(event) =>
                         setBindingCode(event.target.value.toUpperCase())
                       }
-                      placeholder="输入绑定码"
+                      placeholder={t("channels.binding.placeholder")}
                       maxLength={12}
                       className="sm:w-48"
                     />
@@ -532,7 +605,7 @@ export default function ChannelsPage() {
                       loading={redeemBinding.isPending}
                       disabled={!bindingCode.trim()}
                     >
-                      绑定
+                      {t("channels.actions.bind")}
                     </Button>
                   </div>
                 </div>
@@ -541,7 +614,7 @@ export default function ChannelsPage() {
                     <Loading />
                   ) : identities.length === 0 ? (
                     <div className="text-sm text-muted-foreground">
-                      还没有账号绑定记录。
+                      {t("channels.binding.empty")}
                     </div>
                   ) : (
                     identities.map((identity) => (
@@ -554,8 +627,10 @@ export default function ChannelsPage() {
                             {identity.display_name || identity.external_user_id}
                           </div>
                           <div className="truncate text-xs text-muted-foreground">
-                            渠道用户：{identity.external_user_id} · OpenXFlow：
-                            {identity.openxflow_user_id}
+                            {t("channels.binding.channelUser", {
+                              channelUser: identity.external_user_id,
+                              openxflowUser: identity.openxflow_user_id,
+                            })}
                           </div>
                         </div>
                         <Button
@@ -572,7 +647,7 @@ export default function ChannelsPage() {
                             })
                           }
                         >
-                          解绑
+                          {t("channels.actions.unbind")}
                         </Button>
                       </div>
                     ))
@@ -583,9 +658,11 @@ export default function ChannelsPage() {
               <div className="rounded-xl border p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="font-semibold">会话与工作流</h3>
+                    <h3 className="font-semibold">
+                      {t("channels.conversations.title")}
+                    </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      为私聊或群聊配置默认工作流、知识库以及文件上传权限。
+                      {t("channels.conversations.description")}
                     </p>
                   </div>
                   <Button
@@ -597,7 +674,7 @@ export default function ChannelsPage() {
                     }}
                   >
                     <ForwardedIconComponent name="Plus" className="h-4 w-4" />
-                    新增绑定
+                    {t("channels.actions.addBinding")}
                   </Button>
                 </div>
                 <div className="mt-5 flex flex-col gap-2">
@@ -605,14 +682,14 @@ export default function ChannelsPage() {
                     <Loading />
                   ) : conversations.length === 0 ? (
                     <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                      机器人收到已绑定用户的消息或文件后，也会自动创建基础会话记录。
+                      {t("channels.conversations.empty")}
                     </div>
                   ) : (
                     conversations.map((conversation) => {
                       const flow = flows.find(
                         (item) => item.id === conversation.default_flow_id,
                       );
-                      const kb = knowledgeBases.find(
+                      const knowledgeBase = knowledgeBases.find(
                         (item) => item.id === conversation.knowledge_base_id,
                       );
                       return (
@@ -626,13 +703,25 @@ export default function ChannelsPage() {
                                 conversation.external_conversation_id}
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              {conversation.conversation_type} · 会话 ID：
-                              {conversation.external_conversation_id}
+                              {t("channels.conversations.conversationId", {
+                                type: getConversationTypeLabel(
+                                  conversation.conversation_type,
+                                ),
+                                id: conversation.external_conversation_id,
+                              })}
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              工作流：{flow?.name ?? "未绑定"} · 知识库：
-                              {kb?.name ?? "未绑定"} · 文件上传：
-                              {conversation.allow_file_upload ? "允许" : "关闭"}
+                              {t("channels.conversations.summary", {
+                                flow:
+                                  flow?.name ??
+                                  t("channels.conversations.unbound"),
+                                knowledgeBase:
+                                  knowledgeBase?.name ??
+                                  t("channels.conversations.unbound"),
+                                fileUpload: conversation.allow_file_upload
+                                  ? t("channels.conversations.fileAllowed")
+                                  : t("channels.conversations.fileDisabled"),
+                              })}
                             </div>
                           </div>
                           <Button
@@ -643,7 +732,7 @@ export default function ChannelsPage() {
                               setConversationDialogOpen(true);
                             }}
                           >
-                            编辑
+                            {t("channels.actions.edit")}
                           </Button>
                         </div>
                       );
@@ -690,7 +779,7 @@ export default function ChannelsPage() {
         setOpen={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-        description={deleteTarget?.name ?? "渠道配置"}
+        description={deleteTarget?.name ?? t("channels.deleteFallback")}
         onConfirm={handleDelete}
       />
     </div>
