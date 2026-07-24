@@ -8,6 +8,7 @@ from langflow.channels.domain.models import (
     ChannelEventType,
     ChannelIncomingMessage,
     ChannelMessage,
+    ChannelMessageType,
     ChannelType,
     ChannelUser,
 )
@@ -118,8 +119,17 @@ async def test_feishu_workflow_replaces_processing_message_with_final_result() -
     )
 
     assert response is None
-    assert len(adapter.sent_messages) == 1
-    assert adapter.sent_messages[0]["message"].text == "⏳ 正在处理中，请稍候…"
+    assert adapter.sent_messages == [
+        {
+            "external_message_id": "mock-1",
+            "target_id": "100",
+            "message": ChannelMessage(
+                message_type=ChannelMessageType.CARD,
+                text="⏳ 正在处理中，请稍候…",
+                metadata={"feishu_update_multi": True},
+            ),
+        }
+    ]
     assert adapter.updated_messages == [
         {
             "external_message_id": "mock-1",
