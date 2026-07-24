@@ -60,7 +60,7 @@ export default function SettingsPage(): JSX.Element {
       ),
     },
     {
-      title: "渠道中心",
+      title: t("settings.nav.channels"),
       href: "/settings/channels",
       icon: (
         <ForwardedIconComponent
