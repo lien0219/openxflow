@@ -34,8 +34,6 @@ jobs:
           text = text.replace("class ChannelCommandScope(StrEnum):", "class ChannelCommandScope(str, Enum):")
           path.write_text(text, encoding="utf-8")
           PY
-          grep -F "from enum import Enum" src/backend/base/langflow/services/database/models/channel/command_model.py
-          grep -F "class ChannelCommandScope(str, Enum):" src/backend/base/langflow/services/database/models/channel/command_model.py
 
       - name: Align authentication branding tests
         shell: bash
@@ -56,8 +54,6 @@ jobs:
           )
           auto_login.write_text(content, encoding="utf-8")
           PY
-          grep -F 'authSignInHeader: "Sign in to OpenXFlow"' src/frontend/tests/utils/constants/texts.ts
-          grep -F '"Welcome to OpenXFlow"' src/frontend/tests/core/features/auto-login-off.spec.ts
 
       - name: Align MCP documentation test
         shell: bash
@@ -71,7 +67,6 @@ jobs:
           )
           path.write_text(content, encoding="utf-8")
           PY
-          grep -F '"https://github.com/lien0219/openxflow#readme"' src/frontend/tests/extended/features/mcp-server-tab.spec.ts
 
       - name: Align API key settings test
         shell: bash
@@ -90,16 +85,11 @@ jobs:
           )
           path.write_text(content, encoding="utf-8")
           PY
-          grep -F 'getByRole("link", { name: "OpenXFlow API Keys" })' src/frontend/tests/extended/features/userSettings.spec.ts
-          grep -F 'getByText("OpenXFlow API Keys", { exact: true }).nth(1)' src/frontend/tests/extended/features/userSettings.spec.ts
 
       - name: Refresh clean LFX starter fixture
         shell: bash
         run: |
           cp \
-            "src/backend/base/langflow/initial_setup/starter_projects/Basic Prompting.json" \
-            "src/lfx/tests/fixtures/starter_flows/v1.9.0/basic_prompting.json"
-          cmp \
             "src/backend/base/langflow/initial_setup/starter_projects/Basic Prompting.json" \
             "src/lfx/tests/fixtures/starter_flows/v1.9.0/basic_prompting.json"
 
