@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from difflib import get_close_matches
 from typing import Any
 from uuid import UUID
 
@@ -13,6 +14,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.channels.adapters.base import ChannelAdapter
 from langflow.channels.domain.models import (
+    ChannelAction,
     ChannelEvent,
     ChannelEventType,
     ChannelMessage,
@@ -91,7 +93,7 @@ class ChannelDispatchService:
 
         if command in {"/start", "/help"}:
             return self._help_message(bound=True)
-        if command in {"/bind", "/whoami"}:
+        if command == "/bind":
             return ChannelMessage(
                 title="账号已绑定",
                 text=f"当前渠道账号已绑定 OpenXFlow 用户：{user.username}",
@@ -99,13 +101,6 @@ class ChannelDispatchService:
         if command == "/commands":
             return await self._commands_message(user, binding)
 
-        # Legacy commands remain callable during the migration window but are no longer advertised.
-        if command == "/knowledge":
-            return await self._knowledge_message(user, binding)
-        if command == "/use-kb":
-            return await self._bind_knowledge_base(event, user, binding, argument)
-        if command == "/files":
-            return await self._recent_files_message(event, user)
         if command == "/flow":
             if user.id != self.connection.user_id and not user.is_superuser:
                 return ChannelMessage(text="未知命令。发送 /commands 查看当前可用指令。")
@@ -132,7 +127,7 @@ class ChannelDispatchService:
             )
             if custom_response is not None:
                 return custom_response
-            return ChannelMessage(text=f"没有找到指令 {command}。发送 /commands 查看当前可用指令。")
+            return await self._unknown_command_message(user, binding, command)
 
         if event.message.attachments:
             binding = binding or await self._ensure_conversation_binding(event)
@@ -189,11 +184,7 @@ class ChannelDispatchService:
         )
         if command is None:
             return None
-        if (
-            event.conversation.conversation_type != "private"
-            and command.require_mention
-            and not event.message.mentions
-        ):
+        if event.conversation.conversation_type != "private" and command.require_mention and not event.message.mentions:
             return None
         if event.message.attachments and not command.allow_attachments:
             return ChannelMessage(text=f"指令 {command.command} 不允许上传附件。")
@@ -243,8 +234,62 @@ class ChannelDispatchService:
             description = f" — {item.description}" if item.description else ""
             lines.append(f"{item.command}{description}")
         return ChannelMessage(
+            message_type=ChannelMessageType.CARD,
             title="当前可用指令",
             text="\n".join(lines),
+            actions=[
+                ChannelAction(
+                    action_id=f"command:{item.normalized_command}",
+                    label=item.command,
+                    value=item.command,
+                )
+                for item in commands[:6]
+            ],
+        )
+
+    async def _unknown_command_message(
+        self,
+        user: User,
+        binding: ChannelConversationBinding | None,
+        command_name: str,
+    ) -> ChannelMessage:
+        commands = []
+        if binding is not None:
+            commands = await list_available_workflow_commands(
+                self.session,
+                connection_id=self.connection.id,
+                conversation_binding_id=binding.id,
+                user_id=user.id,
+            )
+        command_by_name = {name: item for item in commands for name in (item.normalized_command, *item.aliases)}
+        suggestions = get_close_matches(
+            command_name.lower(),
+            list(command_by_name),
+            n=3,
+            cutoff=0.45,
+        )
+        if not suggestions:
+            return ChannelMessage(text=f"没有找到指令 {command_name}。发送 /commands 查看当前可用指令。")
+        unique_commands = []
+        seen_ids = set()
+        for suggestion in suggestions:
+            item = command_by_name[suggestion]
+            if item.id not in seen_ids:
+                seen_ids.add(item.id)
+                unique_commands.append(item)
+        suggested_text = "、".join(item.command for item in unique_commands)
+        return ChannelMessage(
+            message_type=ChannelMessageType.CARD,
+            title="没有找到该指令",
+            text=f"你是否想使用：{suggested_text}？\n\n发送 /commands 查看全部指令。",
+            actions=[
+                ChannelAction(
+                    action_id=f"suggested:{item.normalized_command}",
+                    label=item.command,
+                    value=item.command,
+                )
+                for item in unique_commands
+            ],
         )
 
     def _resolve_default_flow_id(self, binding: ChannelConversationBinding | None) -> UUID | None:
@@ -272,10 +317,7 @@ class ChannelDispatchService:
             self.session.add(binding)
             await self.session.flush()
         return ChannelMessage(
-            text=(
-                "当前会话已接入 OpenXFlow，但尚未配置默认工作流。"
-                "管理员可在“设置 → 渠道中心 → 会话”中完成配置。"
-            )
+            text=("当前会话已接入 OpenXFlow，但尚未配置默认工作流。管理员可在“设置 → 渠道中心 → 会话”中完成配置。")
         )
 
     async def _execute_workflow(
@@ -558,6 +600,7 @@ class ChannelDispatchService:
     def _help_message(*, bound: bool) -> ChannelMessage:
         binding_line = "账号状态：已绑定。\n\n" if bound else "账号状态：未绑定。\n\n"
         return ChannelMessage(
+            message_type=ChannelMessageType.CARD,
             title="OpenXFlow 渠道助手",
             text=(
                 f"{binding_line}"
@@ -567,4 +610,13 @@ class ChannelDispatchService:
                 "/help — 查看帮助\n\n"
                 "普通消息会自动运行当前会话或渠道连接的默认工作流。"
             ),
+            actions=[
+                ChannelAction(action_id="account", label="账号状态", value="/bind"),
+                ChannelAction(
+                    action_id="commands",
+                    label="可用指令",
+                    value="/commands",
+                    style="primary",
+                ),
+            ],
         )

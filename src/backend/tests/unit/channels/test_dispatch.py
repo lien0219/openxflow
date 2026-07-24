@@ -116,6 +116,7 @@ async def test_feishu_workflow_replaces_processing_message_with_final_result() -
         "flow-id",
         "hello",
         binding=None,
+        trigger_type="default",
     )
 
     assert response is None
@@ -149,8 +150,16 @@ async def test_non_feishu_workflow_returns_final_result_without_processing_messa
         "flow-id",
         "hello",
         binding=None,
+        trigger_type="default",
     )
 
     assert response == ChannelMessage(title="Workflow", markdown="final answer")
     assert adapter.sent_messages == []
     assert adapter.updated_messages == []
+
+
+def test_help_message_exposes_interactive_actions() -> None:
+    message = ChannelDispatchService._help_message(bound=True)
+
+    assert message.message_type == ChannelMessageType.CARD
+    assert [action.value for action in message.actions] == ["/bind", "/commands"]
