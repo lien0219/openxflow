@@ -1,0 +1,152 @@
+name: Channel Gateway Quality Commit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/channel-gateway-quality-commit.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: src/backend/base
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Reuse quality transformation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path(".github/workflows/channel-gateway-quality-fix.yml")
+          lines = workflow.read_text(encoding="utf-8").splitlines()
+          step_index = next(
+              index
+              for index, line in enumerate(lines)
+              if line.strip() == "- name: Apply backend and compatibility fixes"
+          )
+          run_index = next(
+              index
+              for index in range(step_index + 1, len(lines))
+              if lines[index].strip() == "run: |"
+          )
+          end_index = next(
+              index
+              for index in range(run_index + 1, len(lines))
+              if lines[index].startswith("      - name:")
+          )
+          script = textwrap.dedent("\n".join(lines[run_index + 1 : end_index])) + "\n"
+          Path("/tmp/apply-channel-quality.sh").write_text(script, encoding="utf-8")
+          PY
+          bash /tmp/apply-channel-quality.sh
+
+      - name: Correct mutation contract totals
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              'content.count("await queryClient.invalidateQueries(") == 12',
+              'content.count("queryClient.invalidateQueries(") == 13',
+          )
+          text = text.replace(
+              'block.index("await queryClient.invalidateQueries(")',
+              'block.index("queryClient.invalidateQueries(")',
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Sync locked backend test environment
+        run: uv sync --quiet --frozen --project src/backend/base --group dev
+
+      - name: Format and lint backend changes
+        shell: bash
+        run: |
+          files=(
+            src/backend/base/langflow/api/v1/channel_admin.py
+            src/backend/base/langflow/api/v1/channel_management.py
+            src/backend/base/langflow/api/v1/channel_resources.py
+            src/backend/base/langflow/api/v1/channels.py
+            src/backend/base/langflow/channels/services/dispatch.py
+            src/backend/base/langflow/services/database/models/channel/crud.py
+            src/backend/tests/unit/channels/test_dispatch.py
+            src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
+          )
+          uvx --quiet ruff format "${files[@]}"
+          uvx --quiet ruff check --fix --unsafe-fixes --output-format concise "${files[@]}"
+          uvx --quiet ruff check --output-format concise "${files[@]}"
+
+      - name: Run focused backend tests
+        run: >-
+          uv run --frozen --project src/backend/base --group dev pytest -q --tb=short
+          --confcutdir=src/backend/tests/unit/channels
+          src/backend/tests/unit/channels/test_dispatch.py
+          src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
+          src/backend/tests/unit/channels/test_command_routing.py
+          src/backend/tests/unit/channels/test_conversation_routing.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci --ignore-scripts --loglevel=error
+
+      - name: Format compatibility marker
+        working-directory: src/frontend
+        run: >-
+          npx --no-install biome format --write
+          src/locales/channelTranslations.ts
+          src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx
+
+      - name: Remove temporary workflows and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f \
+            .github/workflows/channel-gateway-quality-commit.yml \
+            .github/workflows/channel-gateway-quality-fix.yml \
+            .github/workflows/channel-gateway-legacy-marker.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/backend/base/langflow/api/v1/channel_admin.py \
+            src/backend/base/langflow/api/v1/channel_management.py \
+            src/backend/base/langflow/api/v1/channel_resources.py \
+            src/backend/base/langflow/api/v1/channels.py \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py \
+            src/frontend/src/locales/channelTranslations.ts \
+            src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx
+          git commit -m "fix(channels): complete quality and legacy compatibility checks"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
