@@ -200,7 +200,7 @@ test(
 
     await page
       .getByRole("menuitem", { name: TEXTS.logout })
-      .click({ force: true });
+      .dispatchEvent("click");
 
     await page.waitForSelector(`text=${TEXTS.authSignInHeader}`, {
       timeout: 30000,
@@ -273,7 +273,7 @@ test(
 
     await page
       .getByRole("menuitem", { name: TEXTS.logout })
-      .click({ force: true });
+      .dispatchEvent("click");
 
     await page.waitForSelector(`text=${TEXTS.authSignInHeader}`, {
       timeout: 30000,
