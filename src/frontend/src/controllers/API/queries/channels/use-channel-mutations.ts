@@ -6,6 +6,7 @@ import type {
   ChannelConnectionCreate,
   ChannelConnectionUpdate,
   ChannelConversationBinding,
+  ChannelConversationBindingUpdate,
   ChannelConversationBindingUpsert,
   ChannelHealthResult,
   ChannelIdentity,
@@ -15,6 +16,7 @@ import type {
 } from "./types";
 
 const CONNECTIONS_QUERY_KEY = ["useGetChannelConnections"];
+const CONVERSATIONS_QUERY_KEY = ["useGetChannelConversations"];
 
 export const useCreateChannelConnection: ChannelMutationHook<
   ChannelConnectionCreate,
@@ -62,7 +64,10 @@ export const useUpdateChannelConnection: ChannelMutationHook<
     },
     ...options,
     onSettled: async (...args) => {
-      await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
+      ]);
       await userOnSettled?.(...args);
     },
   });
@@ -218,10 +223,43 @@ export const useUpsertChannelConversation: ChannelMutationHook<
     },
     ...options,
     onSettled: async (...args) => {
-      const variables = args[2];
-      await queryClient.invalidateQueries({
-        queryKey: ["useGetChannelConversations", variables.connectionId],
-      });
+      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      await userOnSettled?.(...args);
+    },
+  });
+};
+
+export const useUpdateChannelConversation: ChannelMutationHook<
+  {
+    connectionId: string;
+    bindingId: string;
+    payload: ChannelConversationBindingUpdate;
+  },
+  ChannelConversationBinding
+> = (options) => {
+  const queryClient = useQueryClient();
+  const userOnSettled = options?.onSettled;
+
+  return useMutation<
+    ChannelConversationBinding,
+    unknown,
+    {
+      connectionId: string;
+      bindingId: string;
+      payload: ChannelConversationBindingUpdate;
+    }
+  >({
+    mutationKey: ["useUpdateChannelConversation"],
+    mutationFn: async ({ connectionId, bindingId, payload }) => {
+      const response = await api.patch<ChannelConversationBinding>(
+        `${getURL("CHANNELS")}/${connectionId}/conversations/${bindingId}`,
+        payload,
+      );
+      return response.data;
+    },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
       await userOnSettled?.(...args);
     },
   });
