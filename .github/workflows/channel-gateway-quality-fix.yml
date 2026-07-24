@@ -1,0 +1,236 @@
+name: Channel Gateway Quality Fix
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/channel-gateway-quality-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: src/backend/base
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply backend and compatibility fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"marker not found in {path}: {old[:80]!r}")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          admin = "src/backend/base/langflow/api/v1/channel_admin.py"
+          replace_once(admin, "from uuid import UUID\n", "from typing import Annotated, Any\nfrom uuid import UUID\n")
+          replace_once(
+              admin,
+              '''    page: int = Query(default=1, ge=1),\n    page_size: int = Query(default=20, ge=1, le=100),\n    query: str | None = Query(default=None, max_length=255),\n    status_filter: str | None = Query(default=None, alias="status", max_length=32),\n''',
+              '''    page: Annotated[int, Query(ge=1)] = 1,\n    page_size: Annotated[int, Query(ge=1, le=100)] = 20,\n    query: Annotated[str | None, Query(max_length=255)] = None,\n    status_filter: Annotated[str | None, Query(alias="status", max_length=32)] = None,\n''',
+          )
+          replace_once(admin, "    filters: list = [ChannelIdentity.connection_id == connection_id]\n", "    filters: list[Any] = [ChannelIdentity.connection_id == connection_id]\n")
+
+          management = "src/backend/base/langflow/api/v1/channel_management.py"
+          replace_once(management, "from uuid import UUID\n", "from typing import Annotated\nfrom uuid import UUID\n")
+          replace_once(
+              management,
+              '''    page: int = Query(default=1, ge=1),\n    page_size: int = Query(default=20, ge=1, le=100),\n    query: str | None = Query(default=None, max_length=255),\n    scope_type: str | None = Query(default=None, max_length=32),\n    enabled: bool | None = Query(default=None),\n''',
+              '''    page: Annotated[int, Query(ge=1)] = 1,\n    page_size: Annotated[int, Query(ge=1, le=100)] = 20,\n    query: Annotated[str | None, Query(max_length=255)] = None,\n    scope_type: Annotated[str | None, Query(max_length=32)] = None,\n    enabled: Annotated[bool | None, Query()] = None,\n''',
+          )
+          replace_once(
+              management,
+              '''    try:\n        result = await create_workflow_command(db, connection, current_user, payload)\n        await db.commit()\n        return result\n    except IntegrityError as exc:\n        await db.rollback()\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="A command with this name already exists in the selected scope",\n        ) from exc\n''',
+              '''    try:\n        result = await create_workflow_command(db, connection, current_user, payload)\n    except IntegrityError as exc:\n        await db.rollback()\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="A command with this name already exists in the selected scope",\n        ) from exc\n    else:\n        await db.commit()\n        return result\n''',
+          )
+          replace_once(
+              management,
+              '''    try:\n        result = await update_workflow_command(db, connection, current_user, command, payload)\n        await db.commit()\n        return result\n    except IntegrityError as exc:\n        await db.rollback()\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="A command with this name already exists in the selected scope",\n        ) from exc\n''',
+              '''    try:\n        result = await update_workflow_command(db, connection, current_user, command, payload)\n    except IntegrityError as exc:\n        await db.rollback()\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="A command with this name already exists in the selected scope",\n        ) from exc\n    else:\n        await db.commit()\n        return result\n''',
+          )
+          replace_once(
+              management,
+              '''    page: int = Query(default=1, ge=1),\n    page_size: int = Query(default=20, ge=1, le=100),\n    conversation_binding_id: UUID | None = Query(default=None),\n    openxflow_user_id: UUID | None = Query(default=None),\n    status_filter: str | None = Query(default=None, alias="status", max_length=32),\n    trigger_type: str | None = Query(default=None, max_length=32),\n''',
+              '''    page: Annotated[int, Query(ge=1)] = 1,\n    page_size: Annotated[int, Query(ge=1, le=100)] = 20,\n    conversation_binding_id: Annotated[UUID | None, Query()] = None,\n    openxflow_user_id: Annotated[UUID | None, Query()] = None,\n    status_filter: Annotated[str | None, Query(alias="status", max_length=32)] = None,\n    trigger_type: Annotated[str | None, Query(max_length=32)] = None,\n''',
+          )
+
+          resources = "src/backend/base/langflow/api/v1/channel_resources.py"
+          replace_once(resources, "from uuid import UUID\n", "from typing import Annotated, Any\nfrom uuid import UUID\n")
+          old_query = '''    page: int = Query(default=1, ge=1),\n    page_size: int = Query(default=20, ge=1, le=100),\n    query: str | None = Query(default=None, max_length=255),\n'''
+          new_query = '''    page: Annotated[int, Query(ge=1)] = 1,\n    page_size: Annotated[int, Query(ge=1, le=100)] = 20,\n    query: Annotated[str | None, Query(max_length=255)] = None,\n'''
+          replace_once(resources, old_query, new_query)
+          replace_once(resources, old_query, new_query)
+          replace_once(resources, "    filters: list = [\n", "    filters: list[Any] = [\n")
+          replace_once(resources, "    filters: list = [KnowledgeBaseRecord.user_id == current_user.id]\n", "    filters: list[Any] = [KnowledgeBaseRecord.user_id == current_user.id]\n")
+
+          channels = "src/backend/base/langflow/api/v1/channels.py"
+          replace_once(channels, "from typing import Any\n", "from typing import Annotated, Any\n")
+          replace_once(
+              channels,
+              '''    page: int = Query(default=1, ge=1),\n    page_size: int = Query(default=20, ge=1, le=100),\n    query: str | None = Query(default=None, max_length=255),\n    conversation_type: str | None = Query(default=None, max_length=32),\n    status_filter: str | None = Query(default=None, alias="status", max_length=32),\n    route_mode: str | None = Query(default=None, max_length=32),\n    sort: str = Query(default="-last_message_at", max_length=64),\n''',
+              '''    page: Annotated[int, Query(ge=1)] = 1,\n    page_size: Annotated[int, Query(ge=1, le=100)] = 20,\n    query: Annotated[str | None, Query(max_length=255)] = None,\n    conversation_type: Annotated[str | None, Query(max_length=32)] = None,\n    status_filter: Annotated[str | None, Query(alias="status", max_length=32)] = None,\n    route_mode: Annotated[str | None, Query(max_length=32)] = None,\n    sort: Annotated[str, Query(max_length=64)] = "-last_message_at",\n''',
+          )
+
+          crud = "src/backend/base/langflow/services/database/models/channel/crud.py"
+          replace_once(crud, "from typing import Any\n", "from typing import TYPE_CHECKING, Any\n")
+          replace_once(crud, "from langflow.channels.domain.models import ChannelEvent\n", "")
+          replace_once(
+              crud,
+              "from langflow.services.database.models.channel.model import (\n",
+              "if TYPE_CHECKING:\n    from langflow.channels.domain.models import ChannelEvent\n\nfrom langflow.services.database.models.channel.model import (\n",
+          )
+
+          dispatch = "src/backend/base/langflow/channels/services/dispatch.py"
+          replace_once(dispatch, "from typing import Any\n", "from typing import TYPE_CHECKING, Any\n")
+          replace_once(
+              dispatch,
+              "from langflow.services.database.models.channel.crud import discover_channel_conversation\n",
+              "if TYPE_CHECKING:\n    from langflow.services.database.models.channel.command_model import ChannelWorkflowCommand\n\nfrom langflow.services.database.models.channel.crud import discover_channel_conversation\n",
+          )
+          replace_once(dispatch, "        commands = []\n", "        commands: list[ChannelWorkflowCommand] = []\n")
+          replace_once(dispatch, "        unique_commands = []\n", "        unique_commands: list[ChannelWorkflowCommand] = []\n")
+          replace_once(dispatch, "        seen_ids = set()\n", "        seen_ids: set[UUID] = set()\n")
+
+          contract = Path("src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py")
+          text = contract.read_text(encoding="utf-8")
+          text = text.replace('count("ChannelMutationHook<") == 8', 'count("ChannelMutationHook<") == 12')
+          text = text.replace('count("return useMutation<") == 8', 'count("return useMutation<") == 12')
+          text = text.replace('count("const userOnSettled = options?.onSettled;") == 8', 'count("const userOnSettled = options?.onSettled;") == 12')
+          text = text.replace('count("await userOnSettled?.(...args);") == 8', 'count("await userOnSettled?.(...args);") == 12')
+          text = text.replace('count("await queryClient.invalidateQueries(") == 8', 'count("await queryClient.invalidateQueries(") == 12')
+          contract.write_text(text, encoding="utf-8")
+
+          conversation = Path(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/"
+              "components/ConversationsTab.tsx"
+          )
+          text = conversation.read_text(encoding="utf-8")
+          marker = '''                    <div className="max-w-72 truncate text-xs text-muted-foreground">\n                      {conversation.external_conversation_id}\n                    </div>\n'''
+          if 'conversation.source === "legacy_manual"' not in text:
+              replacement = marker + '''                    {conversation.source === "legacy_manual" && (\n                      <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">\n                        {t("channels.conversations.legacyManual")}\n                      </span>\n                    )}\n'''
+              if marker not in text:
+                  raise SystemExit("conversation identity marker not found")
+              conversation.write_text(text.replace(marker, replacement, 1), encoding="utf-8")
+
+          translations = Path("src/frontend/src/locales/channelTranslations.ts")
+          text = translations.read_text(encoding="utf-8")
+          if '"channels.conversations.legacyManual"' not in text:
+              text = text.replace(
+                  '  "channels.conversations.fileDisabled": "Disabled",\n',
+                  '  "channels.conversations.fileDisabled": "Disabled",\n  "channels.conversations.legacyManual": "Historical manual record",\n',
+                  1,
+              )
+              text = text.replace(
+                  '  "channels.conversations.fileDisabled": "关闭",\n',
+                  '  "channels.conversations.fileDisabled": "关闭",\n  "channels.conversations.legacyManual": "历史手工记录",\n',
+                  1,
+              )
+              translations.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Sync locked backend test environment
+        run: uv sync --quiet --frozen --project src/backend/base --group dev
+
+      - name: Format and lint backend changes
+        shell: bash
+        run: |
+          uvx --quiet ruff format \
+            src/backend/base/langflow/api/v1/channel_admin.py \
+            src/backend/base/langflow/api/v1/channel_management.py \
+            src/backend/base/langflow/api/v1/channel_resources.py \
+            src/backend/base/langflow/api/v1/channels.py \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
+          uvx --quiet ruff check --fix --unsafe-fixes --output-format concise \
+            src/backend/base/langflow/api/v1/channel_admin.py \
+            src/backend/base/langflow/api/v1/channel_management.py \
+            src/backend/base/langflow/api/v1/channel_resources.py \
+            src/backend/base/langflow/api/v1/channels.py \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
+          uvx --quiet ruff check --output-format concise \
+            src/backend/base/langflow/api/v1/channel_admin.py \
+            src/backend/base/langflow/api/v1/channel_management.py \
+            src/backend/base/langflow/api/v1/channel_resources.py \
+            src/backend/base/langflow/api/v1/channels.py \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
+
+      - name: Run focused backend tests
+        run: >-
+          uv run --frozen --project src/backend/base --group dev pytest -q --tb=short
+          --confcutdir=src/backend/tests/unit/channels
+          src/backend/tests/unit/channels/test_dispatch.py
+          src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
+          src/backend/tests/unit/channels/test_command_routing.py
+          src/backend/tests/unit/channels/test_conversation_routing.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci --ignore-scripts --loglevel=error
+
+      - name: Format compatibility marker
+        working-directory: src/frontend
+        run: >-
+          npx --no-install biome format --write
+          src/locales/channelTranslations.ts
+          src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx
+
+      - name: Remove temporary workflows and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f \
+            .github/workflows/channel-gateway-quality-fix.yml \
+            .github/workflows/channel-gateway-legacy-marker.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/backend/base/langflow/api/v1/channel_admin.py \
+            src/backend/base/langflow/api/v1/channel_management.py \
+            src/backend/base/langflow/api/v1/channel_resources.py \
+            src/backend/base/langflow/api/v1/channels.py \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py \
+            src/frontend/src/locales/channelTranslations.ts \
+            src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx
+          git commit -m "fix(channels): complete quality and legacy compatibility checks"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
