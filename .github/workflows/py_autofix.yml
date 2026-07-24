@@ -21,16 +21,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: "Setup Environment"
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Setup Environment
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
           python-version: ${{ env.PYTHON_VERSION }}
           prune-cache: false
-      - run: uv run ruff check --fix-only .
-      - run: uv run ruff format . --config pyproject.toml
-      - uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27
+
+      - name: Apply Ruff fixes
+        run: |
+          uv run ruff check --fix-only .
+          uv run ruff format . --config pyproject.toml
+
+      - name: Commit Python autofixes
+        if: github.event.pull_request.head.repo.fork == false
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet; then
+            echo "Python sources are already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: apply Python autofixes"
+          git push origin "HEAD:${HEAD_REF}"
+
+      - name: Validate fork formatting
+        if: github.event.pull_request.head.repo.fork
+        run: git diff --exit-code
 
   update-starter-projects:
     name: Update Starter Projects
@@ -46,7 +72,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: "Setup Environment"
+      - name: Setup Environment
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -54,7 +80,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           prune-cache: false
 
-      - name: "Install dependencies"
+      - name: Install dependencies
         run: |
           uv sync
           uv pip install -e .
@@ -62,7 +88,6 @@ jobs:
       - name: Run starter projects update
         run: uv run python scripts/ci/update_starter_projects.py
 
-      # Same-repository PRs can safely receive generated starter-project updates directly.
       - name: Commit refreshed starter projects
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
@@ -82,6 +107,7 @@ jobs:
     name: Update Component Index
     if: >-
       github.actor != 'github-actions[bot]'
+      && !github.event.pull_request.head.repo.fork
       && (github.event.action != 'labeled' || github.event.label.name == 'fix-index')
     runs-on: ubuntu-latest
     steps:
@@ -90,6 +116,7 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+
       - name: Merge base branch
         run: |
           git config user.name "github-actions[bot]"
@@ -107,7 +134,8 @@ jobs:
             git add src/lfx/src/lfx/_assets/component_index.json
             GIT_EDITOR=true git merge --continue
           }
-      - name: "Setup Environment"
+
+      - name: Setup Environment
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -115,7 +143,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           prune-cache: false
 
-      - name: "Install dependencies"
+      - name: Install dependencies
         run: uv sync --dev --project .
 
       - name: Build component index
@@ -123,4 +151,16 @@ jobs:
           LFX_DEV: "1"
         run: make build_component_index
 
-      - uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27
+      - name: Commit refreshed component index
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet -- src/lfx/src/lfx/_assets/component_index.json; then
+            echo "Component index is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lfx/src/lfx/_assets/component_index.json
+          git commit -m "chore: refresh component index"
+          git push origin "HEAD:${HEAD_REF}"
