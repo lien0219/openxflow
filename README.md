@@ -208,12 +208,12 @@ flowchart TB
 
 ### 环境要求
 
-- Python `>=3.10,<3.15`
+- Python `>=3.10,<3.15`（`feature/channel-gateway` 开发推荐 Python 3.12）
 - Node.js `>=20.19.0`（推荐 v22.12 LTS）与 npm v10.9+
 - `uv >=0.4`
-- Web 源码开发需要 GNU Make
+- 传统 Makefile 开发方式需要 GNU Make；跨平台一键脚本不要求 Make
 
-Windows Web 开发建议使用 WSL 或仓库内置的 Dev Container；Windows 桌面端直接在 Windows 环境中运行。
+Windows 可直接使用原生 PowerShell 开发，也可以继续使用 WSL 或仓库内置的 Dev Container。
 
 ### 克隆仓库
 
@@ -266,6 +266,47 @@ npm --prefix desktop run dev
 
 ### 开发模式
 
+#### Windows 一键安装并启动
+
+在仓库根目录执行：
+
+```powershell
+.\dev.ps1
+```
+
+也可以直接双击 `dev.cmd`。默认会安装后端和前端依赖，并分别启动：
+
+- 后端：<http://localhost:7860>
+- 前端：<http://localhost:3000>
+
+常用子命令：
+
+```powershell
+.\dev.ps1 install   # 只安装依赖
+.\dev.ps1 start     # 只启动前后端
+.\dev.ps1 all       # 安装依赖并启动
+.\dev.ps1 help      # 查看参数
+```
+
+#### macOS/Linux 一键安装并启动
+
+```bash
+bash ./dev.sh
+```
+
+常用子命令：
+
+```bash
+bash ./dev.sh install   # 只安装依赖
+bash ./dev.sh start     # 只启动前后端
+bash ./dev.sh all       # 安装依赖并启动
+bash ./dev.sh help      # 查看参数
+```
+
+#### 保留的传统方式
+
+原有 Makefile 命令全部保留：
+
 ```bash
 make init
 ```
@@ -280,7 +321,7 @@ make backend
 make frontend
 ```
 
-后端默认监听 `http://localhost:7860`，前端开发服务器默认监听 `http://localhost:3000`。更多环境配置、测试和组件开发说明请查看[完整开发指南](./DEVELOPMENT.md)。
+更多端口、局域网访问、Windows/WSL 环境切换和故障排查说明请查看[完整开发指南](./DEVELOPMENT.md)。
 
 ### 容器构建与运行
 
@@ -302,6 +343,9 @@ openxflow/
 ├── docker_example/          # Docker Compose 示例
 ├── docs/                    # Docusaurus 文档
 ├── scripts/                 # 构建、测试和维护脚本
+├── dev.ps1                  # Windows 安装依赖与前后端一键启动
+├── dev.cmd                  # Windows 双击启动入口
+├── dev.sh                   # macOS/Linux 安装依赖与前后端一键启动
 ├── src/
 │   ├── backend/             # FastAPI API 与应用服务
 │   ├── frontend/            # React / TypeScript Web 应用
@@ -321,7 +365,7 @@ openxflow/
 | 文档 | 说明 |
 | --- | --- |
 | [DESKTOP.md](./DESKTOP.md) | Windows/macOS 桌面端安装、启动、测试与打包 |
-| [DEVELOPMENT.md](./DEVELOPMENT.md) | 本地开发、Dev Container 与环境配置 |
+| [DEVELOPMENT.md](./DEVELOPMENT.md) | Windows/macOS/Linux 本地开发、一键脚本、Dev Container 与环境配置 |
 | [CUSTOMIZATION.md](./CUSTOMIZATION.md) | 项目维护与定制开发指南 |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 参与贡献指南 |
 | [SECURITY.md](./SECURITY.md) | 安全策略与漏洞报告方式 |

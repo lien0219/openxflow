@@ -102,7 +102,7 @@ test(
       .fill("testtesttesttesttesttesttesttest");
     await page.getByTestId("popover-anchor-apply-to-fields").click();
 
-    const fieldsCount = await page.getByPlaceholder("Fields").count();
+    const _fieldsCount = await page.getByPlaceholder("Fields").count();
 
     await page.getByPlaceholder("Fields").first().waitFor({
       state: "visible",
@@ -321,13 +321,13 @@ test(
       .catch(() => {});
     await page.waitForTimeout(1000);
 
-    await page.getByText("Langflow API").first().click();
+    await page.getByRole("link", { name: "OpenXFlow API Keys" }).click();
 
     // Wait for API section to load
     await page.waitForTimeout(1000);
 
     await expect(
-      page.getByText("Langflow API Keys", { exact: true }).nth(1),
+      page.getByText("OpenXFlow API Keys", { exact: true }).nth(1),
     ).toBeVisible({ timeout: 10000 });
     await page.getByText("Add New").click();
     await expect(page.getByPlaceholder("My API Key")).toBeVisible({

@@ -85,7 +85,9 @@ export default defineConfig(({ mode }) => {
       }),
     ],
     server: {
-      port: port,
+      host: env.VITE_HOST || "0.0.0.0",
+      port,
+      strictPort: true,
       proxy: {
         ...proxyTargets,
       },

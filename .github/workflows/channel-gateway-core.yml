@@ -1,0 +1,146 @@
+name: Channel Gateway Core
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/channel-gateway-core.yml"
+      - ".github/workflows/channel-gateway-frontend.yml"
+      - "uv.lock"
+      - "pyproject.toml"
+      - "src/backend/base/pyproject.toml"
+      - "src/backend/base/langflow/channels/**"
+      - "src/backend/base/langflow/api/v1/channel*.py"
+      - "src/backend/base/langflow/alembic/versions/*channel*"
+      - "src/backend/base/langflow/alembic/versions/f7d0b5c3e4a6_add_channel_webhook_jobs.py"
+      - "src/backend/base/langflow/alembic/versions/a8e1c6d4f5b7_add_channel_outbound_delivery.py"
+      - "src/backend/base/langflow/services/database/models/channel/**"
+      - "src/backend/tests/unit/channels/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: channel-gateway-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflow-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate channel workflow syntax
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: >-
+            .github/workflows/channel-gateway-core.yml
+            .github/workflows/channel-gateway-frontend.yml
+
+  channel-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: src/backend/base
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            pyproject.toml
+            src/backend/base/pyproject.toml
+
+      - name: Sync locked backend test environment
+        run: uv sync --quiet --frozen --project src/backend/base --group dev
+
+      - name: Ruff production channel code
+        run: >-
+          uvx --quiet ruff check
+          --config src/backend/base/langflow/channels/ruff.toml
+          --output-format concise
+          src/backend/base/langflow/channels
+
+      - name: Ruff channel tests
+        run: >-
+          uvx --quiet ruff check
+          --config src/backend/tests/unit/channels/ruff.toml
+          --output-format concise
+          src/backend/tests/unit/channels
+
+      - name: Compile channel code
+        run: >-
+          python -m compileall -q
+          src/backend/base/langflow/channels
+          src/backend/tests/unit/channels
+
+      - name: Run all channel contract suites
+        shell: bash
+        run: |
+          set +e
+
+          uv run --frozen --project src/backend/base --group dev \
+            pytest -q -x --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_channel_core_workflow.py \
+            src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py \
+            src/backend/tests/unit/channels/test_loop_lock.py \
+            src/backend/tests/unit/channels/test_keyed_loop_lock.py \
+            src/backend/tests/unit/channels/test_token_cache.py \
+            src/backend/tests/unit/channels/test_token_cache_config.py \
+            src/backend/tests/unit/channels/test_token_cache_expiry_validation.py \
+            src/backend/tests/unit/channels/test_token_cache_metrics.py \
+            src/backend/tests/unit/channels/test_token_refresh.py \
+            2>&1 | tee /tmp/channel-core.log
+          core_status=${PIPESTATUS[0]}
+
+          uv run --frozen --project src/backend/base --group dev \
+            pytest -q -x --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_resilient_adapter_factory.py \
+            src/backend/tests/unit/channels/test_resilient_token_cache_delegation.py \
+            src/backend/tests/unit/channels/test_resilient_token_contracts.py \
+            2>&1 | tee /tmp/channel-adapters.log
+          adapter_status=${PIPESTATUS[0]}
+
+          uv run --frozen --project src/backend/base --group dev \
+            pytest -q -x --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_channel_migrations_sqlite.py \
+            src/backend/tests/unit/channels/test_outbound_delivery_model.py \
+            2>&1 | tee /tmp/channel-database.log
+          database_status=${PIPESTATUS[0]}
+
+          printf 'core_status=%s\nadapter_status=%s\ndatabase_status=%s\n' \
+            "$core_status" "$adapter_status" "$database_status" \
+            | tee /tmp/channel-status.log
+
+          if (( core_status != 0 || adapter_status != 0 || database_status != 0 )); then
+            exit 1
+          fi
+
+      - name: Upload channel contract logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-contract-logs
+          path: |
+            /tmp/channel-core.log
+            /tmp/channel-adapters.log
+            /tmp/channel-database.log
+            /tmp/channel-status.log
+          if-no-files-found: error
+          retention-days: 7

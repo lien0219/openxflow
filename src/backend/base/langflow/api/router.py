@@ -10,6 +10,13 @@ from langflow.api.v1 import (
     authz_roles_router,
     authz_shares_router,
     authz_teams_router,
+    channel_admin_router,
+    channel_bindings_router,
+    channel_management_router,
+    channel_resources_router,
+    channel_runtime_router,
+    channel_webhooks_router,
+    channels_router,
     chat_router,
     endpoints_router,
     extensions_router,
@@ -89,6 +96,13 @@ router_v1.include_router(authz_roles_router)
 router_v1.include_router(authz_role_assignments_router)
 router_v1.include_router(authz_teams_router)
 router_v1.include_router(authz_me_router)
+router_v1.include_router(channels_router)
+router_v1.include_router(channel_management_router)
+router_v1.include_router(channel_resources_router)
+router_v1.include_router(channel_admin_router)
+router_v1.include_router(channel_bindings_router)
+router_v1.include_router(channel_runtime_router)
+router_v1.include_router(channel_webhooks_router)
 
 
 # Extension reload is Mode A (local-dev / pip-installed) only.  The route is
