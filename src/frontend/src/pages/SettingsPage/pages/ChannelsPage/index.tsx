@@ -152,9 +152,7 @@ export default function ChannelsPage() {
   const showError = (title: string, error: unknown) =>
     setErrorData({
       title,
-      list: [
-        getApiErrorMessage(error, t("channels.error.requestFailed")),
-      ],
+      list: [getApiErrorMessage(error, t("channels.error.requestFailed"))],
     });
 
   const getProviderName = (channelType: string) => {
@@ -401,9 +399,7 @@ export default function ChannelsPage() {
                 />
               </div>
               <div>
-                <div className="text-sm font-medium">
-                  {t(provider.nameKey)}
-                </div>
+                <div className="text-sm font-medium">{t(provider.nameKey)}</div>
                 <div className="text-xs text-muted-foreground">
                   {t(
                     provider.enabled
