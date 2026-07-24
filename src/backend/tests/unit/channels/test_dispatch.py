@@ -1,10 +1,13 @@
+from types import SimpleNamespace
 from uuid import uuid4
 
+from langflow.channels.adapters.mock import MockChannelAdapter
 from langflow.channels.domain.models import (
     ChannelConversation,
     ChannelEvent,
     ChannelEventType,
     ChannelIncomingMessage,
+    ChannelMessage,
     ChannelType,
     ChannelUser,
 )
@@ -13,10 +16,25 @@ from langflow.channels.services.workflow import build_channel_session_id
 from langflow.services.database.models.channel.model import ChannelConversationBinding
 
 
-def _event(*, text: str, conversation_type: str = "private") -> ChannelEvent:
+class FeishuMockAdapter(MockChannelAdapter):
+    channel_type = ChannelType.FEISHU
+
+
+class FakeWorkflowExecutor:
+    async def execute(self, **kwargs) -> ChannelMessage:
+        del kwargs
+        return ChannelMessage(title="Workflow", markdown="final answer")
+
+
+def _event(
+    *,
+    text: str,
+    conversation_type: str = "private",
+    channel: ChannelType = ChannelType.TELEGRAM,
+) -> ChannelEvent:
     return ChannelEvent(
         event_id="1",
-        channel=ChannelType.TELEGRAM,
+        channel=channel,
         connection_id=uuid4(),
         event_type=ChannelEventType.COMMAND if text.startswith("/") else ChannelEventType.TEXT,
         user=ChannelUser(external_user_id="42"),
@@ -30,6 +48,15 @@ def _event(*, text: str, conversation_type: str = "private") -> ChannelEvent:
             text=text,
         ),
     )
+
+
+def _dispatch_service(adapter: MockChannelAdapter) -> ChannelDispatchService:
+    service = object.__new__(ChannelDispatchService)
+    service.session = None
+    service.connection = None
+    service.adapter = adapter
+    service.workflow_executor = FakeWorkflowExecutor()
+    return service
 
 
 def test_command_parser_strips_telegram_bot_suffix() -> None:
@@ -75,3 +102,45 @@ def test_mentions_only_binding_filters_plain_group_text() -> None:
         response_mode="mentions_only",
     )
     assert ChannelDispatchService._should_ignore_group_event(event, binding=binding) is True
+
+
+async def test_feishu_workflow_replaces_processing_message_with_final_result() -> None:
+    event = _event(text="hello", channel=ChannelType.FEISHU)
+    adapter = FeishuMockAdapter(event.connection_id)
+    service = _dispatch_service(adapter)
+
+    response = await service._execute_workflow(
+        event,
+        SimpleNamespace(id=uuid4()),
+        "flow-id",
+        "hello",
+        binding=None,
+    )
+
+    assert response is None
+    assert len(adapter.sent_messages) == 1
+    assert adapter.sent_messages[0]["message"].text == "⏳ 正在处理中，请稍候…"
+    assert adapter.updated_messages == [
+        {
+            "external_message_id": "mock-1",
+            "message": ChannelMessage(title="Workflow", markdown="final answer"),
+        }
+    ]
+
+
+async def test_non_feishu_workflow_returns_final_result_without_processing_message() -> None:
+    event = _event(text="hello", channel=ChannelType.TELEGRAM)
+    adapter = MockChannelAdapter(event.connection_id)
+    service = _dispatch_service(adapter)
+
+    response = await service._execute_workflow(
+        event,
+        SimpleNamespace(id=uuid4()),
+        "flow-id",
+        "hello",
+        binding=None,
+    )
+
+    assert response == ChannelMessage(title="Workflow", markdown="final answer")
+    assert adapter.sent_messages == []
+    assert adapter.updated_messages == []
