@@ -19,57 +19,73 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out feature branch
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
+          fetch-depth: 1
+          show-progress: false
 
       - name: Reconstruct and verify localized patch
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from __future__ import annotations
+          expected=(
+            ea1e231f6e54ca056d2098155a178476195cc077
+            7df0b67a4c441d15dee98dde08cd6ccf41d9f3f4
+            ce5dcd29035d9794261c8fcc3acc5b7870409a1b
+            47697c02eab4b6c42e3f16d4560adafd19a992e5
+            320d0af3cb402ee7724a27b36c14e5f4d638fb10
+            6ec3e8d9d76a4d2644f5716c9272b700571e64d8
+            4f80535efbb2dfeeb951a673e454b5284430c5fe
+            fbf353417792c34b8e9db0f7a9daa7366f3b4d3d
+            2a39a500a5c4ce200e9e62102e35e1a348e2f702
+            c4178a5261eaa8f953d5b45f27e198a4c2a922c0
+            fc65e56c38e977291c70a810d7a93ad4538b4419
+            e5139df9eb0abf11f167539247adeba7c34c74e5
+            617ac703ef655c744fddeafe1d41d1b8b7129342
+            0c9bb2d9c7f74dbf48ccc5d82ec427ffa0553319
+            bbb7d8adcb9e34855229d52575f5f355e8350a43
+            be07edfd13b12365a5ec92875c360d9b7d0449a2
+            c4d3588077e7646f15ae80a0a3db233f98529b3c
+            54f2aac4d8d6a7eb28d84b1ed1d41595af670431
+            ab655509ce6eb1abbbef0b5c499990d53d67c7c0
+            9371261e37223f5165b10d01a6104a5b63814af3
+            97b8aaf2b30894ba1026905f19e8ba38c053a699
+            bbebaa634bbf39dd9f4fabe02b60790181210d2b
+            8051a41208b1edd5cafe1e4b85ef838ac36273c8
+            efbc81fb8179f66cb4cfcd40057e4a9613aaea7a
+            89a2eae224a97b4f2f9183028b9b176f68667d5e
+            037239e3c90de86d5e10b0dbf85458906128d63d
+            09d6c0f1feef83c989a47a14f702cb116715ac7d
+          )
 
-          import base64
-          import hashlib
-          import tarfile
-          from pathlib import Path
+          for index in "${!expected[@]}"; do
+            printf -v suffix '%03d' "$index"
+            path=".github/channel-i18n-chunks/chunk-${suffix}.txt"
+            actual=$(git hash-object "$path")
+            if [ "$actual" != "${expected[$index]}" ]; then
+              echo "repairing $path: $actual -> ${expected[$index]}"
+              gh api \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/${GITHUB_REPOSITORY}/git/blobs/${expected[$index]}" \
+                --jq .content \
+                | tr -d '\n' \
+                | base64 --decode > "$path"
+            fi
+            test "$(git hash-object "$path")" = "${expected[$index]}"
+          done
 
-          chunk_dir = Path(".github/channel-i18n-chunks")
-          chunks = sorted(chunk_dir.glob("chunk-*.txt"))
-          if not chunks:
-              raise SystemExit("No localization chunks were found")
+          cat .github/channel-i18n-chunks/chunk-*.txt > /tmp/channel-i18n-all.b64
+          base64 --decode /tmp/channel-i18n-all.b64 > /tmp/channel-i18n-all.tar.gz
+          echo "62b6f73cd0a5ab3d0f861c15b5ead489094e1829d0e370e8c3b407891790eec7  /tmp/channel-i18n-all.tar.gz" | sha256sum --check --strict
+          tar -tzf /tmp/channel-i18n-all.tar.gz
+          tar -xzf /tmp/channel-i18n-all.tar.gz
 
-          encoded = "".join("".join(path.read_text(encoding="utf-8").split()) for path in chunks)
-          print(f"Reconstructing localization archive from {len(chunks)} chunks and {len(encoded)} base64 characters")
-          try:
-              archive_bytes = base64.b64decode(encoded, validate=True)
-          except ValueError as exc:
-              raise SystemExit(f"Localization archive base64 is invalid: {exc}") from exc
-
-          archive = Path("/tmp/channel-i18n-all.tar.gz")
-          archive.write_bytes(archive_bytes)
-          print(f"Localization archive sha256={hashlib.sha256(archive_bytes).hexdigest()}")
-
-          repository_root = Path.cwd().resolve()
-          with tarfile.open(archive, mode="r:gz") as bundle:
-              members = bundle.getmembers()
-              if not members:
-                  raise SystemExit("Localization archive is empty")
-              for member in members:
-                  target = (repository_root / member.name).resolve()
-                  if repository_root not in target.parents and target != repository_root:
-                      raise SystemExit(f"Unsafe localization archive path: {member.name}")
-              print("Localization archive members:")
-              for member in members:
-                  print(f"- {member.name}")
-              bundle.extractall(repository_root, filter="data")
-          PY
-
-      - name: Preserve latest repository fixes
+      - name: Preserve latest repository autofixes
         shell: bash
         run: |
           python - <<'PY'
@@ -117,19 +133,6 @@ jobs:
           if marker in text:
               text = text.replace(marker, replacement, 1)
           autofix.write_text(text, encoding="utf-8")
-
-          conversations = Path(
-              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/"
-              "components/ConversationsTab.tsx"
-          )
-          text = conversations.read_text(encoding="utf-8")
-          text = text.replace(
-              'className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 '
-              'text-[11px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"',
-              'className="mt-1 inline-flex rounded-full border border-border bg-muted '
-              'px-2 py-0.5 text-[11px] text-muted-foreground"',
-          )
-          conversations.write_text(text, encoding="utf-8")
           PY
 
       - name: Set up Node.js
@@ -145,22 +148,15 @@ jobs:
 
       - name: Format localized Channel Center
         working-directory: src/frontend
-        shell: bash
-        run: |
-          set +e
-          npx --no-install biome check --write --unsafe \
-            src/pages/SettingsPage/pages/ChannelsPage \
-            2>&1 | tee /tmp/channel-i18n-biome.log
-          exit 0
+        run: >-
+          npx --no-install biome check --write --unsafe
+          src/pages/SettingsPage/pages/ChannelsPage
 
-      - name: Upload localization formatting diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: channel-i18n-biome-diagnostics
-          path: /tmp/channel-i18n-biome.log
-          if-no-files-found: error
-          retention-days: 3
+      - name: Check localized Channel Center formatting
+        working-directory: src/frontend
+        run: >-
+          npx --no-install biome check
+          src/pages/SettingsPage/pages/ChannelsPage
 
       - name: Run Channel Center unit tests
         working-directory: src/frontend
