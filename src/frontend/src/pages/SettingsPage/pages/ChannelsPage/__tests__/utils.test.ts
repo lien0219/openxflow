@@ -1,9 +1,16 @@
+import type { TFunction } from "i18next";
 import type { ChannelConnection } from "@/controllers/API/queries/channels";
 import {
   buildChannelWebhookUrl,
   getChannelStatusMeta,
   parseAllowedExtensions,
 } from "../utils";
+
+const translations: Record<string, string> = {
+  "channels.status.configuring": "Not configured",
+  "channels.status.connected": "Connected",
+};
+const t = ((key: string) => translations[key] ?? key) as TFunction;
 
 describe("channel settings helpers", () => {
   it("normalizes and deduplicates file extensions", () => {
@@ -14,9 +21,11 @@ describe("channel settings helpers", () => {
     ]);
   });
 
-  it("returns a readable fallback for unknown statuses", () => {
-    expect(getChannelStatusMeta("configuring").label).toBe("待配置");
-    expect(getChannelStatusMeta("connected").label).toBe("已连接");
+  it("returns localized labels for channel statuses", () => {
+    expect(getChannelStatusMeta("configuring", t).label).toBe(
+      "Not configured",
+    );
+    expect(getChannelStatusMeta("connected", t).label).toBe("Connected");
   });
 
   it("builds a provider-specific webhook URL", () => {
