@@ -14,6 +14,7 @@ import {
 } from "@/controllers/API/queries/channels";
 import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import useAlertStore from "@/stores/alertStore";
+import useChannelCopy from "../use-channel-copy";
 import CommandDialog from "./CommandDialog";
 
 interface CommandsTabProps {
@@ -28,6 +29,7 @@ const SCOPE_LABELS: Record<ChannelCommandScope, string> = {
 };
 
 export default function CommandsTab({ connectionId }: CommandsTabProps) {
+  const copy = useChannelCopy();
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
   const setErrorData = useAlertStore((state) => state.setErrorData);
   const [page, setPage] = useState(1);
@@ -79,9 +81,9 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
     try {
       await createCommand.mutateAsync({ connectionId, payload });
       setDialogOpen(false);
-      setSuccessData({ title: "自定义指令已创建" });
+      setSuccessData({ title: copy("自定义指令已创建") });
     } catch (error) {
-      showError("创建指令失败", error);
+      showError(copy("创建指令失败"), error);
       throw error;
     }
   };
@@ -96,9 +98,9 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
       });
       setDialogOpen(false);
       setEditingCommand(null);
-      setSuccessData({ title: "自定义指令已更新" });
+      setSuccessData({ title: copy("自定义指令已更新") });
     } catch (error) {
-      showError("更新指令失败", error);
+      showError(copy("更新指令失败"), error);
       throw error;
     }
   };
@@ -111,9 +113,9 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
         commandId: deleteTarget.id,
       });
       setDeleteTarget(null);
-      setSuccessData({ title: "自定义指令已删除" });
+      setSuccessData({ title: copy("自定义指令已删除") });
     } catch (error) {
-      showError("删除指令失败", error);
+      showError(copy("删除指令失败"), error);
     }
   };
 
@@ -121,9 +123,9 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
     <div className="flex flex-col gap-4 rounded-xl border p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h3 className="font-semibold">自定义指令中心</h3>
+          <h3 className="font-semibold">{copy("自定义指令中心")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            普通消息使用默认工作流；“/指令 内容”仅本次路由到指定工作流。
+            {copy("普通消息使用默认工作流；“/指令 内容”仅本次路由到指定工作流。")}
           </p>
         </div>
         <Button
@@ -134,7 +136,7 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
             setDialogOpen(true);
           }}
         >
-          新增指令
+          {copy("新增指令")}
         </Button>
       </div>
 
@@ -142,7 +144,7 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
         <Input
           value={queryInput}
           onChange={(event) => setQueryInput(event.target.value)}
-          placeholder="搜索指令名称或说明"
+          placeholder={copy("搜索指令名称或说明")}
         />
         <select
           className="primary-input h-10"
@@ -152,10 +154,10 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
             setPage(1);
           }}
         >
-          <option value="">全部作用域</option>
+          <option value="">{copy("全部作用域")}</option>
           {Object.entries(SCOPE_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
-              {label}
+              {copy(label)}
             </option>
           ))}
         </select>
@@ -165,19 +167,19 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
         <Loading />
       ) : (result?.items.length ?? 0) === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          暂无匹配指令。可创建连接共享、会话共享或仅自己可用的个人指令。
+          {copy("暂无匹配指令。可创建连接共享、会话共享或仅自己可用的个人指令。")}
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[840px] text-left text-sm">
             <thead className="border-b text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2">指令</th>
-                <th className="px-3 py-2">作用域</th>
-                <th className="px-3 py-2">工作流</th>
-                <th className="px-3 py-2">策略</th>
-                <th className="px-3 py-2">最近使用</th>
-                <th className="px-3 py-2 text-right">操作</th>
+                <th className="px-3 py-2">{copy("指令")}</th>
+                <th className="px-3 py-2">{copy("作用域")}</th>
+                <th className="px-3 py-2">{copy("工作流")}</th>
+                <th className="px-3 py-2">{copy("策略")}</th>
+                <th className="px-3 py-2">{copy("最近使用")}</th>
+                <th className="px-3 py-2 text-right">{copy("操作")}</th>
               </tr>
             </thead>
             <tbody>
@@ -186,29 +188,29 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
                   <td className="px-3 py-3">
                     <div className="font-medium">{command.command}</div>
                     <div className="max-w-64 truncate text-xs text-muted-foreground">
-                      {command.description || "无说明"}
+                      {command.description || copy("无说明")}
                     </div>
                     {command.aliases.length > 0 && (
                       <div className="mt-1 text-xs text-muted-foreground">
-                        别名：{command.aliases.join("、")}
+                        {copy("别名列表", { aliases: command.aliases.join(", ") })}
                       </div>
                     )}
                   </td>
                   <td className="px-3 py-3">
-                    {SCOPE_LABELS[command.scope_type]}
+                    {copy(SCOPE_LABELS[command.scope_type])}
                   </td>
                   <td className="px-3 py-3 font-mono text-xs">
                     {command.flow_id.slice(0, 8)}
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
-                    {command.enabled ? "已启用" : "已停用"}
-                    {command.input_required ? " · 必须输入" : ""}
-                    {command.require_mention ? " · 群聊需@" : ""}
+                    {command.enabled ? copy("已启用") : copy("已停用")}
+                    {command.input_required ? ` · ${copy("必须输入")}` : ""}
+                    {command.require_mention ? ` · ${copy("群聊需@")}` : ""}
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
                     {command.last_used_at
                       ? new Date(command.last_used_at).toLocaleString()
-                      : "尚未使用"}
+                      : copy("尚未使用")}
                   </td>
                   <td className="px-3 py-3 text-right">
                     <div className="flex justify-end gap-2">
@@ -220,7 +222,7 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
                           setDialogOpen(true);
                         }}
                       >
-                        编辑
+                        {copy("编辑")}
                       </Button>
                       <Button
                         variant="ghost"
@@ -228,7 +230,7 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
                         className="text-destructive"
                         onClick={() => setDeleteTarget(command)}
                       >
-                        删除
+                        {copy("删除")}
                       </Button>
                     </div>
                   </td>
@@ -241,20 +243,20 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
         <div className="text-muted-foreground">
-          共 {result?.total ?? 0} 条指令
+          {copy("共 {{count}} 条指令", { count: result?.total ?? 0 })}
         </div>
         <div className="flex items-center gap-2">
           <select
             className="primary-input h-9 w-24"
-            value={pageSize}
+            value={Page(1);}
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setPage(1);
             }}
           >
-            <option value={20}>20 条</option>
-            <option value={50}>50 条</option>
-            <option value={100}>100 条</option>
+            <option value={20}>{copy("{{count}} 条", { count: 20 })}</option>
+            <option value={50}>{copy("{{count}} 条", { count: 50 })}</option>
+            <option value={100}>{copy("{{count}} 条", { count: 100 })}</option>
           </select>
           <Button
             variant="outline"
@@ -262,7 +264,7 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
             disabled={page <= 1}
             onClick={() => setPage((current) => Math.max(1, current - 1))}
           >
-            上一页
+            {copy("上一页")}
           </Button>
           <span>
             {page} / {Math.max(1, result?.total_pages ?? 0)}
@@ -273,7 +275,7 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
             disabled={page >= (result?.total_pages ?? 0)}
             onClick={() => setPage((current) => current + 1)}
           >
-            下一页
+            {copy("下一页")}
           </Button>
         </div>
       </div>

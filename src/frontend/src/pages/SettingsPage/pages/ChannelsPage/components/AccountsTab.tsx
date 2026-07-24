@@ -12,11 +12,14 @@ import {
 import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import useAlertStore from "@/stores/alertStore";
 
+import useChannelCopy from "../use-channel-copy";
+
 interface AccountsTabProps {
   connectionId: string;
 }
 
 export default function AccountsTab({ connectionId }: AccountsTabProps) {
+  const copy = useChannelCopy();
   const { t } = useTranslation();
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
   const setErrorData = useAlertStore((state) => state.setErrorData);
@@ -112,7 +115,7 @@ export default function AccountsTab({ connectionId }: AccountsTabProps) {
       <Input
         value={queryInput}
         onChange={(event) => setQueryInput(event.target.value)}
-        placeholder="搜索渠道用户名称或渠道用户 ID"
+        placeholder={copy("搜索渠道用户名称或渠道用户 ID")}
       />
 
       {isLoading ? (
@@ -154,20 +157,20 @@ export default function AccountsTab({ connectionId }: AccountsTabProps) {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
         <div className="text-muted-foreground">
-          共 {result?.total ?? 0} 个绑定账号
+          {copy("共 {{count}} 个绑定账号", { count: result?.total ?? 0 })}
         </div>
         <div className="flex items-center gap-2">
           <select
             className="primary-input h-9 w-24"
-            value={pageSize}
+            value={Page(1);}
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setPage(1);
             }}
           >
-            <option value={20}>20 条</option>
-            <option value={50}>50 条</option>
-            <option value={100}>100 条</option>
+            <option value={20}>{copy("{{count}} 条", { count: 20 })}</option>
+            <option value={50}>{copy("{{count}} 条", { count: 50 })}</option>
+            <option value={100}>{copy("{{count}} 条", { count: 100 })}</option>
           </select>
           <Button
             variant="outline"
@@ -175,7 +178,7 @@ export default function AccountsTab({ connectionId }: AccountsTabProps) {
             disabled={page <= 1}
             onClick={() => setPage((current) => Math.max(1, current - 1))}
           >
-            上一页
+            {copy("上一页")}
           </Button>
           <span>
             {page} / {Math.max(1, result?.total_pages ?? 0)}
@@ -186,7 +189,7 @@ export default function AccountsTab({ connectionId }: AccountsTabProps) {
             disabled={page >= (result?.total_pages ?? 0)}
             onClick={() => setPage((current) => current + 1)}
           >
-            下一页
+            {copy("下一页")}
           </Button>
         </div>
       </div>

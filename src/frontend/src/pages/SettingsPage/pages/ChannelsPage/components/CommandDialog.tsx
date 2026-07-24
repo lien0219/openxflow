@@ -17,6 +17,7 @@ import {
   type ChannelWorkflowCommandUpdate,
   useGetChannelConversations,
 } from "@/controllers/API/queries/channels";
+import useChannelCopy from "../use-channel-copy";
 import ChannelResourceSelect from "./ChannelResourceSelect";
 
 interface CommandDialogProps {
@@ -73,6 +74,7 @@ export default function CommandDialog({
   onCreate,
   onUpdate,
 }: CommandDialogProps) {
+  const copy = useChannelCopy();
   const [form, setForm] = useState<CommandFormState>(DEFAULT_FORM);
   const [conversationSearch, setConversationSearch] = useState("");
   const { data: conversationResult, isLoading: conversationsLoading } =
@@ -159,51 +161,54 @@ export default function CommandDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{command ? "编辑指令" : "新增自定义指令"}</DialogTitle>
+          <DialogTitle>
+            {command ? copy("编辑指令") : copy("新增自定义指令")}
+          </DialogTitle>
           <DialogDescription>
-            用户发送“/指令
-            内容”时，仅本次消息路由到指定工作流，不会改变默认工作流。
+            {copy(
+              "用户发送“/指令 内容”时，仅本次消息路由到指定工作流，不会改变默认工作流。",
+            )}
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-medium">
-              指令名称
+              {copy("指令名称")}
               <Input
                 value={form.command}
                 onChange={(event) => setField("command", event.target.value)}
-                placeholder="/code 或 /代码审查"
+                placeholder={copy("/code 或 /代码审查")}
                 required
               />
               <span className="text-xs font-normal text-muted-foreground">
-                支持中文、英文、数字、-、_，最多 32 个字符。
+                {copy("支持中文、英文、数字、-、_，最多 32 个字符。")}
               </span>
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium">
-              别名
+              {copy("别名")}
               <Input
                 value={form.aliases}
                 onChange={(event) => setField("aliases", event.target.value)}
-                placeholder="/review, /检查代码"
+                placeholder={copy("/review, /检查代码")}
               />
               <span className="text-xs font-normal text-muted-foreground">
-                使用逗号或空格分隔，最多 5 个。
+                {copy("使用逗号或空格分隔，最多 5 个。")}
               </span>
             </label>
           </div>
 
           <label className="flex flex-col gap-2 text-sm font-medium">
-            指令说明
+            {copy("指令说明")}
             <Input
               value={form.description}
               onChange={(event) => setField("description", event.target.value)}
-              placeholder="用于 /commands 列表和无参数提示"
+              placeholder={copy("用于 /commands 列表和无参数提示")}
             />
           </label>
 
           {!command && (
             <label className="flex flex-col gap-2 text-sm font-medium">
-              生效范围
+              {copy("生效范围")}
               <select
                 className="primary-input h-10"
                 value={form.scopeType}
@@ -216,7 +221,7 @@ export default function CommandDialog({
               >
                 {Object.entries(SCOPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {copy(label)}
                   </option>
                 ))}
               </select>
@@ -225,11 +230,11 @@ export default function CommandDialog({
 
           {needsConversation && !command && (
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">指定会话</label>
+              <label className="text-sm font-medium">{copy("指定会话")}</label>
               <Input
                 value={conversationSearch}
                 onChange={(event) => setConversationSearch(event.target.value)}
-                placeholder="先搜索会话名称或平台会话 ID"
+                placeholder={copy("先搜索会话名称或平台会话 ID")}
               />
               <select
                 className="primary-input h-10"
@@ -240,7 +245,9 @@ export default function CommandDialog({
                 required
               >
                 <option value="">
-                  {conversationsLoading ? "正在加载…" : "请选择会话"}
+                  {conversationsLoading
+                    ? copy("正在加载…")
+                    : copy("请选择会话")}
                 </option>
                 {(conversationResult?.items ?? []).map((conversation) => (
                   <option key={conversation.id} value={conversation.id}>
@@ -255,56 +262,59 @@ export default function CommandDialog({
 
           <ChannelResourceSelect
             kind="flow"
-            label="目标工作流"
-            emptyLabel="请选择工作流"
+            label={copy("目标工作流")}
+            emptyLabel={copy("请选择工作流")}
             value={form.flowId}
             onChange={(value) => setField("flowId", value)}
             required
           />
 
           <label className="flex flex-col gap-2 text-sm font-medium">
-            输入模板（可选）
+            {copy("输入模板（可选）")}
             <textarea
               className="primary-input min-h-28 resize-y px-3 py-2"
               value={form.promptTemplate}
               onChange={(event) =>
                 setField("promptTemplate", event.target.value)
               }
-              placeholder={
-                "请按代码审查标准处理以下内容：\n{{input}}\n\n发送人：{{sender_name}}"
-              }
+              placeholder={copy(
+                "请按代码审查标准处理以下内容：\n{{input}}\n\n发送人：{{sender_name}}",
+              )}
             />
             <span className="text-xs font-normal text-muted-foreground">
-              支持 <code>{"{{input}}"}</code>、<code>{"{{sender_name}}"}</code>
-              、<code>{"{{conversation_name}}"}</code>、
-              <code>{"{{conversation_type}}"}</code>。
+              {copy("支持模板变量")}: <code>{"{{input}}"}</code>,{" "}
+              <code>{"{{sender_name}}"}</code>,{" "}
+              <code>{"{{conversation_name}}"}</code>,{" "}
+              <code>{"{{conversation_type}}"}</code>.
             </span>
           </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <CommandSwitch
-              title="必须输入参数"
-              description="只有指令没有正文或附件时显示用法，不执行工作流。"
+              title={copy("必须输入参数")}
+              description={copy(
+                "只有指令没有正文或附件时显示用法，不执行工作流。",
+              )}
               checked={form.inputRequired}
               onCheckedChange={(checked) => setField("inputRequired", checked)}
             />
             <CommandSwitch
-              title="允许附件"
-              description="允许图片和文件随指令一起提交给工作流。"
+              title={copy("允许附件")}
+              description={copy("允许图片和文件随指令一起提交给工作流。")}
               checked={form.allowAttachments}
               onCheckedChange={(checked) =>
                 setField("allowAttachments", checked)
               }
             />
             <CommandSwitch
-              title="群聊必须 @机器人"
-              description="在群聊使用此指令时仍要求明确提及机器人。"
+              title={copy("群聊必须 @机器人")}
+              description={copy("在群聊使用此指令时仍要求明确提及机器人。")}
               checked={form.requireMention}
               onCheckedChange={(checked) => setField("requireMention", checked)}
             />
             <CommandSwitch
-              title="启用指令"
-              description="关闭后保留配置，但不再匹配和展示。"
+              title={copy("启用指令")}
+              description={copy("关闭后保留配置，但不再匹配和展示。")}
               checked={form.enabled}
               onCheckedChange={(checked) => setField("enabled", checked)}
             />
@@ -316,10 +326,10 @@ export default function CommandDialog({
               variant="outline"
               onClick={() => onOpenChange(false)}
             >
-              取消
+              {copy("取消")}
             </Button>
             <Button type="submit" loading={loading}>
-              保存指令
+              {copy("保存指令")}
             </Button>
           </DialogFooter>
         </form>

@@ -16,6 +16,7 @@ import {
   useUpdateChannelConversation,
 } from "@/controllers/API/queries/channels";
 import useAlertStore from "@/stores/alertStore";
+import useChannelCopy from "../use-channel-copy";
 import ChannelResourceSelect from "./ChannelResourceSelect";
 import ConversationBindingDialog from "./ConversationBindingDialog";
 
@@ -37,6 +38,7 @@ export default function ConversationsTab({
   connection,
   capabilities,
 }: ConversationsTabProps) {
+  const copy = useChannelCopy();
   const { t, i18n } = useTranslation();
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
   const setErrorData = useAlertStore((state) => state.setErrorData);
@@ -121,8 +123,8 @@ export default function ConversationsTab({
     if (selectedIds.length === 0) return;
     if (batchAction === "override" && !batchFlowId) {
       setErrorData({
-        title: "请选择批量覆盖工作流",
-        list: ["批量设置独立工作流前必须选择目标工作流。"],
+        title: copy("请选择批量覆盖工作流"),
+        list: [copy("批量设置独立工作流前必须选择目标工作流。")],
       });
       return;
     }
@@ -136,9 +138,9 @@ export default function ConversationsTab({
         },
       });
       setSelectedIds([]);
-      setSuccessData({ title: `已更新 ${response.updated} 个会话` });
+      setSuccessData({ title: copy("已更新 {{count}} 个会话", { count: response.updated }) });
     } catch (error) {
-      showError("批量更新会话失败", error);
+      showError(copy("批量更新会话失败"), error);
     }
   };
 
@@ -157,9 +159,9 @@ export default function ConversationsTab({
   return (
     <div className="flex flex-col gap-4 rounded-xl border p-5">
       <div>
-        <h3 className="font-semibold">会话管理</h3>
+        <h3 className="font-semibold">{copy("会话管理")}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          会话由渠道消息自动发现，平台会话 ID 和类型只读，不再手工新增。
+          {copy("会话由渠道消息自动发现，平台会话 ID 和类型只读，不再手工新增。")}
         </p>
       </div>
 
@@ -167,7 +169,7 @@ export default function ConversationsTab({
         <Input
           value={queryInput}
           onChange={(event) => setQueryInput(event.target.value)}
-          placeholder="搜索会话名称或平台会话 ID"
+          placeholder={copy("搜索会话名称或平台会话ID")}
         />
         <select
           className="primary-input h-10"
@@ -177,7 +179,7 @@ export default function ConversationsTab({
             setPage(1);
           }}
         >
-          <option value="">全部会话类型</option>
+          <option value="">{copy("全部会话类型")}</option>
           {(capabilities?.conversation_types ?? []).map((type) => (
             <option key={type} value={type}>
               {conversationTypeLabel(type, t)}
@@ -192,10 +194,10 @@ export default function ConversationsTab({
             setPage(1);
           }}
         >
-          <option value="">全部状态</option>
+          <option value="">{copy("全部状态")}</option>
           {Object.entries(STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
-              {label}
+              {copy(label)}
             </option>
           ))}
         </select>
@@ -209,10 +211,10 @@ export default function ConversationsTab({
             setPage(1);
           }}
         >
-          <option value="">全部路由方式</option>
-          <option value="inherit">继承全局</option>
-          <option value="override">独立配置</option>
-          <option value="disabled">禁用普通消息</option>
+          <option value="">{copy("全部路由方式")}</option>
+          <option value="inherit">{copy("继承全局")}</option>
+          <option value="override">{copy("独立配置")}</option>
+          <option value="disabled">{copy("禁用普通消息")}</option>
         </select>
       </div>
 
@@ -220,7 +222,7 @@ export default function ConversationsTab({
         <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4">
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium">
-              已选择 {selectedIds.length} 个会话
+              {copy("已选择 {{count}} 个会话", { count: selectedIds.length })}
             </span>
             <select
               className="primary-input h-9 min-w-44"
@@ -231,12 +233,12 @@ export default function ConversationsTab({
                 )
               }
             >
-              <option value="inherit">改为继承全局</option>
-              <option value="override">设置独立工作流</option>
-              <option value="ignore">忽略会话</option>
-              <option value="restore">恢复会话</option>
-              <option value="disable">停用会话</option>
-              <option value="enable">启用并继承全局</option>
+              <option value="inherit">{copy("改为继承全局")}</option>
+              <option value="override">{copy("设置独立工作流")}</option>
+              <option value="ignore">{copy("忽略会话")}</option>
+              <option value="restore">{copy("恢复会话")}</option>
+              <option value="disable">{copy("停用会话")}</option>
+              <option value="enable">{copy("启用并继承全局")}</option>
             </select>
             <Button
               size="sm"
@@ -244,21 +246,21 @@ export default function ConversationsTab({
               onClick={handleBatchAction}
               loading={batchUpdate.isPending}
             >
-              应用
+              {copy("应用")}
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => setSelectedIds([])}
             >
-              取消选择
+              {copy("取消选择")}
             </Button>
           </div>
           {batchAction === "override" && (
             <ChannelResourceSelect
               kind="flow"
-              label="批量覆盖工作流"
-              emptyLabel="请选择目标工作流"
+              label={copy("批量覆盖工作流")}
+              emptyLabel={copy("请选择目标工作流")}
               value={batchFlowId}
               onChange={setBatchFlowId}
               required
@@ -271,7 +273,7 @@ export default function ConversationsTab({
         <Loading />
       ) : conversations.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          暂无匹配会话。用户或群聊第一次给机器人发消息后会自动出现在这里。
+          {copy("暂无匹配会话。用户或群聊第一次给机器人发消息后会自动出现在这里。")}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -283,15 +285,15 @@ export default function ConversationsTab({
                     type="checkbox"
                     checked={allPageSelected}
                     onChange={togglePage}
-                    aria-label="选择当前页全部会话"
+                    aria-label={copy("选择当前页全部会话")}
                   />
                 </th>
-                <th className="px-3 py-2">会话</th>
-                <th className="px-3 py-2">类型</th>
-                <th className="px-3 py-2">状态</th>
-                <th className="px-3 py-2">路由</th>
-                <th className="px-3 py-2">最近活跃</th>
-                <th className="px-3 py-2 text-right">操作</th>
+                <th className="px-3 py-2">{copy("会话")}</th>
+                <th className="px-3 py-2">{copy("类型")}</th>
+                <th className="px-3 py-2">{copy("状态")}</th>
+                <th className="px-3 py-2">{copy("路由")}</th>
+                <th className="px-3 py-2">{copy("最近活跃")}</th>
+                <th className="px-3 py-2 text-right">{copy("操作")}</th>
               </tr>
             </thead>
             <tbody>
@@ -308,7 +310,7 @@ export default function ConversationsTab({
                             : current.filter((id) => id !== conversation.id),
                         )
                       }
-                      aria-label={`选择 ${conversation.display_name || conversation.external_conversation_id}`}
+                      aria-label={copy("选择 {{name}}", { name: conversation.display_name || conversation.external_conversation_id })}
                     />
                   </td>
                   <td className="px-3 py-3">
@@ -320,8 +322,8 @@ export default function ConversationsTab({
                       {conversation.external_conversation_id}
                     </div>
                     {conversation.source === "legacy_manual" && (
-                      <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                        {t("channels.conversations.legacyManual")}
+                      <span className="mt-1 inline-flex rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        {copy("历史手工记录")}
                       </span>
                     )}
                   </td>
@@ -330,11 +332,11 @@ export default function ConversationsTab({
                   </td>
                   <td className="px-3 py-3">
                     <span className="rounded-full bg-muted px-2 py-1 text-xs">
-                      {STATUS_LABELS[conversation.status]}
+                      {copy(STATUS_LABELS[conversation.status])}
                     </span>
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
-                    {routeLabel(conversation, connection)}
+                    {routeLabel(conversation, connection, copy)}
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
                     {new Date(conversation.last_message_at).toLocaleString(
@@ -359,20 +361,20 @@ export default function ConversationsTab({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
         <div className="text-muted-foreground">
-          共 {result?.total ?? 0} 个会话
+          {copy("共 {{count}} 个会话", { count: result?.total ?? 0 })}
         </div>
         <div className="flex items-center gap-2">
           <select
             className="primary-input h-9 w-24"
-            value={pageSize}
+            value={Page(1);}
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setPage(1);
             }}
           >
-            <option value={20}>20 条</option>
-            <option value={50}>50 条</option>
-            <option value={100}>100 条</option>
+            <option value={20}>{copy("{{count}} 条", { count: 20 })}</option>
+            <option value={50}>{copy("{{count}} 条", { count: 50 })}</option>
+            <option value={100}>{copy("{{count}} 条", { count: 100 })}</option>
           </select>
           <Button
             variant="outline"
@@ -380,7 +382,7 @@ export default function ConversationsTab({
             disabled={page <= 1}
             onClick={() => setPage((current) => Math.max(1, current - 1))}
           >
-            上一页
+            {copy("上一页")}
           </Button>
           <span>
             {page} / {Math.max(1, result?.total_pages ?? 0)}
@@ -391,7 +393,7 @@ export default function ConversationsTab({
             disabled={page >= (result?.total_pages ?? 0)}
             onClick={() => setPage((current) => current + 1)}
           >
-            下一页
+            {copy("下一页")}
           </Button>
         </div>
       </div>
@@ -429,14 +431,15 @@ function conversationTypeLabel(
 function routeLabel(
   conversation: ChannelConversationBinding,
   connection: ChannelConnection,
+  copy: (source: string, params?: Record<string, string | number>) => string,
 ): string {
-  if (conversation.route_mode === "disabled") return "普通消息已停用";
+  if (conversation.route_mode === "disabled") return copy("普通消息已停用");
   if (conversation.route_mode === "override") {
     return conversation.default_flow_id
-      ? `独立工作流 · ${conversation.default_flow_id.slice(0, 8)}`
-      : "独立工作流未设置";
+      ? copy("独立工作流 · {{id}}", { id: conversation.default_flow_id.slice(0, 8) })
+      : copy("独立工作流未设置");
   }
   return connection.default_flow_id
-    ? `继承全局 · ${connection.default_flow_id.slice(0, 8)}`
-    : "继承全局但未设置";
+    ? copy("继承全局 · {{id}}", { id: connection.default_flow_id.slice(0, 8) })
+    : copy("继承全局但未设置");
 }

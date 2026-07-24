@@ -17,6 +17,7 @@ import type {
   ChannelConnectionUpdate,
   ChannelType,
 } from "@/controllers/API/queries/channels";
+import useChannelCopy from "../use-channel-copy";
 import { parseAllowedExtensions, readConnectionSetting } from "../utils";
 
 type ConfigurableChannelType = Extract<
@@ -105,6 +106,7 @@ export default function ChannelConnectionDialog({
   loading = false,
   onSubmit,
 }: ChannelConnectionDialogProps) {
+  const copy = useChannelCopy();
   const { t } = useTranslation();
   const providerNameFor = (channelType: ConfigurableChannelType) =>
     t(PROVIDER_KEYS[channelType]);
@@ -154,9 +156,9 @@ export default function ChannelConnectionDialog({
         "Feishu",
         "DingTalk",
         "WeCom",
-        "飞书",
-        "钉钉",
-        "企业微信",
+        copy("飞书"),
+        copy("钉钉"),
+        copy("企业微信"),
       ];
       return {
         ...emptyForm(channelType, providerNameFor(channelType)),

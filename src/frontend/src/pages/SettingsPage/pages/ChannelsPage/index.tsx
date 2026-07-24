@@ -25,6 +25,7 @@ import ConnectionOverviewTab from "./components/ConnectionOverviewTab";
 import ConversationsTab from "./components/ConversationsTab";
 import DefaultRoutingTab from "./components/DefaultRoutingTab";
 import ExecutionLogsTab from "./components/ExecutionLogsTab";
+import useChannelCopy from "./use-channel-copy";
 import {
   buildChannelWebhookUrl,
   getApiErrorMessage,
@@ -94,6 +95,7 @@ const TABS: Array<{ id: DetailTab; label: string }> = [
 ];
 
 export default function ChannelsPage() {
+  const copy = useChannelCopy();
   const { t } = useTranslation();
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
   const setErrorData = useAlertStore((state) => state.setErrorData);
@@ -420,7 +422,7 @@ export default function ChannelsPage() {
                     variant={activeTab === tab.id ? "primary" : "ghost"}
                     onClick={() => setActiveTab(tab.id)}
                   >
-                    {tab.label}
+                    {copy(tab.label)}
                   </Button>
                 ))}
               </div>

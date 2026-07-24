@@ -1,5 +1,6 @@
 import type { useTranslation } from "react-i18next";
 import type { ChannelConnection } from "@/controllers/API/queries/channels";
+import { resolveChannelCopy } from "../use-channel-copy";
 import {
   buildChannelWebhookUrl,
   formatWorkflowOptionLabel,
@@ -54,6 +55,16 @@ describe("channel settings helpers", () => {
 
     expect(buildChannelWebhookUrl(connection)).toBe(
       "https://example.com/api/v1/channel-webhooks/feishu/connection-id",
+    );
+  });
+
+  it("uses Chinese copy for zh locales and English fallback otherwise", () => {
+    expect(resolveChannelCopy("zh-CN", "会话管理")).toBe("会话管理");
+    expect(resolveChannelCopy("en", "会话管理")).toBe(
+      "Conversation management",
+    );
+    expect(resolveChannelCopy("ja", "共 {{count}} 个会话", { count: 3 })).toBe(
+      "3 conversations",
     );
   });
 });

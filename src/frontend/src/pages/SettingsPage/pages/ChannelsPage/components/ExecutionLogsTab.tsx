@@ -7,6 +7,8 @@ import {
   useGetChannelExecutions,
 } from "@/controllers/API/queries/channels";
 
+import useChannelCopy from "../use-channel-copy";
+
 interface ExecutionLogsTabProps {
   connectionId: string;
 }
@@ -27,6 +29,7 @@ const STATUS_LABELS: Record<ChannelExecutionStatus, string> = {
 export default function ExecutionLogsTab({
   connectionId,
 }: ExecutionLogsTabProps) {
+  const copy = useChannelCopy();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [status, setStatus] = useState<ChannelExecutionStatus | "">("");
@@ -52,9 +55,9 @@ export default function ExecutionLogsTab({
   return (
     <div className="flex flex-col gap-4 rounded-xl border p-5">
       <div>
-        <h3 className="font-semibold">渠道运行记录</h3>
+        <h3 className="font-semibold">{copy("渠道运行记录")}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          查看默认路由、指令路由和管理员调试触发的工作流执行结果。
+          {copy("查看默认路由、指令路由和管理员调试触发的工作流执行结果。")}
         </p>
       </div>
 
@@ -67,10 +70,10 @@ export default function ExecutionLogsTab({
             setPage(1);
           }}
         >
-          <option value="">全部执行状态</option>
-          <option value="running">执行中</option>
-          <option value="succeeded">成功</option>
-          <option value="failed">失败</option>
+          <option value="">{copy("全部执行状态")}</option>
+          <option value="running">{copy("执行中")}</option>
+          <option value="succeeded">{copy("成功")}</option>
+          <option value="failed">{copy("失败")}</option>
         </select>
         <select
           className="primary-input h-10"
@@ -80,11 +83,11 @@ export default function ExecutionLogsTab({
             setPage(1);
           }}
         >
-          <option value="">全部触发方式</option>
-          <option value="default">默认工作流</option>
-          <option value="command">自定义指令</option>
-          <option value="admin_flow">管理员调试</option>
-          <option value="file">文件处理</option>
+          <option value="">{copy("全部触发方式")}</option>
+          <option value="default">{copy("默认工作流")}</option>
+          <option value="command">{copy("自定义指令")}</option>
+          <option value="admin_flow">{copy("管理员调试")}</option>
+          <option value="file">{copy("文件处理")}</option>
         </select>
       </div>
 
@@ -92,20 +95,20 @@ export default function ExecutionLogsTab({
         <Loading />
       ) : (result?.items.length ?? 0) === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          当前筛选条件下暂无运行记录。
+          {copy("当前筛选条件下暂无运行记录")}
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="border-b text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2">时间</th>
-                <th className="px-3 py-2">触发方式</th>
-                <th className="px-3 py-2">工作流</th>
-                <th className="px-3 py-2">会话 / 用户</th>
-                <th className="px-3 py-2">状态</th>
-                <th className="px-3 py-2">耗时</th>
-                <th className="px-3 py-2">错误</th>
+                <th className="px-3 py-2">{copy("时间")}</th>
+                <th className="px-3 py-2">{copy("触发方式")}</th>
+                <th className="px-3 py-2">{copy("工作流")}</th>
+                <th className="px-3 py-2">{copy("会话 / 用户")}</th>
+                <th className="px-3 py-2">{copy("状态")}</th>
+                <th className="px-3 py-2">{copy("耗时")}</th>
+                <th className="px-3 py-2">{copy("错误")}</th>
               </tr>
             </thead>
             <tbody>
@@ -115,26 +118,25 @@ export default function ExecutionLogsTab({
                     {new Date(execution.created_at).toLocaleString()}
                   </td>
                   <td className="px-3 py-3">
-                    {TRIGGER_LABELS[execution.trigger_type]}
+                    {copy(TRIGGER_LABELS[execution.trigger_type])}
                     {execution.command_name
                       ? ` · ${execution.command_name}`
                       : ""}
                   </td>
                   <td className="px-3 py-3 font-mono text-xs">
-                    {execution.flow_id?.slice(0, 8) ?? "工作流已删除"}
+                    {execution.flow_id?.slice(0, 8) ?? copy("工作流已删除")}
                   </td>
                   <td className="px-3 py-3 font-mono text-xs text-muted-foreground">
                     <div>
-                      会话：
-                      {execution.conversation_binding_id?.slice(0, 8) ?? "-"}
+                      {copy("会话：{{id}}", { id: execution.conversation_binding_id?.slice(0, 8) ?? "-" })}
                     </div>
                     <div>
-                      用户：{execution.openxflow_user_id?.slice(0, 8) ?? "-"}
+                      {copy("用户：{{id}}", { id: execution.openxflow_user_id?.slice(0, 8) ?? "-" })}
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     <span className="rounded-full bg-muted px-2 py-1 text-xs">
-                      {STATUS_LABELS[execution.status]}
+                      {copy(STATUS_LABELS[execution.status])}
                     </span>
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
@@ -156,20 +158,20 @@ export default function ExecutionLogsTab({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
         <div className="text-muted-foreground">
-          共 {result?.total ?? 0} 条记录
+          {copy("共 {{count}} 条记录", { count: result?.total ?? 0 })}
         </div>
         <div className="flex items-center gap-2">
           <select
             className="primary-input h-9 w-24"
-            value={pageSize}
+            value={Page(1);}
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setPage(1);
             }}
           >
-            <option value={20}>20 条</option>
-            <option value={50}>50 条</option>
-            <option value={100}>100 条</option>
+            <option value={20}>{copy("{{count}} 条", { count: 20 })}</option>
+            <option value={50}>{copy("{{count}} 条", { count: 50 })}</option>
+            <option value={100}>{copy("{{count}} 条", { count: 100 })}</option>
           </select>
           <Button
             variant="outline"
@@ -177,7 +179,7 @@ export default function ExecutionLogsTab({
             disabled={page <= 1}
             onClick={() => setPage((current) => Math.max(1, current - 1))}
           >
-            上一页
+            {copy("上一页")}
           </Button>
           <span>
             {page} / {Math.max(1, result?.total_pages ?? 0)}
@@ -188,7 +190,7 @@ export default function ExecutionLogsTab({
             disabled={page >= (result?.total_pages ?? 0)}
             onClick={() => setPage((current) => current + 1)}
           >
-            下一页
+            {copy("下一页")}
           </Button>
         </div>
       </div>

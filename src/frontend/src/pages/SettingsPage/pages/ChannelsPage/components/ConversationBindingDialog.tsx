@@ -16,6 +16,7 @@ import type {
   ChannelConversationBindingUpdate,
   ChannelConversationRouteMode,
 } from "@/controllers/API/queries/channels";
+import useChannelCopy from "../use-channel-copy";
 import ChannelResourceSelect from "./ChannelResourceSelect";
 
 interface ConversationBindingDialogProps {
@@ -47,6 +48,7 @@ export default function ConversationBindingDialog({
   loading = false,
   onSubmit,
 }: ConversationBindingDialogProps) {
+  const copy = useChannelCopy();
   const { t } = useTranslation();
   const [form, setForm] = useState<ConversationFormState>({
     displayName: "",
@@ -108,7 +110,9 @@ export default function ConversationBindingDialog({
             {t("channels.conversationDialog.editTitle")}
           </DialogTitle>
           <DialogDescription>
-            会话由渠道消息自动发现，平台会话 ID 和会话类型不可手工修改。
+            {copy(
+              "会话由渠道消息自动发现，平台会话 ID 和会话类型不可手工修改。",
+            )}
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
@@ -141,7 +145,7 @@ export default function ConversationBindingDialog({
           </label>
 
           <label className="flex flex-col gap-2 text-sm font-medium">
-            默认路由方式
+            {copy("默认路由方式")}
             <select
               className="primary-input h-10"
               value={form.routeMode}
@@ -152,9 +156,9 @@ export default function ConversationBindingDialog({
                 )
               }
             >
-              <option value="inherit">继承渠道连接默认工作流</option>
-              <option value="override">使用此会话独立工作流</option>
-              <option value="disabled">禁用普通消息工作流</option>
+              <option value="inherit">{copy("继承渠道连接默认工作流")}</option>
+              <option value="override">{copy("使用此会话独立工作流")}</option>
+              <option value="disabled">{copy("禁用普通消息工作流")}</option>
             </select>
           </label>
 
@@ -218,9 +222,9 @@ export default function ConversationBindingDialog({
 
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div>
-              <div className="text-sm font-medium">忽略当前会话</div>
+              <div className="text-sm font-medium">{copy("忽略当前会话")}</div>
               <div className="text-xs text-muted-foreground">
-                开启后保留会话记录和配置，但机器人不再响应此会话。
+                {copy("开启后保留会话记录和配置，但机器人不再响应此会话。")}
               </div>
             </div>
             <Switch

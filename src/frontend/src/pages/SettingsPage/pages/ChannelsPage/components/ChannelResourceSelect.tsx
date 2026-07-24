@@ -7,6 +7,8 @@ import {
   useGetChannelKnowledgeBaseOptions,
 } from "@/controllers/API/queries/channels";
 
+import useChannelCopy from "../use-channel-copy";
+
 type ResourceKind = "flow" | "knowledge-base";
 
 interface ChannelResourceSelectProps {
@@ -28,6 +30,7 @@ export default function ChannelResourceSelect({
   required = false,
   disabled = false,
 }: ChannelResourceSelectProps) {
+  const copy = useChannelCopy();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -64,7 +67,7 @@ export default function ChannelResourceSelect({
       <Input
         value={searchInput}
         onChange={(event) => setSearchInput(event.target.value)}
-        placeholder={`搜索${label}`}
+        placeholder={copy("搜索", { label })}
         disabled={disabled}
       />
       <select
@@ -74,13 +77,15 @@ export default function ChannelResourceSelect({
         required={required}
         disabled={disabled}
       >
-        <option value="">{isLoading ? "正在加载…" : emptyLabel}</option>
+        <option value="">{isLoading ? copy("正在加载…") : emptyLabel}</option>
         {value && !selectedInPage && (
-          <option value={value}>当前已选择 · {value.slice(0, 8)}</option>
+          <option value={value}>
+            {copy("当前已选择 · {{id}}", { id: value.slice(0, 8) })}
+          </option>
         )}
         {items.map((item) => (
           <option key={item.id} value={item.id}>
-            {formatResourceOption(kind, item)}
+            {formatResourceOption(kind, item, copy)}
           </option>
         ))}
       </select>
@@ -92,7 +97,7 @@ export default function ChannelResourceSelect({
             disabled={page <= 1}
             onClick={() => setPage((current) => Math.max(1, current - 1))}
           >
-            上一页
+            {copy("上一页")}
           </button>
           <span>
             {page} / {result?.total_pages}
@@ -103,7 +108,7 @@ export default function ChannelResourceSelect({
             disabled={page >= (result?.total_pages ?? 0)}
             onClick={() => setPage((current) => current + 1)}
           >
-            下一页
+            {copy("下一页")}
           </button>
         </div>
       )}
@@ -114,6 +119,7 @@ export default function ChannelResourceSelect({
 function formatResourceOption(
   kind: ResourceKind,
   item: ChannelFlowOption | ChannelKnowledgeBaseOption,
+  copy: (source: string, params?: Record<string, string | number>) => string,
 ): string {
   if (kind === "flow") {
     const flow = item as ChannelFlowOption;
@@ -122,5 +128,5 @@ function formatResourceOption(
       : flow.name;
   }
   const knowledgeBase = item as ChannelKnowledgeBaseOption;
-  return `${knowledgeBase.name} (${knowledgeBase.chunks} 个分块 · ${knowledgeBase.status})`;
+  return `${knowledgeBase.name} (${copy("{{count}} 个分块", { count: knowledgeBase.chunks })} · ${knowledgeBase.status})`;
 }
