@@ -48,6 +48,7 @@ def test_outbound_delivery_model_schema_contract() -> None:
 def test_outbound_delivery_enums_are_bounded() -> None:
     assert {kind.value for kind in ChannelOutboundDeliveryKind} == {
         "acknowledgement",
+        "processing",
         "response",
     }
     assert {status.value for status in ChannelOutboundDeliveryStatus} == {
