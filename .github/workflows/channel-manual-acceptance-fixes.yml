@@ -1,0 +1,276 @@
+name: Channel Manual Acceptance Fixes
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/channel-manual-acceptance-fixes.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply backend and frontend fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected one match in {path}, found {count}: {old[:120]!r}")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          def append_once(path: str, marker: str, content: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if marker in text:
+                  return
+              file.write_text(text.rstrip() + "\n\n" + content.strip() + "\n", encoding="utf-8")
+
+          # Release SQLite's write lock before the workflow runtime opens its own job session.
+          replace_once(
+              "src/backend/base/langflow/channels/services/dispatch.py",
+              '''        try:\n            channel_context = await self._build_bound_context(binding)\n            if command_name:\n                channel_context["command_name"] = command_name\n            response = await self.workflow_executor.execute(\n''',
+              '''        try:\n            channel_context = await self._build_bound_context(binding)\n            if command_name:\n                channel_context["command_name"] = command_name\n            # The workflow job service persists through its own database session. Commit\n            # conversation discovery and the running audit row first so SQLite does not\n            # keep a write lock while that session creates the workflow job.\n            if self.session is not None:\n                await self.session.commit()\n            response = await self.workflow_executor.execute(\n''',
+          )
+          replace_once(
+              "src/backend/base/langflow/channels/services/dispatch.py",
+              '''                    await finish_channel_execution(\n                        self.session,\n                        execution,\n                        succeeded=succeeded,\n                        error_message=error_message,\n                    )\n''',
+              '''                    await finish_channel_execution(\n                        self.session,\n                        execution,\n                        succeeded=succeeded,\n                        error_message=error_message,\n                    )\n                    await self.session.commit()\n''',
+          )
+
+          append_once(
+              "src/backend/tests/unit/channels/test_dispatch.py",
+              "test_private_and_group_workflows_commit_channel_state_before_execution",
+              '''
+          class CommitTrackingSession:
+              def __init__(self) -> None:
+                  self.commits = 0
+
+              async def commit(self) -> None:
+                  self.commits += 1
+
+
+          class CommitAwareWorkflowExecutor:
+              def __init__(self, session: CommitTrackingSession) -> None:
+                  self.session = session
+
+              async def execute(self, **kwargs) -> ChannelMessage:
+                  del kwargs
+                  assert self.session.commits == 1
+                  return ChannelMessage(title="Workflow", markdown="final answer")
+
+
+          async def test_private_and_group_workflows_commit_channel_state_before_execution() -> None:
+              for conversation_type in ("private", "group"):
+                  event = _event(text="hello", conversation_type=conversation_type)
+                  adapter = MockChannelAdapter(event.connection_id)
+                  service = _dispatch_service(adapter)
+                  session = CommitTrackingSession()
+                  service.session = session
+                  service.workflow_executor = CommitAwareWorkflowExecutor(session)
+
+                  response = await service._execute_workflow(
+                      event,
+                      SimpleNamespace(id=uuid4()),
+                      "flow-id",
+                      "hello",
+                      binding=None,
+                      trigger_type="default",
+                  )
+
+                  assert response == ChannelMessage(title="Workflow", markdown="final answer")
+                  assert session.commits == 1
+          ''',
+          )
+
+          # Legacy manual conversation rows may be hard-deleted; discovered rows may not.
+          replace_once(
+              "src/backend/base/langflow/services/database/models/channel/crud.py",
+              '''async def discover_channel_conversation(\n''',
+              '''async def delete_legacy_channel_conversation_binding(\n    session: AsyncSession,\n    connection_id: UUID,\n    binding_id: UUID,\n) -> bool:\n    binding = await get_channel_conversation_binding(session, connection_id, binding_id)\n    if binding is None:\n        return False\n    if binding.source != ChannelConversationSource.LEGACY_MANUAL.value:\n        msg = "Only legacy manual channel conversations can be deleted"\n        raise ValueError(msg)\n    await session.delete(binding)\n    await session.flush()\n    return True\n\n\nasync def discover_channel_conversation(\n''',
+          )
+          replace_once(
+              "src/backend/base/langflow/api/v1/channels.py",
+              '''    create_channel_connection,\n    delete_channel_connection,\n    delete_channel_identity,\n''',
+              '''    create_channel_connection,\n    delete_channel_connection,\n    delete_channel_identity,\n    delete_legacy_channel_conversation_binding,\n''',
+          )
+          replace_once(
+              "src/backend/base/langflow/api/v1/channels.py",
+              '''    ChannelConversationBindingRead,\n    ChannelConversationBindingUpdate,\n    ChannelConversationBindingUpsert,\n''',
+              '''    ChannelConversationBindingRead,\n    ChannelConversationBindingUpdate,\n    ChannelConversationBindingUpsert,\n    ChannelConversationSource,\n''',
+          )
+          append_endpoint = '''
+
+          @router.delete("/{connection_id}/conversations/{binding_id}", status_code=status.HTTP_204_NO_CONTENT)
+          async def delete_legacy_channel_conversation(
+              connection_id: UUID,
+              binding_id: UUID,
+              db: DbSession,
+              current_user: CurrentActiveUser,
+          ) -> Response:
+              await _owned_connection_or_404(db, current_user.id, connection_id)
+              binding = await get_channel_conversation_binding(db, connection_id, binding_id)
+              if binding is None:
+                  raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel conversation not found")
+              if binding.source != ChannelConversationSource.LEGACY_MANUAL.value:
+                  raise HTTPException(
+                      status_code=status.HTTP_409_CONFLICT,
+                      detail="Only legacy manual channel conversations can be deleted",
+                  )
+              await delete_legacy_channel_conversation_binding(db, connection_id, binding_id)
+              await db.commit()
+              return Response(status_code=status.HTTP_204_NO_CONTENT)
+          '''
+          append_once(
+              "src/backend/base/langflow/api/v1/channels.py",
+              "async def delete_legacy_channel_conversation(",
+              append_endpoint,
+          )
+
+          replace_once(
+              "src/backend/tests/unit/channels/test_conversation_routing.py",
+              '''from uuid import uuid4\n\nfrom langflow.services.database.models.channel.crud import _derive_conversation_status\n''',
+              '''from unittest.mock import AsyncMock, MagicMock\nfrom uuid import uuid4\n\nimport pytest\n\nfrom langflow.services.database.models.channel.crud import (\n    _derive_conversation_status,\n    delete_legacy_channel_conversation_binding,\n)\n''',
+          )
+          replace_once(
+              "src/backend/tests/unit/channels/test_conversation_routing.py",
+              '''    ChannelConversationRouteMode,\n    ChannelConversationStatus,\n''',
+              '''    ChannelConversationRouteMode,\n    ChannelConversationSource,\n    ChannelConversationStatus,\n''',
+          )
+          append_once(
+              "src/backend/tests/unit/channels/test_conversation_routing.py",
+              "test_legacy_manual_conversation_can_be_deleted",
+              '''
+          @pytest.mark.asyncio
+          async def test_legacy_manual_conversation_can_be_deleted() -> None:
+              binding = _binding(route_mode=ChannelConversationRouteMode.OVERRIDE.value)
+              binding.source = ChannelConversationSource.LEGACY_MANUAL.value
+              session = AsyncMock()
+              result = MagicMock()
+              result.first.return_value = binding
+              session.exec.return_value = result
+
+              deleted = await delete_legacy_channel_conversation_binding(session, binding.connection_id, binding.id)
+
+              assert deleted is True
+              session.delete.assert_awaited_once_with(binding)
+              session.flush.assert_awaited_once()
+
+
+          @pytest.mark.asyncio
+          async def test_auto_discovered_conversation_cannot_be_deleted() -> None:
+              binding = _binding(route_mode=ChannelConversationRouteMode.INHERIT.value)
+              binding.source = ChannelConversationSource.AUTO_DISCOVERED.value
+              session = AsyncMock()
+              result = MagicMock()
+              result.first.return_value = binding
+              session.exec.return_value = result
+
+              with pytest.raises(ValueError, match="Only legacy manual"):
+                  await delete_legacy_channel_conversation_binding(session, binding.connection_id, binding.id)
+
+              session.delete.assert_not_awaited()
+          ''',
+          )
+
+          # Frontend delete mutation and legacy-row action.
+          replace_once(
+              "src/frontend/src/controllers/API/queries/channels/use-channel-mutations.ts",
+              '''export const useCreateChannelCommand: ChannelMutationHook<\n''',
+              '''export const useDeleteChannelConversation: ChannelMutationHook<\n  { connectionId: string; bindingId: string },\n  boolean\n> = (options) => {\n  const queryClient = useQueryClient();\n  const userOnSettled = options?.onSettled;\n\n  return useMutation<\n    boolean,\n    unknown,\n    { connectionId: string; bindingId: string }\n  >({\n    mutationKey: ["useDeleteChannelConversation"],\n    mutationFn: async ({ connectionId, bindingId }) => {\n      await api.delete(\n        `${getURL("CHANNELS")}/${connectionId}/conversations/${bindingId}`,\n      );\n      return true;\n    },\n    ...options,\n    onSettled: async (...args) => {\n      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });\n      await userOnSettled?.(...args);\n    },\n  });\n};\n\nexport const useCreateChannelCommand: ChannelMutationHook<\n''',
+          )
+          replace_once(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx",
+              '''import Loading from "@/components/ui/loading";\n''',
+              '''import Loading from "@/components/ui/loading";\nimport DeleteConfirmationModal from "@/modals/deleteConfirmationModal";\n''',
+          )
+          replace_once(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx",
+              '''  useBatchUpdateChannelConversations,\n  useGetChannelConversations,\n  useUpdateChannelConversation,\n''',
+              '''  useBatchUpdateChannelConversations,\n  useDeleteChannelConversation,\n  useGetChannelConversations,\n  useUpdateChannelConversation,\n''',
+          )
+          replace_once(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx",
+              '''  const [editingConversation, setEditingConversation] =\n    useState<ChannelConversationBinding | null>(null);\n''',
+              '''  const [editingConversation, setEditingConversation] =\n    useState<ChannelConversationBinding | null>(null);\n  const [deletingConversation, setDeletingConversation] =\n    useState<ChannelConversationBinding | null>(null);\n''',
+          )
+          replace_once(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx",
+              '''  const updateConversation = useUpdateChannelConversation();\n  const batchUpdate = useBatchUpdateChannelConversations();\n''',
+              '''  const updateConversation = useUpdateChannelConversation();\n  const deleteConversation = useDeleteChannelConversation();\n  const batchUpdate = useBatchUpdateChannelConversations();\n''',
+          )
+          replace_once(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx",
+              '''  const handleBatchAction = async () => {\n''',
+              '''  const handleDeleteConversation = async () => {\n    if (!deletingConversation) return;\n    try {\n      await deleteConversation.mutateAsync({\n        connectionId: connection.id,\n        bindingId: deletingConversation.id,\n      });\n      if (conversations.length === 1 && page > 1) {\n        setPage((current) => Math.max(1, current - 1));\n      }\n      setSelectedIds((current) =>\n        current.filter((id) => id !== deletingConversation.id),\n      );\n      setDeletingConversation(null);\n      setSuccessData({ title: copy("历史手工会话已删除") });\n    } catch (error) {\n      showError(copy("删除历史手工会话失败"), error);\n    }\n  };\n\n  const handleBatchAction = async () => {\n''',
+          )
+          replace_once(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx",
+              '''                  <td className="px-3 py-3 text-right">\n                    <Button\n                      variant="outline"\n                      size="sm"\n                      onClick={() => setEditingConversation(conversation)}\n                    >\n                      {t("channels.actions.edit")}\n                    </Button>\n                  </td>\n''',
+              '''                  <td className="px-3 py-3 text-right">\n                    <div className="flex justify-end gap-2">\n                      <Button\n                        variant="outline"\n                        size="sm"\n                        onClick={() => setEditingConversation(conversation)}\n                      >\n                        {t("channels.actions.edit")}\n                      </Button>\n                      {conversation.source === "legacy_manual" && (\n                        <Button\n                          variant="ghost"\n                          size="sm"\n                          className="text-destructive hover:text-destructive"\n                          onClick={() => setDeletingConversation(conversation)}\n                        >\n                          {copy("删除")}\n                        </Button>\n                      )}\n                    </div>\n                  </td>\n''',
+          )
+          replace_once(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx",
+              '''      <ConversationBindingDialog\n''',
+              '''      <DeleteConfirmationModal\n        open={Boolean(deletingConversation)}\n        setOpen={(open) => {\n          if (!open) setDeletingConversation(null);\n        }}\n        description={\n          deletingConversation?.display_name ||\n          deletingConversation?.external_conversation_id ||\n          ""\n        }\n        onConfirm={handleDeleteConversation}\n      />\n\n      <ConversationBindingDialog\n''',
+          )
+
+          # AG Grid v31+ exposes column methods on GridApi; columnApi is undefined.
+          replace_once(
+              "src/frontend/src/components/core/parameterRenderComponent/components/tableComponent/index.tsx",
+              '''    const onColumnMoved = (params) => {\n      const updatedColumnDefs = cloneDeep(\n        params.columnApi.getAllGridColumns().map((col) => col.getColDef()),\n      );\n      params.api.setGridOption("columnDefs", updatedColumnDefs);\n      if (props.onColumnMoved) props.onColumnMoved(params);\n    };\n''',
+              '''    const onColumnMoved = (params) => {\n      const gridApi = params?.api ?? realRef.current?.api;\n      const columns =\n        gridApi?.getAllGridColumns?.() ?? gridApi?.getColumns?.() ?? [];\n      if (columns.length > 0) {\n        const updatedColumnDefs = cloneDeep(\n          columns.map((col) => col.getColDef()),\n        );\n        gridApi.setGridOption("columnDefs", updatedColumnDefs);\n      }\n      if (props.onColumnMoved) props.onColumnMoved(params);\n    };\n''',
+          )
+          PY
+
+      - name: Validate patched source syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/api/v1/channels.py \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_conversation_routing.py
+
+      - name: Commit fixes to feature branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/channel-manual-acceptance-fixes.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/api/v1/channels.py \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_conversation_routing.py \
+            src/frontend/src/controllers/API/queries/channels/use-channel-mutations.ts \
+            src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx \
+            src/frontend/src/components/core/parameterRenderComponent/components/tableComponent/index.tsx
+          git commit -m "fix(channels): resolve manual acceptance failures"
+          git pull --rebase origin "${HEAD_REF}"
+          git push origin "HEAD:${HEAD_REF}"
