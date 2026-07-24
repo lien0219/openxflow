@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException
 from lfx.log.logger import logger
@@ -19,6 +20,13 @@ from langflow.channels.domain.models import (
     ChannelType,
 )
 from langflow.channels.services.binding import issue_channel_binding_code, resolve_channel_identity
+from langflow.channels.services.commands import (
+    list_available_workflow_commands,
+    mark_workflow_command_used,
+    render_command_input,
+    resolve_workflow_command,
+)
+from langflow.channels.services.execution_logs import finish_channel_execution, start_channel_execution
 from langflow.channels.services.files import (
     ChannelFileService,
     list_owned_knowledge_bases,
@@ -28,6 +36,7 @@ from langflow.channels.services.retry import retry_channel_operation
 from langflow.channels.services.workflow import ChannelWorkflowExecutor
 from langflow.services.authorization import KnowledgeBaseAction, ensure_knowledge_base_permission
 from langflow.services.database.models.channel.crud import discover_channel_conversation
+from langflow.services.database.models.channel.execution_model import ChannelExecutionTrigger
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelConversationBinding,
@@ -88,7 +97,7 @@ class ChannelDispatchService:
                 text=f"当前渠道账号已绑定 OpenXFlow 用户：{user.username}",
             )
         if command == "/commands":
-            return ChannelMessage(title="可用指令", text="当前还没有配置自定义指令。")
+            return await self._commands_message(user, binding)
 
         # Legacy commands remain callable during the migration window but are no longer advertised.
         if command == "/knowledge":
@@ -109,8 +118,20 @@ class ChannelDispatchService:
                 flow_identifier,
                 input_value or None,
                 binding=binding,
+                trigger_type=ChannelExecutionTrigger.ADMIN_FLOW.value,
+                flow_id=self._try_uuid(flow_identifier),
             )
+
         if command is not None:
+            custom_response = await self._execute_custom_command(
+                event,
+                user,
+                binding,
+                command,
+                argument,
+            )
+            if custom_response is not None:
+                return custom_response
             return ChannelMessage(text=f"没有找到指令 {command}。发送 /commands 查看当前可用指令。")
 
         if event.message.attachments:
@@ -145,9 +166,88 @@ class ChannelDispatchService:
             str(flow_id),
             text,
             binding=binding,
+            trigger_type=ChannelExecutionTrigger.DEFAULT.value,
+            flow_id=flow_id,
         )
 
-    def _resolve_default_flow_id(self, binding: ChannelConversationBinding | None):
+    async def _execute_custom_command(
+        self,
+        event: ChannelEvent,
+        user: User,
+        binding: ChannelConversationBinding | None,
+        command_name: str,
+        argument: str,
+    ) -> ChannelMessage | None:
+        if binding is None:
+            return None
+        command = await resolve_workflow_command(
+            self.session,
+            connection_id=self.connection.id,
+            conversation_binding_id=binding.id,
+            user_id=user.id,
+            command_name=command_name,
+        )
+        if command is None:
+            return None
+        if (
+            event.conversation.conversation_type != "private"
+            and command.require_mention
+            and not event.message.mentions
+        ):
+            return None
+        if event.message.attachments and not command.allow_attachments:
+            return ChannelMessage(text=f"指令 {command.command} 不允许上传附件。")
+        if command.input_required and not argument and not event.message.attachments:
+            description = command.description or "请在指令后输入需要处理的内容。"
+            return ChannelMessage(
+                title=command.command,
+                text=f"{description}\n\n用法：{command.command} <内容>",
+            )
+
+        input_value = render_command_input(
+            command,
+            input_value=argument,
+            sender_name=event.user.display_name,
+            conversation_name=event.conversation.title or binding.display_name,
+            conversation_type=event.conversation.conversation_type,
+        )
+        await mark_workflow_command_used(self.session, command)
+        return await self._execute_workflow(
+            event,
+            user,
+            str(command.flow_id),
+            input_value or None,
+            binding=binding,
+            trigger_type=ChannelExecutionTrigger.COMMAND.value,
+            command_name=command.normalized_command,
+            flow_id=command.flow_id,
+        )
+
+    async def _commands_message(
+        self,
+        user: User,
+        binding: ChannelConversationBinding | None,
+    ) -> ChannelMessage:
+        if binding is None:
+            return ChannelMessage(title="可用指令", text="当前会话尚未完成自动发现。")
+        commands = await list_available_workflow_commands(
+            self.session,
+            connection_id=self.connection.id,
+            conversation_binding_id=binding.id,
+            user_id=user.id,
+        )
+        if not commands:
+            return ChannelMessage(title="可用指令", text="当前会话还没有配置自定义指令。")
+        lines = []
+        for item in commands[:50]:
+            description = f" — {item.description}" if item.description else ""
+            lines.append(f"{item.command}{description}")
+        return ChannelMessage(
+            title="当前可用指令",
+            text="\n".join(lines),
+        )
+
+    def _resolve_default_flow_id(self, binding: ChannelConversationBinding | None) -> UUID | None:
         if binding is not None:
             if binding.route_mode == ChannelConversationRouteMode.DISABLED.value:
                 return None
@@ -186,10 +286,32 @@ class ChannelDispatchService:
         input_value: str | None,
         *,
         binding: ChannelConversationBinding | None,
+        trigger_type: str,
+        command_name: str | None = None,
+        flow_id: UUID | None = None,
     ) -> ChannelMessage | None:
+        execution = None
+        try:
+            execution = await start_channel_execution(
+                self.session,
+                connection_id=self.connection.id,
+                conversation_binding_id=binding.id if binding else None,
+                openxflow_user_id=user.id,
+                flow_id=flow_id,
+                external_event_id=event.event_id,
+                trigger_type=trigger_type,
+                command_name=command_name,
+            )
+        except Exception:  # noqa: BLE001
+            await logger.aexception("Unable to create channel execution log")
+
         processing_message_id = await self._send_processing_message(event)
+        succeeded = False
+        error_message: str | None = None
         try:
             channel_context = await self._build_bound_context(binding)
+            if command_name:
+                channel_context["command_name"] = command_name
             response = await self.workflow_executor.execute(
                 event=event,
                 user=user,
@@ -197,15 +319,29 @@ class ChannelDispatchService:
                 input_value=input_value,
                 channel_context=channel_context,
             )
+            succeeded = True
         except HTTPException as exc:
+            error_message = str(exc.detail)
             if exc.status_code in {403, 404}:
                 response = ChannelMessage(text="工作流不存在，或当前绑定账号没有执行权限。")
             else:
                 await logger.aexception("Channel workflow HTTP error for flow %s", flow_identifier)
                 response = ChannelMessage(text="工作流执行失败，请稍后重试。")
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            error_message = str(exc)
             await logger.aexception("Channel workflow execution failed for flow %s", flow_identifier)
             response = ChannelMessage(text="工作流执行失败，请在 OpenXFlow 运行记录中查看错误详情。")
+        finally:
+            if execution is not None:
+                try:
+                    await finish_channel_execution(
+                        self.session,
+                        execution,
+                        succeeded=succeeded,
+                        error_message=error_message,
+                    )
+                except Exception:  # noqa: BLE001
+                    await logger.aexception("Unable to finish channel execution log %s", execution.id)
 
         if processing_message_id is not None:
             try:
@@ -386,6 +522,13 @@ class ChannelDispatchService:
             if kb is not None:
                 context["knowledge_base_name"] = kb.name
         return context
+
+    @staticmethod
+    def _try_uuid(value: str) -> UUID | None:
+        try:
+            return UUID(value)
+        except ValueError:
+            return None
 
     @staticmethod
     def _parse_command(text: str | None) -> tuple[str | None, str]:
