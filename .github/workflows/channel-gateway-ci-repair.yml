@@ -1,0 +1,142 @@
+name: Channel Gateway CI Repair
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/channel-gateway-ci-repair.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Repair runtime compatibility and branded tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from shutil import copyfile
+
+          def replace_exact(path: str, old: str, new: str, expected: int = 1) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding="utf-8")
+              actual = text.count(old)
+              if actual != expected:
+                  raise SystemExit(
+                      f"Expected {expected} occurrence(s) in {path}, found {actual}: {old!r}"
+                  )
+              file_path.write_text(text.replace(old, new), encoding="utf-8")
+
+          command_model = (
+              "src/backend/base/langflow/services/database/models/channel/command_model.py"
+          )
+          replace_exact(command_model, "from enum import StrEnum", "from enum import Enum")
+          replace_exact(
+              command_model,
+              "class ChannelCommandScope(StrEnum):",
+              "class ChannelCommandScope(str, Enum):",
+          )
+
+          texts = "src/frontend/tests/utils/constants/texts.ts"
+          replace_exact(
+              texts,
+              'authSignInHeader: "sign in to langflow"',
+              'authSignInHeader: "Sign in to OpenXFlow"',
+          )
+
+          auto_login = "src/frontend/tests/core/features/auto-login-off.spec.ts"
+          replace_exact(auto_login, '"Welcome to LangFlow"', '"Welcome to OpenXFlow"')
+
+          mcp_test = "src/frontend/tests/extended/features/mcp-server-tab.spec.ts"
+          replace_exact(
+              mcp_test,
+              '"https://docs.langflow.org/mcp-server#connect-clients-to-use-the-servers-actions"',
+              '"https://github.com/lien0219/openxflow#readme"',
+          )
+
+          settings_test = "src/frontend/tests/extended/features/userSettings.spec.ts"
+          replace_exact(
+              settings_test,
+              'await page.getByText("Langflow API").first().click();',
+              'await page.getByRole("link", { name: "OpenXFlow API Keys" }).click();',
+          )
+          replace_exact(
+              settings_test,
+              'page.getByText("Langflow API Keys", { exact: true }).nth(1)',
+              'page.getByText("OpenXFlow API Keys", { exact: true }).nth(1)',
+          )
+
+          copyfile(
+              "src/backend/base/langflow/initial_setup/starter_projects/Basic Prompting.json",
+              "src/lfx/tests/fixtures/starter_flows/v1.9.0/basic_prompting.json",
+          )
+          PY
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci --ignore-scripts --loglevel=error
+
+      - name: Format and verify affected frontend tests
+        working-directory: src/frontend
+        run: |
+          npx --no-install biome check --write --unsafe \
+            tests/utils/constants/texts.ts \
+            tests/core/features/auto-login-off.spec.ts \
+            tests/extended/features/mcp-server-tab.spec.ts \
+            tests/extended/features/userSettings.spec.ts
+          npx --no-install biome check \
+            tests/utils/constants/texts.ts \
+            tests/core/features/auto-login-off.spec.ts \
+            tests/extended/features/mcp-server-tab.spec.ts \
+            tests/extended/features/userSettings.spec.ts
+
+      - name: Verify Python 3.10 syntax
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Compile compatibility model
+        run: >-
+          python -m py_compile
+          src/backend/base/langflow/services/database/models/channel/command_model.py
+
+      - name: Commit repairs to feature branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/channel-gateway-ci-repair.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/backend/base/langflow/services/database/models/channel/command_model.py \
+            src/lfx/tests/fixtures/starter_flows/v1.9.0/basic_prompting.json \
+            src/frontend/tests/utils/constants/texts.ts \
+            src/frontend/tests/core/features/auto-login-off.spec.ts \
+            src/frontend/tests/extended/features/mcp-server-tab.spec.ts \
+            src/frontend/tests/extended/features/userSettings.spec.ts
+          git commit -m "fix(ci): support Python 3.10 and OpenXFlow branded tests"
+          git pull --rebase origin "${HEAD_REF}"
+          git push origin "HEAD:${HEAD_REF}"
