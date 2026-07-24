@@ -54,18 +54,7 @@ function Invoke-NativeCommand {
 
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Command failed with exit code $LASTEXITCODE: $Command $($Arguments -join ' ')"
-    }
-}
-
-function Assert-NodeVersion {
-    $version = (Invoke-NativeCommandCapture -Command "node" -Arguments @("--version")).TrimStart("v")
-    $parts = $version.Split(".")
-    $major = [int]$parts[0]
-    $minor = if ($parts.Length -gt 1) { [int]$parts[1] } else { 0 }
-
-    if (($major -lt 20) -or ($major -eq 20 -and $minor -lt 19)) {
-        throw "Node.js 20.19 or newer is required. Current version: $version"
+        throw "Command failed with exit code ${LASTEXITCODE}: $Command $($Arguments -join ' ')"
     }
 }
 
@@ -77,9 +66,20 @@ function Invoke-NativeCommandCapture {
 
     $output = & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Command failed with exit code $LASTEXITCODE: $Command $($Arguments -join ' ')"
+        throw "Command failed with exit code ${LASTEXITCODE}: $Command $($Arguments -join ' ')"
     }
     return ($output | Out-String).Trim()
+}
+
+function Assert-NodeVersion {
+    $version = (Invoke-NativeCommandCapture -Command "node" -Arguments @("--version")).TrimStart("v")
+    $parts = $version.Split(".")
+    $major = [int]$parts[0]
+    $minor = if ($parts.Length -gt 1) { [int]$parts[1] } else { 0 }
+
+    if (($major -lt 20) -or ($major -eq 20 -and $minor -lt 19)) {
+        throw "Node.js 20.19 or newer is required. Current version: $version"
+    }
 }
 
 function Ensure-EnvironmentFile {
@@ -235,7 +235,7 @@ function Start-DevelopmentServices {
 }
 
 function Show-Help {
-    @"
+    $helpText = @"
 OpenXFlow Windows development helper
 
 Usage:
@@ -261,7 +261,8 @@ Environment variable equivalents:
 
 The existing commands such as 'make init', 'make backend', and 'make frontend'
 remain supported and are not changed by this helper.
-"@ | Write-Host
+"@
+    Write-Host $helpText
 }
 
 try {
