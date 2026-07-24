@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
@@ -26,7 +27,14 @@ from langflow.channels.services.files import (
 from langflow.channels.services.retry import retry_channel_operation
 from langflow.channels.services.workflow import ChannelWorkflowExecutor
 from langflow.services.authorization import KnowledgeBaseAction, ensure_knowledge_base_permission
-from langflow.services.database.models.channel.model import ChannelConnection, ChannelConversationBinding
+from langflow.services.database.models.channel.crud import discover_channel_conversation
+from langflow.services.database.models.channel.model import (
+    ChannelConnection,
+    ChannelConversationBinding,
+    ChannelConversationRouteMode,
+    ChannelConversationStatus,
+    ChannelUnconfiguredBehavior,
+)
 from langflow.services.database.models.knowledge_base.model import KnowledgeBaseRecord
 from langflow.services.database.models.user.model import User
 
@@ -50,7 +58,16 @@ class ChannelDispatchService:
 
     async def handle(self, event: ChannelEvent) -> ChannelMessage | None:
         command, argument = self._parse_command(event.message.text)
-        binding = await self._get_conversation_binding(event)
+        binding = await discover_channel_conversation(self.session, self.connection, event)
+        if binding is None:
+            binding = await self._get_conversation_binding(event)
+
+        if binding is not None and binding.status in {
+            ChannelConversationStatus.IGNORED.value,
+            ChannelConversationStatus.DISABLED.value,
+            ChannelConversationStatus.UNAVAILABLE.value,
+        }:
+            return None
         if self._should_ignore_group_event(event, binding=binding, command=command):
             return None
 
@@ -70,6 +87,10 @@ class ChannelDispatchService:
                 title="账号已绑定",
                 text=f"当前渠道账号已绑定 OpenXFlow 用户：{user.username}",
             )
+        if command == "/commands":
+            return ChannelMessage(title="可用指令", text="当前还没有配置自定义指令。")
+
+        # Legacy commands remain callable during the migration window but are no longer advertised.
         if command == "/knowledge":
             return await self._knowledge_message(user, binding)
         if command == "/use-kb":
@@ -77,9 +98,11 @@ class ChannelDispatchService:
         if command == "/files":
             return await self._recent_files_message(event, user)
         if command == "/flow":
+            if user.id != self.connection.user_id and not user.is_superuser:
+                return ChannelMessage(text="未知命令。发送 /commands 查看当前可用指令。")
             flow_identifier, _, input_value = argument.partition(" ")
             if not flow_identifier:
-                return ChannelMessage(text="用法：/flow <工作流 ID 或 endpoint_name> [输入内容]")
+                return ChannelMessage(text="管理员用法：/flow <工作流 ID 或 endpoint_name> [输入内容]")
             return await self._execute_workflow(
                 event,
                 user,
@@ -87,18 +110,8 @@ class ChannelDispatchService:
                 input_value or None,
                 binding=binding,
             )
-        if command == "/run":
-            if binding is None or binding.default_flow_id is None:
-                return ChannelMessage(text="当前会话尚未绑定默认工作流。可使用 /flow <工作流 ID> [输入内容]。")
-            return await self._execute_workflow(
-                event,
-                user,
-                str(binding.default_flow_id),
-                argument or None,
-                binding=binding,
-            )
         if command is not None:
-            return ChannelMessage(text="未知命令。发送 /help 查看可用操作。")
+            return ChannelMessage(text=f"没有找到指令 {command}。发送 /commands 查看当前可用指令。")
 
         if event.message.attachments:
             binding = binding or await self._ensure_conversation_binding(event)
@@ -122,26 +135,47 @@ class ChannelDispatchService:
         text = (event.message.text or "").strip()
         if not text:
             return None
-        if binding is None or binding.default_flow_id is None:
-            if binding is not None and binding.knowledge_base_id is not None:
-                return ChannelMessage(
-                    text=(
-                        "当前会话已绑定知识库，但尚未绑定默认问答工作流。"
-                        "管理员可在渠道中心绑定工作流，或使用 /flow <工作流 ID> <问题>。"
-                    )
-                )
-            return ChannelMessage(
-                text=(
-                    "当前会话尚未绑定默认工作流。管理员可在 OpenXFlow 渠道中心完成绑定，"
-                    "或使用 /flow <工作流 ID> <问题> 临时运行。"
-                )
-            )
+
+        flow_id = self._resolve_default_flow_id(binding)
+        if flow_id is None:
+            return await self._pending_route_message(binding)
         return await self._execute_workflow(
             event,
             user,
-            str(binding.default_flow_id),
+            str(flow_id),
             text,
             binding=binding,
+        )
+
+    def _resolve_default_flow_id(self, binding: ChannelConversationBinding | None):
+        if binding is not None:
+            if binding.route_mode == ChannelConversationRouteMode.DISABLED.value:
+                return None
+            if (
+                binding.route_mode == ChannelConversationRouteMode.OVERRIDE.value
+                and binding.default_flow_id is not None
+            ):
+                return binding.default_flow_id
+        return self.connection.default_flow_id
+
+    async def _pending_route_message(self, binding: ChannelConversationBinding | None) -> ChannelMessage | None:
+        if self.connection.unconfigured_behavior == ChannelUnconfiguredBehavior.IGNORE.value:
+            return None
+        if not self.connection.pending_notice_enabled:
+            return None
+        if binding is not None and binding.pending_notice_sent_at is not None:
+            return None
+        if binding is not None:
+            binding.pending_notice_sent_at = datetime.now(timezone.utc)
+            binding.status = ChannelConversationStatus.PENDING.value
+            binding.updated_at = datetime.now(timezone.utc)
+            self.session.add(binding)
+            await self.session.flush()
+        return ChannelMessage(
+            text=(
+                "当前会话已接入 OpenXFlow，但尚未配置默认工作流。"
+                "管理员可在“设置 → 渠道中心 → 会话”中完成配置。"
+            )
         )
 
     async def _execute_workflow(
@@ -225,6 +259,9 @@ class ChannelDispatchService:
         return (await self.session.exec(statement)).first()
 
     async def _ensure_conversation_binding(self, event: ChannelEvent) -> ChannelConversationBinding:
+        binding = await discover_channel_conversation(self.session, self.connection, event)
+        if binding is not None:
+            return binding
         binding = await self._get_conversation_binding(event)
         if binding is not None:
             return binding
@@ -233,6 +270,8 @@ class ChannelDispatchService:
             external_conversation_id=event.conversation.external_conversation_id,
             conversation_type=event.conversation.conversation_type,
             display_name=event.conversation.title,
+            response_mode=self.connection.default_response_mode,
+            allow_file_upload=self.connection.default_allow_file_upload,
         )
         self.session.add(binding)
         await self.session.flush()
@@ -250,14 +289,14 @@ class ChannelDispatchService:
                 title="知识库",
                 text="当前账号还没有知识库，请先在 OpenXFlow 网页端创建。",
             )
-        current_id = binding.knowledge_base_id if binding else None
+        current_id = binding.knowledge_base_id if binding else self.connection.default_knowledge_base_id
         lines = []
         for kb in knowledge_bases[:20]:
             marker = "✅" if kb.id == current_id else "•"
             lines.append(f"{marker} {kb.name}（{kb.status}，{kb.chunks} 个分块）")
         return ChannelMessage(
             title="可用知识库",
-            text=("\n".join(lines) + "\n\n使用 /use-kb <知识库名称> 绑定当前会话；使用 /use-kb none 解除绑定。"),
+            text=("\n".join(lines) + "\n\n请在 OpenXFlow 渠道中心配置会话知识库。"),
         )
 
     async def _bind_knowledge_base(
@@ -269,7 +308,7 @@ class ChannelDispatchService:
     ) -> ChannelMessage:
         normalized = identifier.strip()
         if not normalized:
-            return ChannelMessage(text="用法：/use-kb <知识库名称或 ID>；解除绑定：/use-kb none")
+            return ChannelMessage(text="请在 OpenXFlow 渠道中心配置当前会话知识库。")
 
         binding = binding or await self._ensure_conversation_binding(event)
         if normalized.lower() in {"none", "off", "clear"} or normalized in {"取消", "关闭", "解除"}:
@@ -280,7 +319,7 @@ class ChannelDispatchService:
 
         kb = await resolve_owned_knowledge_base(self.session, user.id, normalized)
         if kb is None:
-            return ChannelMessage(text="没有找到该知识库。发送 /knowledge 查看可用名称。")
+            return ChannelMessage(text="没有找到该知识库，请前往 OpenXFlow 渠道中心选择。")
         try:
             await ensure_knowledge_base_permission(
                 user,
@@ -323,16 +362,27 @@ class ChannelDispatchService:
         self,
         binding: ChannelConversationBinding | None,
     ) -> dict[str, Any]:
-        if binding is None:
-            return {}
         context: dict[str, Any] = {
-            "conversation_binding_id": str(binding.id),
-            "response_mode": binding.response_mode,
-            "allow_file_upload": binding.allow_file_upload,
+            "connection_id": str(self.connection.id),
+            "channel_type": self.connection.channel_type,
         }
-        if binding.knowledge_base_id is not None:
-            kb = await self.session.get(KnowledgeBaseRecord, binding.knowledge_base_id)
-            context["knowledge_base_id"] = str(binding.knowledge_base_id)
+        if binding is not None:
+            context.update(
+                {
+                    "conversation_binding_id": str(binding.id),
+                    "response_mode": binding.response_mode,
+                    "allow_file_upload": binding.allow_file_upload,
+                    "conversation_route_mode": binding.route_mode,
+                }
+            )
+        knowledge_base_id = (
+            binding.knowledge_base_id
+            if binding is not None and binding.knowledge_base_id is not None
+            else self.connection.default_knowledge_base_id
+        )
+        if knowledge_base_id is not None:
+            kb = await self.session.get(KnowledgeBaseRecord, knowledge_base_id)
+            context["knowledge_base_id"] = str(knowledge_base_id)
             if kb is not None:
                 context["knowledge_base_name"] = kb.name
         return context
@@ -365,17 +415,13 @@ class ChannelDispatchService:
     def _help_message(*, bound: bool) -> ChannelMessage:
         binding_line = "账号状态：已绑定。\n\n" if bound else "账号状态：未绑定。\n\n"
         return ChannelMessage(
-            title="OpenXFlow 手机操作",
+            title="OpenXFlow 渠道助手",
             text=(
                 f"{binding_line}"
-                "可用命令：\n"
+                "可用系统指令：\n"
                 "/bind — 绑定或查看账号状态\n"
-                "/run [内容] — 运行当前会话的默认工作流\n"
-                "/flow <工作流 ID 或 endpoint_name> [内容] — 运行指定工作流\n"
-                "/knowledge — 查看知识库\n"
-                "/use-kb <名称或 ID> — 绑定当前会话知识库\n"
-                "/files — 查看当前会话最近文件\n"
-                "/whoami — 查看当前绑定账号\n"
-                "/help — 查看帮助"
+                "/commands — 查看当前可用的自定义指令\n"
+                "/help — 查看帮助\n\n"
+                "普通消息会自动运行当前会话或渠道连接的默认工作流。"
             ),
         )
