@@ -113,9 +113,7 @@ export default function ConversationBindingDialog({
                 onChange={(event) =>
                   setField("externalConversationId", event.target.value)
                 }
-                placeholder={t(
-                  "channels.conversationDialog.chatIdPlaceholder",
-                )}
+                placeholder={t("channels.conversationDialog.chatIdPlaceholder")}
                 disabled={Boolean(binding)}
                 required
               />
@@ -191,7 +189,11 @@ export default function ConversationBindingDialog({
               </option>
               {knowledgeBases.map((knowledgeBase) => (
                 <option key={knowledgeBase.id} value={knowledgeBase.id}>
-                  {knowledgeBase.name} ({t("channels.conversationDialog.chunks", { count: knowledgeBase.chunks })})
+                  {knowledgeBase.name} (
+                  {t("channels.conversationDialog.chunks", {
+                    count: knowledgeBase.chunks,
+                  })}
+                  )
                 </option>
               ))}
             </select>
