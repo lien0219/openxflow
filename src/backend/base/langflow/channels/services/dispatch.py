@@ -422,6 +422,7 @@ class ChannelDispatchService:
             text="⏳ 正在处理中，请稍候…",
             metadata={"feishu_update_multi": True},
         )
+
         async def sender() -> str:
             return await retry_channel_operation(
                 lambda: self.adapter.send_response(event, processing_message),

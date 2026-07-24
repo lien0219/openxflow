@@ -75,6 +75,7 @@ async def finalize_channel_execution(
     error_message: str | None = None,
 ) -> None:
     """Finish an audit row in an isolated session that survives caller cancellation."""
+
     async def persist() -> None:
         async with session_scope() as session:
             execution = await session.get(ChannelExecutionLog, execution_id)
