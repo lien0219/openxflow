@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import AsyncExitStack, asynccontextmanager
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
@@ -31,6 +32,9 @@ from langflow.channels.services.webhook_processing import (
     webhook_limiter_snapshot,
 )
 from langflow.services.database.models.channel.model import ChannelConnection
+
+_SIGNATURE_VERIFICATION_FAILED = "Channel event signature verification failed"
+_EVENT_CONNECTION_MISMATCH = "Parsed channel event does not match the configured connection"
 
 
 @asynccontextmanager
@@ -114,10 +118,10 @@ async def _validate_and_schedule_provider_event(
 
     try:
         if not await adapter.verify_event(headers, payload):
-            raise PermissionError("Channel event signature verification failed")
+            raise PermissionError(_SIGNATURE_VERIFICATION_FAILED)
         event = await adapter.parse_event(headers, payload)
         if event.connection_id != connection_id or event.channel.value != expected_channel_type:
-            raise ValueError("Parsed channel event does not match the configured connection")
+            raise ValueError(_EVENT_CONNECTION_MISMATCH)
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid channel webhook signature") from exc
     except ValueError as exc:
@@ -231,10 +235,10 @@ async def receive_dingtalk_webhook(
 async def verify_wecom_callback(
     connection_id: UUID,
     db: DbSession,
-    msg_signature: str = Query(alias="msg_signature"),
-    timestamp: str = Query(),
-    nonce: str = Query(),
-    echo: str = Query(alias="echostr"),
+    msg_signature: Annotated[str, Query(alias="msg_signature")],
+    timestamp: Annotated[str, Query()],
+    nonce: Annotated[str, Query()],
+    echo: Annotated[str, Query(alias="echostr")],
 ) -> PlainTextResponse:
     connection = await db.get(ChannelConnection, connection_id)
     if connection is None or connection.channel_type != "wecom" or not connection.enabled:
@@ -262,9 +266,9 @@ async def receive_wecom_callback(
     request: Request,
     db: DbSession,
     background_tasks: BackgroundTasks,
-    msg_signature: str = Query(alias="msg_signature"),
-    timestamp: str = Query(),
-    nonce: str = Query(),
+    msg_signature: Annotated[str, Query(alias="msg_signature")],
+    timestamp: Annotated[str, Query()],
+    nonce: Annotated[str, Query()],
 ) -> PlainTextResponse:
     await _validate_and_schedule_provider_event(
         connection_id=connection_id,
