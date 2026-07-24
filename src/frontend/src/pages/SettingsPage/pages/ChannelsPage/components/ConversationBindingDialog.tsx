@@ -16,16 +16,12 @@ import type {
   ChannelConversationBindingUpdate,
   ChannelConversationRouteMode,
 } from "@/controllers/API/queries/channels";
-import type { KnowledgeBaseInfo } from "@/controllers/API/queries/knowledge-bases/use-get-knowledge-bases";
-import type { FlowType } from "@/types/flow";
-import { formatWorkflowOptionLabel } from "../utils";
+import ChannelResourceSelect from "./ChannelResourceSelect";
 
 interface ConversationBindingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   binding?: ChannelConversationBinding | null;
-  flows: FlowType[];
-  knowledgeBases: KnowledgeBaseInfo[];
   supportsMentions?: boolean;
   supportsFileUpload?: boolean;
   loading?: boolean;
@@ -46,8 +42,6 @@ export default function ConversationBindingDialog({
   open,
   onOpenChange,
   binding,
-  flows,
-  knowledgeBases,
   supportsMentions = true,
   supportsFileUpload = true,
   loading = false,
@@ -94,7 +88,11 @@ export default function ConversationBindingDialog({
       default_flow_id:
         form.routeMode === "override" ? form.defaultFlowId || null : null,
       knowledge_base_id: form.knowledgeBaseId || null,
-      status: form.ignored ? "ignored" : undefined,
+      status: form.ignored
+        ? "ignored"
+        : binding.status === "ignored"
+          ? "pending"
+          : undefined,
     });
   };
 
@@ -159,51 +157,23 @@ export default function ConversationBindingDialog({
           </label>
 
           {form.routeMode === "override" && (
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              {t("channels.conversationDialog.defaultWorkflow")}
-              <select
-                className="primary-input h-10"
-                value={form.defaultFlowId}
-                onChange={(event) =>
-                  setField("defaultFlowId", event.target.value)
-                }
-                required
-              >
-                <option value="">
-                  {t("channels.conversationDialog.noWorkflow")}
-                </option>
-                {flows.map((flow) => (
-                  <option key={flow.id} value={flow.id}>
-                    {formatWorkflowOptionLabel(flow)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ChannelResourceSelect
+              kind="flow"
+              label={t("channels.conversationDialog.defaultWorkflow")}
+              emptyLabel={t("channels.conversationDialog.noWorkflow")}
+              value={form.defaultFlowId}
+              onChange={(value) => setField("defaultFlowId", value)}
+              required
+            />
           )}
 
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            {t("channels.conversationDialog.defaultKnowledgeBase")}
-            <select
-              className="primary-input h-10"
-              value={form.knowledgeBaseId}
-              onChange={(event) =>
-                setField("knowledgeBaseId", event.target.value)
-              }
-            >
-              <option value="">
-                {t("channels.conversationDialog.noKnowledgeBase")}
-              </option>
-              {knowledgeBases.map((knowledgeBase) => (
-                <option key={knowledgeBase.id} value={knowledgeBase.id}>
-                  {knowledgeBase.name} (
-                  {t("channels.conversationDialog.chunks", {
-                    count: knowledgeBase.chunks,
-                  })}
-                  )
-                </option>
-              ))}
-            </select>
-          </label>
+          <ChannelResourceSelect
+            kind="knowledge-base"
+            label={t("channels.conversationDialog.defaultKnowledgeBase")}
+            emptyLabel={t("channels.conversationDialog.noKnowledgeBase")}
+            value={form.knowledgeBaseId}
+            onChange={(value) => setField("knowledgeBaseId", value)}
+          />
 
           {isGroupConversation && supportsMentions && (
             <label className="flex flex-col gap-2 text-sm font-medium">
