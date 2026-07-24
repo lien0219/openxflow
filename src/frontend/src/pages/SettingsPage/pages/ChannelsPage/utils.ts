@@ -3,6 +3,12 @@ import type { ChannelConnection } from "@/controllers/API/queries/channels";
 
 type TranslationFunction = ReturnType<typeof useTranslation>["t"];
 
+interface WorkflowOption {
+  id: string;
+  name: string;
+  endpoint_name?: string | null;
+}
+
 export function parseAllowedExtensions(value: string): string[] {
   return Array.from(
     new Set(
@@ -12,6 +18,12 @@ export function parseAllowedExtensions(value: string): string[] {
         .filter(Boolean),
     ),
   );
+}
+
+export function formatWorkflowOptionLabel(flow: WorkflowOption): string {
+  const shortId = flow.id.slice(0, 8);
+  const endpoint = flow.endpoint_name?.trim();
+  return `${flow.name} [${shortId}]${endpoint ? ` / ${endpoint}` : ""}`;
 }
 
 export function readConnectionSetting<T>(
