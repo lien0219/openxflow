@@ -1,3 +1,4 @@
+export * from "./identity-types";
 export * from "./resource-types";
 export * from "./types";
 export * from "./use-channel-mutations";
@@ -6,5 +7,6 @@ export * from "./use-get-channel-connections";
 export * from "./use-get-channel-conversations";
 export * from "./use-get-channel-executions";
 export * from "./use-get-channel-identities";
+export * from "./use-get-channel-identities-page";
 export * from "./use-get-channel-provider-capabilities";
 export * from "./use-get-channel-resource-options";
