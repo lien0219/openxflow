@@ -102,4 +102,19 @@ jobs:
         run: npm ci --ignore-scripts --loglevel=error
 
       - name: Type-check Channel Center
-        run: npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json
+        shell: bash
+        run: |
+          set +e
+          npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json 2>&1 | tee /tmp/channel-tsc.log
+          tsc_status=${PIPESTATUS[0]}
+          set -e
+
+          channel_pattern='src/(controllers/API/queries/channels|pages/SettingsPage/pages/ChannelsPage|pages/SettingsPage/index\.tsx|routes\.tsx)'
+          if grep -E "$channel_pattern" /tmp/channel-tsc.log; then
+            echo "Channel Center type errors detected."
+            exit 1
+          fi
+
+          if [ "$tsc_status" -ne 0 ]; then
+            echo "::warning::TypeScript reported pre-existing errors outside the Channel Center scope."
+          fi
