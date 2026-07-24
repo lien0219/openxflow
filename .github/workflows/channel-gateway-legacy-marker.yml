@@ -1,0 +1,91 @@
+name: Channel Gateway Legacy Marker
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/channel-gateway-legacy-marker.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Add legacy conversation marker
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/"
+              "components/ConversationsTab.tsx"
+          )
+          text = path.read_text(encoding="utf-8")
+          marker = '''                    <div className="max-w-72 truncate text-xs text-muted-foreground">\n                      {conversation.external_conversation_id}\n                    </div>\n'''
+          replacement = '''                    <div className="max-w-72 truncate text-xs text-muted-foreground">\n                      {conversation.external_conversation_id}\n                    </div>\n                    {conversation.source === "legacy_manual" && (\n                      <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">\n                        {t("channels.conversations.legacyManual")}\n                      </span>\n                    )}\n'''
+          if marker not in text:
+              raise SystemExit("conversation identity block not found")
+          path.write_text(text.replace(marker, replacement, 1), encoding="utf-8")
+
+          translations = Path("src/frontend/src/locales/channelTranslations.ts")
+          text = translations.read_text(encoding="utf-8")
+          en_marker = '  "channels.conversations.fileDisabled": "Disabled",\n'
+          zh_marker = '  "channels.conversations.fileDisabled": "关闭",\n'
+          if '"channels.conversations.legacyManual"' not in text:
+              if en_marker not in text or zh_marker not in text:
+                  raise SystemExit("channel translation insertion marker not found")
+              text = text.replace(
+                  en_marker,
+                  en_marker + '  "channels.conversations.legacyManual": "Historical manual record",\n',
+                  1,
+              )
+              text = text.replace(
+                  zh_marker,
+                  zh_marker + '  "channels.conversations.legacyManual": "历史手工记录",\n',
+                  1,
+              )
+          translations.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci --ignore-scripts --loglevel=error
+
+      - name: Format updated frontend files
+        working-directory: src/frontend
+        run: >-
+          npx --no-install biome check --write
+          src/locales/channelTranslations.ts
+          src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx
+
+      - name: Remove one-time workflow and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/channel-gateway-legacy-marker.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/frontend/src/locales/channelTranslations.ts \
+            src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationsTab.tsx
+          git commit -m "feat(channels): label historical manual conversations"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
