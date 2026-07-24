@@ -54,7 +54,11 @@ def _event(
 def _dispatch_service(adapter: MockChannelAdapter) -> ChannelDispatchService:
     service = object.__new__(ChannelDispatchService)
     service.session = None
-    service.connection = None
+    service.connection = SimpleNamespace(
+        id=adapter.connection_id,
+        channel_type=adapter.channel_type.value,
+        default_knowledge_base_id=None,
+    )
     service.adapter = adapter
     service.workflow_executor = FakeWorkflowExecutor()
     return service

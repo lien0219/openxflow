@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import Annotated, Any
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -53,11 +54,11 @@ class ChannelKnowledgeBaseOptionPage(BaseModel):
 async def read_channel_flow_options(
     db: DbSession,
     current_user: CurrentActiveUser,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    query: str | None = Query(default=None, max_length=255),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    query: Annotated[str | None, Query(max_length=255)] = None,
 ) -> ChannelFlowOptionPage:
-    filters: list = [
+    filters: list[Any] = [
         Flow.user_id == current_user.id,
         sa.or_(Flow.is_component.is_(False), Flow.is_component.is_(None)),
     ]
@@ -103,11 +104,11 @@ async def read_channel_flow_options(
 async def read_channel_knowledge_base_options(
     db: DbSession,
     current_user: CurrentActiveUser,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    query: str | None = Query(default=None, max_length=255),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    query: Annotated[str | None, Query(max_length=255)] = None,
 ) -> ChannelKnowledgeBaseOptionPage:
-    filters: list = [KnowledgeBaseRecord.user_id == current_user.id]
+    filters: list[Any] = [KnowledgeBaseRecord.user_id == current_user.id]
     if query and query.strip():
         filters.append(KnowledgeBaseRecord.name.ilike(f"%{query.strip()}%"))
 

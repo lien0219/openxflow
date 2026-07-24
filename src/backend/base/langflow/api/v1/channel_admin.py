@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import Annotated, Any
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -53,9 +54,7 @@ async def _owned_connection_or_404(
     connection_id: UUID,
 ) -> ChannelConnection:
     connection = await db.get(ChannelConnection, connection_id)
-    if connection is None or (
-        connection.user_id != current_user.id and not current_user.is_superuser
-    ):
+    if connection is None or (connection.user_id != current_user.id and not current_user.is_superuser):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
     return connection
 
@@ -65,13 +64,13 @@ async def read_channel_identities_page(
     connection_id: UUID,
     db: DbSession,
     current_user: CurrentActiveUser,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    query: str | None = Query(default=None, max_length=255),
-    status_filter: str | None = Query(default=None, alias="status", max_length=32),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    query: Annotated[str | None, Query(max_length=255)] = None,
+    status_filter: Annotated[str | None, Query(alias="status", max_length=32)] = None,
 ) -> ChannelIdentityPage:
     await _owned_connection_or_404(db, current_user, connection_id)
-    filters: list = [ChannelIdentity.connection_id == connection_id]
+    filters: list[Any] = [ChannelIdentity.connection_id == connection_id]
     if query and query.strip():
         pattern = f"%{query.strip()}%"
         filters.append(
@@ -138,9 +137,7 @@ async def batch_update_channel_conversations(
     updated_items: list[ChannelConversationBindingRead] = []
     for row in rows:
         update = _batch_update_payload(payload)
-        updated_items.append(
-            await update_channel_conversation_binding(db, connection, row, update)
-        )
+        updated_items.append(await update_channel_conversation_binding(db, connection, row, update))
     await db.commit()
     return ChannelConversationBatchResponse(updated=len(updated_items), items=updated_items)
 

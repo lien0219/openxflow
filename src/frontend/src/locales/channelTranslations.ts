@@ -63,6 +63,7 @@ const en: ChannelTranslationMap = {
   "channels.conversations.unbound": "Not bound",
   "channels.conversations.fileAllowed": "Allowed",
   "channels.conversations.fileDisabled": "Disabled",
+  "channels.conversations.legacyManual": "Historical manual record",
   "channels.deleteFallback": "Channel configuration",
   "channels.toast.telegramConfigured":
     "Telegram connection and Webhook configured",
@@ -226,6 +227,7 @@ const zhHans: ChannelTranslationMap = {
   "channels.conversations.unbound": "未绑定",
   "channels.conversations.fileAllowed": "允许",
   "channels.conversations.fileDisabled": "关闭",
+  "channels.conversations.legacyManual": "历史手工记录",
   "channels.deleteFallback": "渠道配置",
   "channels.toast.telegramConfigured": "Telegram 连接与 Webhook 已配置",
   "channels.toast.connectionSaved": "{{name}}连接已保存",

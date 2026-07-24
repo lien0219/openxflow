@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from difflib import get_close_matches
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -37,6 +37,10 @@ from langflow.channels.services.files import (
 from langflow.channels.services.retry import retry_channel_operation
 from langflow.channels.services.workflow import ChannelWorkflowExecutor
 from langflow.services.authorization import KnowledgeBaseAction, ensure_knowledge_base_permission
+
+if TYPE_CHECKING:
+    from langflow.services.database.models.channel.command_model import ChannelWorkflowCommand
+
 from langflow.services.database.models.channel.crud import discover_channel_conversation
 from langflow.services.database.models.channel.execution_model import ChannelExecutionTrigger
 from langflow.services.database.models.channel.model import (
@@ -253,7 +257,7 @@ class ChannelDispatchService:
         binding: ChannelConversationBinding | None,
         command_name: str,
     ) -> ChannelMessage:
-        commands = []
+        commands: list[ChannelWorkflowCommand] = []
         if binding is not None:
             commands = await list_available_workflow_commands(
                 self.session,
@@ -270,8 +274,8 @@ class ChannelDispatchService:
         )
         if not suggestions:
             return ChannelMessage(text=f"没有找到指令 {command_name}。发送 /commands 查看当前可用指令。")
-        unique_commands = []
-        seen_ids = set()
+        unique_commands: list[ChannelWorkflowCommand] = []
+        seen_ids: set[UUID] = set()
         for suggestion in suggestions:
             item = command_by_name[suggestion]
             if item.id not in seen_ids:

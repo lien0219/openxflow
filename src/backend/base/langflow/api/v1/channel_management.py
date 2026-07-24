@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
@@ -56,9 +57,7 @@ async def _owned_connection_or_404(
     connection_id: UUID,
 ) -> ChannelConnection:
     connection = await db.get(ChannelConnection, connection_id)
-    if connection is None or (
-        connection.user_id != current_user.id and not current_user.is_superuser
-    ):
+    if connection is None or (connection.user_id != current_user.id and not current_user.is_superuser):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
     return connection
 
@@ -68,11 +67,11 @@ async def read_channel_commands(
     connection_id: UUID,
     db: DbSession,
     current_user: CurrentActiveUser,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    query: str | None = Query(default=None, max_length=255),
-    scope_type: str | None = Query(default=None, max_length=32),
-    enabled: bool | None = Query(default=None),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    query: Annotated[str | None, Query(max_length=255)] = None,
+    scope_type: Annotated[str | None, Query(max_length=32)] = None,
+    enabled: Annotated[bool | None, Query()] = None,
 ) -> ChannelWorkflowCommandPage:
     connection = await _accessible_connection_or_404(db, current_user, connection_id)
     return await list_workflow_commands(
@@ -108,14 +107,15 @@ async def create_channel_command(
     )
     try:
         result = await create_workflow_command(db, connection, current_user, payload)
-        await db.commit()
-        return result
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A command with this name already exists in the selected scope",
         ) from exc
+    else:
+        await db.commit()
+        return result
 
 
 @router.patch("/{connection_id}/commands/{command_id}", response_model=ChannelWorkflowCommandRead)
@@ -140,14 +140,15 @@ async def patch_channel_command(
         )
     try:
         result = await update_workflow_command(db, connection, current_user, command, payload)
-        await db.commit()
-        return result
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A command with this name already exists in the selected scope",
         ) from exc
+    else:
+        await db.commit()
+        return result
 
 
 @router.delete("/{connection_id}/commands/{command_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -171,12 +172,12 @@ async def read_channel_executions(
     connection_id: UUID,
     db: DbSession,
     current_user: CurrentActiveUser,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    conversation_binding_id: UUID | None = Query(default=None),
-    openxflow_user_id: UUID | None = Query(default=None),
-    status_filter: str | None = Query(default=None, alias="status", max_length=32),
-    trigger_type: str | None = Query(default=None, max_length=32),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    conversation_binding_id: Annotated[UUID | None, Query()] = None,
+    openxflow_user_id: Annotated[UUID | None, Query()] = None,
+    status_filter: Annotated[str | None, Query(alias="status", max_length=32)] = None,
+    trigger_type: Annotated[str | None, Query(max_length=32)] = None,
 ) -> ChannelExecutionLogPage:
     await _owned_connection_or_404(db, current_user, connection_id)
     return await list_channel_executions(

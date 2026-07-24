@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -13,8 +13,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from langflow.channels.domain.models import ChannelEvent
 from langflow.channels.security.credentials import decrypt_credentials, encrypt_credentials, list_credential_keys
+
+if TYPE_CHECKING:
+    from langflow.channels.domain.models import ChannelEvent
+
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelConnectionCreate,

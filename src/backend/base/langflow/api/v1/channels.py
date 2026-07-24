@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
@@ -258,13 +258,13 @@ async def read_channel_conversations(
     connection_id: UUID,
     db: DbSession,
     current_user: CurrentActiveUser,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    query: str | None = Query(default=None, max_length=255),
-    conversation_type: str | None = Query(default=None, max_length=32),
-    status_filter: str | None = Query(default=None, alias="status", max_length=32),
-    route_mode: str | None = Query(default=None, max_length=32),
-    sort: str = Query(default="-last_message_at", max_length=64),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    query: Annotated[str | None, Query(max_length=255)] = None,
+    conversation_type: Annotated[str | None, Query(max_length=32)] = None,
+    status_filter: Annotated[str | None, Query(alias="status", max_length=32)] = None,
+    route_mode: Annotated[str | None, Query(max_length=32)] = None,
+    sort: Annotated[str, Query(max_length=64)] = "-last_message_at",
 ) -> ChannelConversationBindingPage:
     await _owned_connection_or_404(db, current_user.id, connection_id)
     return await list_conversation_bindings(

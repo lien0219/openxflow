@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from langflow.api.v1.schemas import RunResponse, SimplifiedAPIRequest
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelMessageType
 from langflow.helpers.flow import get_flow_by_id_or_endpoint_name
 from langflow.services.authorization import FlowAction, ensure_flow_permission
 from langflow.services.database.models.user.model import User
+
+if TYPE_CHECKING:
+    from langflow.api.v1.schemas import RunResponse
 
 _TELEGRAM_SAFE_TEXT_LIMIT = 3900
 _PREFERRED_OUTPUT_KEYS = ("text", "message", "content", "result", "results", "data")
@@ -86,6 +88,7 @@ class ChannelWorkflowExecutor:
         # Lazy import avoids a router -> channel webhook -> workflow -> endpoints
         # cycle while FastAPI is still constructing the v1 router.
         from langflow.api.v1.endpoints import simple_run_flow
+        from langflow.api.v1.schemas import SimplifiedAPIRequest
 
         flow = await get_flow_by_id_or_endpoint_name(
             flow_identifier,

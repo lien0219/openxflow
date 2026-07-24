@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 from langflow.channels.services.capabilities import (
-    get_channel_provider_capabilities,
+    get_provider_capabilities,
     validate_provider_conversation_type,
 )
 from langflow.channels.services.commands import (
@@ -36,9 +36,7 @@ def test_normalize_command_rejects_reserved_and_invalid_commands() -> None:
 
 
 def test_normalize_aliases_deduplicates_and_limits_values() -> None:
-    aliases = normalize_aliases(
-        ["/one", "/ONE", "/two", "/three", "/four", "/five", "/six"]
-    )
+    aliases = normalize_aliases(["/one", "/ONE", "/two", "/three", "/four", "/five", "/six"])
     assert aliases == ["/one", "/two", "/three", "/four", "/five"]
 
 
@@ -89,8 +87,7 @@ def test_render_command_input_replaces_supported_variables() -> None:
         scope_type=ChannelCommandScope.CONNECTION_SHARED.value,
         scope_key="connection",
         prompt_template=(
-            "Input={{input}}; sender={{sender_name}}; "
-            "conversation={{conversation_name}}; type={{conversation_type}}"
+            "Input={{input}}; sender={{sender_name}}; conversation={{conversation_name}}; type={{conversation_type}}"
         ),
     )
 
@@ -106,20 +103,19 @@ def test_render_command_input_replaces_supported_variables() -> None:
 
 
 def test_provider_capabilities_expose_provider_specific_conversation_types() -> None:
-    capabilities = get_channel_provider_capabilities()
+    capabilities = get_provider_capabilities()
 
-    assert capabilities["telegram"].conversation_types == [
+    assert capabilities["telegram"].conversation_types == (
         "private",
         "group",
         "supergroup",
         "channel",
-    ]
-    assert capabilities["feishu"].conversation_types == ["private", "group"]
-    assert capabilities["dingtalk"].conversation_types == ["private", "group"]
-    assert capabilities["wecom"].conversation_types == ["private"]
+    )
+    assert capabilities["feishu"].conversation_types == ("private", "group")
+    assert capabilities["dingtalk"].conversation_types == ("private", "group")
+    assert capabilities["wecom"].conversation_types == ("private",)
 
 
 def test_provider_conversation_type_validation_rejects_unsupported_type() -> None:
-    assert validate_provider_conversation_type("feishu", "group") == "group"
-    with pytest.raises(ValueError):
-        validate_provider_conversation_type("wecom", "group")
+    assert validate_provider_conversation_type("feishu", "group") is True
+    assert validate_provider_conversation_type("wecom", "group") is False

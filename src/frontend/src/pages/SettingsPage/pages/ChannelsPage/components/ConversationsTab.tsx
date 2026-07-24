@@ -319,6 +319,11 @@ export default function ConversationsTab({
                     <div className="max-w-72 truncate text-xs text-muted-foreground">
                       {conversation.external_conversation_id}
                     </div>
+                    {conversation.source === "legacy_manual" && (
+                      <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                        {t("channels.conversations.legacyManual")}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-3">
                     {conversationTypeLabel(conversation.conversation_type, t)}
