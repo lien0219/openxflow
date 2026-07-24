@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/controllers/API/helpers/constants.ts",
+    "src/controllers/API/queries/channels/**/*.ts",
+    "src/pages/SettingsPage/pages/ChannelsPage/**/*.ts",
+    "src/pages/SettingsPage/pages/ChannelsPage/**/*.tsx",
+    "src/pages/SettingsPage/index.tsx",
+    "src/routes.tsx"
+  ],
+  "exclude": [
+    "src/**/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "tests/**"
+  ]
+}
