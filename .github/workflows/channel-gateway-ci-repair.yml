@@ -23,75 +23,85 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Repair runtime compatibility and branded tests
+      - name: Support Python 3.10 channel command scopes
         shell: bash
         run: |
-          set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          from shutil import copyfile
+          path = Path("src/backend/base/langflow/services/database/models/channel/command_model.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace("from enum import StrEnum", "from enum import Enum")
+          text = text.replace("class ChannelCommandScope(StrEnum):", "class ChannelCommandScope(str, Enum):")
+          path.write_text(text, encoding="utf-8")
+          PY
+          grep -F "from enum import Enum" src/backend/base/langflow/services/database/models/channel/command_model.py
+          grep -F "class ChannelCommandScope(str, Enum):" src/backend/base/langflow/services/database/models/channel/command_model.py
 
-          def ensure_replaced(path: str, old: str, new: str) -> None:
-              file_path = Path(path)
-              text = file_path.read_text(encoding="utf-8")
-              if old in text:
-                  text = text.replace(old, new)
-                  file_path.write_text(text, encoding="utf-8")
-                  print(f"updated {path}: {old!r} -> {new!r}")
-              elif new in text:
-                  print(f"already updated {path}: {new!r}")
-              else:
-                  raise SystemExit(
-                      f"Neither old nor new value exists in {path}: {old!r} / {new!r}"
-                  )
-
-          command_model = (
-              "src/backend/base/langflow/services/database/models/channel/command_model.py"
-          )
-          ensure_replaced(command_model, "from enum import StrEnum", "from enum import Enum")
-          ensure_replaced(
-              command_model,
-              "class ChannelCommandScope(StrEnum):",
-              "class ChannelCommandScope(str, Enum):",
-          )
-
-          ensure_replaced(
-              "src/frontend/tests/utils/constants/texts.ts",
+      - name: Align authentication branding tests
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          texts = Path("src/frontend/tests/utils/constants/texts.ts")
+          content = texts.read_text(encoding="utf-8").replace(
               'authSignInHeader: "sign in to langflow"',
               'authSignInHeader: "Sign in to OpenXFlow"',
           )
-          ensure_replaced(
-              "src/frontend/tests/core/features/auto-login-off.spec.ts",
+          texts.write_text(content, encoding="utf-8")
+
+          auto_login = Path("src/frontend/tests/core/features/auto-login-off.spec.ts")
+          content = auto_login.read_text(encoding="utf-8").replace(
               '"Welcome to LangFlow"',
               '"Welcome to OpenXFlow"',
           )
-          ensure_replaced(
-              "src/frontend/tests/extended/features/mcp-server-tab.spec.ts",
+          auto_login.write_text(content, encoding="utf-8")
+          PY
+          grep -F 'authSignInHeader: "Sign in to OpenXFlow"' src/frontend/tests/utils/constants/texts.ts
+          grep -F '"Welcome to OpenXFlow"' src/frontend/tests/core/features/auto-login-off.spec.ts
+
+      - name: Align MCP documentation test
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("src/frontend/tests/extended/features/mcp-server-tab.spec.ts")
+          content = path.read_text(encoding="utf-8").replace(
               '"https://docs.langflow.org/mcp-server#connect-clients-to-use-the-servers-actions"',
               '"https://github.com/lien0219/openxflow#readme"',
           )
-          ensure_replaced(
-              "src/frontend/tests/extended/features/userSettings.spec.ts",
+          path.write_text(content, encoding="utf-8")
+          PY
+          grep -F '"https://github.com/lien0219/openxflow#readme"' src/frontend/tests/extended/features/mcp-server-tab.spec.ts
+
+      - name: Align API key settings test
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("src/frontend/tests/extended/features/userSettings.spec.ts")
+          content = path.read_text(encoding="utf-8")
+          content = content.replace(
               'await page.getByText("Langflow API").first().click();',
               'await page.getByRole("link", { name: "OpenXFlow API Keys" }).click();',
           )
-          ensure_replaced(
-              "src/frontend/tests/extended/features/userSettings.spec.ts",
+          content = content.replace(
               'page.getByText("Langflow API Keys", { exact: true }).nth(1)',
               'page.getByText("OpenXFlow API Keys", { exact: true }).nth(1)',
           )
-
-          source = Path(
-              "src/backend/base/langflow/initial_setup/starter_projects/Basic Prompting.json"
-          )
-          destination = Path(
-              "src/lfx/tests/fixtures/starter_flows/v1.9.0/basic_prompting.json"
-          )
-          if not source.is_file():
-              raise SystemExit(f"Missing current starter flow: {source}")
-          copyfile(source, destination)
-          print(f"refreshed {destination} from {source}")
+          path.write_text(content, encoding="utf-8")
           PY
+          grep -F 'getByRole("link", { name: "OpenXFlow API Keys" })' src/frontend/tests/extended/features/userSettings.spec.ts
+          grep -F 'getByText("OpenXFlow API Keys", { exact: true }).nth(1)' src/frontend/tests/extended/features/userSettings.spec.ts
+
+      - name: Refresh clean LFX starter fixture
+        shell: bash
+        run: |
+          cp \
+            "src/backend/base/langflow/initial_setup/starter_projects/Basic Prompting.json" \
+            "src/lfx/tests/fixtures/starter_flows/v1.9.0/basic_prompting.json"
+          cmp \
+            "src/backend/base/langflow/initial_setup/starter_projects/Basic Prompting.json" \
+            "src/lfx/tests/fixtures/starter_flows/v1.9.0/basic_prompting.json"
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
