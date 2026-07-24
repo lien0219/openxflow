@@ -17,15 +17,13 @@ import {
   type ChannelWorkflowCommandUpdate,
   useGetChannelConversations,
 } from "@/controllers/API/queries/channels";
-import type { FlowType } from "@/types/flow";
-import { formatWorkflowOptionLabel } from "../utils";
+import ChannelResourceSelect from "./ChannelResourceSelect";
 
 interface CommandDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   connectionId: string;
   command?: ChannelWorkflowCommand | null;
-  flows: FlowType[];
   loading?: boolean;
   onCreate: (payload: ChannelWorkflowCommandCreate) => Promise<void>;
   onUpdate: (payload: ChannelWorkflowCommandUpdate) => Promise<void>;
@@ -71,7 +69,6 @@ export default function CommandDialog({
   onOpenChange,
   connectionId,
   command,
-  flows,
   loading = false,
   onCreate,
   onUpdate,
@@ -255,22 +252,14 @@ export default function CommandDialog({
             </div>
           )}
 
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            目标工作流
-            <select
-              className="primary-input h-10"
-              value={form.flowId}
-              onChange={(event) => setField("flowId", event.target.value)}
-              required
-            >
-              <option value="">请选择工作流</option>
-              {flows.map((flow) => (
-                <option key={flow.id} value={flow.id}>
-                  {formatWorkflowOptionLabel(flow)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ChannelResourceSelect
+            kind="flow"
+            label="目标工作流"
+            emptyLabel="请选择工作流"
+            value={form.flowId}
+            onChange={(value) => setField("flowId", value)}
+            required
+          />
 
           <label className="flex flex-col gap-2 text-sm font-medium">
             输入模板（可选）
