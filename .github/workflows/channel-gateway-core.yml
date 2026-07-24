@@ -55,11 +55,17 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Ruff channel code
+      - name: Ruff production channel code
         run: >-
           uvx --quiet ruff check
           --output-format concise
           src/backend/base/langflow/channels
+
+      - name: Ruff channel tests
+        run: >-
+          uvx --quiet ruff check
+          --config src/backend/tests/unit/channels/ruff.toml
+          --output-format concise
           src/backend/tests/unit/channels
 
       - name: Compile channel code
@@ -78,6 +84,7 @@ jobs:
           --with 'pytest-asyncio>=0.23'
           --with 'httpx>=0.27'
           --with 'prometheus-client>=0.20'
+          --with 'asgi-lifespan>=2.1.0'
           pytest -q
           src/backend/tests/unit/channels/test_channel_core_workflow.py
           src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
@@ -121,6 +128,7 @@ jobs:
           --with 'sqlalchemy>=2.0.38,<3.0.0'
           --with 'sqlmodel==0.0.37'
           --with 'pydantic>=2.13,<3.0.0'
+          --with 'asgi-lifespan>=2.1.0'
           pytest -q
           src/backend/tests/unit/channels/test_resilient_adapter_factory.py
           src/backend/tests/unit/channels/test_resilient_token_cache_delegation.py
@@ -155,6 +163,7 @@ jobs:
           --with 'alembic>=1.13,<2.0.0'
           --with 'aiosqlite>=0.20,<1.0.0'
           --with 'pydantic>=2.13,<3.0.0'
+          --with 'asgi-lifespan>=2.1.0'
           pytest -q
           src/backend/tests/unit/channels/test_channel_migrations_sqlite.py
           src/backend/tests/unit/channels/test_outbound_delivery_model.py
