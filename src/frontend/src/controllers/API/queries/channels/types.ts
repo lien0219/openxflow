@@ -17,6 +17,17 @@ export type ChannelUnconfiguredBehavior =
   | "use_global_default"
   | "notify_pending"
   | "ignore";
+export type ChannelCommandScope =
+  | "connection_shared"
+  | "conversation_shared"
+  | "identity_connection"
+  | "identity_conversation";
+export type ChannelExecutionStatus = "running" | "succeeded" | "failed";
+export type ChannelExecutionTrigger =
+  | "default"
+  | "command"
+  | "admin_flow"
+  | "file";
 
 export type ChannelMutationHook<Variables, Data, Error = unknown> = (
   options?: Omit<
@@ -182,6 +193,109 @@ export type ChannelProviderCapabilitiesMap = Record<
   ChannelType,
   ChannelProviderCapabilities
 >;
+
+export interface ChannelWorkflowCommand {
+  id: string;
+  connection_id: string;
+  conversation_binding_id: string | null;
+  owner_user_id: string | null;
+  created_by: string;
+  flow_id: string;
+  command: string;
+  normalized_command: string;
+  aliases: string[];
+  description: string | null;
+  scope_type: ChannelCommandScope;
+  scope_key: string;
+  prompt_template: string | null;
+  input_required: boolean;
+  allow_attachments: boolean;
+  require_mention: boolean;
+  enabled: boolean;
+  settings_data: Record<string, unknown>;
+  last_used_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChannelWorkflowCommandPage {
+  items: ChannelWorkflowCommand[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+}
+
+export interface ChannelWorkflowCommandCreate {
+  command: string;
+  aliases: string[];
+  description?: string | null;
+  scope_type: ChannelCommandScope;
+  conversation_binding_id?: string | null;
+  flow_id: string;
+  prompt_template?: string | null;
+  input_required: boolean;
+  allow_attachments: boolean;
+  require_mention: boolean;
+  enabled: boolean;
+  settings_data: Record<string, unknown>;
+}
+
+export interface ChannelWorkflowCommandUpdate {
+  command?: string;
+  aliases?: string[];
+  description?: string | null;
+  flow_id?: string;
+  prompt_template?: string | null;
+  input_required?: boolean;
+  allow_attachments?: boolean;
+  require_mention?: boolean;
+  enabled?: boolean;
+  settings_data?: Record<string, unknown>;
+}
+
+export interface ChannelCommandQuery {
+  connectionId: string;
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  scopeType?: ChannelCommandScope | "";
+  enabled?: boolean;
+}
+
+export interface ChannelExecutionLog {
+  id: string;
+  connection_id: string;
+  conversation_binding_id: string | null;
+  openxflow_user_id: string | null;
+  flow_id: string | null;
+  external_event_id: string;
+  trigger_type: ChannelExecutionTrigger;
+  command_name: string | null;
+  status: ChannelExecutionStatus;
+  duration_ms: number | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface ChannelExecutionLogPage {
+  items: ChannelExecutionLog[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+}
+
+export interface ChannelExecutionQuery {
+  connectionId: string;
+  page?: number;
+  pageSize?: number;
+  conversationBindingId?: string;
+  openxflowUserId?: string;
+  status?: ChannelExecutionStatus | "";
+  triggerType?: ChannelExecutionTrigger | "";
+}
 
 export interface TelegramWebhookConfigure {
   public_base_url: string;
