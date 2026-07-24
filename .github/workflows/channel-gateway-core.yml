@@ -87,34 +87,44 @@ jobs:
           src/backend/base/langflow/channels
           src/backend/tests/unit/channels
 
-      - name: Run channel core contracts
-        run: >-
-          uv run --frozen --project src/backend/base --group dev
-          pytest -q --tb=short
-          --confcutdir=src/backend/tests/unit/channels
-          src/backend/tests/unit/channels/test_channel_core_workflow.py
-          src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py
-          src/backend/tests/unit/channels/test_loop_lock.py
-          src/backend/tests/unit/channels/test_keyed_loop_lock.py
-          src/backend/tests/unit/channels/test_token_cache.py
-          src/backend/tests/unit/channels/test_token_cache_config.py
-          src/backend/tests/unit/channels/test_token_cache_expiry_validation.py
-          src/backend/tests/unit/channels/test_token_cache_metrics.py
-          src/backend/tests/unit/channels/test_token_refresh.py
+      - name: Run all channel contract suites
+        shell: bash
+        run: |
+          set +e
 
-      - name: Run resilient adapter contracts
-        run: >-
-          uv run --frozen --project src/backend/base --group dev
-          pytest -q --tb=short
-          --confcutdir=src/backend/tests/unit/channels
-          src/backend/tests/unit/channels/test_resilient_adapter_factory.py
-          src/backend/tests/unit/channels/test_resilient_token_cache_delegation.py
-          src/backend/tests/unit/channels/test_resilient_token_contracts.py
+          uv run --frozen --project src/backend/base --group dev \
+            pytest -q -x --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_channel_core_workflow.py \
+            src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py \
+            src/backend/tests/unit/channels/test_loop_lock.py \
+            src/backend/tests/unit/channels/test_keyed_loop_lock.py \
+            src/backend/tests/unit/channels/test_token_cache.py \
+            src/backend/tests/unit/channels/test_token_cache_config.py \
+            src/backend/tests/unit/channels/test_token_cache_expiry_validation.py \
+            src/backend/tests/unit/channels/test_token_cache_metrics.py \
+            src/backend/tests/unit/channels/test_token_refresh.py
+          core_status=$?
 
-      - name: Run SQLite migration and model contracts
-        run: >-
-          uv run --frozen --project src/backend/base --group dev
-          pytest -q --tb=short
-          --confcutdir=src/backend/tests/unit/channels
-          src/backend/tests/unit/channels/test_channel_migrations_sqlite.py
-          src/backend/tests/unit/channels/test_outbound_delivery_model.py
+          uv run --frozen --project src/backend/base --group dev \
+            pytest -q -x --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_resilient_adapter_factory.py \
+            src/backend/tests/unit/channels/test_resilient_token_cache_delegation.py \
+            src/backend/tests/unit/channels/test_resilient_token_contracts.py
+          adapter_status=$?
+
+          uv run --frozen --project src/backend/base --group dev \
+            pytest -q -x --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_channel_migrations_sqlite.py \
+            src/backend/tests/unit/channels/test_outbound_delivery_model.py
+          database_status=$?
+
+          echo "core_status=$core_status"
+          echo "adapter_status=$adapter_status"
+          echo "database_status=$database_status"
+
+          if (( core_status != 0 || adapter_status != 0 || database_status != 0 )); then
+            exit 1
+          fi
