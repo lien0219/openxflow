@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { ChannelConnection } from "@/controllers/API/queries/channels";
 
 export function parseAllowedExtensions(value: string): string[] {
@@ -32,42 +33,41 @@ export function buildChannelWebhookUrl(
   return `${publicBaseUrl.replace(/\/+$/, "")}/api/v1/channel-webhooks/${connection.channel_type}/${connection.id}`;
 }
 
-export function getChannelStatusMeta(status: string): {
+export function getChannelStatusMeta(
+  status: string,
+  t: TFunction,
+): {
   label: string;
   className: string;
 } {
   switch (status) {
     case "connected":
       return {
-        label: "已连接",
+        label: t("channels.status.connected"),
         className: "bg-accent-emerald text-accent-emerald-foreground",
       };
     case "error":
       return {
-        label: "异常",
+        label: t("channels.status.error"),
         className: "bg-accent-red text-accent-red-foreground",
       };
     case "disconnected":
       return {
-        label: "已断开",
+        label: t("channels.status.disconnected"),
         className: "bg-muted text-muted-foreground",
       };
     default:
       return {
-        label: "待配置",
+        label: t("channels.status.configuring"),
         className: "bg-accent-amber text-accent-amber-foreground",
       };
   }
 }
 
-export function getApiErrorMessage(error: unknown): string {
+export function getApiErrorMessage(error: unknown, fallback: string): string {
   const candidate = error as {
     message?: string;
     response?: { data?: { detail?: string } };
   };
-  return (
-    candidate.response?.data?.detail ??
-    candidate.message ??
-    "请求失败，请稍后重试。"
-  );
+  return candidate.response?.data?.detail ?? candidate.message ?? fallback;
 }
