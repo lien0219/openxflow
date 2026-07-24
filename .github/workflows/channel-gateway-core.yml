@@ -65,7 +65,7 @@ jobs:
             src/backend/base/pyproject.toml
 
       - name: Sync locked backend test environment
-        run: uv sync --frozen --project src/backend/base --group dev
+        run: uv sync --quiet --frozen --project src/backend/base --group dev
 
       - name: Ruff production channel code
         run: >-
@@ -103,28 +103,44 @@ jobs:
             src/backend/tests/unit/channels/test_token_cache_config.py \
             src/backend/tests/unit/channels/test_token_cache_expiry_validation.py \
             src/backend/tests/unit/channels/test_token_cache_metrics.py \
-            src/backend/tests/unit/channels/test_token_refresh.py
-          core_status=$?
+            src/backend/tests/unit/channels/test_token_refresh.py \
+            2>&1 | tee /tmp/channel-core.log
+          core_status=${PIPESTATUS[0]}
 
           uv run --frozen --project src/backend/base --group dev \
             pytest -q -x --tb=short \
             --confcutdir=src/backend/tests/unit/channels \
             src/backend/tests/unit/channels/test_resilient_adapter_factory.py \
             src/backend/tests/unit/channels/test_resilient_token_cache_delegation.py \
-            src/backend/tests/unit/channels/test_resilient_token_contracts.py
-          adapter_status=$?
+            src/backend/tests/unit/channels/test_resilient_token_contracts.py \
+            2>&1 | tee /tmp/channel-adapters.log
+          adapter_status=${PIPESTATUS[0]}
 
           uv run --frozen --project src/backend/base --group dev \
             pytest -q -x --tb=short \
             --confcutdir=src/backend/tests/unit/channels \
             src/backend/tests/unit/channels/test_channel_migrations_sqlite.py \
-            src/backend/tests/unit/channels/test_outbound_delivery_model.py
-          database_status=$?
+            src/backend/tests/unit/channels/test_outbound_delivery_model.py \
+            2>&1 | tee /tmp/channel-database.log
+          database_status=${PIPESTATUS[0]}
 
-          echo "core_status=$core_status"
-          echo "adapter_status=$adapter_status"
-          echo "database_status=$database_status"
+          printf 'core_status=%s\nadapter_status=%s\ndatabase_status=%s\n' \
+            "$core_status" "$adapter_status" "$database_status" \
+            | tee /tmp/channel-status.log
 
           if (( core_status != 0 || adapter_status != 0 || database_status != 0 )); then
             exit 1
           fi
+
+      - name: Upload channel contract logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-contract-logs
+          path: |
+            /tmp/channel-core.log
+            /tmp/channel-adapters.log
+            /tmp/channel-database.log
+            /tmp/channel-status.log
+          if-no-files-found: error
+          retention-days: 7
