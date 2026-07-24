@@ -1,0 +1,43 @@
+name: Channel Gateway CI Log Diagnostics
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/channel-gateway-ci-log-diagnostics.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  collect:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      JOB_ID: "89510475539"
+    steps:
+      - name: Download failed integration job log
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/jobs/${JOB_ID}/logs" \
+            > integration-job.log
+          tail -n 400 integration-job.log > integration-tail.log
+          grep -nEi "(^|[^a-z])(failed|failure|error|exception|traceback)([^a-z]|$)" integration-job.log \
+            | tail -n 250 > integration-errors.log || true
+
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-integration-ci-diagnostics
+          path: |
+            integration-tail.log
+            integration-errors.log
+          if-no-files-found: error
+          retention-days: 3
