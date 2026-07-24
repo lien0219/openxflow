@@ -2,6 +2,7 @@ import type { useTranslation } from "react-i18next";
 import type { ChannelConnection } from "@/controllers/API/queries/channels";
 import {
   buildChannelWebhookUrl,
+  formatWorkflowOptionLabel,
   getChannelStatusMeta,
   parseAllowedExtensions,
 } from "../utils";
@@ -21,6 +22,22 @@ describe("channel settings helpers", () => {
       "docx",
       "xlsx",
     ]);
+  });
+
+  it("formats workflow options with short IDs and endpoints", () => {
+    expect(
+      formatWorkflowOptionLabel({
+        id: "12345678-aaaa-bbbb-cccc-1234567890ab",
+        name: "Document Q&A",
+        endpoint_name: "document-qa",
+      }),
+    ).toBe("Document Q&A [12345678] / document-qa");
+    expect(
+      formatWorkflowOptionLabel({
+        id: "abcdefgh-aaaa-bbbb-cccc-1234567890ab",
+        name: "Fallback flow",
+      }),
+    ).toBe("Fallback flow [abcdefgh]");
   });
 
   it("returns localized labels for channel statuses", () => {
