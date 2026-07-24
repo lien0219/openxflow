@@ -5,6 +5,7 @@ from langflow.api.v1.authz_role_assignments import router as authz_role_assignme
 from langflow.api.v1.authz_roles import router as authz_roles_router
 from langflow.api.v1.authz_shares import router as authz_shares_router
 from langflow.api.v1.authz_teams import router as authz_teams_router
+from langflow.api.v1.channel_admin import router as channel_admin_router
 from langflow.api.v1.channel_bindings import router as channel_bindings_router
 from langflow.api.v1.channel_management import router as channel_management_router
 from langflow.api.v1.channel_resources import router as channel_resources_router
@@ -45,6 +46,7 @@ __all__ = [
     "authz_roles_router",
     "authz_shares_router",
     "authz_teams_router",
+    "channel_admin_router",
     "channel_bindings_router",
     "channel_management_router",
     "channel_resources_router",
