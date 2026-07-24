@@ -187,6 +187,30 @@ async def test_feishu_send_response_replies_to_original_message(monkeypatch: pyt
     assert captured["payload"]["reply_in_thread"] is False
 
 
+@pytest.mark.asyncio
+async def test_feishu_update_message_uses_shared_card_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = _adapter()
+    captured: dict = {}
+
+    async def fake_request(method, path, *, params=None, payload=None):
+        captured.update({"method": method, "path": path, "params": params, "payload": payload})
+        return {}
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    await adapter.update_message(
+        "sent-message",
+        ChannelMessage(title="Workflow", markdown="final answer"),
+    )
+
+    assert captured["method"] == "PATCH"
+    assert captured["path"] == "im/v1/messages/sent-message"
+    assert set(captured["payload"]) == {"content"}
+    content = json.loads(captured["payload"]["content"])
+    assert content["config"]["update_multi"] is True
+    assert content["header"]["title"]["content"] == "Workflow"
+    assert content["elements"] == [{"tag": "markdown", "content": "final answer"}]
+
+
 def test_feishu_card_renderer_builds_interactive_buttons() -> None:
     msg_type, content = FeishuChannelAdapter._render_message(
         ChannelMessage(
@@ -200,3 +224,16 @@ def test_feishu_card_renderer_builds_interactive_buttons() -> None:
     assert msg_type == "interactive"
     assert content["header"]["title"]["content"] == "审批"
     assert content["elements"][1]["actions"][0]["value"]["action_id"] == "approve"
+
+
+def test_feishu_processing_card_enables_multi_update() -> None:
+    msg_type, content = FeishuChannelAdapter._render_message(
+        ChannelMessage(
+            message_type=ChannelMessageType.CARD,
+            text="⏳ 正在处理中，请稍候…",
+            metadata={"feishu_update_multi": True},
+        )
+    )
+
+    assert msg_type == "interactive"
+    assert content["config"]["update_multi"] is True
