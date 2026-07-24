@@ -7,7 +7,16 @@ from langflow.alembic.versions import (
     a8e1c6d4f5b7_add_channel_outbound_delivery as outbound_delivery_migration,
 )
 from langflow.alembic.versions import (
+    b9f2d7e6c4a1_add_channel_routing_and_discovery as routing_migration,
+)
+from langflow.alembic.versions import (
+    c0a3e8f7d5b2_add_channel_commands_and_execution_logs as command_migration,
+)
+from langflow.alembic.versions import (
     c4a9e2d7f1b0_add_channel_gateway_schema as gateway_schema_migration,
+)
+from langflow.alembic.versions import (
+    d1e4f9a8b6c3_ensure_channel_conversation_status_index as status_index_repair_migration,
 )
 from langflow.alembic.versions import (
     d5b8f3a1c2e4_add_channel_file_asset_tracking as file_asset_migration,
@@ -25,6 +34,9 @@ _MIGRATIONS = (
     widen_file_identifier_migration,
     webhook_job_migration,
     outbound_delivery_migration,
+    routing_migration,
+    command_migration,
+    status_index_repair_migration,
 )
 
 
@@ -43,6 +55,9 @@ def test_channel_migration_revision_chain() -> None:
         "e6c9a4b2d3f5",
         "f7d0b5c3e4a6",
         "a8e1c6d4f5b7",
+        "b9f2d7e6c4a1",
+        "c0a3e8f7d5b2",
+        "d1e4f9a8b6c3",
     ]
     assert [migration.down_revision for migration in _MIGRATIONS] == [
         "e1705947c729",
@@ -50,6 +65,9 @@ def test_channel_migration_revision_chain() -> None:
         "d5b8f3a1c2e4",
         "e6c9a4b2d3f5",
         "f7d0b5c3e4a6",
+        "a8e1c6d4f5b7",
+        "b9f2d7e6c4a1",
+        "c0a3e8f7d5b2",
     ]
 
 
@@ -72,6 +90,8 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
             "channel_file_asset",
             "channel_webhook_job",
             "channel_outbound_delivery",
+            "channel_workflow_command",
+            "channel_execution_log",
         }
         inspector = sa.inspect(connection)
         assert expected_tables.issubset(set(inspector.get_table_names()))
@@ -104,9 +124,43 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
             "updated_at",
         )
 
+        conversation_indexes = {
+            index["name"]: tuple(index["column_names"])
+            for index in sa.inspect(connection).get_indexes("channel_conversation_binding")
+        }
+        assert conversation_indexes["ix_channel_conversation_binding_status"] == ("status",)
+
         for migration in reversed(_MIGRATIONS):
             migration.downgrade()
 
         remaining_tables = set(sa.inspect(connection).get_table_names())
         assert expected_tables.isdisjoint(remaining_tables)
         assert {"user", "flow", "knowledge_base", "file", "job"}.issubset(remaining_tables)
+
+
+def test_status_index_repair_handles_already_migrated_sqlite_database(monkeypatch) -> None:
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE channel_conversation_binding "
+            "(id CHAR(32) PRIMARY KEY, status VARCHAR(32) NOT NULL DEFAULT 'pending')"
+        )
+        context = MigrationContext.configure(connection, opts={"render_as_batch": True})
+        operations = Operations(context)
+        monkeypatch.setattr(status_index_repair_migration, "op", operations)
+
+        status_index_repair_migration.upgrade()
+        status_index_repair_migration.upgrade()
+
+        indexes = {
+            index["name"]: tuple(index["column_names"])
+            for index in sa.inspect(connection).get_indexes("channel_conversation_binding")
+        }
+        assert indexes["ix_channel_conversation_binding_status"] == ("status",)
+
+        status_index_repair_migration.downgrade()
+        indexes_after_downgrade = {
+            index["name"]: tuple(index["column_names"])
+            for index in sa.inspect(connection).get_indexes("channel_conversation_binding")
+        }
+        assert indexes_after_downgrade["ix_channel_conversation_binding_status"] == ("status",)
