@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
-class ChannelType(StrEnum):
+class ChannelType(str, Enum):
     TELEGRAM = "telegram"
     FEISHU = "feishu"
     DINGTALK = "dingtalk"
@@ -16,7 +16,7 @@ class ChannelType(StrEnum):
     MOCK = "mock"
 
 
-class ChannelEventType(StrEnum):
+class ChannelEventType(str, Enum):
     TEXT = "message.text"
     FILE = "message.file"
     IMAGE = "message.image"
@@ -26,7 +26,7 @@ class ChannelEventType(StrEnum):
     UNKNOWN = "unknown"
 
 
-class ChannelMessageType(StrEnum):
+class ChannelMessageType(str, Enum):
     TEXT = "text"
     MARKDOWN = "markdown"
     CARD = "card"
