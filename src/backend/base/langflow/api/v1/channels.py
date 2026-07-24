@@ -38,6 +38,10 @@ from langflow.services.database.models.channel.model import (
 )
 
 router = APIRouter(prefix="/channels", tags=["Channels"])
+_DINGTALK_STREAM_UNAVAILABLE = (
+    "DingTalk credentials are valid, but the Stream runtime is unavailable. "
+    "Install dingtalk-stream>=0.24.3 on the OpenXFlow server."
+)
 
 
 class TelegramWebhookConfigureRequest(BaseModel):
@@ -68,14 +72,15 @@ async def create_channel_connection_route(
 ) -> ChannelConnectionRead:
     try:
         result = await create_channel_connection(db, current_user.id, payload)
-        await db.commit()
-        return result
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A channel connection with this name already exists",
         ) from exc
+    else:
+        await db.commit()
+        return result
 
 
 @router.patch("/{connection_id}", response_model=ChannelConnectionRead)
@@ -88,14 +93,15 @@ async def update_channel_connection_route(
     connection = await _owned_connection_or_404(db, current_user.id, connection_id)
     try:
         result = await update_channel_connection(db, connection, payload)
-        await db.commit()
-        return result
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A channel connection with this name already exists",
         ) from exc
+    else:
+        await db.commit()
+        return result
 
 
 @router.delete("/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -124,10 +130,7 @@ async def test_channel_connection_route(
             and connection.connection_mode == "stream"
             and result.get("stream_sdk_available") is False
         ):
-            raise RuntimeError(
-                "DingTalk credentials are valid, but the Stream runtime is unavailable. "
-                "Install dingtalk-stream>=0.24.3 on the OpenXFlow server."
-            )
+            raise RuntimeError(_DINGTALK_STREAM_UNAVAILABLE)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
     except Exception as exc:
