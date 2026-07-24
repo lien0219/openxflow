@@ -109,8 +109,7 @@ export default function ChannelsPage() {
 
   const { data: connections = [], isLoading: connectionsLoading } =
     useGetChannelConnections();
-  const { data: providerCapabilities } =
-    useGetChannelProviderCapabilities({});
+  const { data: providerCapabilities } = useGetChannelProviderCapabilities({});
   const selectedConnection = useMemo(
     () =>
       connections.find(
@@ -446,9 +445,7 @@ export default function ChannelsPage() {
                     setEditingConnection(selectedConnection);
                     setConnectionDialogOpen(true);
                   }}
-                  onDelete={() =>
-                    setDeleteConnectionTarget(selectedConnection)
-                  }
+                  onDelete={() => setDeleteConnectionTarget(selectedConnection)}
                 />
               )}
               {activeTab === "routing" && (

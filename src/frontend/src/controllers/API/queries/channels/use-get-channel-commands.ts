@@ -3,10 +3,7 @@ import type { useQueryFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
 import { UseRequestProcessor } from "../../services/request-processor";
-import type {
-  ChannelCommandQuery,
-  ChannelWorkflowCommandPage,
-} from "./types";
+import type { ChannelCommandQuery, ChannelWorkflowCommandPage } from "./types";
 
 export const useGetChannelCommands: useQueryFunctionType<
   ChannelCommandQuery,

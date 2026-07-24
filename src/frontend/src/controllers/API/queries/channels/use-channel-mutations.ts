@@ -227,7 +227,9 @@ export const useUpsertChannelConversation: ChannelMutationHook<
     },
     ...options,
     onSettled: async (...args) => {
-      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      await queryClient.invalidateQueries({
+        queryKey: CONVERSATIONS_QUERY_KEY,
+      });
       await userOnSettled?.(...args);
     },
   });
@@ -263,7 +265,9 @@ export const useUpdateChannelConversation: ChannelMutationHook<
     },
     ...options,
     onSettled: async (...args) => {
-      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      await queryClient.invalidateQueries({
+        queryKey: CONVERSATIONS_QUERY_KEY,
+      });
       await userOnSettled?.(...args);
     },
   });

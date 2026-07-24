@@ -165,25 +165,24 @@ export default function DefaultRoutingTab({
         )}
       </div>
 
-      {capabilities?.supports_group_chat &&
-        capabilities.supports_mentions && (
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            新群聊默认响应模式
-            <select
-              className="primary-input h-10"
-              value={form.defaultResponseMode}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  defaultResponseMode: event.target.value,
-                }))
-              }
-            >
-              <option value="mentions_only">仅 @机器人或指令时响应</option>
-              <option value="all_messages">响应所有消息</option>
-            </select>
-          </label>
-        )}
+      {capabilities?.supports_group_chat && capabilities.supports_mentions && (
+        <label className="flex flex-col gap-2 text-sm font-medium">
+          新群聊默认响应模式
+          <select
+            className="primary-input h-10"
+            value={form.defaultResponseMode}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                defaultResponseMode: event.target.value,
+              }))
+            }
+          >
+            <option value="mentions_only">仅 @机器人或指令时响应</option>
+            <option value="all_messages">响应所有消息</option>
+          </select>
+        </label>
+      )}
 
       <div className="flex justify-end">
         <Button
@@ -198,9 +197,7 @@ export default function DefaultRoutingTab({
   );
 }
 
-function formFromConnection(
-  connection: ChannelConnection,
-): RoutingFormState {
+function formFromConnection(connection: ChannelConnection): RoutingFormState {
   return {
     defaultFlowId: connection.default_flow_id ?? "",
     defaultKnowledgeBaseId: connection.default_knowledge_base_id ?? "",

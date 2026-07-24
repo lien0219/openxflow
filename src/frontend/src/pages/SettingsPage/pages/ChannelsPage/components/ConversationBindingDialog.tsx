@@ -104,7 +104,9 @@ export default function ConversationBindingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{t("channels.conversationDialog.editTitle")}</DialogTitle>
+          <DialogTitle>
+            {t("channels.conversationDialog.editTitle")}
+          </DialogTitle>
           <DialogDescription>
             会话由渠道消息自动发现，平台会话 ID 和会话类型不可手工修改。
           </DialogDescription>

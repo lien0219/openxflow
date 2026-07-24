@@ -46,9 +46,7 @@ export default function ConversationsTab({
   const [query, setQuery] = useState("");
   const [conversationType, setConversationType] = useState("");
   const [status, setStatus] = useState<ChannelConversationStatus | "">("");
-  const [routeMode, setRouteMode] = useState<
-    ChannelConversationRouteMode | ""
-  >(
+  const [routeMode, setRouteMode] = useState<ChannelConversationRouteMode | "">(
     "",
   );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -150,7 +148,9 @@ export default function ConversationsTab({
         current.filter((id) => !pageIds.includes(id)),
       );
     } else {
-      setSelectedIds((current) => Array.from(new Set([...current, ...pageIds])));
+      setSelectedIds((current) =>
+        Array.from(new Set([...current, ...pageIds])),
+      );
     }
   };
 

@@ -49,15 +49,13 @@ export default function ChannelResourceSelect({
     { enabled: kind === "knowledge-base" && !disabled },
   );
 
-  const result =
-    kind === "flow" ? flowQuery.data : knowledgeBaseQuery.data;
+  const result = kind === "flow" ? flowQuery.data : knowledgeBaseQuery.data;
   const isLoading =
     kind === "flow" ? flowQuery.isLoading : knowledgeBaseQuery.isLoading;
 
-  const items = useMemo(
-    () => result?.items ?? [],
-    [result?.items],
-  ) as Array<ChannelFlowOption | ChannelKnowledgeBaseOption>;
+  const items = useMemo(() => result?.items ?? [], [result?.items]) as Array<
+    ChannelFlowOption | ChannelKnowledgeBaseOption
+  >;
   const selectedInPage = items.some((item) => item.id === value);
 
   return (

@@ -3,10 +3,7 @@ import type { useQueryFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
 import { UseRequestProcessor } from "../../services/request-processor";
-import type {
-  ChannelExecutionLogPage,
-  ChannelExecutionQuery,
-} from "./types";
+import type { ChannelExecutionLogPage, ChannelExecutionQuery } from "./types";
 
 export const useGetChannelExecutions: useQueryFunctionType<
   ChannelExecutionQuery,
@@ -21,8 +18,7 @@ export const useGetChannelExecutions: useQueryFunctionType<
         params: {
           page: params.page ?? 1,
           page_size: params.pageSize ?? 20,
-          conversation_binding_id:
-            params.conversationBindingId || undefined,
+          conversation_binding_id: params.conversationBindingId || undefined,
           openxflow_user_id: params.openxflowUserId || undefined,
           status: params.status || undefined,
           trigger_type: params.triggerType || undefined,

@@ -25,7 +25,9 @@ export default function AccountsTab({ connectionId }: AccountsTabProps) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [deleteTarget, setDeleteTarget] = useState<ChannelIdentity | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChannelIdentity | null>(
+    null,
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

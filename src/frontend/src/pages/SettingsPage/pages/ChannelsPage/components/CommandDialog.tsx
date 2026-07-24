@@ -161,7 +161,8 @@ export default function CommandDialog({
         <DialogHeader>
           <DialogTitle>{command ? "编辑指令" : "新增自定义指令"}</DialogTitle>
           <DialogDescription>
-            用户发送“/指令 内容”时，仅本次消息路由到指定工作流，不会改变默认工作流。
+            用户发送“/指令
+            内容”时，仅本次消息路由到指定工作流，不会改变默认工作流。
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
@@ -274,9 +275,8 @@ export default function CommandDialog({
               }
             />
             <span className="text-xs font-normal text-muted-foreground">
-              支持 <code>{"{{input}}"}</code>、
-              <code>{"{{sender_name}}"}</code>、
-              <code>{"{{conversation_name}}"}</code>、
+              支持 <code>{"{{input}}"}</code>、<code>{"{{sender_name}}"}</code>
+              、<code>{"{{conversation_name}}"}</code>、
               <code>{"{{conversation_type}}"}</code>。
             </span>
           </label>
@@ -286,9 +286,7 @@ export default function CommandDialog({
               title="必须输入参数"
               description="只有指令没有正文或附件时显示用法，不执行工作流。"
               checked={form.inputRequired}
-              onCheckedChange={(checked) =>
-                setField("inputRequired", checked)
-              }
+              onCheckedChange={(checked) => setField("inputRequired", checked)}
             />
             <CommandSwitch
               title="允许附件"
@@ -302,9 +300,7 @@ export default function CommandDialog({
               title="群聊必须 @机器人"
               description="在群聊使用此指令时仍要求明确提及机器人。"
               checked={form.requireMention}
-              onCheckedChange={(checked) =>
-                setField("requireMention", checked)
-              }
+              onCheckedChange={(checked) => setField("requireMention", checked)}
             />
             <CommandSwitch
               title="启用指令"

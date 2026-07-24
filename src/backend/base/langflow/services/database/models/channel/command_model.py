@@ -49,7 +49,6 @@ class ChannelWorkflowCommand(ChannelWorkflowCommandBase, table=True):  # type: i
             name="uq_channel_workflow_command_scope_command",
         ),
         sa.Index("ix_channel_workflow_command_connection_scope", "connection_id", "scope_type", "enabled"),
-        sa.Index("ix_channel_workflow_command_flow_id", "flow_id"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

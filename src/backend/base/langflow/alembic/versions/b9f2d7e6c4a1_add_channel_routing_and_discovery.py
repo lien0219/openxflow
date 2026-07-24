@@ -183,6 +183,7 @@ def upgrade() -> None:
     )
 
     indexes = {
+        "ix_channel_conversation_binding_status": ["status"],
         "ix_channel_conversation_connection_last_message": ["connection_id", "last_message_at"],
         "ix_channel_conversation_connection_status": ["connection_id", "status", "last_message_at"],
         "ix_channel_conversation_connection_type": ["connection_id", "conversation_type", "last_message_at"],
@@ -197,6 +198,7 @@ def downgrade() -> None:
     conn = op.get_bind()
     if migration.table_exists("channel_conversation_binding", conn):
         for index_name in (
+            "ix_channel_conversation_binding_status",
             "ix_channel_conversation_connection_route",
             "ix_channel_conversation_connection_type",
             "ix_channel_conversation_connection_status",

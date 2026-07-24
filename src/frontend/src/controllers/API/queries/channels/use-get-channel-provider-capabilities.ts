@@ -18,13 +18,9 @@ export const useGetChannelProviderCapabilities: useQueryFunctionType<
     return response.data;
   };
 
-  return query(
-    ["useGetChannelProviderCapabilities"],
-    getCapabilities,
-    {
-      refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000,
-      ...options,
-    },
-  ) as UseQueryResult<ChannelProviderCapabilitiesMap, Error>;
+  return query(["useGetChannelProviderCapabilities"], getCapabilities, {
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  }) as UseQueryResult<ChannelProviderCapabilitiesMap, Error>;
 };

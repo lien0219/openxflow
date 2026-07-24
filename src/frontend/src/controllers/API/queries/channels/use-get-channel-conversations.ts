@@ -14,23 +14,24 @@ export const useGetChannelConversations: useQueryFunctionType<
 > = (params, options) => {
   const { query } = UseRequestProcessor();
 
-  const getConversations = async (): Promise<ChannelConversationBindingPage> => {
-    const response = await api.get<ChannelConversationBindingPage>(
-      `${getURL("CHANNELS")}/${params.connectionId}/conversations`,
-      {
-        params: {
-          page: params.page ?? 1,
-          page_size: params.pageSize ?? 20,
-          query: params.query || undefined,
-          conversation_type: params.conversationType || undefined,
-          status: params.status || undefined,
-          route_mode: params.routeMode || undefined,
-          sort: params.sort ?? "-last_message_at",
+  const getConversations =
+    async (): Promise<ChannelConversationBindingPage> => {
+      const response = await api.get<ChannelConversationBindingPage>(
+        `${getURL("CHANNELS")}/${params.connectionId}/conversations`,
+        {
+          params: {
+            page: params.page ?? 1,
+            page_size: params.pageSize ?? 20,
+            query: params.query || undefined,
+            conversation_type: params.conversationType || undefined,
+            status: params.status || undefined,
+            route_mode: params.routeMode || undefined,
+            sort: params.sort ?? "-last_message_at",
+          },
         },
-      },
-    );
-    return response.data;
-  };
+      );
+      return response.data;
+    };
 
   return query(
     [
