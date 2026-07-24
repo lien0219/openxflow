@@ -62,6 +62,7 @@ jobs:
       - name: Run starter projects update
         run: uv run python scripts/ci/update_starter_projects.py
 
+      # Same-repository PRs can safely receive generated starter-project updates directly.
       - name: Commit refreshed starter projects
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
