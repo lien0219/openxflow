@@ -17,6 +17,7 @@ import type {
 } from "@/controllers/API/queries/channels";
 import type { KnowledgeBaseInfo } from "@/controllers/API/queries/knowledge-bases/use-get-knowledge-bases";
 import type { FlowType } from "@/types/flow";
+import { formatWorkflowOptionLabel } from "../utils";
 
 interface ConversationBindingDialogProps {
   open: boolean;
@@ -168,8 +169,7 @@ export default function ConversationBindingDialog({
               </option>
               {flows.map((flow) => (
                 <option key={flow.id} value={flow.id}>
-                  {flow.name}
-                  {flow.endpoint_name ? ` (${flow.endpoint_name})` : ""}
+                  {formatWorkflowOptionLabel(flow)}
                 </option>
               ))}
             </select>
