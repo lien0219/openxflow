@@ -107,7 +107,10 @@ class ChannelGateway:
 
         try:
             if adapter.requires_event_acknowledgement(event):
-                acknowledgement_sender = lambda: adapter.acknowledge_event(event)
+
+                async def acknowledgement_sender() -> None:
+                    await adapter.acknowledge_event(event)
+
                 if guard_outbound:
                     await send_outbound_acknowledgement_once(event, acknowledgement_sender)
                 else:
@@ -115,10 +118,13 @@ class ChannelGateway:
 
             response = await handler(event)
             if response is not None:
-                response_sender = lambda: retry_channel_operation(
-                    lambda: adapter.send_response(event, response),
-                    operation_name=f"{adapter.channel_type.value}.send_response",
-                )
+
+                async def response_sender() -> str:
+                    return await retry_channel_operation(
+                        lambda: adapter.send_response(event, response),
+                        operation_name=f"{adapter.channel_type.value}.send_response",
+                    )
+
                 if guard_outbound:
                     await send_outbound_response_once(event, response, response_sender)
                 else:
