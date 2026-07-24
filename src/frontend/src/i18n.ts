@@ -1,5 +1,6 @@
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
+import { channelTranslations } from "./locales/channelTranslations";
 import en from "./locales/en.json";
 
 const SUPPORTED_LANGUAGES = [
@@ -52,7 +53,7 @@ const _consoleInfo = console.info.bind(console);
 console.info = () => {};
 i18n.use(initReactI18next).init({
   resources: {
-    en: { translation: en },
+    en: { translation: { ...en, ...channelTranslations.en } },
   },
   lng: detectedLang,
   fallbackLng: "en",
@@ -69,7 +70,10 @@ export async function loadLanguage(lang: string): Promise<void> {
   if (i18n.hasResourceBundle(lang, "translation")) return;
   try {
     const messages = await import(`./locales/${lang}.json`);
-    i18n.addResourceBundle(lang, "translation", messages.default);
+    i18n.addResourceBundle(lang, "translation", {
+      ...messages.default,
+      ...(channelTranslations[lang] ?? {}),
+    });
   } catch {
     // Unknown locale — no bundle file exists. i18next's fallbackLng: "en" takes over.
   }
