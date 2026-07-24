@@ -22,9 +22,7 @@ describe("channel settings helpers", () => {
   });
 
   it("returns localized labels for channel statuses", () => {
-    expect(getChannelStatusMeta("configuring", t).label).toBe(
-      "Not configured",
-    );
+    expect(getChannelStatusMeta("configuring", t).label).toBe("Not configured");
     expect(getChannelStatusMeta("connected", t).label).toBe("Connected");
   });
 
