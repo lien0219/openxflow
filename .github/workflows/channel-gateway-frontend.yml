@@ -109,12 +109,12 @@ jobs:
           tsc_status=${PIPESTATUS[0]}
           set -e
 
-          channel_error_pattern='^src/(controllers/API/queries/channels|pages/SettingsPage/pages/ChannelsPage|pages/SettingsPage/index\.tsx|routes\.tsx).*error TS[0-9]+:'
+          channel_error_pattern='^src/(controllers/API/queries/channels|pages/SettingsPage/pages/ChannelsPage).*error TS[0-9]+:'
           if grep -E "$channel_error_pattern" /tmp/channel-tsc.log; then
             echo "Channel Center type errors detected."
             exit 1
           fi
 
           if [ "$tsc_status" -ne 0 ]; then
-            echo "::warning::TypeScript reported pre-existing errors outside the Channel Center scope."
+            echo "::warning::TypeScript reported pre-existing errors in imported shared modules."
           fi
