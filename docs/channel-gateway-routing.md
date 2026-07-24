@@ -19,7 +19,7 @@ Provider conversation types are normalized as follows:
 | DingTalk | `private`, `group` |
 | Enterprise WeChat | `private` |
 
-The platform conversation ID and type are discovered values and are read-only in the settings UI.
+The platform conversation ID and type are discovered values and are read-only in the settings UI. Historical manually entered records are labeled separately so administrators can distinguish them from provider-discovered conversations and replace them after the real platform conversation appears.
 
 ## Default routing
 
@@ -97,7 +97,7 @@ Each channel connection exposes the same tabs:
 - Accounts
 - Execution logs
 
-Provider capability metadata controls which conversation types and feature settings appear. This keeps the product model consistent while preserving provider-specific behavior.
+Provider capability metadata controls which conversation types and feature settings appear. This keeps the product model consistent while preserving provider-specific behavior. Channel management labels, dialogs, filters, empty states, pagination controls, and validation messages use the existing localization layer so Chinese and English interfaces remain consistent.
 
 ## Database migrations
 
