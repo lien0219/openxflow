@@ -198,7 +198,9 @@ test(
       sessionStorage.setItem("testMockAutoLogin", "true");
     });
 
-    await page.getByText(TEXTS.logout, { exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: TEXTS.logout })
+      .click({ force: true });
 
     await page.waitForSelector(`text=${TEXTS.authSignInHeader}`, {
       timeout: 30000,
@@ -223,7 +225,7 @@ test(
 
     expect(
       (
-        await page.waitForSelector("text=Welcome to LangFlow", {
+        await page.waitForSelector("text=Welcome to OpenXFlow", {
           timeout: 30000,
         })
       ).isVisible(),
@@ -269,7 +271,9 @@ test(
       sessionStorage.setItem("testMockAutoLogin", "true");
     });
 
-    await page.getByText(TEXTS.logout, { exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: TEXTS.logout })
+      .click({ force: true });
 
     await page.waitForSelector(`text=${TEXTS.authSignInHeader}`, {
       timeout: 30000,
