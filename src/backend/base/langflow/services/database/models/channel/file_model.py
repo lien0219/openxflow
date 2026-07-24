@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -15,7 +15,7 @@ from sqlmodel import Field, SQLModel
 JsonVariant = JSON().with_variant(JSONB(), "postgresql")
 
 
-class ChannelFileStatus(StrEnum):
+class ChannelFileStatus(str, Enum):
     RECEIVED = "received"
     STORED = "stored"
     INGESTING = "ingesting"

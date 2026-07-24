@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -17,7 +17,7 @@ from langflow.services.database.models.channel.model import utc_now
 JsonVariant = JSON().with_variant(JSONB(), "postgresql")
 
 
-class ChannelWebhookJobStatus(StrEnum):
+class ChannelWebhookJobStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"

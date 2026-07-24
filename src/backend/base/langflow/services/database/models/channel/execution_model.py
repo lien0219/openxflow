@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from enum import StrEnum
+from enum import Enum
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -15,13 +15,13 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class ChannelExecutionStatus(StrEnum):
+class ChannelExecutionStatus(str, Enum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
 
 
-class ChannelExecutionTrigger(StrEnum):
+class ChannelExecutionTrigger(str, Enum):
     DEFAULT = "default"
     COMMAND = "command"
     ADMIN_FLOW = "admin_flow"

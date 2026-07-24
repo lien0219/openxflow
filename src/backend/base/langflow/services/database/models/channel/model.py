@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -20,27 +20,27 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class ChannelConnectionStatus(StrEnum):
+class ChannelConnectionStatus(str, Enum):
     CONFIGURING = "configuring"
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
     ERROR = "error"
 
 
-class ChannelIdentityStatus(StrEnum):
+class ChannelIdentityStatus(str, Enum):
     PENDING = "pending"
     BOUND = "bound"
     DISABLED = "disabled"
 
 
-class ChannelReceiptStatus(StrEnum):
+class ChannelReceiptStatus(str, Enum):
     RECEIVED = "received"
     PROCESSING = "processing"
     PROCESSED = "processed"
     FAILED = "failed"
 
 
-class ChannelConversationStatus(StrEnum):
+class ChannelConversationStatus(str, Enum):
     PENDING = "pending"
     INHERITED = "inherited"
     OVERRIDDEN = "overridden"
@@ -49,18 +49,18 @@ class ChannelConversationStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
-class ChannelConversationRouteMode(StrEnum):
+class ChannelConversationRouteMode(str, Enum):
     INHERIT = "inherit"
     OVERRIDE = "override"
     DISABLED = "disabled"
 
 
-class ChannelConversationSource(StrEnum):
+class ChannelConversationSource(str, Enum):
     AUTO_DISCOVERED = "auto_discovered"
     LEGACY_MANUAL = "legacy_manual"
 
 
-class ChannelUnconfiguredBehavior(StrEnum):
+class ChannelUnconfiguredBehavior(str, Enum):
     USE_GLOBAL_DEFAULT = "use_global_default"
     NOTIFY_PENDING = "notify_pending"
     IGNORE = "ignore"

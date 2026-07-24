@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -13,12 +13,12 @@ from sqlmodel import Field, SQLModel
 from langflow.services.database.models.channel.model import utc_now
 
 
-class ChannelOutboundDeliveryKind(StrEnum):
+class ChannelOutboundDeliveryKind(str, Enum):
     ACKNOWLEDGEMENT = "acknowledgement"
     RESPONSE = "response"
 
 
-class ChannelOutboundDeliveryStatus(StrEnum):
+class ChannelOutboundDeliveryStatus(str, Enum):
     RESERVED = "reserved"
     SENT = "sent"
     FAILED = "failed"
