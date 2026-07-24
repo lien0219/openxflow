@@ -3,6 +3,7 @@
   "include": [
     "src/controllers/API/helpers/constants.ts",
     "src/controllers/API/queries/channels/**/*.ts",
+    "src/locales/channelTranslations.ts",
     "src/pages/SettingsPage/pages/ChannelsPage/**/*.ts",
     "src/pages/SettingsPage/pages/ChannelsPage/**/*.tsx"
   ],
