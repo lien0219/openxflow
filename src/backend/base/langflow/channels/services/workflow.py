@@ -57,9 +57,43 @@ def _collect_text_candidates(value: Any, *, depth: int = 0) -> list[str]:
     return []
 
 
+def _collect_chat_output_messages(value: Any) -> list[str]:
+    """Extract rendered assistant messages from RunOutputs before generic metadata."""
+    if not isinstance(value, (list, tuple)):
+        return []
+    candidates: list[str] = []
+    for run_output in value:
+        if hasattr(run_output, "model_dump"):
+            run_output = run_output.model_dump(exclude_none=True)
+        if not isinstance(run_output, dict):
+            continue
+        result_items = run_output.get("outputs")
+        if not isinstance(result_items, (list, tuple)):
+            continue
+        for result_item in result_items:
+            if hasattr(result_item, "model_dump"):
+                result_item = result_item.model_dump(exclude_none=True)
+            if not isinstance(result_item, dict):
+                continue
+            messages = result_item.get("messages")
+            if not isinstance(messages, (list, tuple)):
+                continue
+            for message in messages:
+                if hasattr(message, "model_dump"):
+                    message = message.model_dump(exclude_none=True)
+                if not isinstance(message, dict):
+                    continue
+                sender = str(message.get("sender") or "").strip().lower()
+                if sender and sender not in {"machine", "ai", "assistant"}:
+                    continue
+                candidates.extend(_collect_text_candidates(message.get("message"), depth=1))
+    return candidates
+
+
 def render_run_response(response: RunResponse) -> str:
     payload = response.model_dump(exclude_none=True)
-    candidates = _collect_text_candidates(payload.get("outputs"))
+    outputs = payload.get("outputs")
+    candidates = _collect_chat_output_messages(outputs) or _collect_text_candidates(outputs)
     deduplicated: list[str] = []
     for candidate in candidates:
         if candidate not in deduplicated:

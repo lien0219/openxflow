@@ -1,7 +1,13 @@
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 import { channelTranslations } from "./locales/channelTranslations";
+import de from "./locales/de.json";
 import en from "./locales/en.json";
+import es from "./locales/es.json";
+import fr from "./locales/fr.json";
+import ja from "./locales/ja.json";
+import pt from "./locales/pt.json";
+import zhHans from "./locales/zh-Hans.json";
 
 const SUPPORTED_LANGUAGES = [
   "en",
@@ -53,7 +59,15 @@ const _consoleInfo = console.info.bind(console);
 console.info = () => {};
 i18n.use(initReactI18next).init({
   resources: {
+    de: { translation: { ...de, ...(channelTranslations.de ?? {}) } },
     en: { translation: { ...en, ...channelTranslations.en } },
+    es: { translation: { ...es, ...(channelTranslations.es ?? {}) } },
+    fr: { translation: { ...fr, ...(channelTranslations.fr ?? {}) } },
+    ja: { translation: { ...ja, ...(channelTranslations.ja ?? {}) } },
+    pt: { translation: { ...pt, ...(channelTranslations.pt ?? {}) } },
+    "zh-Hans": {
+      translation: { ...zhHans, ...(channelTranslations["zh-Hans"] ?? {}) },
+    },
   },
   lng: detectedLang,
   fallbackLng: "en",

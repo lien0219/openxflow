@@ -15,6 +15,7 @@ from langflow.channels.services.outbound_delivery import (
     OutboundDeliveryDecision,
     channel_response_digest,
     send_outbound_acknowledgement_once,
+    send_outbound_processing_once,
     send_outbound_response_once,
 )
 from langflow.services.database.models.channel.outbound_delivery_model import ChannelOutboundDeliveryKind
@@ -178,3 +179,28 @@ async def test_provider_error_is_preserved_when_failure_state_write_also_fails(m
 
     with pytest.raises(RuntimeError, match="provider unavailable"):
         await send_outbound_response_once(_event(), ChannelMessage(text="world"), sender)
+
+
+@pytest.mark.asyncio
+async def test_processing_delivery_reuses_existing_provider_message(monkeypatch) -> None:
+    called = False
+
+    async def reserve(_event, _message):
+        return OutboundDeliveryDecision(
+            False,
+            uuid4(),
+            ChannelOutboundDeliveryKind.PROCESSING,
+            "provider-processing-1",
+        )
+
+    async def sender() -> str:
+        nonlocal called
+        called = True
+        return "unexpected"
+
+    monkeypatch.setattr(outbound_delivery, "reserve_outbound_processing", reserve)
+
+    result = await send_outbound_processing_once(_event(), ChannelMessage(text="working"), sender)
+
+    assert result == "provider-processing-1"
+    assert called is False

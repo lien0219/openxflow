@@ -47,6 +47,7 @@ class OutboundDeliveryDecision:
     should_send: bool
     delivery_id: UUID | None
     delivery_kind: ChannelOutboundDeliveryKind
+    provider_message_id: str | None = None
 
 
 def channel_response_digest(message: ChannelMessage) -> str:
@@ -78,7 +79,12 @@ async def _reserve_outbound_delivery(
         if existing is not None:
             if existing.status != ChannelOutboundDeliveryStatus.FAILED.value:
                 record_outbound_delivery_suppressed(delivery_kind)
-                return OutboundDeliveryDecision(False, existing.id, delivery_kind)
+                return OutboundDeliveryDecision(
+                    False,
+                    existing.id,
+                    delivery_kind,
+                    existing.provider_message_id,
+                )
             result = await session.exec(
                 sa.update(ChannelOutboundDelivery)
                 .where(
@@ -137,6 +143,17 @@ async def reserve_outbound_delivery(
     return await _reserve_outbound_delivery(
         event,
         delivery_kind=ChannelOutboundDeliveryKind.RESPONSE,
+        response_digest=channel_response_digest(message),
+    )
+
+
+async def reserve_outbound_processing(
+    event: ChannelEvent,
+    message: ChannelMessage,
+) -> OutboundDeliveryDecision:
+    return await _reserve_outbound_delivery(
+        event,
+        delivery_kind=ChannelOutboundDeliveryKind.PROCESSING,
         response_digest=channel_response_digest(message),
     )
 
@@ -286,6 +303,37 @@ async def send_outbound_acknowledgement_once(
         None,
     )
     return True
+
+
+async def send_outbound_processing_once(
+    event: ChannelEvent,
+    message: ChannelMessage,
+    sender: Callable[[], Awaitable[str]],
+) -> str | None:
+    decision = await reserve_outbound_processing(event, message)
+    if not decision.should_send or decision.delivery_id is None:
+        return decision.provider_message_id
+    try:
+        provider_message_id = await sender()
+    except Exception as provider_error:
+        try:
+            await mark_outbound_delivery_failed(
+                decision.delivery_id,
+                decision.delivery_kind,
+                provider_error,
+            )
+        except Exception:
+            await logger.aexception(
+                "Unable to persist failed outbound processing message for event %s",
+                event.event_id,
+            )
+        raise
+    await mark_outbound_delivery_sent(
+        decision.delivery_id,
+        decision.delivery_kind,
+        provider_message_id,
+    )
+    return provider_message_id
 
 
 async def send_outbound_response_once(

@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from langflow.channels.services.runtime_config import webhook_task_timeout_seconds
 from langflow.services.database.models.channel.execution_model import (
     ChannelExecutionLog,
     ChannelExecutionLogPage,
     ChannelExecutionLogRead,
     ChannelExecutionStatus,
 )
+from langflow.services.deps import session_scope
 
 
 def _utc_now() -> datetime:
@@ -65,6 +68,52 @@ async def finish_channel_execution(
     await session.flush()
 
 
+async def finalize_channel_execution(
+    execution_id: UUID,
+    *,
+    succeeded: bool,
+    error_message: str | None = None,
+) -> None:
+    """Finish an audit row in an isolated session that survives caller cancellation."""
+    async def persist() -> None:
+        async with session_scope() as session:
+            execution = await session.get(ChannelExecutionLog, execution_id)
+            if execution is None:
+                return
+            await finish_channel_execution(
+                session,
+                execution,
+                succeeded=succeeded,
+                error_message=error_message,
+            )
+            await session.commit()
+
+    task = asyncio.create_task(persist())
+    await asyncio.shield(task)
+
+
+async def _fail_stale_channel_executions(
+    session: AsyncSession,
+    connection_id: UUID,
+) -> None:
+    cutoff = _utc_now() - timedelta(seconds=webhook_task_timeout_seconds() + 60)
+    statement = select(ChannelExecutionLog).where(
+        ChannelExecutionLog.connection_id == connection_id,
+        ChannelExecutionLog.status == ChannelExecutionStatus.RUNNING.value,
+        ChannelExecutionLog.created_at <= cutoff,
+    )
+    stale_rows = (await session.exec(statement)).all()
+    for execution in stale_rows:
+        await finish_channel_execution(
+            session,
+            execution,
+            succeeded=False,
+            error_message="Channel workflow execution was interrupted or timed out",
+        )
+    if stale_rows:
+        await session.commit()
+
+
 async def list_channel_executions(
     session: AsyncSession,
     connection_id: UUID,
@@ -76,6 +125,7 @@ async def list_channel_executions(
     status: str | None = None,
     trigger_type: str | None = None,
 ) -> ChannelExecutionLogPage:
+    await _fail_stale_channel_executions(session, connection_id)
     normalized_page = max(1, page)
     normalized_page_size = min(100, max(1, page_size))
     filters: list = [ChannelExecutionLog.connection_id == connection_id]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any
@@ -28,12 +29,13 @@ from langflow.channels.services.commands import (
     render_command_input,
     resolve_workflow_command,
 )
-from langflow.channels.services.execution_logs import finish_channel_execution, start_channel_execution
+from langflow.channels.services.execution_logs import finalize_channel_execution, start_channel_execution
 from langflow.channels.services.files import (
     ChannelFileService,
     list_owned_knowledge_bases,
     resolve_owned_knowledge_base,
 )
+from langflow.channels.services.outbound_delivery import send_outbound_processing_once
 from langflow.channels.services.retry import retry_channel_operation
 from langflow.channels.services.workflow import ChannelWorkflowExecutor
 from langflow.services.authorization import KnowledgeBaseAction, ensure_knowledge_base_permission
@@ -351,6 +353,11 @@ class ChannelDispatchService:
         except Exception:  # noqa: BLE001
             await logger.aexception("Unable to create channel execution log")
 
+        # Persist the event receipt, discovered conversation, and running audit row
+        # before any provider side effect. This prevents a Feishu retry from racing
+        # the first delivery and creating a second processing/final card.
+        if self.session is not None:
+            await self.session.commit()
         processing_message_id = await self._send_processing_message(event)
         succeeded = False
         error_message: str | None = None
@@ -358,11 +365,6 @@ class ChannelDispatchService:
             channel_context = await self._build_bound_context(binding)
             if command_name:
                 channel_context["command_name"] = command_name
-            # The workflow job service persists through its own database session. Commit
-            # conversation discovery and the running audit row first so SQLite does not
-            # keep a write lock while that session creates the workflow job.
-            if self.session is not None:
-                await self.session.commit()
             response = await self.workflow_executor.execute(
                 event=event,
                 user=user,
@@ -378,6 +380,9 @@ class ChannelDispatchService:
             else:
                 await logger.aexception("Channel workflow HTTP error for flow %s", flow_identifier)
                 response = ChannelMessage(text="工作流执行失败，请稍后重试。")
+        except asyncio.CancelledError:
+            error_message = "Channel workflow execution was cancelled or timed out"
+            raise
         except Exception as exc:  # noqa: BLE001
             error_message = str(exc)
             await logger.aexception("Channel workflow execution failed for flow %s", flow_identifier)
@@ -385,13 +390,13 @@ class ChannelDispatchService:
         finally:
             if execution is not None:
                 try:
-                    await finish_channel_execution(
-                        self.session,
-                        execution,
+                    await finalize_channel_execution(
+                        execution.id,
                         succeeded=succeeded,
                         error_message=error_message,
                     )
-                    await self.session.commit()
+                except asyncio.CancelledError:
+                    raise
                 except Exception:  # noqa: BLE001
                     await logger.aexception("Unable to finish channel execution log %s", execution.id)
 
@@ -417,11 +422,16 @@ class ChannelDispatchService:
             text="⏳ 正在处理中，请稍候…",
             metadata={"feishu_update_multi": True},
         )
-        try:
+        async def sender() -> str:
             return await retry_channel_operation(
                 lambda: self.adapter.send_response(event, processing_message),
                 operation_name="feishu.send_processing_message",
             )
+
+        try:
+            if self.session is None:
+                return await sender()
+            return await send_outbound_processing_once(event, processing_message, sender)
         except Exception:  # noqa: BLE001
             await logger.aexception("Unable to send Feishu processing message; continuing without it")
             return None

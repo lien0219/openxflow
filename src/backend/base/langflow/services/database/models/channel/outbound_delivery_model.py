@@ -15,6 +15,7 @@ from langflow.services.database.models.channel.model import utc_now
 
 class ChannelOutboundDeliveryKind(str, Enum):
     ACKNOWLEDGEMENT = "acknowledgement"
+    PROCESSING = "processing"
     RESPONSE = "response"
 
 
