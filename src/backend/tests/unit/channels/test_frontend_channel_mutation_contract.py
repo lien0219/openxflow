@@ -11,6 +11,7 @@ _MUTATIONS = (
     / "channels"
     / "use-channel-mutations.ts"
 )
+_EXPECTED_MUTATION_HOOKS = 12
 
 
 def test_channel_mutations_use_strong_variables_type() -> None:
@@ -18,8 +19,8 @@ def test_channel_mutations_use_strong_variables_type() -> None:
 
     assert "useMutationFunctionType" not in content
     assert "UseRequestProcessor" not in content
-    assert content.count("ChannelMutationHook<") == 12
-    assert content.count("return useMutation<") == 12
+    assert content.count("ChannelMutationHook<") == _EXPECTED_MUTATION_HOOKS
+    assert content.count("return useMutation<") == _EXPECTED_MUTATION_HOOKS
     assert "const variables = args[2];" in content
     assert "variables.connectionId" in content
 
@@ -27,8 +28,8 @@ def test_channel_mutations_use_strong_variables_type() -> None:
 def test_channel_mutations_preserve_internal_cache_invalidation() -> None:
     content = _MUTATIONS.read_text(encoding="utf-8")
 
-    assert content.count("const userOnSettled = options?.onSettled;") == 12
-    assert content.count("await userOnSettled?.(...args);") == 12
+    assert content.count("const userOnSettled = options?.onSettled;") == _EXPECTED_MUTATION_HOOKS
+    assert content.count("await userOnSettled?.(...args);") == _EXPECTED_MUTATION_HOOKS
     assert content.count("queryClient.invalidateQueries(") == 13
 
     for block in content.split("return useMutation<")[1:]:
