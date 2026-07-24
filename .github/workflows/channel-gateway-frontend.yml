@@ -14,6 +14,8 @@ on:
       - "src/frontend/src/controllers/API/queries/channels/**"
       - "src/frontend/src/controllers/API/helpers/constants.ts"
       - "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/**"
+      - "src/frontend/src/i18n.ts"
+      - "src/frontend/src/locales/channelTranslations.ts"
       - "src/frontend/src/pages/SettingsPage/index.tsx"
       - "src/frontend/src/routes.tsx"
   workflow_dispatch:
@@ -54,6 +56,8 @@ jobs:
           src/controllers/API/helpers/constants.ts
           src/pages/SettingsPage/index.tsx
           src/routes.tsx
+          src/i18n.ts
+          src/locales/channelTranslations.ts
           tsconfig.channels.json
 
   unit-tests:
@@ -81,6 +85,7 @@ jobs:
           npm test --
           --runInBand
           src/pages/SettingsPage/pages/ChannelsPage/__tests__/utils.test.ts
+          src/pages/SettingsPage/pages/ChannelsPage/__tests__/i18n.test.ts
 
   type-check:
     runs-on: ubuntu-latest
