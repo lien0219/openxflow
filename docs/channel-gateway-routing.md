@@ -105,11 +105,12 @@ Channel routing models remain importable on the repository's supported Python ma
 
 ## Database migrations
 
-Run both channel routing migrations before enabling the updated UI and command routing:
+Apply the complete channel routing migration chain before enabling the updated UI and command routing:
 
 ```text
 b9f2d7e6c4a1
 c0a3e8f7d5b2
+d1e4f9a8b6c3
 ```
 
-The first migration adds connection and conversation routing/discovery fields. The second adds custom command and execution audit tables. Apply both migrations and restart the backend before beginning provider-level manual acceptance.
+The first migration adds connection and conversation routing/discovery fields. The second adds custom command and execution audit tables. The final repair migration creates the conversation status index for databases that had already applied an earlier form of the routing migration. Apply all pending migrations and restart the backend before beginning provider-level manual acceptance.
