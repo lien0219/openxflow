@@ -20,6 +20,15 @@ _TResponse = TypeVar("_TResponse")
 TokenCache = dict[str, tuple[str, float]]
 
 
+def response_json_object(response: httpx.Response) -> dict[str, Any] | None:
+    """Return a JSON object response body, ignoring non-JSON and non-object payloads."""
+    try:
+        body = response.json()
+    except (UnicodeDecodeError, ValueError):
+        return None
+    return body if isinstance(body, dict) else None
+
+
 def is_access_token_rejection(
     response: httpx.Response,
     body: dict[str, Any] | None,
