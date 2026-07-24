@@ -1,6 +1,6 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
-import { UseRequestProcessor } from "../../services/request-processor";
 import type {
   ChannelConnection,
   ChannelConnectionCreate,
@@ -20,209 +20,209 @@ export const useCreateChannelConnection: ChannelMutationHook<
   ChannelConnectionCreate,
   ChannelConnection
 > = (options) => {
-  const { mutate, queryClient } = UseRequestProcessor();
+  const queryClient = useQueryClient();
   const userOnSettled = options?.onSettled;
-  return mutate(
-    ["useCreateChannelConnection"],
-    async (payload: ChannelConnectionCreate) => {
+
+  return useMutation<ChannelConnection, unknown, ChannelConnectionCreate>({
+    mutationKey: ["useCreateChannelConnection"],
+    mutationFn: async (payload) => {
       const response = await api.post<ChannelConnection>(
         `${getURL("CHANNELS")}/`,
         payload,
       );
       return response.data;
     },
-    {
-      ...options,
-      onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({
-          queryKey: CONNECTIONS_QUERY_KEY,
-        });
-        await userOnSettled?.(data, error, variables, context);
-      },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+      await userOnSettled?.(...args);
     },
-  );
+  });
 };
 
 export const useUpdateChannelConnection: ChannelMutationHook<
   { connectionId: string; payload: ChannelConnectionUpdate },
   ChannelConnection
 > = (options) => {
-  const { mutate, queryClient } = UseRequestProcessor();
+  const queryClient = useQueryClient();
   const userOnSettled = options?.onSettled;
-  return mutate(
-    ["useUpdateChannelConnection"],
-    async ({ connectionId, payload }) => {
+
+  return useMutation<
+    ChannelConnection,
+    unknown,
+    { connectionId: string; payload: ChannelConnectionUpdate }
+  >({
+    mutationKey: ["useUpdateChannelConnection"],
+    mutationFn: async ({ connectionId, payload }) => {
       const response = await api.patch<ChannelConnection>(
         `${getURL("CHANNELS")}/${connectionId}`,
         payload,
       );
       return response.data;
     },
-    {
-      ...options,
-      onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({
-          queryKey: CONNECTIONS_QUERY_KEY,
-        });
-        await userOnSettled?.(data, error, variables, context);
-      },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+      await userOnSettled?.(...args);
     },
-  );
+  });
 };
 
 export const useDeleteChannelConnection: ChannelMutationHook<
   { connectionId: string },
   boolean
 > = (options) => {
-  const { mutate, queryClient } = UseRequestProcessor();
+  const queryClient = useQueryClient();
   const userOnSettled = options?.onSettled;
-  return mutate(
-    ["useDeleteChannelConnection"],
-    async ({ connectionId }) => {
+
+  return useMutation<boolean, unknown, { connectionId: string }>({
+    mutationKey: ["useDeleteChannelConnection"],
+    mutationFn: async ({ connectionId }) => {
       await api.delete(`${getURL("CHANNELS")}/${connectionId}`);
       return true;
     },
-    {
-      ...options,
-      onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({
-          queryKey: CONNECTIONS_QUERY_KEY,
-        });
-        await userOnSettled?.(data, error, variables, context);
-      },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+      await userOnSettled?.(...args);
     },
-  );
+  });
 };
 
 export const useTestChannelConnection: ChannelMutationHook<
   { connectionId: string },
   ChannelHealthResult
 > = (options) => {
-  const { mutate, queryClient } = UseRequestProcessor();
+  const queryClient = useQueryClient();
   const userOnSettled = options?.onSettled;
-  return mutate(
-    ["useTestChannelConnection"],
-    async ({ connectionId }) => {
+
+  return useMutation<ChannelHealthResult, unknown, { connectionId: string }>({
+    mutationKey: ["useTestChannelConnection"],
+    mutationFn: async ({ connectionId }) => {
       const response = await api.post<ChannelHealthResult>(
         `${getURL("CHANNELS")}/${connectionId}/test`,
       );
       return response.data;
     },
-    {
-      ...options,
-      onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({
-          queryKey: CONNECTIONS_QUERY_KEY,
-        });
-        await userOnSettled?.(data, error, variables, context);
-      },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+      await userOnSettled?.(...args);
     },
-  );
+  });
 };
 
 export const useConfigureTelegramWebhook: ChannelMutationHook<
   { connectionId: string; payload: TelegramWebhookConfigure },
   TelegramWebhookResult
 > = (options) => {
-  const { mutate, queryClient } = UseRequestProcessor();
+  const queryClient = useQueryClient();
   const userOnSettled = options?.onSettled;
-  return mutate(
-    ["useConfigureTelegramWebhook"],
-    async ({ connectionId, payload }) => {
+
+  return useMutation<
+    TelegramWebhookResult,
+    unknown,
+    { connectionId: string; payload: TelegramWebhookConfigure }
+  >({
+    mutationKey: ["useConfigureTelegramWebhook"],
+    mutationFn: async ({ connectionId, payload }) => {
       const response = await api.post<TelegramWebhookResult>(
         `${getURL("CHANNELS")}/${connectionId}/telegram/webhook`,
         payload,
       );
       return response.data;
     },
-    {
-      ...options,
-      onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({
-          queryKey: CONNECTIONS_QUERY_KEY,
-        });
-        await userOnSettled?.(data, error, variables, context);
-      },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
+      await userOnSettled?.(...args);
     },
-  );
+  });
 };
 
 export const useRedeemChannelBindingCode: ChannelMutationHook<
   { code: string },
   ChannelIdentity
 > = (options) => {
-  const { mutate, queryClient } = UseRequestProcessor();
+  const queryClient = useQueryClient();
   const userOnSettled = options?.onSettled;
-  return mutate(
-    ["useRedeemChannelBindingCode"],
-    async ({ code }) => {
+
+  return useMutation<ChannelIdentity, unknown, { code: string }>({
+    mutationKey: ["useRedeemChannelBindingCode"],
+    mutationFn: async ({ code }) => {
       const response = await api.post<ChannelIdentity>(
         `${getURL("CHANNEL_BINDINGS")}/redeem`,
         { code },
       );
       return response.data;
     },
-    {
-      ...options,
-      onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({
-          queryKey: ["useGetChannelIdentities"],
-        });
-        await userOnSettled?.(data, error, variables, context);
-      },
+    ...options,
+    onSettled: async (...args) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["useGetChannelIdentities"],
+      });
+      await userOnSettled?.(...args);
     },
-  );
+  });
 };
 
 export const useDeleteChannelIdentity: ChannelMutationHook<
   { connectionId: string; identityId: string },
   boolean
 > = (options) => {
-  const { mutate, queryClient } = UseRequestProcessor();
+  const queryClient = useQueryClient();
   const userOnSettled = options?.onSettled;
-  return mutate(
-    ["useDeleteChannelIdentity"],
-    async ({ connectionId, identityId }) => {
+
+  return useMutation<
+    boolean,
+    unknown,
+    { connectionId: string; identityId: string }
+  >({
+    mutationKey: ["useDeleteChannelIdentity"],
+    mutationFn: async ({ connectionId, identityId }) => {
       await api.delete(
         `${getURL("CHANNELS")}/${connectionId}/identities/${identityId}`,
       );
       return true;
     },
-    {
-      ...options,
-      onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({
-          queryKey: ["useGetChannelIdentities", variables.connectionId],
-        });
-        await userOnSettled?.(data, error, variables, context);
-      },
+    ...options,
+    onSettled: async (...args) => {
+      const variables = args[2];
+      await queryClient.invalidateQueries({
+        queryKey: ["useGetChannelIdentities", variables.connectionId],
+      });
+      await userOnSettled?.(...args);
     },
-  );
+  });
 };
 
 export const useUpsertChannelConversation: ChannelMutationHook<
   { connectionId: string; payload: ChannelConversationBindingUpsert },
   ChannelConversationBinding
 > = (options) => {
-  const { mutate, queryClient } = UseRequestProcessor();
+  const queryClient = useQueryClient();
   const userOnSettled = options?.onSettled;
-  return mutate(
-    ["useUpsertChannelConversation"],
-    async ({ connectionId, payload }) => {
+
+  return useMutation<
+    ChannelConversationBinding,
+    unknown,
+    { connectionId: string; payload: ChannelConversationBindingUpsert }
+  >({
+    mutationKey: ["useUpsertChannelConversation"],
+    mutationFn: async ({ connectionId, payload }) => {
       const response = await api.put<ChannelConversationBinding>(
         `${getURL("CHANNELS")}/${connectionId}/conversations`,
         payload,
       );
       return response.data;
     },
-    {
-      ...options,
-      onSettled: async (data, error, variables, context) => {
-        await queryClient.invalidateQueries({
-          queryKey: ["useGetChannelConversations", variables.connectionId],
-        });
-        await userOnSettled?.(data, error, variables, context);
-      },
+    ...options,
+    onSettled: async (...args) => {
+      const variables = args[2];
+      await queryClient.invalidateQueries({
+        queryKey: ["useGetChannelConversations", variables.connectionId],
+      });
+      await userOnSettled?.(...args);
     },
-  );
+  });
 };
