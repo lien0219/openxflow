@@ -30,8 +30,6 @@ async def redeem_channel_binding(
 ) -> ChannelIdentityRead:
     try:
         identity = await redeem_channel_binding_code(db, payload.code, current_user.id)
-        await db.commit()
-        return identity
     except ChannelBindingCodeExpiredError as exc:
         await db.commit()
         raise HTTPException(status_code=status.HTTP_410_GONE, detail=str(exc)) from exc
@@ -44,3 +42,6 @@ async def redeem_channel_binding(
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Channel identity binding conflict") from exc
+    else:
+        await db.commit()
+        return identity
