@@ -162,7 +162,7 @@ export default function AccountsTab({ connectionId }: AccountsTabProps) {
         <div className="flex items-center gap-2">
           <select
             className="primary-input h-9 w-24"
-            value={Page(1);}
+            value={pageSize}
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setPage(1);

@@ -125,7 +125,9 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
         <div>
           <h3 className="font-semibold">{copy("自定义指令中心")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {copy("普通消息使用默认工作流；“/指令 内容”仅本次路由到指定工作流。")}
+            {copy(
+              "普通消息使用默认工作流；“/指令 内容”仅本次路由到指定工作流。",
+            )}
           </p>
         </div>
         <Button
@@ -167,7 +169,9 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
         <Loading />
       ) : (result?.items.length ?? 0) === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          {copy("暂无匹配指令。可创建连接共享、会话共享或仅自己可用的个人指令。")}
+          {copy(
+            "暂无匹配指令。可创建连接共享、会话共享或仅自己可用的个人指令。",
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -192,7 +196,9 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
                     </div>
                     {command.aliases.length > 0 && (
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {copy("别名列表", { aliases: command.aliases.join(", ") })}
+                        {copy("别名列表", {
+                          aliases: command.aliases.join(", "),
+                        })}
                       </div>
                     )}
                   </td>
@@ -248,7 +254,7 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
         <div className="flex items-center gap-2">
           <select
             className="primary-input h-9 w-24"
-            value={Page(1);}
+            value={pageSize}
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setPage(1);

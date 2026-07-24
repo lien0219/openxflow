@@ -128,10 +128,15 @@ export default function ExecutionLogsTab({
                   </td>
                   <td className="px-3 py-3 font-mono text-xs text-muted-foreground">
                     <div>
-                      {copy("会话：{{id}}", { id: execution.conversation_binding_id?.slice(0, 8) ?? "-" })}
+                      {copy("会话：{{id}}", {
+                        id:
+                          execution.conversation_binding_id?.slice(0, 8) ?? "-",
+                      })}
                     </div>
                     <div>
-                      {copy("用户：{{id}}", { id: execution.openxflow_user_id?.slice(0, 8) ?? "-" })}
+                      {copy("用户：{{id}}", {
+                        id: execution.openxflow_user_id?.slice(0, 8) ?? "-",
+                      })}
                     </div>
                   </td>
                   <td className="px-3 py-3">
@@ -163,7 +168,7 @@ export default function ExecutionLogsTab({
         <div className="flex items-center gap-2">
           <select
             className="primary-input h-9 w-24"
-            value={Page(1);}
+            value={pageSize}
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setPage(1);

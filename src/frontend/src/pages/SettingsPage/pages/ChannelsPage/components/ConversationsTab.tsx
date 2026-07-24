@@ -138,7 +138,9 @@ export default function ConversationsTab({
         },
       });
       setSelectedIds([]);
-      setSuccessData({ title: copy("已更新 {{count}} 个会话", { count: response.updated }) });
+      setSuccessData({
+        title: copy("已更新 {{count}} 个会话", { count: response.updated }),
+      });
     } catch (error) {
       showError(copy("批量更新会话失败"), error);
     }
@@ -161,7 +163,9 @@ export default function ConversationsTab({
       <div>
         <h3 className="font-semibold">{copy("会话管理")}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          {copy("会话由渠道消息自动发现，平台会话 ID 和类型只读，不再手工新增。")}
+          {copy(
+            "会话由渠道消息自动发现，平台会话 ID 和类型只读，不再手工新增。",
+          )}
         </p>
       </div>
 
@@ -273,7 +277,9 @@ export default function ConversationsTab({
         <Loading />
       ) : conversations.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          {copy("暂无匹配会话。用户或群聊第一次给机器人发消息后会自动出现在这里。")}
+          {copy(
+            "暂无匹配会话。用户或群聊第一次给机器人发消息后会自动出现在这里。",
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -310,7 +316,11 @@ export default function ConversationsTab({
                             : current.filter((id) => id !== conversation.id),
                         )
                       }
-                      aria-label={copy("选择 {{name}}", { name: conversation.display_name || conversation.external_conversation_id })}
+                      aria-label={copy("选择 {{name}}", {
+                        name:
+                          conversation.display_name ||
+                          conversation.external_conversation_id,
+                      })}
                     />
                   </td>
                   <td className="px-3 py-3">
@@ -366,7 +376,7 @@ export default function ConversationsTab({
         <div className="flex items-center gap-2">
           <select
             className="primary-input h-9 w-24"
-            value={Page(1);}
+            value={pageSize}
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setPage(1);
@@ -436,7 +446,9 @@ function routeLabel(
   if (conversation.route_mode === "disabled") return copy("普通消息已停用");
   if (conversation.route_mode === "override") {
     return conversation.default_flow_id
-      ? copy("独立工作流 · {{id}}", { id: conversation.default_flow_id.slice(0, 8) })
+      ? copy("独立工作流 · {{id}}", {
+          id: conversation.default_flow_id.slice(0, 8),
+        })
       : copy("独立工作流未设置");
   }
   return connection.default_flow_id
