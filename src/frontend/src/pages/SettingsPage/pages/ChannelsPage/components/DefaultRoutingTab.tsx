@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   type ChannelConnection,
   type ChannelProviderCapabilities,
+  type ChannelResponseMode,
   type ChannelUnconfiguredBehavior,
   useUpdateChannelConnection,
 } from "@/controllers/API/queries/channels";
@@ -23,7 +24,7 @@ interface RoutingFormState {
   unconfiguredBehavior: ChannelUnconfiguredBehavior;
   pendingNoticeEnabled: boolean;
   personalCommandsEnabled: boolean;
-  defaultResponseMode: string;
+  defaultResponseMode: ChannelResponseMode;
   defaultAllowFileUpload: boolean;
 }
 
@@ -178,14 +179,16 @@ export default function DefaultRoutingTab({
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
-                defaultResponseMode: event.target.value,
+                defaultResponseMode: event.target.value as ChannelResponseMode,
               }))
             }
           >
-            <option value="mentions_only">
+            <option value="mention_only">
               {copy("仅 @机器人或指令时响应")}
             </option>
             <option value="all_messages">{copy("响应所有消息")}</option>
+            <option value="commands_only">{copy("仅响应指令")}</option>
+            <option value="disabled">{copy("完全停用响应")}</option>
           </select>
         </label>
       )}
