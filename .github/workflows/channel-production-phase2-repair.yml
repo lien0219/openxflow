@@ -45,6 +45,7 @@ jobs:
           status=${PIPESTATUS[0]}
           if [ "$status" -eq 0 ]; then
             python .github/scripts/patch_channel_policy_defaults.py
+            python .github/scripts/patch_channel_principal_compat.py
           fi
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           exit 0
@@ -147,6 +148,7 @@ jobs:
           rm -f .github/scripts/finalize_channel_production_phase2.py
           rm -f .github/scripts/repair_channel_production_phase2.py
           rm -f .github/scripts/patch_channel_policy_defaults.py
+          rm -f .github/scripts/patch_channel_principal_compat.py
           rm -f .github/workflows/channel-production-phase2.yml
           rm -f .github/workflows/channel-production-phase2-finalize.yml
           rm -f .github/workflows/channel-production-phase2-repair.yml
