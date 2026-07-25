@@ -433,6 +433,7 @@ class ChannelDispatchService:
                     "access_policy": effective_access_policy(self.connection, binding),
                     "context_mode": context_mode,
                     "execution_identity_type": execution_identity_type,
+                    "granted_flow_id": str(flow_id) if flow_id is not None else None,
                 }
             )
             if command_name:

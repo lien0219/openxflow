@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from langflow.channels.services.service_identity import ensure_channel_service_identity
 from langflow.services.database.models.channel.execution_model import ChannelExecutionIdentityType
 from langflow.services.database.models.channel.model import (
     ChannelAccessPolicy,
@@ -98,11 +99,11 @@ async def resolve_execution_principal(
             identity=identity,
         )
 
-    service_user_id = connection.service_user_id
-    if service_user_id is None:
-        raise ChannelServiceIdentityUnavailableError
-    service_user = await session.get(User, service_user_id)
-    if service_user is None or not service_user.is_active:
+    try:
+        service_user = await ensure_channel_service_identity(session, connection)
+    except Exception as exc:  # noqa: BLE001
+        raise ChannelServiceIdentityUnavailableError from exc
+    if not service_user.is_active:
         raise ChannelServiceIdentityUnavailableError
     return ChannelExecutionPrincipal(
         user=service_user,

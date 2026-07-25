@@ -50,7 +50,6 @@ from langflow.services.database.models.channel.model import (
     ChannelIdentityCreate,
     ChannelIdentityRead,
 )
-from langflow.services.database.models.user.model import User
 
 router = APIRouter(prefix="/channels", tags=["Channels"])
 _DINGTALK_STREAM_UNAVAILABLE = (
@@ -90,15 +89,11 @@ async def create_channel_connection_route(
     db: DbSession,
     current_user: CurrentActiveUser,
 ) -> ChannelConnectionRead:
-    service_user_id = payload.service_user_id or current_user.id
-    if service_user_id != current_user.id and not current_user.is_superuser:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot assign another service user")
-    service_user = await db.get(User, service_user_id)
-    if service_user is None or not service_user.is_active:
+    if payload.service_user_id is not None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Service user is missing or inactive"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Channel service identities are provisioned automatically",
         )
-    payload.service_user_id = service_user_id
     await validate_connection_routing_resources(db, current_user, payload)
     try:
         result = await create_channel_connection(db, current_user.id, payload)
@@ -122,13 +117,10 @@ async def update_channel_connection_route(
 ) -> ChannelConnectionRead:
     connection = await _owned_connection_or_404(db, current_user.id, connection_id)
     if payload.service_user_id is not None:
-        if payload.service_user_id != current_user.id and not current_user.is_superuser:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot assign another service user")
-        service_user = await db.get(User, payload.service_user_id)
-        if service_user is None or not service_user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Service user is missing or inactive"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Channel service identities are managed automatically and cannot be reassigned",
+        )
     await validate_connection_routing_resources(
         db,
         current_user,

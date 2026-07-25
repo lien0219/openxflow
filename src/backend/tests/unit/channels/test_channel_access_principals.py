@@ -18,8 +18,14 @@ class FakeSession:
         return self.users.get(user_id)
 
 
-def _user(user_id, *, active=True):
-    return SimpleNamespace(id=user_id, is_active=active)
+def _user(user_id, *, active=True, connection_id=None):
+    optins = {}
+    if connection_id is not None:
+        optins = {
+            "channel_service_identity": True,
+            "channel_connection_id": str(connection_id),
+        }
+    return SimpleNamespace(id=user_id, is_active=active, optins=optins)
 
 
 def _identity(user_id=None):
@@ -32,6 +38,7 @@ def _identity(user_id=None):
 async def test_shared_route_requires_explicit_service_identity() -> None:
     owner_id = uuid4()
     connection = SimpleNamespace(
+        id=uuid4(),
         user_id=owner_id,
         service_user_id=None,
         access_policy="hybrid",
@@ -44,11 +51,12 @@ async def test_bound_only_gates_member_but_shared_route_uses_service_identity() 
     service_id = uuid4()
     member_id = uuid4()
     connection = SimpleNamespace(
+        id=uuid4(),
         user_id=uuid4(),
         service_user_id=service_id,
         access_policy="bound_only",
     )
-    users = {service_id: _user(service_id), member_id: _user(member_id)}
+    users = {service_id: _user(service_id, connection_id=connection.id), member_id: _user(member_id)}
     principal = await resolve_execution_principal(
         FakeSession(users),
         connection,
@@ -62,6 +70,7 @@ async def test_bound_only_gates_member_but_shared_route_uses_service_identity() 
 async def test_bound_only_rejects_unbound_member_before_shared_execution() -> None:
     service_id = uuid4()
     connection = SimpleNamespace(
+        id=uuid4(),
         user_id=uuid4(),
         service_user_id=service_id,
         access_policy="bound_only",
@@ -79,6 +88,7 @@ async def test_hybrid_personal_route_uses_bound_member_identity() -> None:
     service_id = uuid4()
     member_id = uuid4()
     connection = SimpleNamespace(
+        id=uuid4(),
         user_id=uuid4(),
         service_user_id=service_id,
         access_policy="hybrid",

@@ -5,12 +5,18 @@ from __future__ import annotations
 import hashlib
 import json
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
+
+from fastapi import HTTPException, status
 
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelMessageType
 from langflow.helpers.flow import get_flow_by_id_or_endpoint_name
 from langflow.services.authorization import FlowAction, ensure_flow_permission
+from langflow.services.database.models.channel.execution_model import ChannelExecutionIdentityType
 from langflow.services.database.models.channel.model import ChannelContextMode
+from langflow.services.database.models.flow.model import Flow
 from langflow.services.database.models.user.model import User
+from langflow.services.deps import session_scope
 
 if TYPE_CHECKING:
     from langflow.api.v1.schemas import RunResponse
@@ -121,15 +127,34 @@ class ChannelWorkflowExecutor:
         from langflow.api.v1.endpoints import simple_run_flow
         from langflow.api.v1.schemas import SimplifiedAPIRequest
 
-        flow = await get_flow_by_id_or_endpoint_name(flow_identifier, user.id, widen_for_shares=True)
-        await ensure_flow_permission(
-            user,
-            FlowAction.EXECUTE,
-            flow_id=flow.id,
-            flow_user_id=flow.user_id,
-            workspace_id=getattr(flow, "workspace_id", None),
-            folder_id=getattr(flow, "folder_id", None),
-        )
+        if execution_identity_type == ChannelExecutionIdentityType.SERVICE.value:
+            granted_flow_id = str((channel_context or {}).get("granted_flow_id") or "")
+            if not granted_flow_id or granted_flow_id != flow_identifier:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="The channel service identity is not granted this workflow",
+                )
+            try:
+                flow_id = UUID(granted_flow_id)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Shared channel routes require an explicit workflow ID grant",
+                ) from exc
+            async with session_scope() as session:
+                flow = await session.get(Flow, flow_id)
+            if flow is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
+        else:
+            flow = await get_flow_by_id_or_endpoint_name(flow_identifier, user.id, widen_for_shares=True)
+            await ensure_flow_permission(
+                user,
+                FlowAction.EXECUTE,
+                flow_id=flow.id,
+                flow_user_id=flow.user_id,
+                workspace_id=getattr(flow, "workspace_id", None),
+                folder_id=getattr(flow, "folder_id", None),
+            )
         normalized_attachments = [attachment.model_dump(exclude_none=True) for attachment in event.message.attachments]
         context_payload: dict[str, Any] = {
             "type": event.channel.value,

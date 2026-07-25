@@ -14,6 +14,10 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.channels.security.credentials import decrypt_credentials, encrypt_credentials, list_credential_keys
+from langflow.channels.services.service_identity import (
+    ensure_channel_service_identity,
+    remove_channel_service_identity,
+)
 
 if TYPE_CHECKING:
     from langflow.channels.domain.models import ChannelEvent
@@ -110,7 +114,7 @@ async def create_channel_connection(
         channel_type=payload.channel_type,
         enabled=payload.enabled,
         connection_mode=payload.connection_mode,
-        service_user_id=payload.service_user_id or user_id,
+        service_user_id=None,
         default_flow_id=payload.default_flow_id,
         default_knowledge_base_id=payload.default_knowledge_base_id,
         auto_discover_conversations=payload.auto_discover_conversations,
@@ -135,6 +139,7 @@ async def create_channel_connection(
     )
     session.add(connection)
     await session.flush()
+    await ensure_channel_service_identity(session, connection)
     await session.refresh(connection)
     return _connection_read(connection)
 
@@ -144,6 +149,8 @@ async def list_channel_connections(session: AsyncSession, user_id: UUID) -> list
         select(ChannelConnection).where(ChannelConnection.user_id == user_id).order_by(ChannelConnection.created_at)
     )
     rows = (await session.exec(statement)).all()
+    for row in rows:
+        await ensure_channel_service_identity(session, row)
     return [_connection_read(row) for row in rows]
 
 
@@ -156,7 +163,10 @@ async def get_owned_channel_connection(
         ChannelConnection.id == connection_id,
         ChannelConnection.user_id == user_id,
     )
-    return (await session.exec(statement)).first()
+    connection = (await session.exec(statement)).first()
+    if connection is not None:
+        await ensure_channel_service_identity(session, connection)
+    return connection
 
 
 async def update_channel_connection(
@@ -164,7 +174,7 @@ async def update_channel_connection(
     connection: ChannelConnection,
     payload: ChannelConnectionUpdate,
 ) -> ChannelConnectionRead:
-    changes = payload.model_dump(exclude_unset=True, exclude={"credentials"})
+    changes = payload.model_dump(exclude_unset=True, exclude={"credentials", "service_user_id"})
     for key, value in changes.items():
         setattr(connection, key, value)
 
@@ -175,6 +185,7 @@ async def update_channel_connection(
 
     connection.updated_at = _utc_now()
     session.add(connection)
+    await ensure_channel_service_identity(session, connection)
 
     if "default_flow_id" in changes:
         inherited_statement = select(ChannelConversationBinding).where(
@@ -196,6 +207,7 @@ async def update_channel_connection(
 
 
 async def delete_channel_connection(session: AsyncSession, connection: ChannelConnection) -> None:
+    await remove_channel_service_identity(session, connection)
     await session.delete(connection)
     await session.flush()
 
