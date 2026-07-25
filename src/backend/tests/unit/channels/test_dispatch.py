@@ -206,4 +206,6 @@ async def test_private_and_group_workflows_commit_channel_state_before_execution
         )
 
         assert response == ChannelMessage(title="Workflow", markdown="final answer")
-        assert session.commits == 1
+        # One commit exposes channel state before workflow execution; the second
+        # persists the final channel message and response metadata.
+        assert session.commits == 2

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from datetime import datetime, timezone
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any
@@ -22,13 +23,23 @@ from langflow.channels.domain.models import (
     ChannelMessageType,
     ChannelType,
 )
-from langflow.channels.services.binding import issue_channel_binding_code, resolve_channel_identity
+from langflow.channels.services.access_control import (
+    ChannelBindingRequiredError,
+    ChannelExecutionPrincipal,
+    ChannelServiceIdentityUnavailableError,
+    bound_identity_user,
+    effective_access_policy,
+    effective_context_mode,
+    resolve_execution_principal,
+)
+from langflow.channels.services.binding import discover_channel_identity, issue_channel_binding_code
 from langflow.channels.services.commands import (
     list_available_workflow_commands,
     mark_workflow_command_used,
     render_command_input,
     resolve_workflow_command,
 )
+from langflow.channels.services.context import prepare_channel_input, record_channel_response
 from langflow.channels.services.execution_logs import finalize_channel_execution, start_channel_execution
 from langflow.channels.services.files import (
     ChannelFileService,
@@ -37,14 +48,14 @@ from langflow.channels.services.files import (
 )
 from langflow.channels.services.outbound_delivery import send_outbound_processing_once
 from langflow.channels.services.retry import retry_channel_operation
-from langflow.channels.services.workflow import ChannelWorkflowExecutor
+from langflow.channels.services.workflow import ChannelWorkflowExecutor, build_channel_session_id
 from langflow.services.authorization import KnowledgeBaseAction, ensure_knowledge_base_permission
 
 if TYPE_CHECKING:
     from langflow.services.database.models.channel.command_model import ChannelWorkflowCommand
 
 from langflow.services.database.models.channel.crud import discover_channel_conversation
-from langflow.services.database.models.channel.execution_model import ChannelExecutionTrigger
+from langflow.services.database.models.channel.execution_model import ChannelExecutionStatus, ChannelExecutionTrigger
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelConversationBinding,
@@ -78,6 +89,13 @@ class ChannelDispatchService:
         binding = await discover_channel_conversation(self.session, self.connection, event)
         if binding is None:
             binding = await self._get_conversation_binding(event)
+        identity = await discover_channel_identity(self.session, event)
+        bound_user = await bound_identity_user(self.session, identity)
+        if bound_user is not None:
+            event.user.openxflow_user_id = bound_user.id
+
+        access_policy = effective_access_policy(self.connection, binding)
+        personal_user_id = bound_user.id if bound_user is not None and access_policy != "shared" else None
 
         if binding is not None and binding.status in {
             ChannelConversationStatus.IGNORED.value,
@@ -88,34 +106,34 @@ class ChannelDispatchService:
         if self._should_ignore_group_event(event, binding=binding, command=command):
             return None
 
-        identity = await resolve_channel_identity(self.session, event)
-        if identity is None:
-            return await self._binding_required_message(event)
-
-        event.user.openxflow_user_id = identity.openxflow_user_id
-        user = await self.session.get(User, identity.openxflow_user_id)
-        if user is None or not user.is_active:
-            return ChannelMessage(text="绑定的 OpenXFlow 账号不存在或已停用，请联系管理员。")
-
         if command in {"/start", "/help"}:
-            return self._help_message(bound=True)
+            return self._help_message(bound=bound_user is not None)
         if command == "/bind":
-            return ChannelMessage(
-                title="账号已绑定",
-                text=f"当前渠道账号已绑定 OpenXFlow 用户：{user.username}",
-            )
+            if bound_user is not None:
+                return ChannelMessage(
+                    title="账号已绑定",
+                    text=f"当前渠道账号已绑定 OpenXFlow 用户：{bound_user.username}",
+                )
+            return await self._binding_required_message(event)
         if command == "/commands":
-            return await self._commands_message(user, binding)
+            if access_policy == "bound_only" and bound_user is None:
+                return await self._binding_required_message(event)
+            return await self._commands_message(personal_user_id, binding)
 
         if command == "/flow":
-            if user.id != self.connection.user_id and not user.is_superuser:
+            if bound_user is None or (bound_user.id != self.connection.user_id and not bound_user.is_superuser):
                 return ChannelMessage(text="未知命令。发送 /commands 查看当前可用指令。")
             flow_identifier, _, input_value = argument.partition(" ")
             if not flow_identifier:
                 return ChannelMessage(text="管理员用法：/flow <工作流 ID 或 endpoint_name> [输入内容]")
+            principal = ChannelExecutionPrincipal(
+                user=bound_user,
+                identity_type="bound_user",
+                identity=identity,
+            )
             return await self._execute_workflow(
                 event,
-                user,
+                principal,
                 flow_identifier,
                 input_value or None,
                 binding=binding,
@@ -126,14 +144,27 @@ class ChannelDispatchService:
         if command is not None:
             custom_response = await self._execute_custom_command(
                 event,
-                user,
+                identity,
+                bound_user,
                 binding,
                 command,
                 argument,
             )
             if custom_response is not None:
                 return custom_response
-            return await self._unknown_command_message(user, binding, command)
+            return await self._unknown_command_message(personal_user_id, binding, command)
+
+        try:
+            principal = await resolve_execution_principal(
+                self.session,
+                self.connection,
+                binding,
+                identity,
+            )
+        except ChannelBindingRequiredError:
+            return await self._binding_required_message(event)
+        except ChannelServiceIdentityUnavailableError:
+            return ChannelMessage(text="当前渠道共享执行身份尚未配置或已停用，请联系管理员。")
 
         if event.message.attachments:
             binding = binding or await self._ensure_conversation_binding(event)
@@ -144,7 +175,7 @@ class ChannelDispatchService:
             for attachment in event.message.attachments:
                 response = await self.file_service.handle_attachment(
                     event=event,
-                    user=user,
+                    user=principal.user,
                     binding=binding,
                     attachment=attachment,
                 )
@@ -157,13 +188,12 @@ class ChannelDispatchService:
         text = (event.message.text or "").strip()
         if not text:
             return None
-
         flow_id = self._resolve_default_flow_id(binding)
         if flow_id is None:
             return await self._pending_route_message(binding)
         return await self._execute_workflow(
             event,
-            user,
+            principal,
             str(flow_id),
             text,
             binding=binding,
@@ -174,18 +204,24 @@ class ChannelDispatchService:
     async def _execute_custom_command(
         self,
         event: ChannelEvent,
-        user: User,
+        identity,
+        bound_user: User | None,
         binding: ChannelConversationBinding | None,
         command_name: str,
         argument: str,
     ) -> ChannelMessage | None:
         if binding is None:
             return None
+        command_user_id = (
+            bound_user.id
+            if bound_user is not None and effective_access_policy(self.connection, binding) != "shared"
+            else None
+        )
         command = await resolve_workflow_command(
             self.session,
             connection_id=self.connection.id,
             conversation_binding_id=binding.id,
-            user_id=user.id,
+            user_id=command_user_id,
             command_name=command_name,
         )
         if command is None:
@@ -196,10 +232,20 @@ class ChannelDispatchService:
             return ChannelMessage(text=f"指令 {command.command} 不允许上传附件。")
         if command.input_required and not argument and not event.message.attachments:
             description = command.description or "请在指令后输入需要处理的内容。"
-            return ChannelMessage(
-                title=command.command,
-                text=f"{description}\n\n用法：{command.command} <内容>",
+            return ChannelMessage(title=command.command, text=f"{description}\n\n用法：{command.command} <内容>")
+
+        try:
+            principal = await resolve_execution_principal(
+                self.session,
+                self.connection,
+                binding,
+                identity,
+                requires_personal=command.owner_user_id is not None,
             )
+        except ChannelBindingRequiredError:
+            return await self._binding_required_message(event)
+        except ChannelServiceIdentityUnavailableError:
+            return ChannelMessage(text="当前渠道共享执行身份尚未配置或已停用，请联系管理员。")
 
         input_value = render_command_input(
             command,
@@ -211,7 +257,7 @@ class ChannelDispatchService:
         await mark_workflow_command_used(self.session, command)
         return await self._execute_workflow(
             event,
-            user,
+            principal,
             str(command.flow_id),
             input_value or None,
             binding=binding,
@@ -222,7 +268,7 @@ class ChannelDispatchService:
 
     async def _commands_message(
         self,
-        user: User,
+        user_id: UUID | None,
         binding: ChannelConversationBinding | None,
     ) -> ChannelMessage:
         if binding is None:
@@ -231,7 +277,7 @@ class ChannelDispatchService:
             self.session,
             connection_id=self.connection.id,
             conversation_binding_id=binding.id,
-            user_id=user.id,
+            user_id=user_id,
         )
         if not commands:
             return ChannelMessage(title="可用指令", text="当前会话还没有配置自定义指令。")
@@ -255,7 +301,7 @@ class ChannelDispatchService:
 
     async def _unknown_command_message(
         self,
-        user: User,
+        user_id: UUID | None,
         binding: ChannelConversationBinding | None,
         command_name: str,
     ) -> ChannelMessage:
@@ -265,15 +311,10 @@ class ChannelDispatchService:
                 self.session,
                 connection_id=self.connection.id,
                 conversation_binding_id=binding.id,
-                user_id=user.id,
+                user_id=user_id,
             )
         command_by_name = {name: item for item in commands for name in (item.normalized_command, *item.aliases)}
-        suggestions = get_close_matches(
-            command_name.lower(),
-            list(command_by_name),
-            n=3,
-            cutoff=0.45,
-        )
+        suggestions = get_close_matches(command_name.lower(), list(command_by_name), n=3, cutoff=0.45)
         if not suggestions:
             return ChannelMessage(text=f"没有找到指令 {command_name}。发送 /commands 查看当前可用指令。")
         unique_commands: list[ChannelWorkflowCommand] = []
@@ -329,7 +370,7 @@ class ChannelDispatchService:
     async def _execute_workflow(
         self,
         event: ChannelEvent,
-        user: User,
+        principal: ChannelExecutionPrincipal,
         flow_identifier: str,
         input_value: str | None,
         *,
@@ -338,53 +379,104 @@ class ChannelDispatchService:
         command_name: str | None = None,
         flow_id: UUID | None = None,
     ) -> ChannelMessage | None:
-        execution = None
-        try:
-            execution = await start_channel_execution(
-                self.session,
-                connection_id=self.connection.id,
-                conversation_binding_id=binding.id if binding else None,
-                openxflow_user_id=user.id,
-                flow_id=flow_id,
-                external_event_id=event.event_id,
-                trigger_type=trigger_type,
-                command_name=command_name,
-            )
-        except Exception:  # noqa: BLE001
-            await logger.aexception("Unable to create channel execution log")
-
-        # Persist the event receipt, discovered conversation, and running audit row
-        # before any provider side effect. This prevents a Feishu retry from racing
-        # the first delivery and creating a second processing/final card.
+        if isinstance(principal, ChannelExecutionPrincipal):
+            execution_user = principal.user
+            execution_identity_type = principal.identity_type
+        else:
+            execution_user = principal
+            execution_identity_type = "bound_user"
+        context_mode = effective_context_mode(self.connection, binding)
+        session_id = build_channel_session_id(event, context_mode)
+        prepared_input = input_value
         if self.session is not None:
+            prepared_input = await prepare_channel_input(
+                self.session,
+                connection=self.connection,
+                binding=binding,
+                event=event,
+                session_id=session_id,
+                input_value=input_value,
+            )
+
+        execution = None
+        queue_wait_ms = event.message.metadata.get("queue_wait_ms")
+        if not isinstance(queue_wait_ms, int):
+            queue_wait_ms = None
+        if self.session is not None:
+            try:
+                execution = await start_channel_execution(
+                    self.session,
+                    connection_id=self.connection.id,
+                    conversation_binding_id=binding.id if binding else None,
+                    openxflow_user_id=execution_user.id,
+                    external_user_id=event.user.external_user_id,
+                    session_id=session_id,
+                    execution_identity_type=execution_identity_type,
+                    flow_id=flow_id,
+                    external_event_id=event.event_id,
+                    trigger_type=trigger_type,
+                    command_name=command_name,
+                    queue_wait_ms=queue_wait_ms,
+                )
+            except Exception:  # noqa: BLE001
+                await logger.aexception("Unable to create channel execution log")
             await self.session.commit()
+
         processing_message_id = await self._send_processing_message(event)
-        succeeded = False
+        final_status = ChannelExecutionStatus.FAILED.value
         error_message: str | None = None
+        error_code: str | None = None
         try:
             channel_context = await self._build_bound_context(binding)
+            channel_context.update(
+                {
+                    "access_policy": effective_access_policy(self.connection, binding),
+                    "context_mode": context_mode,
+                    "execution_identity_type": execution_identity_type,
+                }
+            )
             if command_name:
                 channel_context["command_name"] = command_name
-            response = await self.workflow_executor.execute(
-                event=event,
-                user=user,
-                flow_identifier=flow_identifier,
-                input_value=input_value,
-                channel_context=channel_context,
-            )
-            succeeded = True
+            executor_kwargs: dict[str, Any] = {
+                "event": event,
+                "user": execution_user,
+                "flow_identifier": flow_identifier,
+                "input_value": prepared_input,
+                "channel_context": channel_context,
+            }
+            executor_parameters = inspect.signature(self.workflow_executor.execute).parameters
+            if "session_id" in executor_parameters:
+                executor_kwargs["session_id"] = session_id
+            if "execution_identity_type" in executor_parameters:
+                executor_kwargs["execution_identity_type"] = execution_identity_type
+            response = await self.workflow_executor.execute(**executor_kwargs)
+            final_status = ChannelExecutionStatus.SUCCEEDED.value
+            if self.session is not None:
+                await record_channel_response(
+                    self.session,
+                    connection=self.connection,
+                    binding=binding,
+                    event=event,
+                    session_id=session_id,
+                    response=response,
+                )
+                await self.session.commit()
         except HTTPException as exc:
             error_message = str(exc.detail)
+            error_code = f"http_{exc.status_code}"
             if exc.status_code in {403, 404}:
-                response = ChannelMessage(text="工作流不存在，或当前绑定账号没有执行权限。")
+                response = ChannelMessage(text="工作流不存在，或当前执行身份没有执行权限。")
             else:
                 await logger.aexception("Channel workflow HTTP error for flow %s", flow_identifier)
                 response = ChannelMessage(text="工作流执行失败，请稍后重试。")
         except asyncio.CancelledError:
             error_message = "Channel workflow execution was cancelled or timed out"
+            error_code = "execution_cancelled"
+            final_status = ChannelExecutionStatus.TIMEOUT.value
             raise
         except Exception as exc:  # noqa: BLE001
             error_message = str(exc)
+            error_code = type(exc).__name__[:128]
             await logger.aexception("Channel workflow execution failed for flow %s", flow_identifier)
             response = ChannelMessage(text="工作流执行失败，请在 OpenXFlow 运行记录中查看错误详情。")
         finally:
@@ -392,8 +484,9 @@ class ChannelDispatchService:
                 try:
                     await finalize_channel_execution(
                         execution.id,
-                        succeeded=succeeded,
+                        status=final_status,
                         error_message=error_message,
+                        error_code=error_code,
                     )
                 except asyncio.CancelledError:
                     raise
@@ -409,7 +502,7 @@ class ChannelDispatchService:
                 return None
             except Exception:  # noqa: BLE001
                 await logger.aexception(
-                    "Unable to update Feishu processing message %s; falling back to a new response",
+                    "Unable to update processing message %s; falling back to a new response",
                     processing_message_id,
                 )
         return response
@@ -572,6 +665,8 @@ class ChannelDispatchService:
                     "response_mode": binding.response_mode,
                     "allow_file_upload": binding.allow_file_upload,
                     "conversation_route_mode": binding.route_mode,
+                    "conversation_access_policy": binding.access_policy,
+                    "conversation_context_mode": binding.context_mode,
                 }
             )
         knowledge_base_id = (

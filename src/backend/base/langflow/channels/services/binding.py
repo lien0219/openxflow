@@ -1,4 +1,4 @@
-"""Secure account-binding challenges for external communication channels."""
+"""Secure account-binding challenges and external identity discovery."""
 
 from __future__ import annotations
 
@@ -52,6 +52,45 @@ def _as_utc(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
+async def discover_channel_identity(session: AsyncSession, event: ChannelEvent) -> ChannelIdentity:
+    statement = select(ChannelIdentity).where(
+        ChannelIdentity.connection_id == event.connection_id,
+        ChannelIdentity.external_tenant_id == (event.user.tenant_id or ""),
+        ChannelIdentity.external_user_id == event.user.external_user_id,
+    )
+    identity = (await session.exec(statement)).first()
+    now = _utc_now()
+    if identity is None:
+        identity = ChannelIdentity(
+            connection_id=event.connection_id,
+            external_tenant_id=event.user.tenant_id or "",
+            external_user_id=event.user.external_user_id,
+            display_name=event.user.display_name,
+            profile_data=dict(event.user.metadata),
+            status=ChannelIdentityStatus.DISCOVERED.value,
+            first_seen_at=now,
+            last_seen_at=now,
+            last_message_at=event.timestamp or now,
+        )
+        try:
+            async with session.begin_nested():
+                session.add(identity)
+                await session.flush()
+        except IntegrityError:
+            identity = (await session.exec(statement)).first()
+            if identity is None:
+                raise
+    identity.display_name = event.user.display_name or identity.display_name
+    identity.profile_data = dict(event.user.metadata)
+    identity.last_seen_at = now
+    identity.last_message_at = event.timestamp or now
+    identity.updated_at = now
+    session.add(identity)
+    await session.flush()
+    await session.refresh(identity)
+    return identity
+
+
 async def resolve_channel_identity(session: AsyncSession, event: ChannelEvent) -> ChannelIdentity | None:
     statement = select(ChannelIdentity).where(
         ChannelIdentity.connection_id == event.connection_id,
@@ -97,7 +136,6 @@ async def issue_channel_binding_code(
         except IntegrityError:
             continue
         return code
-
     raise RuntimeError("Unable to allocate a unique channel binding code")
 
 
@@ -133,7 +171,11 @@ async def redeem_channel_binding_code(
         .with_for_update()
     )
     identity = (await session.exec(identity_statement)).first()
-    if identity is not None and identity.openxflow_user_id != openxflow_user_id:
+    if (
+        identity is not None
+        and identity.openxflow_user_id is not None
+        and identity.openxflow_user_id != openxflow_user_id
+    ):
         raise ChannelIdentityConflictError("This channel account is already bound to another OpenXFlow user")
 
     if identity is None:
@@ -145,11 +187,15 @@ async def redeem_channel_binding_code(
             display_name=challenge.display_name,
             profile_data=challenge.profile_data,
             status=ChannelIdentityStatus.BOUND.value,
+            bound_at=now,
         )
     else:
+        identity.openxflow_user_id = openxflow_user_id
         identity.status = ChannelIdentityStatus.BOUND.value
+        identity.bound_at = now
         identity.display_name = challenge.display_name or identity.display_name
         identity.profile_data = challenge.profile_data
+        identity.last_seen_at = now
         identity.updated_at = now
 
     challenge.used_at = now

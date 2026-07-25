@@ -359,11 +359,12 @@ async def delete_workflow_command(
 def _scope_priority(
     command: ChannelWorkflowCommand,
     *,
-    user_id: UUID,
+    user_id: UUID | None,
     conversation_binding_id: UUID,
 ) -> int | None:
     if (
-        command.scope_type == ChannelCommandScope.IDENTITY_CONVERSATION.value
+        user_id is not None
+        and command.scope_type == ChannelCommandScope.IDENTITY_CONVERSATION.value
         and command.owner_user_id == user_id
         and command.conversation_binding_id == conversation_binding_id
     ):
@@ -373,7 +374,11 @@ def _scope_priority(
         and command.conversation_binding_id == conversation_binding_id
     ):
         return 1
-    if command.scope_type == ChannelCommandScope.IDENTITY_CONNECTION.value and command.owner_user_id == user_id:
+    if (
+        user_id is not None
+        and command.scope_type == ChannelCommandScope.IDENTITY_CONNECTION.value
+        and command.owner_user_id == user_id
+    ):
         return 2
     if command.scope_type == ChannelCommandScope.CONNECTION_SHARED.value:
         return 3
@@ -385,7 +390,7 @@ async def resolve_workflow_command(
     *,
     connection_id: UUID,
     conversation_binding_id: UUID,
-    user_id: UUID,
+    user_id: UUID | None,
     command_name: str,
 ) -> ChannelWorkflowCommand | None:
     normalized = command_name.lower()
@@ -396,9 +401,13 @@ async def resolve_workflow_command(
             ChannelWorkflowCommand.conversation_binding_id.is_(None),
             ChannelWorkflowCommand.conversation_binding_id == conversation_binding_id,
         ),
-        sa.or_(
-            ChannelWorkflowCommand.owner_user_id.is_(None),
-            ChannelWorkflowCommand.owner_user_id == user_id,
+        (
+            ChannelWorkflowCommand.owner_user_id.is_(None)
+            if user_id is None
+            else sa.or_(
+                ChannelWorkflowCommand.owner_user_id.is_(None),
+                ChannelWorkflowCommand.owner_user_id == user_id,
+            )
         ),
     )
     rows = (await session.exec(statement)).all()
@@ -424,7 +433,7 @@ async def list_available_workflow_commands(
     *,
     connection_id: UUID,
     conversation_binding_id: UUID,
-    user_id: UUID,
+    user_id: UUID | None,
 ) -> list[ChannelWorkflowCommand]:
     statement = select(ChannelWorkflowCommand).where(
         ChannelWorkflowCommand.connection_id == connection_id,
@@ -433,9 +442,13 @@ async def list_available_workflow_commands(
             ChannelWorkflowCommand.conversation_binding_id.is_(None),
             ChannelWorkflowCommand.conversation_binding_id == conversation_binding_id,
         ),
-        sa.or_(
-            ChannelWorkflowCommand.owner_user_id.is_(None),
-            ChannelWorkflowCommand.owner_user_id == user_id,
+        (
+            ChannelWorkflowCommand.owner_user_id.is_(None)
+            if user_id is None
+            else sa.or_(
+                ChannelWorkflowCommand.owner_user_id.is_(None),
+                ChannelWorkflowCommand.owner_user_id == user_id,
+            )
         ),
     )
     rows = (await session.exec(statement)).all()

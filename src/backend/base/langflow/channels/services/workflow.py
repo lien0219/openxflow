@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelMessageType
 from langflow.helpers.flow import get_flow_by_id_or_endpoint_name
 from langflow.services.authorization import FlowAction, ensure_flow_permission
+from langflow.services.database.models.channel.model import ChannelContextMode
 from langflow.services.database.models.user.model import User
 
 if TYPE_CHECKING:
@@ -18,15 +19,15 @@ _TELEGRAM_SAFE_TEXT_LIMIT = 3900
 _PREFERRED_OUTPUT_KEYS = ("text", "message", "content", "result", "results", "data")
 
 
-def build_channel_session_id(event: ChannelEvent) -> str:
-    raw = ":".join(
-        (
-            event.channel.value,
-            str(event.connection_id),
-            event.conversation.external_conversation_id,
-            event.user.external_user_id,
-        )
-    )
+def build_channel_session_id(event: ChannelEvent, context_mode: str = ChannelContextMode.ISOLATED.value) -> str:
+    parts = [
+        event.channel.value,
+        str(event.connection_id),
+        event.conversation.external_conversation_id,
+    ]
+    if context_mode != ChannelContextMode.SHARED.value or event.conversation.conversation_type == "private":
+        parts.append(event.user.external_user_id)
+    raw = ":".join(parts)
     return f"channel-{hashlib.sha256(raw.encode()).hexdigest()[:32]}"
 
 
@@ -58,7 +59,6 @@ def _collect_text_candidates(value: Any, *, depth: int = 0) -> list[str]:
 
 
 def _collect_chat_output_messages(value: Any) -> list[str]:
-    """Extract rendered assistant messages from RunOutputs before generic metadata."""
     if not isinstance(value, (list, tuple)):
         return []
     candidates: list[str] = []
@@ -98,10 +98,7 @@ def render_run_response(response: RunResponse) -> str:
     for candidate in candidates:
         if candidate not in deduplicated:
             deduplicated.append(candidate)
-    if deduplicated:
-        rendered = deduplicated[-1]
-    else:
-        rendered = json.dumps(payload, ensure_ascii=False, default=str, indent=2)
+    rendered = deduplicated[-1] if deduplicated else json.dumps(payload, ensure_ascii=False, default=str, indent=2)
     if len(rendered) > _TELEGRAM_SAFE_TEXT_LIMIT:
         rendered = f"{rendered[: _TELEGRAM_SAFE_TEXT_LIMIT - 24]}\n\n[结果已截断]"
     return rendered
@@ -117,18 +114,14 @@ class ChannelWorkflowExecutor:
         user: User,
         flow_identifier: str,
         input_value: str | None,
+        session_id: str,
+        execution_identity_type: str,
         channel_context: dict[str, Any] | None = None,
     ) -> ChannelMessage:
-        # Lazy import avoids a router -> channel webhook -> workflow -> endpoints
-        # cycle while FastAPI is still constructing the v1 router.
         from langflow.api.v1.endpoints import simple_run_flow
         from langflow.api.v1.schemas import SimplifiedAPIRequest
 
-        flow = await get_flow_by_id_or_endpoint_name(
-            flow_identifier,
-            user.id,
-            widen_for_shares=True,
-        )
+        flow = await get_flow_by_id_or_endpoint_name(flow_identifier, user.id, widen_for_shares=True)
         await ensure_flow_permission(
             user,
             FlowAction.EXECUTE,
@@ -147,24 +140,24 @@ class ChannelWorkflowExecutor:
             "event_id": event.event_id,
             "external_user_id": event.user.external_user_id,
             "openxflow_user_id": str(user.id),
+            "execution_identity_type": execution_identity_type,
             "attachments": normalized_attachments,
             "message_metadata": dict(event.message.metadata),
         }
         if channel_context:
             context_payload.update(channel_context)
-        context = {"channel": context_payload}
         request = SimplifiedAPIRequest(
             input_value=input_value,
             input_type="chat",
             output_type="chat",
-            session_id=build_channel_session_id(event),
+            session_id=session_id,
             user_id=f"{event.channel.value}:{event.user.external_user_id}",
         )
         response = await simple_run_flow(
             flow,
             request,
             api_key_user=user,
-            context=context,
+            context={"channel": context_payload},
         )
         return ChannelMessage(
             message_type=ChannelMessageType.MARKDOWN,
@@ -173,5 +166,6 @@ class ChannelWorkflowExecutor:
             metadata={
                 "flow_id": str(flow.id),
                 "session_id": response.session_id,
+                "execution_identity_type": execution_identity_type,
             },
         )

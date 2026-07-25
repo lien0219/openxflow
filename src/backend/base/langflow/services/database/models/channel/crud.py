@@ -51,6 +51,7 @@ def _connection_read(connection: ChannelConnection) -> ChannelConnectionRead:
         channel_type=connection.channel_type,
         enabled=connection.enabled,
         connection_mode=connection.connection_mode,
+        service_user_id=connection.service_user_id,
         default_flow_id=connection.default_flow_id,
         default_knowledge_base_id=connection.default_knowledge_base_id,
         auto_discover_conversations=connection.auto_discover_conversations,
@@ -59,6 +60,17 @@ def _connection_read(connection: ChannelConnection) -> ChannelConnectionRead:
         personal_commands_enabled=connection.personal_commands_enabled,
         default_response_mode=connection.default_response_mode,
         default_allow_file_upload=connection.default_allow_file_upload,
+        access_policy=connection.access_policy,
+        default_context_mode=connection.default_context_mode,
+        max_concurrency=connection.max_concurrency,
+        per_user_concurrency=connection.per_user_concurrency,
+        per_user_queue_limit=connection.per_user_queue_limit,
+        rate_limit_per_minute=connection.rate_limit_per_minute,
+        daily_quota=connection.daily_quota,
+        task_timeout_seconds=connection.task_timeout_seconds,
+        queue_timeout_seconds=connection.queue_timeout_seconds,
+        shared_context_window=connection.shared_context_window,
+        context_retention_days=connection.context_retention_days,
         settings_data=connection.settings_data,
         status=connection.status,
         configured_credential_keys=list_credential_keys(connection.credentials_encrypted),
@@ -98,6 +110,7 @@ async def create_channel_connection(
         channel_type=payload.channel_type,
         enabled=payload.enabled,
         connection_mode=payload.connection_mode,
+        service_user_id=payload.service_user_id or user_id,
         default_flow_id=payload.default_flow_id,
         default_knowledge_base_id=payload.default_knowledge_base_id,
         auto_discover_conversations=payload.auto_discover_conversations,
@@ -106,6 +119,17 @@ async def create_channel_connection(
         personal_commands_enabled=payload.personal_commands_enabled,
         default_response_mode=payload.default_response_mode,
         default_allow_file_upload=payload.default_allow_file_upload,
+        access_policy=payload.access_policy,
+        default_context_mode=payload.default_context_mode,
+        max_concurrency=payload.max_concurrency,
+        per_user_concurrency=payload.per_user_concurrency,
+        per_user_queue_limit=payload.per_user_queue_limit,
+        rate_limit_per_minute=payload.rate_limit_per_minute,
+        daily_quota=payload.daily_quota,
+        task_timeout_seconds=payload.task_timeout_seconds,
+        queue_timeout_seconds=payload.queue_timeout_seconds,
+        shared_context_window=payload.shared_context_window,
+        context_retention_days=payload.context_retention_days,
         settings_data=payload.settings_data,
         credentials_encrypted=encrypt_credentials(payload.credentials),
     )
@@ -181,7 +205,9 @@ async def list_channel_identities(
     connection_id: UUID,
 ) -> list[ChannelIdentityRead]:
     statement = (
-        select(ChannelIdentity).where(ChannelIdentity.connection_id == connection_id).order_by(ChannelIdentity.bound_at)
+        select(ChannelIdentity)
+        .where(ChannelIdentity.connection_id == connection_id)
+        .order_by(ChannelIdentity.last_seen_at.desc(), ChannelIdentity.id)
     )
     rows = (await session.exec(statement)).all()
     return [ChannelIdentityRead.model_validate(row, from_attributes=True) for row in rows]
@@ -199,13 +225,18 @@ async def upsert_channel_identity(
     )
     identity = (await session.exec(statement)).first()
     values = payload.model_dump()
+    now = _utc_now()
+    if values.get("openxflow_user_id") is not None:
+        values["status"] = "bound"
+        values["bound_at"] = now
 
     if identity is None:
         identity = ChannelIdentity(connection_id=connection_id, **values)
     else:
         for key, value in values.items():
             setattr(identity, key, value)
-        identity.updated_at = _utc_now()
+        identity.last_seen_at = now
+        identity.updated_at = now
 
     session.add(identity)
     await session.flush()

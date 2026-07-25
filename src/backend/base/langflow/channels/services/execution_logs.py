@@ -31,20 +31,30 @@ async def start_channel_execution(
     connection_id: UUID,
     conversation_binding_id: UUID | None,
     openxflow_user_id: UUID | None,
+    external_user_id: str | None,
+    session_id: str | None,
+    execution_identity_type: str,
     flow_id: UUID | None,
     external_event_id: str,
     trigger_type: str,
     command_name: str | None = None,
+    queue_wait_ms: int | None = None,
 ) -> ChannelExecutionLog:
+    now = _utc_now()
     execution = ChannelExecutionLog(
         connection_id=connection_id,
         conversation_binding_id=conversation_binding_id,
         openxflow_user_id=openxflow_user_id,
+        external_user_id=external_user_id,
+        session_id=session_id,
+        execution_identity_type=execution_identity_type,
         flow_id=flow_id,
         external_event_id=external_event_id,
         trigger_type=trigger_type,
         command_name=command_name,
         status=ChannelExecutionStatus.RUNNING.value,
+        queue_wait_ms=queue_wait_ms,
+        started_at=now,
     )
     session.add(execution)
     await session.flush()
@@ -56,13 +66,16 @@ async def finish_channel_execution(
     session: AsyncSession,
     execution: ChannelExecutionLog,
     *,
-    succeeded: bool,
+    status: str,
     error_message: str | None = None,
+    error_code: str | None = None,
 ) -> None:
     completed_at = _utc_now()
-    execution.status = ChannelExecutionStatus.SUCCEEDED.value if succeeded else ChannelExecutionStatus.FAILED.value
+    execution.status = status
     execution.completed_at = completed_at
-    execution.duration_ms = max(0, int((completed_at - execution.created_at).total_seconds() * 1000))
+    started_at = execution.started_at or execution.created_at
+    execution.duration_ms = max(0, int((completed_at - started_at).total_seconds() * 1000))
+    execution.error_code = error_code[:128] if error_code else None
     execution.error_message = error_message[:4000] if error_message else None
     session.add(execution)
     await session.flush()
@@ -71,11 +84,10 @@ async def finish_channel_execution(
 async def finalize_channel_execution(
     execution_id: UUID,
     *,
-    succeeded: bool,
+    status: str,
     error_message: str | None = None,
+    error_code: str | None = None,
 ) -> None:
-    """Finish an audit row in an isolated session that survives caller cancellation."""
-
     async def persist() -> None:
         async with session_scope() as session:
             execution = await session.get(ChannelExecutionLog, execution_id)
@@ -84,8 +96,9 @@ async def finalize_channel_execution(
             await finish_channel_execution(
                 session,
                 execution,
-                succeeded=succeeded,
+                status=status,
                 error_message=error_message,
+                error_code=error_code,
             )
             await session.commit()
 
@@ -93,10 +106,7 @@ async def finalize_channel_execution(
     await asyncio.shield(task)
 
 
-async def _fail_stale_channel_executions(
-    session: AsyncSession,
-    connection_id: UUID,
-) -> None:
+async def _fail_stale_channel_executions(session: AsyncSession, connection_id: UUID) -> None:
     cutoff = _utc_now() - timedelta(seconds=webhook_task_timeout_seconds() + 60)
     statement = select(ChannelExecutionLog).where(
         ChannelExecutionLog.connection_id == connection_id,
@@ -108,7 +118,8 @@ async def _fail_stale_channel_executions(
         await finish_channel_execution(
             session,
             execution,
-            succeeded=False,
+            status=ChannelExecutionStatus.TIMEOUT.value,
+            error_code="execution_timeout",
             error_message="Channel workflow execution was interrupted or timed out",
         )
     if stale_rows:
@@ -139,16 +150,16 @@ async def list_channel_executions(
     if trigger_type:
         filters.append(ChannelExecutionLog.trigger_type == trigger_type)
 
-    total_statement = select(func.count()).select_from(ChannelExecutionLog).where(*filters)
-    total = int((await session.exec(total_statement)).one())
-    statement = (
-        select(ChannelExecutionLog)
-        .where(*filters)
-        .order_by(ChannelExecutionLog.created_at.desc(), ChannelExecutionLog.id)
-        .offset((normalized_page - 1) * normalized_page_size)
-        .limit(normalized_page_size)
-    )
-    rows = (await session.exec(statement)).all()
+    total = int((await session.exec(select(func.count()).select_from(ChannelExecutionLog).where(*filters))).one())
+    rows = (
+        await session.exec(
+            select(ChannelExecutionLog)
+            .where(*filters)
+            .order_by(ChannelExecutionLog.created_at.desc(), ChannelExecutionLog.id)
+            .offset((normalized_page - 1) * normalized_page_size)
+            .limit(normalized_page_size)
+        )
+    ).all()
     return ChannelExecutionLogPage(
         items=[ChannelExecutionLogRead.model_validate(row, from_attributes=True) for row in rows],
         page=normalized_page,
