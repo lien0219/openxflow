@@ -3,10 +3,6 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from langflow.channels.services.configuration_audit import (
     channel_resource_changes,
     record_channel_configuration_audit,
@@ -35,6 +31,9 @@ from langflow.services.database.models.channel.webhook_job_model import (
     ChannelWebhookJob,
     ChannelWebhookJobStatus,
 )
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 async def _database(tmp_path):  # type: ignore[no-untyped-def]

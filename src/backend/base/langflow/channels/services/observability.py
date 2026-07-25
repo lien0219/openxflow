@@ -22,7 +22,6 @@ from langflow.services.database.models.channel.message_model import (
     ChannelMessageRecordStatus,
 )
 from langflow.services.database.models.channel.model import (
-    ChannelConversationBinding,
     ChannelEventReceipt,
     ChannelReceiptStatus,
     utc_now,
@@ -156,9 +155,7 @@ async def read_connection_overview(
             ChannelExecutionStatus.DELIVERY_FAILED,
         )
     )
-    success_rate = (
-        execution_counts[ChannelExecutionStatus.SUCCEEDED.value] / terminal_total if terminal_total else 0.0
-    )
+    success_rate = execution_counts[ChannelExecutionStatus.SUCCEEDED.value] / terminal_total if terminal_total else 0.0
 
     duration_rows = (
         await session.exec(
@@ -279,11 +276,7 @@ async def list_outbound_deliveries(
         filters.append(ChannelOutboundDelivery.created_at <= created_to)
 
     total = int(
-        (
-            await session.exec(
-                select(sa.func.count()).select_from(ChannelOutboundDelivery).where(*filters)
-            )
-        ).one()
+        (await session.exec(select(sa.func.count()).select_from(ChannelOutboundDelivery).where(*filters))).one()
     )
     rows = (
         await session.exec(

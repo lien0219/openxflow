@@ -61,7 +61,10 @@ def sanitize_channel_audit_value(value: Any, *, key: str | None = None) -> Any:
     if isinstance(value, Enum):
         return sanitize_channel_audit_value(value.value)
     if isinstance(value, dict):
-        return {str(item_key): sanitize_channel_audit_value(item_value, key=str(item_key)) for item_key, item_value in value.items()}
+        return {
+            str(item_key): sanitize_channel_audit_value(item_value, key=str(item_key))
+            for item_key, item_value in value.items()
+        }
     if isinstance(value, (list, tuple, set)):
         return [sanitize_channel_audit_value(item) for item in value]
     if isinstance(value, (BaseModel, SQLModel)):
@@ -151,9 +154,7 @@ async def list_channel_configuration_audits(
     total = int(
         (
             await session.exec(
-                select(__import__("sqlalchemy").func.count())
-                .select_from(ChannelConfigurationAudit)
-                .where(*filters)
+                select(__import__("sqlalchemy").func.count()).select_from(ChannelConfigurationAudit).where(*filters)
             )
         ).one()
     )
