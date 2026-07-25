@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Keep rollout repair idempotent so the workflow can be safely retried.
 apply_path = Path(".github/scripts/apply_channel_capability_response_scope.py")
 apply_content = apply_path.read_text(encoding="utf-8")
 old_marker = '    "def build_channel_session_id(\\n",\n'
