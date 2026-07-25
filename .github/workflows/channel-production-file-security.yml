@@ -1,0 +1,131 @@
+name: Channel Production File Security
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: channel-production-file-security
+  cancel-in-progress: true
+
+jobs:
+  apply-test-commit:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out channel branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/channel-gateway
+          fetch-depth: 0
+
+      - name: Apply file security and KB delegation runtime
+        shell: bash
+        run: |
+          set -o pipefail
+          python .github/scripts/apply_channel_file_security_runtime.py \
+            2>&1 | tee /tmp/channel-file-security-apply.log
+
+      - name: Upload application diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-file-security-apply-diagnostics
+          path: /tmp/channel-file-security-apply.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Format file security runtime
+        run: |
+          uvx --quiet ruff format \
+            src/backend/base/langflow/channels/services/file_security.py \
+            src/backend/base/langflow/channels/services/files.py \
+            src/backend/tests/unit/channels/test_channel_file_security.py \
+            src/backend/tests/unit/channels/test_files.py
+
+      - name: Lint file security runtime
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            uvx --quiet ruff check --fix \
+              --config src/backend/base/langflow/channels/ruff.toml \
+              src/backend/base/langflow/channels/services/file_security.py \
+              src/backend/base/langflow/channels/services/files.py
+            uvx --quiet ruff check --fix \
+              --config src/backend/tests/unit/channels/ruff.toml \
+              src/backend/tests/unit/channels/test_channel_file_security.py \
+              src/backend/tests/unit/channels/test_files.py
+          } 2>&1 | tee /tmp/channel-file-security-ruff.log
+
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-file-security-ruff-diagnostics
+          path: /tmp/channel-file-security-ruff.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Compile file security runtime
+        run: |
+          python -m compileall -q \
+            src/backend/base/langflow/channels/services/file_security.py \
+            src/backend/base/langflow/channels/services/files.py \
+            src/backend/tests/unit/channels/test_channel_file_security.py \
+            src/backend/tests/unit/channels/test_files.py
+
+      - name: Sync backend test environment
+        run: uv sync --quiet --frozen --project src/backend/base --group dev
+
+      - name: Run file security and channel regression tests
+        shell: bash
+        run: |
+          set -o pipefail
+          PYTHONPATH=src/backend/base uv run --frozen --project src/backend/base --group dev \
+            pytest -q --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_channel_file_security.py \
+            src/backend/tests/unit/channels/test_files.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_conversation_routing.py \
+            src/backend/tests/unit/channels/test_models.py \
+            src/backend/tests/unit/channels/test_channel_core_workflow.py \
+            2>&1 | tee /tmp/channel-file-security-pytest.log
+
+      - name: Upload regression diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-file-security-pytest-diagnostics
+          path: /tmp/channel-file-security-pytest.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Remove one-shot rollout resources
+        run: |
+          rm -f .github/scripts/apply_channel_file_security_runtime.py
+          rm -f .github/workflows/channel-production-file-security.yml
+
+      - name: Commit secure file ingestion runtime
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(channels): secure file ingestion and scoped kb delegation"
+          git pull --rebase origin feature/channel-gateway
+          git push origin HEAD:feature/channel-gateway
