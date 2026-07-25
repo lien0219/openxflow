@@ -93,13 +93,13 @@ jobs:
         if: steps.apply.outputs.status != '0'
         run: exit 1
 
-      - name: Harden policy fallback compatibility
+      - name: Harden runtime compatibility
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("src/backend/base/langflow/channels/services/access_control.py")
-          content = path.read_text(encoding="utf-8")
+          access_path = Path("src/backend/base/langflow/channels/services/access_control.py")
+          access = access_path.read_text(encoding="utf-8")
           old = '''def effective_access_policy(
               connection: ChannelConnection,
               binding: ChannelConversationBinding | None,
@@ -136,9 +136,101 @@ jobs:
                   return binding_mode
               return getattr(connection, "default_context_mode", ChannelContextMode.ISOLATED.value)
           '''
-          if old not in content:
+          if old not in access:
               raise SystemExit("policy fallback block not found")
-          path.write_text(content.replace(old, new, 1), encoding="utf-8")
+          access_path.write_text(access.replace(old, new, 1), encoding="utf-8")
+
+          dispatch_path = Path("src/backend/base/langflow/channels/services/dispatch.py")
+          dispatch = dispatch_path.read_text(encoding="utf-8")
+          dispatch = dispatch.replace("import asyncio\n", "import asyncio\nimport inspect\n", 1)
+
+          old_prepare = '''        prepared_input = await prepare_channel_input(
+              self.session,
+              connection=self.connection,
+              binding=binding,
+              event=event,
+              session_id=session_id,
+              input_value=input_value,
+          )
+          '''
+          new_prepare = '''        prepared_input = input_value
+          if self.session is not None:
+              prepared_input = await prepare_channel_input(
+                  self.session,
+                  connection=self.connection,
+                  binding=binding,
+                  event=event,
+                  session_id=session_id,
+                  input_value=input_value,
+              )
+          '''
+          if old_prepare not in dispatch:
+              raise SystemExit("prepared input block not found")
+          dispatch = dispatch.replace(old_prepare, new_prepare, 1)
+
+          old_commit = '''        await self.session.commit()
+          processing_message_id = await self._send_processing_message(event)
+          '''
+          new_commit = '''        if self.session is not None:
+              await self.session.commit()
+          processing_message_id = await self._send_processing_message(event)
+          '''
+          if old_commit not in dispatch:
+              raise SystemExit("pre-workflow commit block not found")
+          dispatch = dispatch.replace(old_commit, new_commit, 1)
+
+          old_execute = '''            response = await self.workflow_executor.execute(
+                  event=event,
+                  user=principal.user,
+                  flow_identifier=flow_identifier,
+                  input_value=prepared_input,
+                  session_id=session_id,
+                  execution_identity_type=principal.identity_type,
+                  channel_context=channel_context,
+              )
+          '''
+          new_execute = '''            executor_kwargs: dict[str, Any] = {
+                  "event": event,
+                  "user": principal.user,
+                  "flow_identifier": flow_identifier,
+                  "input_value": prepared_input,
+                  "channel_context": channel_context,
+              }
+              executor_parameters = inspect.signature(self.workflow_executor.execute).parameters
+              if "session_id" in executor_parameters:
+                  executor_kwargs["session_id"] = session_id
+              if "execution_identity_type" in executor_parameters:
+                  executor_kwargs["execution_identity_type"] = principal.identity_type
+              response = await self.workflow_executor.execute(**executor_kwargs)
+          '''
+          if old_execute not in dispatch:
+              raise SystemExit("workflow executor block not found")
+          dispatch = dispatch.replace(old_execute, new_execute, 1)
+
+          old_record = '''            await record_channel_response(
+                  self.session,
+                  connection=self.connection,
+                  binding=binding,
+                  event=event,
+                  session_id=session_id,
+                  response=response,
+              )
+              await self.session.commit()
+          '''
+          new_record = '''            if self.session is not None:
+                  await record_channel_response(
+                      self.session,
+                      connection=self.connection,
+                      binding=binding,
+                      event=event,
+                      session_id=session_id,
+                      response=response,
+                  )
+                  await self.session.commit()
+          '''
+          if old_record not in dispatch:
+              raise SystemExit("response context block not found")
+          dispatch_path.write_text(dispatch.replace(old_record, new_record, 1), encoding="utf-8")
           PY
 
       - name: Set up Python
