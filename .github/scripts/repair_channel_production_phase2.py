@@ -46,7 +46,7 @@ def prepare_phase2_script() -> None:
         "context_block",
         "policy_test",
     ):
-        for quote in ("'''", '\"\"\"'):
+        for quote in ("'''", '"""'):
             old = f"{name} = {quote}"
             new = f"{name} = r{quote}"
             if old in content:
@@ -104,13 +104,17 @@ def repair_access_control() -> None:
         identity=identity,
     )
 '''
-    content = replace_between(
-        content,
-        "async def resolve_execution_principal(\n",
-        "\n",
-        replacement,
-        label="access principal",
-    ) if False else content
+    content = (
+        replace_between(
+            content,
+            "async def resolve_execution_principal(\n",
+            "\n",
+            replacement,
+            label="access principal",
+        )
+        if False
+        else content
+    )
     start = content.find("async def resolve_execution_principal(\n")
     if start < 0:
         raise RuntimeError("Unable to locate access principal function")
@@ -124,7 +128,7 @@ def repair_dispatch() -> None:
     if "import inspect\n" not in content:
         content = replace_once(content, "import asyncio\n", "import asyncio\nimport inspect\n", label="inspect import")
 
-    identity_block = '''        if bound_user is not None:
+    identity_block = """        if bound_user is not None:
             event.user.openxflow_user_id = bound_user.id
 
         access_policy = effective_access_policy(self.connection, binding)
@@ -134,21 +138,21 @@ def repair_dispatch() -> None:
             else None
         )
 
-'''
+"""
     content = replace_once(
         content,
-        '''        if bound_user is not None:
+        """        if bound_user is not None:
             event.user.openxflow_user_id = bound_user.id
 
-''',
+""",
         identity_block,
         label="dispatch access policy",
     )
     content = content.replace(
         "return await self._commands_message(bound_user.id if bound_user else None, binding)",
-        '''if access_policy == "bound_only" and bound_user is None:
+        """if access_policy == "bound_only" and bound_user is None:
                 return await self._binding_required_message(event)
-            return await self._commands_message(personal_user_id, binding)''',
+            return await self._commands_message(personal_user_id, binding)""",
         1,
     )
     content = content.replace(
@@ -159,17 +163,17 @@ def repair_dispatch() -> None:
 
     content = replace_once(
         content,
-        '''        command = await resolve_workflow_command(
+        """        command = await resolve_workflow_command(
             self.session,
-''',
-        '''        command_user_id = (
+""",
+        """        command_user_id = (
             bound_user.id
             if bound_user is not None and effective_access_policy(self.connection, binding) != "shared"
             else None
         )
         command = await resolve_workflow_command(
             self.session,
-''',
+""",
         label="command policy",
     )
     content = content.replace(
@@ -178,7 +182,7 @@ def repair_dispatch() -> None:
         1,
     )
 
-    execute_block = '''    async def _execute_workflow(
+    execute_block = """    async def _execute_workflow(
         self,
         event: ChannelEvent,
         principal: ChannelExecutionPrincipal,
@@ -312,7 +316,7 @@ def repair_dispatch() -> None:
                 )
         return response
 
-'''
+"""
     content = replace_between(
         content,
         "    async def _execute_workflow(\n",
@@ -326,7 +330,7 @@ def repair_dispatch() -> None:
 def write_principal_tests() -> None:
     path = ROOT / "src/backend/tests/unit/channels/test_channel_access_principals.py"
     path.write_text(
-        '''from types import SimpleNamespace
+        """from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -422,7 +426,7 @@ async def test_hybrid_personal_route_uses_bound_member_identity() -> None:
     )
     assert principal.user.id == member_id
     assert principal.identity_type == ChannelExecutionIdentityType.BOUND_USER.value
-''',
+""",
         encoding="utf-8",
     )
 
