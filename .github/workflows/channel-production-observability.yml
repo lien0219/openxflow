@@ -29,6 +29,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          python .github/scripts/patch_channel_observability_rollout.py
           python .github/scripts/apply_channel_observability_runtime.py \
             2>&1 | tee /tmp/channel-observability-apply.log
 
@@ -165,6 +166,7 @@ jobs:
       - name: Remove one-shot rollout resources
         run: |
           rm -f .github/scripts/apply_channel_observability_runtime.py
+          rm -f .github/scripts/patch_channel_observability_rollout.py
           rm -f .github/workflows/channel-production-observability.yml
 
       - name: Commit production observability runtime
