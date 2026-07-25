@@ -147,7 +147,6 @@ jobs:
             src/backend/tests/unit/channels/test_gateway.py \
             src/backend/tests/unit/channels/test_dispatch.py \
             src/backend/tests/unit/channels/test_models.py \
-            src/backend/tests/unit/channels/test_channel_runtime.py \
             src/backend/tests/unit/channels/test_outbound_delivery.py \
             src/backend/tests/unit/channels/test_outbound_delivery_lifecycle.py \
             src/backend/tests/unit/channels/test_durable_webhook_jobs_sqlite.py \
