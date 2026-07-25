@@ -87,22 +87,37 @@ jobs:
             src/backend/tests/unit/channels/test_channel_access_principals.py
 
       - name: Lint changed Python
+        shell: bash
         run: |
-          uvx --quiet ruff check --fix \
-            --config src/backend/base/langflow/channels/ruff.toml \
-            src/backend/base/langflow/channels/services/access_control.py \
-            src/backend/base/langflow/channels/services/context.py \
-            src/backend/base/langflow/channels/services/binding.py \
-            src/backend/base/langflow/channels/services/commands.py \
-            src/backend/base/langflow/channels/services/dispatch.py \
-            src/backend/base/langflow/channels/services/execution_logs.py \
-            src/backend/base/langflow/channels/services/workflow.py \
-            src/backend/base/langflow/services/database/models/channel/crud.py \
-            src/backend/base/langflow/api/v1/channels.py
-          uvx --quiet ruff check --fix \
-            --config src/backend/tests/unit/channels/ruff.toml \
-            src/backend/tests/unit/channels/test_production_access_context.py \
-            src/backend/tests/unit/channels/test_channel_access_principals.py
+          set -o pipefail
+          {
+            uvx --quiet ruff check --fix \
+              --config src/backend/base/langflow/channels/ruff.toml \
+              src/backend/base/langflow/channels/services/access_control.py \
+              src/backend/base/langflow/channels/services/context.py \
+              src/backend/base/langflow/channels/services/binding.py \
+              src/backend/base/langflow/channels/services/commands.py \
+              src/backend/base/langflow/channels/services/dispatch.py \
+              src/backend/base/langflow/channels/services/execution_logs.py \
+              src/backend/base/langflow/channels/services/workflow.py \
+              src/backend/base/langflow/services/database/models/channel/crud.py \
+              src/backend/base/langflow/api/v1/channels.py
+            uvx --quiet ruff check --fix \
+              --config src/backend/tests/unit/channels/ruff.toml \
+              src/backend/tests/unit/channels/test_production_access_context.py \
+              src/backend/tests/unit/channels/test_channel_access_principals.py
+          } 2>&1 | tee /tmp/channel-production-phase2-ruff.log
+
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-production-phase2-ruff-diagnostics
+          path: |
+            /tmp/channel-production-phase2-ruff.log
+            src/backend/base/langflow/channels/services/dispatch.py
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Compile changed Python
         run: |
