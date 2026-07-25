@@ -1,0 +1,151 @@
+name: Channel Production Capabilities
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: channel-production-capabilities
+  cancel-in-progress: true
+
+jobs:
+  apply-test-commit:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out channel branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/channel-gateway
+          fetch-depth: 0
+
+      - name: Apply capability response and thread scope runtime
+        shell: bash
+        run: |
+          set -o pipefail
+          python .github/scripts/apply_channel_capability_response_scope.py \
+            2>&1 | tee /tmp/channel-capabilities-apply.log
+
+      - name: Upload application diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-capabilities-apply-diagnostics
+          path: /tmp/channel-capabilities-apply.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Format capability runtime
+        run: |
+          uvx --quiet ruff format \
+            src/backend/base/langflow/channels/services/conversation_scope.py \
+            src/backend/base/langflow/channels/services/response_policy.py \
+            src/backend/base/langflow/channels/services/capabilities.py \
+            src/backend/base/langflow/channels/services/queueing.py \
+            src/backend/base/langflow/channels/services/workflow.py \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/services/database/models/channel/model.py \
+            src/backend/tests/unit/channels/test_channel_capabilities_policy.py \
+            src/backend/tests/unit/channels/test_channel_queueing.py \
+            src/backend/tests/unit/channels/test_dispatch.py
+
+      - name: Lint capability runtime
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            uvx --quiet ruff check --fix \
+              --config src/backend/base/langflow/channels/ruff.toml \
+              src/backend/base/langflow/channels/services/conversation_scope.py \
+              src/backend/base/langflow/channels/services/response_policy.py \
+              src/backend/base/langflow/channels/services/capabilities.py \
+              src/backend/base/langflow/channels/services/queueing.py \
+              src/backend/base/langflow/channels/services/workflow.py \
+              src/backend/base/langflow/channels/services/dispatch.py \
+              src/backend/base/langflow/services/database/models/channel/model.py
+            uvx --quiet ruff check --fix \
+              --config src/backend/tests/unit/channels/ruff.toml \
+              src/backend/tests/unit/channels/test_channel_capabilities_policy.py \
+              src/backend/tests/unit/channels/test_channel_queueing.py \
+              src/backend/tests/unit/channels/test_dispatch.py
+          } 2>&1 | tee /tmp/channel-capabilities-ruff.log
+
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-capabilities-ruff-diagnostics
+          path: /tmp/channel-capabilities-ruff.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Compile capability runtime
+        run: |
+          python -m compileall -q \
+            src/backend/base/langflow/channels/services/conversation_scope.py \
+            src/backend/base/langflow/channels/services/response_policy.py \
+            src/backend/base/langflow/channels/services/capabilities.py \
+            src/backend/base/langflow/channels/services/queueing.py \
+            src/backend/base/langflow/channels/services/workflow.py \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/services/database/models/channel/model.py \
+            src/backend/tests/unit/channels/test_channel_capabilities_policy.py \
+            src/backend/tests/unit/channels/test_channel_queueing.py \
+            src/backend/tests/unit/channels/test_dispatch.py
+
+      - name: Sync backend test environment
+        run: uv sync --quiet --frozen --project src/backend/base --group dev
+
+      - name: Run capability response and scope regression tests
+        shell: bash
+        run: |
+          set -o pipefail
+          PYTHONPATH=src/backend/base uv run --frozen --project src/backend/base --group dev \
+            pytest -q --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_channel_capabilities_policy.py \
+            src/backend/tests/unit/channels/test_channel_queueing.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_conversation_routing.py \
+            src/backend/tests/unit/channels/test_feishu_processing_message.py \
+            src/backend/tests/unit/channels/test_telegram.py \
+            src/backend/tests/unit/channels/test_models.py \
+            src/backend/tests/unit/channels/test_workflow_response.py \
+            src/backend/tests/unit/channels/test_channel_core_workflow.py \
+            2>&1 | tee /tmp/channel-capabilities-pytest.log
+
+      - name: Upload regression diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-capabilities-pytest-diagnostics
+          path: /tmp/channel-capabilities-pytest.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Remove one-shot rollout resources
+        run: |
+          rm -f .github/scripts/apply_channel_capability_response_scope.py
+          rm -f .github/workflows/channel-production-capabilities.yml
+
+      - name: Commit capability response and thread scope runtime
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(channels): unify capabilities response modes and thread scopes"
+          git pull --rebase origin feature/channel-gateway
+          git push origin HEAD:feature/channel-gateway
