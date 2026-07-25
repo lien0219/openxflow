@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from typing import Any
 
 _TELEGRAM_WEBHOOK_SECRET = re.compile(r"^[A-Za-z0-9_-]{16,256}$")
 _WECOM_ENCODING_AES_KEY = re.compile(r"^[A-Za-z0-9+/]{43}$")
@@ -11,6 +12,10 @@ _WECOM_ENCODING_AES_KEY = re.compile(r"^[A-Za-z0-9+/]{43}$")
 
 class ChannelProviderCredentialError(ValueError):
     """Raised when a channel connection cannot authenticate provider traffic safely."""
+
+
+def _normalized(value: Any) -> str:
+    return str(getattr(value, "value", value)).strip().lower()
 
 
 def _required(credentials: Mapping[str, str], key: str, *, provider: str) -> str:
@@ -21,13 +26,13 @@ def _required(credentials: Mapping[str, str], key: str, *, provider: str) -> str
 
 
 def validate_channel_provider_credentials(
-    channel_type: str,
-    connection_mode: str,
+    channel_type: Any,
+    connection_mode: Any,
     credentials: Mapping[str, str],
 ) -> None:
     """Reject incomplete or unsafe provider authentication configuration."""
-    normalized_channel = channel_type.strip().lower()
-    normalized_mode = connection_mode.strip().lower()
+    normalized_channel = _normalized(channel_type)
+    normalized_mode = _normalized(connection_mode)
 
     if normalized_channel == "mock":
         return
