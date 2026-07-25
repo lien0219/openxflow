@@ -233,7 +233,7 @@ replace_once(
 )
 replace_between(
     WORKFLOW,
-    "def build_channel_session_id(\n",
+    "def build_channel_session_id(",
     "def _collect_text_candidates",
     """def build_channel_session_id(event: ChannelEvent, context_mode: str = ChannelContextMode.ISOLATED.value) -> str:
     parts = [
