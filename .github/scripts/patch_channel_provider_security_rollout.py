@@ -47,7 +47,7 @@ if create_replacement not in crud:
     crud = crud.replace(create_marker, create_replacement, 1)
 
 update_start = crud.find("async def update_channel_connection(\n")
-update_end = crud.find("async def delete_channel_connection(\n", update_start)
+update_end = crud.find("async def delete_channel_connection(", update_start)
 if update_start < 0 or update_end < 0:
     raise RuntimeError("Missing current connection update block")
 updated_function = """async def update_channel_connection(
