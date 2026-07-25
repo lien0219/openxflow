@@ -55,7 +55,7 @@ def replace_block(path: Path, pattern: str, replacement: str, label: str) -> Non
 def harden_access_control() -> None:
     path = ROOT / "src/backend/base/langflow/channels/services/access_control.py"
     replacement = dedent(
-        '''\
+        """\
         def effective_access_policy(
             connection: ChannelConnection,
             binding: ChannelConversationBinding | None,
@@ -76,7 +76,7 @@ def harden_access_control() -> None:
             return getattr(connection, "default_context_mode", ChannelContextMode.ISOLATED.value)
 
 
-        '''
+        """
     )
     replace_block(
         path,
@@ -94,7 +94,7 @@ def harden_dispatch() -> None:
     path.write_text(content, encoding="utf-8")
 
     method = dedent(
-        '''\
+        """\
         async def _execute_workflow(
             self,
             event: ChannelEvent,
@@ -231,7 +231,7 @@ def harden_dispatch() -> None:
                     )
             return response
 
-        '''
+        """
     )
     replace_block(
         path,
