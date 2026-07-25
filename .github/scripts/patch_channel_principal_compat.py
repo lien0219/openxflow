@@ -14,8 +14,8 @@ replacement = (
 )
 if marker not in content:
     raise RuntimeError("Missing workflow principal compatibility marker")
-content = content.replace(marker, replacement, 1)
 content = content.replace("principal.user.id", "execution_user.id")
 content = content.replace("principal.user", "execution_user")
 content = content.replace("principal.identity_type", "execution_identity_type")
+content = content.replace(marker, replacement, 1)
 path.write_text(content, encoding="utf-8")
