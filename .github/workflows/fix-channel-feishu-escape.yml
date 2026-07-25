@@ -1,0 +1,45 @@
+name: Fix Channel Feishu Escape
+
+on:
+  push:
+    branches:
+      - feature/channel-gateway
+    paths:
+      - .github/workflows/fix-channel-feishu-escape.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out channel branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/channel-gateway
+          fetch-depth: 0
+
+      - name: Fix generated newline escaping
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/apply_channel_capability_response_scope.py')
+          content = path.read_text(encoding='utf-8')
+          old = '        normalized = "\\n".join(line for line in normalized_lines if line)'
+          new = '        normalized = "\\\\n".join(line for line in normalized_lines if line)'
+          if new not in content:
+              if old not in content:
+                  raise SystemExit('Feishu paragraph escape marker not found')
+              path.write_text(content.replace(old, new, 1), encoding='utf-8')
+          PY
+          rm .github/workflows/fix-channel-feishu-escape.yml
+
+      - name: Commit escape fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/scripts/apply_channel_capability_response_scope.py .github/workflows/fix-channel-feishu-escape.yml
+          git commit -m "fix(channels): escape generated Feishu paragraph separator"
+          git push origin HEAD:feature/channel-gateway
