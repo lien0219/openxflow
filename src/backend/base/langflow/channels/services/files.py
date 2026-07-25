@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,8 @@ from langflow.api.utils.kb_helpers import KBAnalysisHelper, KBIngestionHelper, K
 from langflow.channels.adapters.base import ChannelAdapter
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.domain.models import ChannelAttachment, ChannelEvent, ChannelMessage
+from langflow.channels.services.file_security import BuiltinChannelFileScanner, ChannelFileScanner
+from langflow.channels.services.service_identity import is_managed_channel_service_user
 from langflow.services.authorization import (
     FileAction,
     KnowledgeBaseAction,
@@ -39,7 +42,6 @@ from langflow.services.memory_base.kb_path_helpers import validate_kb_path
 
 _DEFAULT_ALLOWED_EXTENSIONS = {
     ".csv",
-    ".doc",
     ".docx",
     ".htm",
     ".html",
@@ -47,11 +49,9 @@ _DEFAULT_ALLOWED_EXTENSIONS = {
     ".markdown",
     ".md",
     ".pdf",
-    ".ppt",
     ".pptx",
     ".rtf",
     ".txt",
-    ".xls",
     ".xlsx",
     ".xml",
     ".yaml",
@@ -75,6 +75,56 @@ def sanitize_channel_filename(filename: str) -> str:
     if candidate in {"", ".", ".."}:
         raise ValueError("文件名无效。")
     return candidate
+
+
+@dataclass(frozen=True)
+class ChannelKnowledgeBaseAccess:
+    """Scoped resource-owner delegation for one explicitly configured KB."""
+
+    resource_owner: User
+    delegated: bool
+
+
+def effective_channel_knowledge_base_id(
+    connection: ChannelConnection,
+    binding: ChannelConversationBinding | None,
+) -> UUID | None:
+    """Prefer a conversation override and otherwise use the connection default."""
+    if binding is not None and binding.knowledge_base_id is not None:
+        return binding.knowledge_base_id
+    return connection.default_knowledge_base_id
+
+
+def resolve_channel_knowledge_base_access(
+    *,
+    connection: ChannelConnection,
+    binding: ChannelConversationBinding | None,
+    execution_user: User,
+    connection_owner: User | None,
+    knowledge_base: KnowledgeBaseRecord,
+) -> ChannelKnowledgeBaseAccess:
+    """Resolve the least-privileged identity allowed to mutate the target KB."""
+    if is_managed_channel_service_user(execution_user, connection.id):
+        explicitly_granted_ids = {
+            kb_id
+            for kb_id in (
+                connection.default_knowledge_base_id,
+                binding.knowledge_base_id if binding is not None else None,
+            )
+            if kb_id is not None
+        }
+        if (
+            connection_owner is None
+            or connection_owner.id != connection.user_id
+            or knowledge_base.user_id != connection_owner.id
+            or knowledge_base.id not in explicitly_granted_ids
+        ):
+            raise ValueError("服务身份只能写入连接或会话显式授权的所有者知识库。")
+        return ChannelKnowledgeBaseAccess(resource_owner=connection_owner, delegated=True)
+
+    if knowledge_base.user_id != execution_user.id:
+        raise ValueError("当前会话绑定的知识库不存在或不属于当前账号。")
+    return ChannelKnowledgeBaseAccess(resource_owner=execution_user, delegated=False)
 
 
 def _allowed_extensions(connection: ChannelConnection) -> set[str]:
@@ -164,15 +214,17 @@ async def run_channel_ingestion_and_notify(
     chunk_overlap: int,
     separator: str,
     model_selection: dict[str, Any],
-    user_id: UUID,
+    execution_user_id: UUID,
+    resource_owner_user_id: UUID,
+    delegated_service_identity: bool,
     target_id: str,
 ) -> None:
     """Run a KB ingestion job and notify the originating conversation."""
     async with session_scope() as session:
-        user = await session.get(User, user_id)
+        resource_owner = await session.get(User, resource_owner_user_id)
         connection = await session.get(ChannelConnection, connection_id)
 
-    if user is None or connection is None:
+    if resource_owner is None or connection is None:
         await _finalize_channel_file_asset(
             asset_id,
             ChannelFileStatus.FAILED,
@@ -194,8 +246,15 @@ async def run_channel_ingestion_and_notify(
             chunk_overlap=chunk_overlap,
             separator=separator,
             source_name=f"{connection.channel_type}:{target_id}",
-            current_user=user,
+            current_user=resource_owner,
             model_selection=model_selection,
+            source_metadata={
+                "channel_connection_id": str(connection_id),
+                "channel_file_asset_id": str(asset_id),
+                "execution_user_id": str(execution_user_id),
+                "resource_owner_user_id": str(resource_owner_user_id),
+                "delegated_service_identity": delegated_service_identity,
+            },
             task_job_id=job_id,
             job_service=job_service,
         )
@@ -233,10 +292,12 @@ class ChannelFileService:
         session: AsyncSession,
         connection: ChannelConnection,
         adapter: ChannelAdapter,
+        scanner: ChannelFileScanner | None = None,
     ) -> None:
         self.session = session
         self.connection = connection
         self.adapter = adapter
+        self.scanner = scanner or BuiltinChannelFileScanner()
 
     async def handle_attachment(
         self,
@@ -286,6 +347,13 @@ class ChannelFileService:
             if not content:
                 raise ValueError("文件内容为空。")
 
+            declared_mime_type = attachment.mime_type or provider_metadata.get("content_type")
+            scan_result = self.scanner.scan(
+                filename=safe_filename,
+                content=content,
+                declared_mime_type=str(declared_mime_type) if declared_mime_type else None,
+            )
+
             user_file, _stored_filename = await self._store_user_file(
                 user=user,
                 filename=safe_filename,
@@ -294,9 +362,13 @@ class ChannelFileService:
             asset.user_file_id = user_file.id
             asset.filename = safe_filename
             asset.size_bytes = len(content)
-            asset.mime_type = attachment.mime_type or provider_metadata.get("content_type")
+            asset.mime_type = scan_result.detected_mime_type
             asset.status = ChannelFileStatus.STORED.value
-            asset.metadata_data = {**asset.metadata_data, **provider_metadata}
+            asset.metadata_data = {
+                **asset.metadata_data,
+                **provider_metadata,
+                "security_scan": scan_result.as_metadata(),
+            }
             asset.updated_at = _utc_now()
             self.session.add(asset)
             await self.session.flush()
@@ -311,11 +383,13 @@ class ChannelFileService:
                 }
             )
 
-            if binding is not None and binding.knowledge_base_id is not None:
+            knowledge_base_id = effective_channel_knowledge_base_id(self.connection, binding)
+            if knowledge_base_id is not None:
                 job_id, kb_name = await self._queue_knowledge_base_ingestion(
                     event=event,
                     user=user,
                     binding=binding,
+                    kb_id=knowledge_base_id,
                     asset=asset,
                     filename=safe_filename,
                     content=content,
@@ -435,16 +509,27 @@ class ChannelFileService:
         *,
         event: ChannelEvent,
         user: User,
-        binding: ChannelConversationBinding,
+        binding: ChannelConversationBinding | None,
+        kb_id: UUID,
         asset: ChannelFileAsset,
         filename: str,
         content: bytes,
     ) -> tuple[UUID, str]:
-        kb = await self.session.get(KnowledgeBaseRecord, binding.knowledge_base_id)
-        if kb is None or kb.user_id != user.id:
-            raise ValueError("当前会话绑定的知识库不存在或不属于当前账号。")
+        kb = await self.session.get(KnowledgeBaseRecord, kb_id)
+        if kb is None:
+            raise ValueError("当前会话配置的知识库不存在。")
+
+        connection_owner = await self.session.get(User, self.connection.user_id)
+        access = resolve_channel_knowledge_base_access(
+            connection=self.connection,
+            binding=binding,
+            execution_user=user,
+            connection_owner=connection_owner,
+            knowledge_base=kb,
+        )
+        resource_owner = access.resource_owner
         await ensure_knowledge_base_permission(
-            user,
+            resource_owner,
             KnowledgeBaseAction.INGEST,
             kb_id=kb.id,
             kb_user_id=kb.user_id,
@@ -452,7 +537,7 @@ class ChannelFileService:
         )
 
         kb_root = KBStorageHelper.get_root_path()
-        user_root = (kb_root / user.username).resolve()
+        user_root = (kb_root / resource_owner.username).resolve()
         kb_path = (user_root / kb.name).resolve()
         validate_kb_path(user_root, kb_path)
         if not kb_path.exists() or not kb_path.is_dir():
@@ -473,13 +558,21 @@ class ChannelFileService:
             job_type=JobType.INGESTION,
             asset_id=kb.id,
             asset_type="knowledge_base",
-            user_id=user.id,
+            user_id=resource_owner.id,
             dedupe_key=f"channel_file:{asset.id}",
         )
 
         asset.knowledge_base_id = kb.id
         asset.ingestion_job_id = job_id
         asset.status = ChannelFileStatus.INGESTING.value
+        asset.metadata_data = {
+            **asset.metadata_data,
+            "knowledge_base_access": {
+                "execution_user_id": str(user.id),
+                "resource_owner_user_id": str(resource_owner.id),
+                "delegated_service_identity": access.delegated,
+            },
+        }
         asset.updated_at = _utc_now()
         self.session.add(asset)
         await self.session.flush()
@@ -499,7 +592,9 @@ class ChannelFileService:
                 chunk_overlap=kb.chunk_overlap,
                 separator=kb.separator or "",
                 model_selection=dict(model_selection),
-                user_id=user.id,
+                execution_user_id=user.id,
+                resource_owner_user_id=resource_owner.id,
+                delegated_service_identity=access.delegated,
                 target_id=event.conversation.external_conversation_id,
             )
         except Exception as exc:
