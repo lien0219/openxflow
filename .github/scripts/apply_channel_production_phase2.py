@@ -876,39 +876,45 @@ write("src/backend/base/langflow/channels/services/execution_logs.py", execution
 
 # Commands: allow unbound users to resolve shared commands only.
 COMMANDS = "src/backend/base/langflow/channels/services/commands.py"
-replace_once(COMMANDS, "    user_id: UUID,\n    conversation_binding_id: UUID,", "    user_id: UUID | None,\n    conversation_binding_id: UUID,")
 replace_once(
     COMMANDS,
-    '''    if (
-        command.scope_type == ChannelCommandScope.IDENTITY_CONVERSATION.value
-        and command.owner_user_id == user_id
-''',
-    '''    if (
-        user_id is not None
-        and command.scope_type == ChannelCommandScope.IDENTITY_CONVERSATION.value
-        and command.owner_user_id == user_id
-''',
+    "    user_id: UUID,\n    conversation_binding_id: UUID,",
+    "    user_id: UUID | None,\n    conversation_binding_id: UUID,",
 )
 replace_once(
     COMMANDS,
-    '''    if command.scope_type == ChannelCommandScope.IDENTITY_CONNECTION.value and command.owner_user_id == user_id:
-''',
-    '''    if (
+    """    if (
+        command.scope_type == ChannelCommandScope.IDENTITY_CONVERSATION.value
+        and command.owner_user_id == user_id
+""",
+    """    if (
+        user_id is not None
+        and command.scope_type == ChannelCommandScope.IDENTITY_CONVERSATION.value
+        and command.owner_user_id == user_id
+""",
+)
+replace_once(
+    COMMANDS,
+    """    if command.scope_type == ChannelCommandScope.IDENTITY_CONNECTION.value and command.owner_user_id == user_id:
+""",
+    """    if (
         user_id is not None
         and command.scope_type == ChannelCommandScope.IDENTITY_CONNECTION.value
         and command.owner_user_id == user_id
     ):
-''',
+""",
 )
-replace_once(COMMANDS, "    user_id: UUID,\n    command_name: str,", "    user_id: UUID | None,\n    command_name: str,")
+replace_once(
+    COMMANDS, "    user_id: UUID,\n    command_name: str,", "    user_id: UUID | None,\n    command_name: str,"
+)
 replace_once(
     COMMANDS,
-    '''        sa.or_(
+    """        sa.or_(
             ChannelWorkflowCommand.owner_user_id.is_(None),
             ChannelWorkflowCommand.owner_user_id == user_id,
         ),
-''',
-    '''        (
+""",
+    """        (
             ChannelWorkflowCommand.owner_user_id.is_(None)
             if user_id is None
             else sa.or_(
@@ -916,17 +922,21 @@ replace_once(
                 ChannelWorkflowCommand.owner_user_id == user_id,
             )
         ),
-''',
+""",
 )
-replace_once(COMMANDS, "    user_id: UUID,\n) -> list[ChannelWorkflowCommand]:", "    user_id: UUID | None,\n) -> list[ChannelWorkflowCommand]:")
+replace_once(
+    COMMANDS,
+    "    user_id: UUID,\n) -> list[ChannelWorkflowCommand]:",
+    "    user_id: UUID | None,\n) -> list[ChannelWorkflowCommand]:",
+)
 # Replace the second identical owner filter if it remains.
 content = read(COMMANDS)
-old_filter = '''        sa.or_(
+old_filter = """        sa.or_(
             ChannelWorkflowCommand.owner_user_id.is_(None),
             ChannelWorkflowCommand.owner_user_id == user_id,
         ),
-'''
-new_filter = '''        (
+"""
+new_filter = """        (
             ChannelWorkflowCommand.owner_user_id.is_(None)
             if user_id is None
             else sa.or_(
@@ -934,7 +944,7 @@ new_filter = '''        (
                 ChannelWorkflowCommand.owner_user_id == user_id,
             )
         ),
-'''
+"""
 if old_filter in content:
     write(COMMANDS, content.replace(old_filter, new_filter, 1))
 
@@ -942,20 +952,20 @@ if old_filter in content:
 CRUD = "src/backend/base/langflow/services/database/models/channel/crud.py"
 replace_once(
     CRUD,
-    '''        connection_mode=connection.connection_mode,
+    """        connection_mode=connection.connection_mode,
         default_flow_id=connection.default_flow_id,
-''',
-    '''        connection_mode=connection.connection_mode,
+""",
+    """        connection_mode=connection.connection_mode,
         service_user_id=connection.service_user_id,
         default_flow_id=connection.default_flow_id,
-''',
+""",
 )
 replace_once(
     CRUD,
-    '''        default_allow_file_upload=connection.default_allow_file_upload,
+    """        default_allow_file_upload=connection.default_allow_file_upload,
         settings_data=connection.settings_data,
-''',
-    '''        default_allow_file_upload=connection.default_allow_file_upload,
+""",
+    """        default_allow_file_upload=connection.default_allow_file_upload,
         access_policy=connection.access_policy,
         default_context_mode=connection.default_context_mode,
         max_concurrency=connection.max_concurrency,
@@ -968,24 +978,24 @@ replace_once(
         shared_context_window=connection.shared_context_window,
         context_retention_days=connection.context_retention_days,
         settings_data=connection.settings_data,
-''',
+""",
 )
 replace_once(
     CRUD,
-    '''        connection_mode=payload.connection_mode,
+    """        connection_mode=payload.connection_mode,
         default_flow_id=payload.default_flow_id,
-''',
-    '''        connection_mode=payload.connection_mode,
+""",
+    """        connection_mode=payload.connection_mode,
         service_user_id=payload.service_user_id or user_id,
         default_flow_id=payload.default_flow_id,
-''',
+""",
 )
 replace_once(
     CRUD,
-    '''        default_allow_file_upload=payload.default_allow_file_upload,
+    """        default_allow_file_upload=payload.default_allow_file_upload,
         settings_data=payload.settings_data,
-''',
-    '''        default_allow_file_upload=payload.default_allow_file_upload,
+""",
+    """        default_allow_file_upload=payload.default_allow_file_upload,
         access_policy=payload.access_policy,
         default_context_mode=payload.default_context_mode,
         max_concurrency=payload.max_concurrency,
@@ -998,70 +1008,70 @@ replace_once(
         shared_context_window=payload.shared_context_window,
         context_retention_days=payload.context_retention_days,
         settings_data=payload.settings_data,
-''',
+""",
 )
 replace_once(
     CRUD,
-    '''        select(ChannelIdentity).where(ChannelIdentity.connection_id == connection_id).order_by(ChannelIdentity.bound_at)
-''',
-    '''        select(ChannelIdentity)
+    """        select(ChannelIdentity).where(ChannelIdentity.connection_id == connection_id).order_by(ChannelIdentity.bound_at)
+""",
+    """        select(ChannelIdentity)
         .where(ChannelIdentity.connection_id == connection_id)
         .order_by(ChannelIdentity.last_seen_at.desc(), ChannelIdentity.id)
-''',
+""",
 )
 replace_once(
     CRUD,
-    '''    values = payload.model_dump()
+    """    values = payload.model_dump()
 
     if identity is None:
-''',
-    '''    values = payload.model_dump()
+""",
+    """    values = payload.model_dump()
     now = _utc_now()
     if values.get("openxflow_user_id") is not None:
         values["status"] = "bound"
         values["bound_at"] = now
 
     if identity is None:
-''',
+""",
 )
 replace_once(
     CRUD,
-    '''        for key, value in values.items():
+    """        for key, value in values.items():
             setattr(identity, key, value)
         identity.updated_at = _utc_now()
-''',
-    '''        for key, value in values.items():
+""",
+    """        for key, value in values.items():
             setattr(identity, key, value)
         identity.last_seen_at = now
         identity.updated_at = now
-''',
+""",
 )
 
 # API: secure service principal selection and require a target for manual binding.
 CHANNELS_API = "src/backend/base/langflow/api/v1/channels.py"
 replace_once(
     CHANNELS_API,
-    '''from langflow.services.database.models.channel.model import (
-''',
-    '''from langflow.services.database.models.channel.model import (
-''',
+    """from langflow.services.database.models.channel.model import (
+""",
+    """from langflow.services.database.models.channel.model import (
+""",
 )
 replace_once(
     CHANNELS_API,
-    '''    ChannelIdentityRead,
+    """    ChannelIdentityRead,
 )
-''',
-    '''    ChannelIdentityRead,
+""",
+    """    ChannelIdentityRead,
 )
 from langflow.services.database.models.user.model import User
-''',
+""",
 )
 replace_once(
     CHANNELS_API,
-    '''    await validate_connection_routing_resources(db, current_user, payload)
+    """    await validate_connection_routing_resources(db, current_user, payload)
     try:
-''',
-    '''    service_user_id = payload.service_user_id or current_user.id
+""",
+    """    service_user_id = payload.service_user_id or current_user.id
     if service_user_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot assign another service user")
     service_user = await db.get(User, service_user_id)
@@ -1070,14 +1080,14 @@ replace_once(
     payload.service_user_id = service_user_id
     await validate_connection_routing_resources(db, current_user, payload)
     try:
-''',
+""",
 )
 replace_once(
     CHANNELS_API,
-    '''    connection = await _owned_connection_or_404(db, current_user.id, connection_id)
+    """    connection = await _owned_connection_or_404(db, current_user.id, connection_id)
     await validate_connection_routing_resources(
-''',
-    '''    connection = await _owned_connection_or_404(db, current_user.id, connection_id)
+""",
+    """    connection = await _owned_connection_or_404(db, current_user.id, connection_id)
     if payload.service_user_id is not None:
         if payload.service_user_id != current_user.id and not current_user.is_superuser:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot assign another service user")
@@ -1085,27 +1095,27 @@ replace_once(
         if service_user is None or not service_user.is_active:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Service user is missing or inactive")
     await validate_connection_routing_resources(
-''',
+""",
 )
 replace_once(
     CHANNELS_API,
-    '''    await _owned_connection_or_404(db, current_user.id, connection_id)
+    """    await _owned_connection_or_404(db, current_user.id, connection_id)
     if payload.openxflow_user_id != current_user.id and not current_user.is_superuser:
-''',
-    '''    await _owned_connection_or_404(db, current_user.id, connection_id)
+""",
+    """    await _owned_connection_or_404(db, current_user.id, connection_id)
     if payload.openxflow_user_id is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="openxflow_user_id is required")
     if payload.openxflow_user_id != current_user.id and not current_user.is_superuser:
-''',
+""",
 )
 
 # Dispatch imports.
 DISPATCH = "src/backend/base/langflow/channels/services/dispatch.py"
 replace_once(
     DISPATCH,
-    '''from langflow.channels.services.binding import issue_channel_binding_code, resolve_channel_identity
-''',
-    '''from langflow.channels.services.access_control import (
+    """from langflow.channels.services.binding import issue_channel_binding_code, resolve_channel_identity
+""",
+    """from langflow.channels.services.access_control import (
     ChannelBindingRequiredError,
     ChannelExecutionPrincipal,
     ChannelServiceIdentityUnavailableError,
@@ -1115,32 +1125,32 @@ replace_once(
     resolve_execution_principal,
 )
 from langflow.channels.services.binding import discover_channel_identity, issue_channel_binding_code
-''',
+""",
 )
 replace_once(
     DISPATCH,
-    '''from langflow.channels.services.execution_logs import finalize_channel_execution, start_channel_execution
-''',
-    '''from langflow.channels.services.context import prepare_channel_input, record_channel_response
+    """from langflow.channels.services.execution_logs import finalize_channel_execution, start_channel_execution
+""",
+    """from langflow.channels.services.context import prepare_channel_input, record_channel_response
 from langflow.channels.services.execution_logs import finalize_channel_execution, start_channel_execution
-''',
+""",
 )
 replace_once(
     DISPATCH,
-    '''from langflow.channels.services.workflow import ChannelWorkflowExecutor
-''',
-    '''from langflow.channels.services.workflow import ChannelWorkflowExecutor, build_channel_session_id
-''',
+    """from langflow.channels.services.workflow import ChannelWorkflowExecutor
+""",
+    """from langflow.channels.services.workflow import ChannelWorkflowExecutor, build_channel_session_id
+""",
 )
 replace_once(
     DISPATCH,
-    '''from langflow.services.database.models.channel.execution_model import ChannelExecutionTrigger
-''',
-    '''from langflow.services.database.models.channel.execution_model import ChannelExecutionStatus, ChannelExecutionTrigger
-''',
+    """from langflow.services.database.models.channel.execution_model import ChannelExecutionTrigger
+""",
+    """from langflow.services.database.models.channel.execution_model import ChannelExecutionStatus, ChannelExecutionTrigger
+""",
 )
 
-handle_block = '''    async def handle(self, event: ChannelEvent) -> ChannelMessage | None:
+handle_block = """    async def handle(self, event: ChannelEvent) -> ChannelMessage | None:
         command, argument = self._parse_command(event.message.text)
         binding = await discover_channel_conversation(self.session, self.connection, event)
         if binding is None:
@@ -1254,10 +1264,15 @@ handle_block = '''    async def handle(self, event: ChannelEvent) -> ChannelMess
             flow_id=flow_id,
         )
 
-'''
-replace_between(DISPATCH, "    async def handle(self, event: ChannelEvent) -> ChannelMessage | None:\n", "    async def _execute_custom_command(\n", handle_block)
+"""
+replace_between(
+    DISPATCH,
+    "    async def handle(self, event: ChannelEvent) -> ChannelMessage | None:\n",
+    "    async def _execute_custom_command(\n",
+    handle_block,
+)
 
-custom_block = '''    async def _execute_custom_command(
+custom_block = """    async def _execute_custom_command(
         self,
         event: ChannelEvent,
         identity,
@@ -1317,10 +1332,12 @@ custom_block = '''    async def _execute_custom_command(
             flow_id=command.flow_id,
         )
 
-'''
-replace_between(DISPATCH, "    async def _execute_custom_command(\n", "    async def _commands_message(\n", custom_block)
+"""
+replace_between(
+    DISPATCH, "    async def _execute_custom_command(\n", "    async def _commands_message(\n", custom_block
+)
 
-commands_block = '''    async def _commands_message(
+commands_block = """    async def _commands_message(
         self,
         user_id: UUID | None,
         binding: ChannelConversationBinding | None,
@@ -1353,10 +1370,12 @@ commands_block = '''    async def _commands_message(
             ],
         )
 
-'''
-replace_between(DISPATCH, "    async def _commands_message(\n", "    async def _unknown_command_message(\n", commands_block)
+"""
+replace_between(
+    DISPATCH, "    async def _commands_message(\n", "    async def _unknown_command_message(\n", commands_block
+)
 
-unknown_block = '''    async def _unknown_command_message(
+unknown_block = """    async def _unknown_command_message(
         self,
         user_id: UUID | None,
         binding: ChannelConversationBinding | None,
@@ -1396,10 +1415,12 @@ unknown_block = '''    async def _unknown_command_message(
             ],
         )
 
-'''
-replace_between(DISPATCH, "    async def _unknown_command_message(\n", "    def _resolve_default_flow_id(\n", unknown_block)
+"""
+replace_between(
+    DISPATCH, "    async def _unknown_command_message(\n", "    def _resolve_default_flow_id(\n", unknown_block
+)
 
-execute_block = '''    async def _execute_workflow(
+execute_block = """    async def _execute_workflow(
         self,
         event: ChannelEvent,
         principal: ChannelExecutionPrincipal,
@@ -1524,10 +1545,12 @@ execute_block = '''    async def _execute_workflow(
                 )
         return response
 
-'''
-replace_between(DISPATCH, "    async def _execute_workflow(\n", "    async def _send_processing_message(\n", execute_block)
+"""
+replace_between(
+    DISPATCH, "    async def _execute_workflow(\n", "    async def _send_processing_message(\n", execute_block
+)
 
-context_block = '''    async def _build_bound_context(
+context_block = """    async def _build_bound_context(
         self,
         binding: ChannelConversationBinding | None,
     ) -> dict[str, Any]:
@@ -1558,11 +1581,13 @@ context_block = '''    async def _build_bound_context(
                 context["knowledge_base_name"] = kb.name
         return context
 
-'''
-replace_between(DISPATCH, "    async def _build_bound_context(\n", "    @staticmethod\n    def _try_uuid", context_block)
+"""
+replace_between(
+    DISPATCH, "    async def _build_bound_context(\n", "    @staticmethod\n    def _try_uuid", context_block
+)
 
 # Tests for policy and context behavior.
-policy_test = '''from types import SimpleNamespace
+policy_test = """from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -1621,7 +1646,7 @@ def test_private_sessions_remain_user_scoped_in_shared_mode() -> None:
 
 def test_binding_required_error_is_permission_error() -> None:
     assert issubclass(ChannelBindingRequiredError, PermissionError)
-'''
+"""
 write("src/backend/tests/unit/channels/test_production_access_context.py", policy_test)
 
 print("Applied production channel phase 2 access and context runtime")
