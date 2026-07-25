@@ -128,80 +128,80 @@ replace_once(
 )
 replace_once(
     CRUD,
-    '''    session.add(connection)
+    """    session.add(connection)
     await session.flush()
     await session.refresh(connection)
     return _connection_read(connection)
-''',
-    '''    session.add(connection)
+""",
+    """    session.add(connection)
     await session.flush()
     await ensure_channel_service_identity(session, connection)
     await session.refresh(connection)
     return _connection_read(connection)
-''',
+""",
     label="create managed service user",
 )
 replace_once(
     CRUD,
-    '''    rows = (await session.exec(statement)).all()
+    """    rows = (await session.exec(statement)).all()
     return [_connection_read(row) for row in rows]
-''',
-    '''    rows = (await session.exec(statement)).all()
+""",
+    """    rows = (await session.exec(statement)).all()
     for row in rows:
         await ensure_channel_service_identity(session, row)
     return [_connection_read(row) for row in rows]
-''',
+""",
     label="repair listed connections",
 )
 replace_once(
     CRUD,
-    '''    return (await session.exec(statement)).first()
+    """    return (await session.exec(statement)).first()
 
 
 async def update_channel_connection(
-''',
-    '''    connection = (await session.exec(statement)).first()
+""",
+    """    connection = (await session.exec(statement)).first()
     if connection is not None:
         await ensure_channel_service_identity(session, connection)
     return connection
 
 
 async def update_channel_connection(
-''',
+""",
     label="repair fetched connection",
 )
 replace_once(
     CRUD,
-    '''    changes = payload.model_dump(exclude_unset=True, exclude={"credentials"})
-''',
-    '''    changes = payload.model_dump(exclude_unset=True, exclude={"credentials", "service_user_id"})
-''',
+    """    changes = payload.model_dump(exclude_unset=True, exclude={"credentials"})
+""",
+    """    changes = payload.model_dump(exclude_unset=True, exclude={"credentials", "service_user_id"})
+""",
     label="service identity read only",
 )
 replace_once(
     CRUD,
-    '''    connection.updated_at = _utc_now()
+    """    connection.updated_at = _utc_now()
     session.add(connection)
 
     if "default_flow_id" in changes:
-''',
-    '''    connection.updated_at = _utc_now()
+""",
+    """    connection.updated_at = _utc_now()
     session.add(connection)
     await ensure_channel_service_identity(session, connection)
 
     if "default_flow_id" in changes:
-''',
+""",
     label="repair updated connection",
 )
 replace_once(
     CRUD,
-    '''async def delete_channel_connection(session: AsyncSession, connection: ChannelConnection) -> None:
+    """async def delete_channel_connection(session: AsyncSession, connection: ChannelConnection) -> None:
     await session.delete(connection)
-''',
-    '''async def delete_channel_connection(session: AsyncSession, connection: ChannelConnection) -> None:
+""",
+    """async def delete_channel_connection(session: AsyncSession, connection: ChannelConnection) -> None:
     await remove_channel_service_identity(session, connection)
     await session.delete(connection)
-''',
+""",
     label="delete managed service user",
 )
 
@@ -214,37 +214,37 @@ replace_once(
 )
 replace_once(
     ACCESS,
-    '''    service_user_id = connection.service_user_id
+    """    service_user_id = connection.service_user_id
     if service_user_id is None:
         raise ChannelServiceIdentityUnavailableError
     service_user = await session.get(User, service_user_id)
-''',
-    '''    try:
+""",
+    """    try:
         service_user = await ensure_channel_service_identity(session, connection)
     except Exception as exc:  # noqa: BLE001
         raise ChannelServiceIdentityUnavailableError from exc
-''',
+""",
     label="runtime managed identity",
 )
 replace_once(
     ACCESS,
-    '''    if service_user is None or not service_user.is_active:
-''',
-    '''    if not service_user.is_active:
-''',
+    """    if service_user is None or not service_user.is_active:
+""",
+    """    if not service_user.is_active:
+""",
     label="managed identity active check",
 )
 
 DISPATCH = "src/backend/base/langflow/channels/services/dispatch.py"
 replace_once(
     DISPATCH,
-    '''                    "execution_identity_type": execution_identity_type,
+    """                    "execution_identity_type": execution_identity_type,
                 }
-''',
-    '''                    "execution_identity_type": execution_identity_type,
+""",
+    """                    "execution_identity_type": execution_identity_type,
                     "granted_flow_id": str(flow_id) if flow_id is not None else None,
                 }
-''',
+""",
     label="explicit flow grant",
 )
 
@@ -263,7 +263,7 @@ replace_once(
 )
 replace_once(
     WORKFLOW,
-    '''        flow = await get_flow_by_id_or_endpoint_name(flow_identifier, user.id, widen_for_shares=True)
+    """        flow = await get_flow_by_id_or_endpoint_name(flow_identifier, user.id, widen_for_shares=True)
         await ensure_flow_permission(
             user,
             FlowAction.EXECUTE,
@@ -272,8 +272,8 @@ replace_once(
             workspace_id=getattr(flow, "workspace_id", None),
             folder_id=getattr(flow, "folder_id", None),
         )
-''',
-    '''        if execution_identity_type == ChannelExecutionIdentityType.SERVICE.value:
+""",
+    """        if execution_identity_type == ChannelExecutionIdentityType.SERVICE.value:
             granted_flow_id = str((channel_context or {}).get("granted_flow_id") or "")
             if not granted_flow_id or granted_flow_id != flow_identifier:
                 raise HTTPException(
@@ -301,11 +301,11 @@ replace_once(
                 workspace_id=getattr(flow, "workspace_id", None),
                 folder_id=getattr(flow, "folder_id", None),
             )
-''',
+""",
     label="service workflow grant",
 )
 
-tests = '''from types import SimpleNamespace
+tests = """from types import SimpleNamespace
 from uuid import uuid4
 
 from langflow.channels.services.service_identity import (
@@ -333,7 +333,7 @@ def test_service_identity_marker_is_connection_scoped() -> None:
     assert is_managed_channel_service_user(user, connection_id)
     assert not is_managed_channel_service_user(user, uuid4())
     assert not is_managed_channel_service_user(SimpleNamespace(optins=None), connection_id)
-'''
+"""
 write("src/backend/tests/unit/channels/test_channel_service_identity.py", tests)
 
 print("Applied managed channel service identity runtime")
