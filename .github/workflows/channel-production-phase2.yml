@@ -56,12 +56,16 @@ jobs:
               "context_block",
               "policy_test",
           ):
-              old = f"{name} = '''"
-              new = f"{name} = r'''"
-              if old in content:
-                  content = content.replace(old, new, 1)
-                  print(f"made {name} raw")
-              else:
+              converted = False
+              for quote in ("'''", '\"\"\"'):
+                  old = f"{name} = {quote}"
+                  new = f"{name} = r{quote}"
+                  if old in content:
+                      content = content.replace(old, new, 1)
+                      converted = True
+                      print(f"made {name} raw")
+                      break
+              if not converted:
                   print(f"skipped raw conversion for {name}")
           path.write_text(content, encoding="utf-8")
           PY
