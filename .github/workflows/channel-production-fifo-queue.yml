@@ -25,7 +25,21 @@ jobs:
           fetch-depth: 0
 
       - name: Apply durable FIFO queue
-        run: python .github/scripts/apply_channel_fifo_queue.py
+        id: apply
+        shell: bash
+        run: |
+          set -o pipefail
+          python .github/scripts/apply_channel_fifo_queue.py 2>&1 | tee /tmp/channel-fifo-apply.log
+          python .github/scripts/patch_channel_fifo_queue.py 2>&1 | tee -a /tmp/channel-fifo-apply.log
+
+      - name: Upload queue application diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-fifo-apply-diagnostics
+          path: /tmp/channel-fifo-apply.log
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,19 +62,32 @@ jobs:
             src/backend/tests/unit/channels/test_durable_webhook_jobs_sqlite.py
 
       - name: Lint queue runtime
+        shell: bash
         run: |
-          uvx --quiet ruff check --fix \
-            --config src/backend/base/langflow/channels/ruff.toml \
-            src/backend/base/langflow/channels/services/queueing.py \
-            src/backend/base/langflow/channels/services/webhook_jobs.py \
-            src/backend/base/langflow/channels/services/webhook_processing.py \
-            src/backend/base/langflow/channels/services/dingtalk_stream.py \
-            src/backend/base/langflow/channels/adapters/factory.py \
-            src/backend/base/langflow/api/v1/channel_webhooks.py
-          uvx --quiet ruff check --fix \
-            --config src/backend/tests/unit/channels/ruff.toml \
-            src/backend/tests/unit/channels/test_channel_queueing.py \
-            src/backend/tests/unit/channels/test_durable_webhook_jobs_sqlite.py
+          set -o pipefail
+          {
+            uvx --quiet ruff check --fix \
+              --config src/backend/base/langflow/channels/ruff.toml \
+              src/backend/base/langflow/channels/services/queueing.py \
+              src/backend/base/langflow/channels/services/webhook_jobs.py \
+              src/backend/base/langflow/channels/services/webhook_processing.py \
+              src/backend/base/langflow/channels/services/dingtalk_stream.py \
+              src/backend/base/langflow/channels/adapters/factory.py \
+              src/backend/base/langflow/api/v1/channel_webhooks.py
+            uvx --quiet ruff check --fix \
+              --config src/backend/tests/unit/channels/ruff.toml \
+              src/backend/tests/unit/channels/test_channel_queueing.py \
+              src/backend/tests/unit/channels/test_durable_webhook_jobs_sqlite.py
+          } 2>&1 | tee /tmp/channel-fifo-ruff.log
+
+      - name: Upload queue lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-fifo-ruff-diagnostics
+          path: /tmp/channel-fifo-ruff.log
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Compile queue runtime
         run: |
@@ -78,21 +105,35 @@ jobs:
         run: uv sync --quiet --frozen --project src/backend/base --group dev
 
       - name: Run durable queue regression tests
+        shell: bash
         run: |
+          set -o pipefail
           PYTHONPATH=src/backend/base uv run --frozen --project src/backend/base --group dev \
             pytest -q --tb=short \
             --confcutdir=src/backend/tests/unit/channels \
             src/backend/tests/unit/channels/test_channel_queueing.py \
             src/backend/tests/unit/channels/test_durable_webhook_jobs_sqlite.py \
             src/backend/tests/unit/channels/test_webhook_processing.py \
-            src/backend/tests/unit/channels/test_webhook_background.py \
-            src/backend/tests/unit/channels/test_dingtalk_stream.py \
+            src/backend/tests/unit/channels/test_webhook_queue_timeout.py \
+            src/backend/tests/unit/channels/test_dingtalk_stream_runtime.py \
+            src/backend/tests/unit/channels/test_dingtalk_resilient.py \
             src/backend/tests/unit/channels/test_gateway.py \
-            src/backend/tests/unit/channels/test_dispatch.py
+            src/backend/tests/unit/channels/test_dispatch.py \
+            2>&1 | tee /tmp/channel-fifo-pytest.log
+
+      - name: Upload queue regression diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-fifo-pytest-diagnostics
+          path: /tmp/channel-fifo-pytest.log
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Remove one-shot queue rollout resources
         run: |
           rm -f .github/scripts/apply_channel_fifo_queue.py
+          rm -f .github/scripts/patch_channel_fifo_queue.py
           rm -f .github/workflows/channel-production-fifo-queue.yml
 
       - name: Commit durable FIFO queue
