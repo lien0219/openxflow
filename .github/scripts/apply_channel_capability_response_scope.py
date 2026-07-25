@@ -376,7 +376,7 @@ replace_once(
         return normalized or None
 """,
     """        normalized_lines = [" ".join(line.split()) for line in cleaned.splitlines()]
-        normalized = "\n".join(line for line in normalized_lines if line)
+        normalized = "\\n".join(line for line in normalized_lines if line)
         return normalized or None
 """,
     label="preserve Feishu post paragraphs",
