@@ -9,16 +9,23 @@ if "import sqlalchemy as sa\n" not in audit_content:
         "import sqlalchemy as sa\nfrom pydantic import BaseModel\n",
         1,
     )
-for expression in (
-    'select(__import__("sqlalchemy").func.count()).select_from(ChannelConfigurationAudit).where(*filters)',
-    "select(sa.func.count()).select_from(ChannelConfigurationAudit).where(*filters)",
-):
+
+compact_queries = (
+    '(await session.exec(select(__import__("sqlalchemy").func.count()).select_from(ChannelConfigurationAudit).where(*filters))).one()',
+    "(await session.exec(select(sa.func.count()).select_from(ChannelConfigurationAudit).where(*filters))).one()",
+)
+expanded_query = (
+    "(\n"
+    "            await session.exec(\n"
+    "                select(sa.func.count())\n"
+    "                .select_from(ChannelConfigurationAudit)\n"
+    "                .where(*filters)\n"
+    "            )\n"
+    "        ).one()"
+)
+for expression in compact_queries:
     if expression in audit_content:
-        audit_content = audit_content.replace(
-            expression,
-            "select(sa.func.count())\n"
-            "                .select_from(ChannelConfigurationAudit)\n"
-            "                .where(*filters)",
-            1,
-        )
+        audit_content = audit_content.replace(expression, expanded_query, 1)
+        break
+
 audit_path.write_text(audit_content, encoding="utf-8")
