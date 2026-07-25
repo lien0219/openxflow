@@ -383,9 +383,11 @@ claim_block = r'''async def claim_provider_webhook_job(
 
 
 '''
-replace_between(WEBHOOK_JOBS, "async def claim_provider_webhook_job(\n", "async def complete_provider_webhook_job(\n", claim_block)
+replace_between(
+    WEBHOOK_JOBS, "async def claim_provider_webhook_job(\n", "async def complete_provider_webhook_job(\n", claim_block
+)
 
-execute_block = r'''    async def _execute(self, job: ChannelWebhookJob) -> bool:
+execute_block = r"""    async def _execute(self, job: ChannelWebhookJob) -> bool:
         async with session_scope() as session:
             await recover_stale_event_receipt(session, job)
         created_at = job.created_at
@@ -409,8 +411,13 @@ execute_block = r'''    async def _execute(self, job: ChannelWebhookJob) -> bool
             queue_rejection_reason=str(rejection_reason) if rejection_reason else None,
         )
 
-'''
-replace_between(WEBHOOK_JOBS, "    async def _execute(self, job: ChannelWebhookJob) -> bool:\n", "    async def _process", execute_block)
+"""
+replace_between(
+    WEBHOOK_JOBS,
+    "    async def _execute(self, job: ChannelWebhookJob) -> bool:\n",
+    "    async def _process",
+    execute_block,
+)
 
 WEBHOOK_PROCESSING = "src/backend/base/langflow/channels/services/webhook_processing.py"
 replace_once(
@@ -420,23 +427,23 @@ replace_once(
 )
 replace_once(
     WEBHOOK_PROCESSING,
-    '''    preverified: bool = False,
+    """    preverified: bool = False,
 ) -> bool:
-''',
-    '''    preverified: bool = False,
+""",
+    """    preverified: bool = False,
     queue_wait_ms: int = 0,
     queue_position: int = 0,
     queue_rejection_reason: str | None = None,
 ) -> bool:
-''',
+""",
 )
 replace_once(
     WEBHOOK_PROCESSING,
-    '''        dispatcher = ChannelDispatchService(session, connection, adapter)
+    """        dispatcher = ChannelDispatchService(session, connection, adapter)
 
         try:
-''',
-    '''        dispatcher = ChannelDispatchService(session, connection, adapter)
+""",
+    """        dispatcher = ChannelDispatchService(session, connection, adapter)
 
         async def queued_handler(event):  # type: ignore[no-untyped-def]
             event.message.metadata["queue_wait_ms"] = max(0, queue_wait_ms)
@@ -452,7 +459,7 @@ replace_once(
             return await dispatcher.handle(event)
 
         try:
-''',
+""",
 )
 replace_once(
     WEBHOOK_PROCESSING,
@@ -479,39 +486,39 @@ replace_once(
 )
 replace_once(
     CHANNEL_WEBHOOKS,
-    '''    if durable_webhook_job_config().enabled:
+    """    if durable_webhook_job_config().enabled:
         await enqueue_provider_webhook_job(
-''',
-    '''    if durable_webhook_job_config().enabled:
+""",
+    """    if durable_webhook_job_config().enabled:
         queue = await resolve_channel_queue_descriptor(db, connection, event)
         await enqueue_provider_webhook_job(
-''',
+""",
 )
 replace_once(
     CHANNEL_WEBHOOKS,
-    '''            payload=payload,
+    """            payload=payload,
         )
-''',
-    '''            payload=payload,
+""",
+    """            payload=payload,
             connection=connection,
             external_conversation_id=queue.external_conversation_id,
             external_user_id=queue.external_user_id,
             conversation_type=queue.conversation_type,
             queue_key=queue.queue_key,
         )
-''',
+""",
 )
 
 FACTORY = "src/backend/base/langflow/channels/adapters/factory.py"
 replace_once(
     FACTORY,
-    '''            robot_code=credentials.get("robot_code"),
+    """            robot_code=credentials.get("robot_code"),
             api_base_url=str(connection.settings_data.get("api_base_url", "https://api.dingtalk.com")),
-''',
-    '''            robot_code=credentials.get("robot_code"),
+""",
+    """            robot_code=credentials.get("robot_code"),
             api_base_url=str(connection.settings_data.get("api_base_url", "https://api.dingtalk.com")),
             stream_authenticated=connection.connection_mode == "stream",
-''',
+""",
 )
 
 DINGTALK_STREAM = "src/backend/base/langflow/channels/services/dingtalk_stream.py"
@@ -522,10 +529,10 @@ replace_once(
 )
 replace_once(
     DINGTALK_STREAM,
-    '''        gateway = ChannelGateway()
+    """        gateway = ChannelGateway()
         gateway.register_adapter(connection.id, adapter)
-''',
-    '''        if durable_webhook_job_config().enabled:
+""",
+    """        if durable_webhook_job_config().enabled:
             event = await adapter.parse_event({}, payload)
             queue = await resolve_channel_queue_descriptor(session, connection, event)
             await enqueue_provider_webhook_job(
@@ -545,7 +552,7 @@ replace_once(
 
         gateway = ChannelGateway()
         gateway.register_adapter(connection.id, adapter)
-''',
+""",
 )
 
 SQLITE_TEST = "src/backend/tests/unit/channels/test_durable_webhook_jobs_sqlite.py"
@@ -568,29 +575,29 @@ CREATE TABLE channel_webhook_job (
 )
 replace_once(
     SQLITE_TEST,
-    '''    external_event_id VARCHAR(255) NOT NULL,
+    """    external_event_id VARCHAR(255) NOT NULL,
     headers_data JSON NOT NULL,
-''',
-    '''    external_event_id VARCHAR(255) NOT NULL,
+""",
+    """    external_event_id VARCHAR(255) NOT NULL,
     external_conversation_id VARCHAR(255) NOT NULL DEFAULT '',
     external_user_id VARCHAR(255) NOT NULL DEFAULT '',
     conversation_type VARCHAR(32) NOT NULL DEFAULT 'private',
     queue_key VARCHAR(768) NOT NULL DEFAULT '',
     headers_data JSON NOT NULL,
-''',
+""",
 )
 replace_once(
     SQLITE_TEST,
-    '''    async with engine.begin() as connection:
+    """    async with engine.begin() as connection:
         await connection.execute(sa.text(_CREATE_JOB_TABLE))
-''',
-    '''    async with engine.begin() as connection:
+""",
+    """    async with engine.begin() as connection:
         await connection.execute(sa.text(_CREATE_CONNECTION_TABLE))
         await connection.execute(sa.text(_CREATE_JOB_TABLE))
-''',
+""",
 )
 
-fifo_test = r'''
+fifo_test = r"""
 
 async def test_durable_webhook_jobs_preserve_queue_fifo_and_allow_other_sessions() -> None:
     engine, factory = await _session_factory()
@@ -648,12 +655,12 @@ async def test_durable_webhook_jobs_preserve_queue_fifo_and_allow_other_sessions
         assert next_in_fifo.external_event_id == "event-a2"
     finally:
         await engine.dispose()
-'''
+"""
 content = read(SQLITE_TEST)
 if "test_durable_webhook_jobs_preserve_queue_fifo" not in content:
     write(SQLITE_TEST, content + fifo_test)
 
-queueing_test = r'''from types import SimpleNamespace
+queueing_test = r"""from types import SimpleNamespace
 from uuid import uuid4
 
 from langflow.channels.services.queueing import resolve_channel_queue_descriptor
@@ -710,7 +717,7 @@ async def test_private_queue_remains_member_scoped_in_shared_default() -> None:
         _event(user_id="b", conversation_type="private"),
     )
     assert first.queue_key != second.queue_key
-'''
+"""
 write("src/backend/tests/unit/channels/test_channel_queueing.py", queueing_test)
 
 print("Applied durable per-session channel FIFO queue")
