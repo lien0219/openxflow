@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
+import sqlalchemy as sa
 from pydantic import BaseModel
 from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -154,7 +155,9 @@ async def list_channel_configuration_audits(
     total = int(
         (
             await session.exec(
-                select(__import__("sqlalchemy").func.count()).select_from(ChannelConfigurationAudit).where(*filters)
+                select(sa.func.count())
+                .select_from(ChannelConfigurationAudit)
+                .where(*filters)
             )
         ).one()
     )
