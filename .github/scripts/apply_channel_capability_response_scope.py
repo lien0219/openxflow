@@ -369,6 +369,19 @@ replace_once(
     label="conversation response default",
 )
 
+FEISHU = "src/backend/base/langflow/channels/adapters/feishu.py"
+replace_once(
+    FEISHU,
+    """        normalized = " ".join(cleaned.split())
+        return normalized or None
+""",
+    """        normalized_lines = [" ".join(line.split()) for line in cleaned.splitlines()]
+        normalized = "\n".join(line for line in normalized_lines if line)
+        return normalized or None
+""",
+    label="preserve Feishu post paragraphs",
+)
+
 TEST_DISPATCH = "src/backend/tests/unit/channels/test_dispatch.py"
 replace_once(
     TEST_DISPATCH,
