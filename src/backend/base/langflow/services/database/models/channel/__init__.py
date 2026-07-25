@@ -91,10 +91,10 @@ from langflow.services.database.models.channel.webhook_job_model import (
 __all__ = [
     "ChannelAccessPolicy",
     "ChannelBindingCode",
+    "ChannelCommandScope",
     "ChannelConfigurationAudit",
     "ChannelConfigurationAuditPage",
     "ChannelConfigurationAuditRead",
-    "ChannelCommandScope",
     "ChannelConnection",
     "ChannelConnectionCreate",
     "ChannelConnectionRead",
