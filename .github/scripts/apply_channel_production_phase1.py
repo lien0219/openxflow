@@ -33,30 +33,30 @@ MODELS_INIT = "src/backend/base/langflow/services/database/models/__init__.py"
 
 replace_once(
     MODEL,
-    '''class ChannelIdentityStatus(str, Enum):
+    """class ChannelIdentityStatus(str, Enum):
     PENDING = "pending"
     BOUND = "bound"
     DISABLED = "disabled"
-''',
-    '''class ChannelIdentityStatus(str, Enum):
+""",
+    """class ChannelIdentityStatus(str, Enum):
     DISCOVERED = "discovered"
     PENDING = "pending"
     BOUND = "bound"
     DISABLED = "disabled"
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''class ChannelUnconfiguredBehavior(str, Enum):
+    """class ChannelUnconfiguredBehavior(str, Enum):
     USE_GLOBAL_DEFAULT = "use_global_default"
     NOTIFY_PENDING = "notify_pending"
     IGNORE = "ignore"
 
 
 class ChannelConnectionBase(SQLModel):
-''',
-    '''class ChannelUnconfiguredBehavior(str, Enum):
+""",
+    """class ChannelUnconfiguredBehavior(str, Enum):
     USE_GLOBAL_DEFAULT = "use_global_default"
     NOTIFY_PENDING = "notify_pending"
     IGNORE = "ignore"
@@ -77,16 +77,16 @@ class ChannelContextMode(str, Enum):
 
 
 class ChannelConnectionBase(SQLModel):
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''    default_response_mode: str = Field(default="mentions_only", max_length=32)
+    """    default_response_mode: str = Field(default="mentions_only", max_length=32)
     default_allow_file_upload: bool = Field(default=True)
     settings_data: dict[str, Any] = Field(
-''',
-    '''    default_response_mode: str = Field(default="mentions_only", max_length=32)
+""",
+    """    default_response_mode: str = Field(default="mentions_only", max_length=32)
     default_allow_file_upload: bool = Field(default=True)
     access_policy: str = Field(default=ChannelAccessPolicy.HYBRID.value, max_length=32)
     default_context_mode: str = Field(default=ChannelContextMode.ISOLATED.value, max_length=32)
@@ -100,14 +100,14 @@ replace_once(
     shared_context_window: int = Field(default=20, ge=0, le=100)
     context_retention_days: int = Field(default=30, ge=1, le=365)
     settings_data: dict[str, Any] = Field(
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''    default_flow_id: UUID | None = Field(
-''',
-    '''    service_user_id: UUID | None = Field(
+    """    default_flow_id: UUID | None = Field(
+""",
+    """    service_user_id: UUID | None = Field(
         default=None,
         sa_column=Column(
             sa.Uuid(),
@@ -117,41 +117,41 @@ replace_once(
         ),
     )
     default_flow_id: UUID | None = Field(
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''class ChannelConnectionCreate(ChannelConnectionBase):
+    """class ChannelConnectionCreate(ChannelConnectionBase):
     credentials: dict[str, str] = Field(default_factory=dict)
     default_flow_id: UUID | None = None
-''',
-    '''class ChannelConnectionCreate(ChannelConnectionBase):
+""",
+    """class ChannelConnectionCreate(ChannelConnectionBase):
     credentials: dict[str, str] = Field(default_factory=dict)
     service_user_id: UUID | None = None
     default_flow_id: UUID | None = None
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''    default_flow_id: UUID | None = None
+    """    default_flow_id: UUID | None = None
     default_knowledge_base_id: UUID | None = None
     auto_discover_conversations: bool | None = None
-''',
-    '''    service_user_id: UUID | None = None
+""",
+    """    service_user_id: UUID | None = None
     default_flow_id: UUID | None = None
     default_knowledge_base_id: UUID | None = None
     auto_discover_conversations: bool | None = None
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''    default_allow_file_upload: bool | None = None
+    """    default_allow_file_upload: bool | None = None
     settings_data: dict[str, Any] | None = None
-''',
-    '''    default_allow_file_upload: bool | None = None
+""",
+    """    default_allow_file_upload: bool | None = None
     access_policy: str | None = Field(default=None, max_length=32)
     default_context_mode: str | None = Field(default=None, max_length=32)
     max_concurrency: int | None = Field(default=None, ge=1, le=100)
@@ -164,35 +164,35 @@ replace_once(
     shared_context_window: int | None = Field(default=None, ge=0, le=100)
     context_retention_days: int | None = Field(default=None, ge=1, le=365)
     settings_data: dict[str, Any] | None = None
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''class ChannelConnectionRead(ChannelConnectionBase):
+    """class ChannelConnectionRead(ChannelConnectionBase):
     id: UUID
     user_id: UUID
     default_flow_id: UUID | None = None
-''',
-    '''class ChannelConnectionRead(ChannelConnectionBase):
+""",
+    """class ChannelConnectionRead(ChannelConnectionBase):
     id: UUID
     user_id: UUID
     service_user_id: UUID | None = None
     default_flow_id: UUID | None = None
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''    status: str = Field(default=ChannelIdentityStatus.BOUND.value, max_length=32)
-''',
-    '''    status: str = Field(default=ChannelIdentityStatus.DISCOVERED.value, max_length=32)
-''',
+    """    status: str = Field(default=ChannelIdentityStatus.BOUND.value, max_length=32)
+""",
+    """    status: str = Field(default=ChannelIdentityStatus.DISCOVERED.value, max_length=32)
+""",
 )
 
 replace_once(
     MODEL,
-    '''    openxflow_user_id: UUID = Field(
+    """    openxflow_user_id: UUID = Field(
         sa_column=Column(
             sa.Uuid(),
             ForeignKey("user.id", ondelete="CASCADE"),
@@ -205,8 +205,8 @@ replace_once(
         sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
     )
     updated_at: datetime = Field(
-''',
-    '''    openxflow_user_id: UUID | None = Field(
+""",
+    """    openxflow_user_id: UUID | None = Field(
         default=None,
         sa_column=Column(
             sa.Uuid(),
@@ -232,12 +232,12 @@ replace_once(
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     updated_at: datetime = Field(
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''class ChannelIdentityCreate(ChannelIdentityBase):
+    """class ChannelIdentityCreate(ChannelIdentityBase):
     openxflow_user_id: UUID
 
 
@@ -247,8 +247,8 @@ class ChannelIdentityRead(ChannelIdentityBase):
     openxflow_user_id: UUID
     bound_at: datetime
     updated_at: datetime
-''',
-    '''class ChannelIdentityCreate(ChannelIdentityBase):
+""",
+    """class ChannelIdentityCreate(ChannelIdentityBase):
     openxflow_user_id: UUID | None = None
 
 
@@ -261,41 +261,41 @@ class ChannelIdentityRead(ChannelIdentityBase):
     last_message_at: datetime
     bound_at: datetime | None = None
     updated_at: datetime
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''    source: str = Field(default=ChannelConversationSource.LEGACY_MANUAL.value, max_length=32)
+    """    source: str = Field(default=ChannelConversationSource.LEGACY_MANUAL.value, max_length=32)
     settings_data: dict[str, Any] = Field(
-''',
-    '''    source: str = Field(default=ChannelConversationSource.LEGACY_MANUAL.value, max_length=32)
+""",
+    """    source: str = Field(default=ChannelConversationSource.LEGACY_MANUAL.value, max_length=32)
     access_policy: str = Field(default=ChannelAccessPolicy.INHERIT.value, max_length=32)
     context_mode: str = Field(default=ChannelContextMode.INHERIT.value, max_length=32)
     settings_data: dict[str, Any] = Field(
-''',
+""",
 )
 
 replace_once(
     MODEL,
-    '''    status: str | None = Field(default=None, max_length=32)
+    """    status: str | None = Field(default=None, max_length=32)
     default_flow_id: UUID | None = None
-''',
-    '''    status: str | None = Field(default=None, max_length=32)
+""",
+    """    status: str | None = Field(default=None, max_length=32)
     access_policy: str | None = Field(default=None, max_length=32)
     context_mode: str | None = Field(default=None, max_length=32)
     default_flow_id: UUID | None = None
-''',
+""",
 )
 
 replace_once(
     EXECUTION,
-    '''class ChannelExecutionStatus(str, Enum):
+    """class ChannelExecutionStatus(str, Enum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
-''',
-    '''class ChannelExecutionStatus(str, Enum):
+""",
+    """class ChannelExecutionStatus(str, Enum):
     QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
@@ -308,79 +308,79 @@ replace_once(
 class ChannelExecutionIdentityType(str, Enum):
     SERVICE = "service"
     BOUND_USER = "bound_user"
-''',
+""",
 )
 
 replace_once(
     EXECUTION,
-    '''        sa.Index("ix_channel_execution_status_created", "status", "created_at"),
-''',
-    '''        sa.Index("ix_channel_execution_status_created", "status", "created_at"),
+    """        sa.Index("ix_channel_execution_status_created", "status", "created_at"),
+""",
+    """        sa.Index("ix_channel_execution_status_created", "status", "created_at"),
         sa.Index("ix_channel_execution_external_user_created", "connection_id", "external_user_id", "created_at"),
-''',
+""",
 )
 
 replace_once(
     EXECUTION,
-    '''    flow_id: UUID | None = Field(
-''',
-    '''    external_user_id: str | None = Field(default=None, max_length=255, index=True)
+    """    flow_id: UUID | None = Field(
+""",
+    """    external_user_id: str | None = Field(default=None, max_length=255, index=True)
     session_id: str | None = Field(default=None, max_length=255, index=True)
     execution_identity_type: str = Field(
         default=ChannelExecutionIdentityType.BOUND_USER.value,
         max_length=32,
     )
     flow_id: UUID | None = Field(
-''',
+""",
 )
 
 replace_once(
     EXECUTION,
-    '''    duration_ms: int | None = None
+    """    duration_ms: int | None = None
     error_message: str | None = Field(default=None, sa_column=Column(Text(), nullable=True))
     created_at: datetime = Field(
-''',
-    '''    queue_wait_ms: int | None = None
+""",
+    """    queue_wait_ms: int | None = None
     duration_ms: int | None = None
     delivery_duration_ms: int | None = None
     retry_count: int = Field(default=0, ge=0)
     error_code: str | None = Field(default=None, max_length=128)
     error_message: str | None = Field(default=None, sa_column=Column(Text(), nullable=True))
     created_at: datetime = Field(
-''',
+""",
 )
 
 replace_once(
     EXECUTION,
-    '''    completed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-''',
-    '''    started_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    """    completed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+""",
+    """    started_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     completed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-''',
+""",
 )
 
 replace_once(
     EXECUTION,
-    '''    openxflow_user_id: UUID | None = None
+    """    openxflow_user_id: UUID | None = None
     flow_id: UUID | None = None
-''',
-    '''    openxflow_user_id: UUID | None = None
+""",
+    """    openxflow_user_id: UUID | None = None
     external_user_id: str | None = None
     session_id: str | None = None
     execution_identity_type: str
     flow_id: UUID | None = None
-''',
+""",
 )
 
 replace_once(
     EXECUTION,
-    '''    status: str
+    """    status: str
     duration_ms: int | None = None
     error_message: str | None = None
     created_at: datetime
     completed_at: datetime | None = None
-''',
-    '''    status: str
+""",
+    """    status: str
     queue_wait_ms: int | None = None
     duration_ms: int | None = None
     delivery_duration_ms: int | None = None
@@ -390,49 +390,49 @@ replace_once(
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
-''',
+""",
 )
 
 replace_once(
     WEBHOOK_JOB,
-    '''class ChannelWebhookJobStatus(str, Enum):
+    """class ChannelWebhookJobStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
-''',
-    '''class ChannelWebhookJobStatus(str, Enum):
+""",
+    """class ChannelWebhookJobStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
-''',
+""",
 )
 
 replace_once(
     WEBHOOK_JOB,
-    '''        Index("ix_channel_webhook_job_lease", "status", "lease_expires_at"),
-''',
-    '''        Index("ix_channel_webhook_job_lease", "status", "lease_expires_at"),
+    """        Index("ix_channel_webhook_job_lease", "status", "lease_expires_at"),
+""",
+    """        Index("ix_channel_webhook_job_lease", "status", "lease_expires_at"),
         Index("ix_channel_webhook_job_queue", "queue_key", "status", "created_at"),
         Index("ix_channel_webhook_job_connection_status", "connection_id", "status", "created_at"),
         Index("ix_channel_webhook_job_user_created", "connection_id", "external_user_id", "created_at"),
-''',
+""",
 )
 
 replace_once(
     WEBHOOK_JOB,
-    '''    channel_type: str = Field(nullable=False, max_length=32)
+    """    channel_type: str = Field(nullable=False, max_length=32)
     external_event_id: str = Field(nullable=False, max_length=255)
-''',
-    '''    channel_type: str = Field(nullable=False, max_length=32)
+""",
+    """    channel_type: str = Field(nullable=False, max_length=32)
     external_event_id: str = Field(nullable=False, max_length=255)
     external_conversation_id: str = Field(default="", nullable=False, max_length=255)
     external_user_id: str = Field(default="", nullable=False, max_length=255)
     conversation_type: str = Field(default="private", nullable=False, max_length=32)
     queue_key: str = Field(default="", nullable=False, max_length=768)
-''',
+""",
 )
 
 context_model = '''"""Bounded public conversation context used by shared and hybrid channel modes."""
@@ -508,83 +508,83 @@ write("src/backend/base/langflow/services/database/models/channel/context_model.
 
 replace_once(
     CHANNEL_INIT,
-    '''from langflow.services.database.models.channel.execution_model import (
-''',
-    '''from langflow.services.database.models.channel.context_model import (
+    """from langflow.services.database.models.channel.execution_model import (
+""",
+    """from langflow.services.database.models.channel.context_model import (
     ChannelContextRole,
     ChannelConversationContextEntry,
 )
 from langflow.services.database.models.channel.execution_model import (
-''',
+""",
 )
 replace_once(
     CHANNEL_INIT,
-    '''    ChannelExecutionLogRead,
+    """    ChannelExecutionLogRead,
     ChannelExecutionStatus,
-''',
-    '''    ChannelExecutionIdentityType,
+""",
+    """    ChannelExecutionIdentityType,
     ChannelExecutionLogRead,
     ChannelExecutionStatus,
-''',
+""",
 )
 replace_once(
     CHANNEL_INIT,
-    '''    ChannelConnection,
-''',
-    '''    ChannelAccessPolicy,
+    """    ChannelConnection,
+""",
+    """    ChannelAccessPolicy,
     ChannelConnection,
-''',
+""",
 )
 replace_once(
     CHANNEL_INIT,
-    '''    ChannelConversationStatus,
-''',
-    '''    ChannelContextMode,
+    """    ChannelConversationStatus,
+""",
+    """    ChannelContextMode,
     ChannelConversationStatus,
-''',
+""",
 )
 replace_once(
     CHANNEL_INIT,
-    '''    "ChannelBindingCode",
-''',
-    '''    "ChannelAccessPolicy",
+    """    "ChannelBindingCode",
+""",
+    """    "ChannelAccessPolicy",
     "ChannelBindingCode",
-''',
+""",
 )
 replace_once(
     CHANNEL_INIT,
-    '''    "ChannelConversationBindingUpsert",
-''',
-    '''    "ChannelConversationBindingUpsert",
+    """    "ChannelConversationBindingUpsert",
+""",
+    """    "ChannelConversationBindingUpsert",
     "ChannelConversationContextEntry",
     "ChannelContextMode",
     "ChannelContextRole",
-''',
+""",
 )
 replace_once(
     CHANNEL_INIT,
-    '''    "ChannelExecutionLogRead",
-''',
-    '''    "ChannelExecutionIdentityType",
+    """    "ChannelExecutionLogRead",
+""",
+    """    "ChannelExecutionIdentityType",
     "ChannelExecutionLogRead",
-''',
+""",
 )
 
 replace_once(
     MODELS_INIT,
-    '''    ChannelConversationBinding,
-''',
-    '''    ChannelConversationBinding,
+    """    ChannelConversationBinding,
+""",
+    """    ChannelConversationBinding,
     ChannelConversationContextEntry,
-''',
+""",
 )
 replace_once(
     MODELS_INIT,
-    '''    "ChannelConversationBinding",
-''',
-    '''    "ChannelConversationBinding",
+    """    "ChannelConversationBinding",
+""",
+    """    "ChannelConversationBinding",
     "ChannelConversationContextEntry",
-''',
+""",
 )
 
 migration = '''"""add production channel access, context, and queue controls
@@ -860,7 +860,7 @@ write(
     migration,
 )
 
-model_test = '''from uuid import uuid4
+model_test = """from uuid import uuid4
 
 from langflow.services.database.models.channel.context_model import (
     ChannelContextRole,
@@ -938,7 +938,7 @@ def test_context_entry_contract() -> None:
     )
     assert entry.role == "user"
     assert entry.text == "hello"
-'''
+"""
 write("src/backend/tests/unit/channels/test_production_policy_models.py", model_test)
 
 print("Applied production channel phase 1 model and migration changes")
