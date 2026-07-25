@@ -43,6 +43,37 @@ jobs:
           python .github/scripts/repair_channel_production_phase2.py \
             2>&1 | tee /tmp/channel-production-phase2-repair.log
           status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ]; then
+            python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/backend/base/langflow/channels/services/access_control.py')
+          content = path.read_text(encoding='utf-8')
+          content = content.replace(
+              '''    if binding is not None and binding.access_policy != ChannelAccessPolicy.INHERIT.value:
+                  return binding.access_policy
+              return connection.access_policy
+          ''',
+              '''    binding_policy = getattr(binding, "access_policy", ChannelAccessPolicy.INHERIT.value)
+              if binding is not None and binding_policy != ChannelAccessPolicy.INHERIT.value:
+                  return binding_policy
+              return getattr(connection, "access_policy", ChannelAccessPolicy.HYBRID.value)
+          ''',
+          )
+          content = content.replace(
+              '''    if binding is not None and binding.context_mode != ChannelContextMode.INHERIT.value:
+                  return binding.context_mode
+              return connection.default_context_mode
+          ''',
+              '''    binding_mode = getattr(binding, "context_mode", ChannelContextMode.INHERIT.value)
+              if binding is not None and binding_mode != ChannelContextMode.INHERIT.value:
+                  return binding_mode
+              return getattr(connection, "default_context_mode", ChannelContextMode.ISOLATED.value)
+          ''',
+          )
+          path.write_text(content, encoding='utf-8')
+          PY
+          fi
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           exit 0
 
