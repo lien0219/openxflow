@@ -21,7 +21,7 @@ patch(
 )
 patch(
     "src/backend/base/langflow/api/v1/channels.py",
-    '''    service_user_id = payload.service_user_id or current_user.id
+    """    service_user_id = payload.service_user_id or current_user.id
     if service_user_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot assign another service user")
     service_user = await db.get(User, service_user_id)
@@ -30,18 +30,18 @@ patch(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Service user is missing or inactive"
         )
     payload.service_user_id = service_user_id
-''',
-    '''    if payload.service_user_id is not None:
+""",
+    """    if payload.service_user_id is not None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Channel service identities are provisioned automatically",
         )
-''',
+""",
     label="managed create identity",
 )
 patch(
     "src/backend/base/langflow/api/v1/channels.py",
-    '''    if payload.service_user_id is not None:
+    """    if payload.service_user_id is not None:
         if payload.service_user_id != current_user.id and not current_user.is_superuser:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot assign another service user")
         service_user = await db.get(User, payload.service_user_id)
@@ -49,13 +49,13 @@ patch(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Service user is missing or inactive"
             )
-''',
-    '''    if payload.service_user_id is not None:
+""",
+    """    if payload.service_user_id is not None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Channel service identities are managed automatically and cannot be reassigned",
         )
-''',
+""",
     label="managed update identity",
 )
 
@@ -68,10 +68,10 @@ if new_fixture not in test_content:
         raise RuntimeError("Missing principal connection fixture")
     test_content = test_content.replace(old_fixture, new_fixture)
 
-old_user_helper = '''def _user(user_id, *, active=True):
+old_user_helper = """def _user(user_id, *, active=True):
     return SimpleNamespace(id=user_id, is_active=active)
-'''
-new_user_helper = '''def _user(user_id, *, active=True, connection_id=None):
+"""
+new_user_helper = """def _user(user_id, *, active=True, connection_id=None):
     optins = {}
     if connection_id is not None:
         optins = {
@@ -79,16 +79,14 @@ new_user_helper = '''def _user(user_id, *, active=True, connection_id=None):
             "channel_connection_id": str(connection_id),
         }
     return SimpleNamespace(id=user_id, is_active=active, optins=optins)
-'''
+"""
 if new_user_helper not in test_content:
     if old_user_helper not in test_content:
         raise RuntimeError("Missing principal user helper")
     test_content = test_content.replace(old_user_helper, new_user_helper, 1)
 
 old_service_users = "users = {service_id: _user(service_id), member_id: _user(member_id)}"
-new_service_users = (
-    "users = {service_id: _user(service_id, connection_id=connection.id), member_id: _user(member_id)}"
-)
+new_service_users = "users = {service_id: _user(service_id, connection_id=connection.id), member_id: _user(member_id)}"
 if new_service_users not in test_content:
     if old_service_users not in test_content:
         raise RuntimeError("Missing service principal fixture")
