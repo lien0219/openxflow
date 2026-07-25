@@ -42,14 +42,14 @@ replace_once(
 )
 replace_once(
     CRUD,
-    '''async def create_channel_connection(
+    """async def create_channel_connection(
     session: AsyncSession,
     user_id: UUID,
     payload: ChannelConnectionCreate,
 ) -> ChannelConnection:
     values = payload.model_dump(exclude={"credentials", "service_user_id"})
-''',
-    '''async def create_channel_connection(
+""",
+    """async def create_channel_connection(
     session: AsyncSession,
     user_id: UUID,
     payload: ChannelConnectionCreate,
@@ -60,14 +60,14 @@ replace_once(
         payload.credentials,
     )
     values = payload.model_dump(exclude={"credentials", "service_user_id"})
-''',
+""",
     label="connection create validation",
 )
 replace_between(
     CRUD,
     "async def update_channel_connection(\n",
     "async def delete_channel_connection(\n",
-    '''async def update_channel_connection(
+    """async def update_channel_connection(
     session: AsyncSession,
     connection: ChannelConnection,
     payload: ChannelConnectionUpdate,
@@ -96,7 +96,7 @@ replace_between(
     return connection
 
 
-''',
+""",
     label="connection update validation",
 )
 
@@ -110,17 +110,17 @@ replace_once(
 )
 replace_once(
     FACTORY,
-    '''    credentials = decrypt_channel_credentials(connection.credentials_encrypted)
+    """    credentials = decrypt_channel_credentials(connection.credentials_encrypted)
     channel = ChannelType(connection.channel_type)
-''',
-    '''    credentials = decrypt_channel_credentials(connection.credentials_encrypted)
+""",
+    """    credentials = decrypt_channel_credentials(connection.credentials_encrypted)
     validate_channel_provider_credentials(
         connection.channel_type,
         connection.connection_mode,
         credentials,
     )
     channel = ChannelType(connection.channel_type)
-''',
+""",
     label="factory runtime validation",
 )
 
@@ -134,14 +134,14 @@ replace_once(
 )
 replace_once(
     CHANNELS_API,
-    '''    except IntegrityError as exc:
+    """    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A channel connection with this name already exists",
         ) from exc
-''',
-    '''    except ChannelProviderCredentialError as exc:
+""",
+    """    except ChannelProviderCredentialError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -153,19 +153,19 @@ replace_once(
             status_code=status.HTTP_409_CONFLICT,
             detail="A channel connection with this name already exists",
         ) from exc
-''',
+""",
     label="connection create credential error",
 )
 # Apply the same error branch to the second connection mutation handler.
 content = read(CHANNELS_API)
-needle = '''    except IntegrityError as exc:
+needle = """    except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A channel connection with this name already exists",
         ) from exc
-'''
-credential_branch = '''    except ChannelProviderCredentialError as exc:
+"""
+credential_branch = """    except ChannelProviderCredentialError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -177,7 +177,7 @@ credential_branch = '''    except ChannelProviderCredentialError as exc:
             status_code=status.HTTP_409_CONFLICT,
             detail="A channel connection with this name already exists",
         ) from exc
-'''
+"""
 if content.count("except ChannelProviderCredentialError as exc:") < 2:
     index = content.find(needle, content.find("async def update_channel_connection_route"))
     if index < 0:
@@ -189,24 +189,24 @@ if content.count("except ChannelProviderCredentialError as exc:") < 2:
 TELEGRAM = "src/backend/base/langflow/channels/adapters/telegram.py"
 replace_once(
     TELEGRAM,
-    '''    async def verify_event(self, headers: dict[str, str], payload: bytes) -> bool:
+    """    async def verify_event(self, headers: dict[str, str], payload: bytes) -> bool:
         del payload
         if self.webhook_secret is None:
             return True
-''',
-    '''    async def verify_event(self, headers: dict[str, str], payload: bytes) -> bool:
+""",
+    """    async def verify_event(self, headers: dict[str, str], payload: bytes) -> bool:
         del payload
         if self.webhook_secret is None:
             return False
-''',
+""",
     label="Telegram fail-closed verification",
 )
 replace_once(
     TELEGRAM,
-    '''    @staticmethod
+    """    @staticmethod
     def _extract_mentions(message: dict[str, Any], text: str | None) -> list[str]:
-''',
-    '''    @staticmethod
+""",
+    """    @staticmethod
     def _utf16_entity_text(text: str, offset: int, length: int) -> str:
         if offset < 0 or length <= 0:
             return ""
@@ -222,29 +222,29 @@ replace_once(
 
     @staticmethod
     def _extract_mentions(message: dict[str, Any], text: str | None) -> list[str]:
-''',
+""",
     label="Telegram UTF-16 helper",
 )
 replace_once(
     TELEGRAM,
     "                mentions.append(text[offset : offset + length])\n",
-    '''                mention = TelegramChannelAdapter._utf16_entity_text(text, offset, length)
+    """                mention = TelegramChannelAdapter._utf16_entity_text(text, offset, length)
                 if mention:
                     mentions.append(mention.lstrip("@"))
-''',
+""",
     label="Telegram UTF-16 mention extraction",
 )
 replace_once(
     TELEGRAM,
-    '''        if self.webhook_secret:
+    """        if self.webhook_secret:
             payload["secret_token"] = self.webhook_secret
         return bool(await self._request("setWebhook", payload=payload))
-''',
-    '''        if not self.webhook_secret:
+""",
+    """        if not self.webhook_secret:
             raise ValueError("Telegram webhook_secret is required before configuring a webhook")
         payload["secret_token"] = self.webhook_secret
         return bool(await self._request("setWebhook", payload=payload))
-''',
+""",
     label="Telegram webhook secret requirement",
 )
 
@@ -252,16 +252,16 @@ replace_once(
 FEISHU = "src/backend/base/langflow/channels/adapters/feishu.py"
 replace_once(
     FEISHU,
-    '''        if body.get("encrypt"):
+    """        if body.get("encrypt"):
             return False
         if self.verification_token is None:
             return True
-''',
-    '''        if body.get("encrypt"):
+""",
+    """        if body.get("encrypt"):
             return False
         if self.verification_token is None:
             return False
-''',
+""",
     label="Feishu fail-closed verification",
 )
 
@@ -283,7 +283,7 @@ replace_once(
 )
 replace_once(
     WECOM,
-    '''    def verify_url(
+    """    def verify_url(
         self,
         *,
         signature: str,
@@ -292,8 +292,8 @@ replace_once(
         echo: str,
     ) -> str:
         encrypted = unquote(echo)
-''',
-    '''    @staticmethod
+""",
+    """    @staticmethod
     def _callback_timestamp_is_fresh(timestamp: str) -> bool:
         try:
             callback_time = int(timestamp)
@@ -312,21 +312,21 @@ replace_once(
         if not self._callback_timestamp_is_fresh(timestamp):
             raise PermissionError("Expired WeCom callback timestamp")
         encrypted = unquote(echo)
-''',
+""",
     label="WeCom URL freshness",
 )
 replace_once(
     WECOM,
-    '''        nonce = headers.get("x-wecom-nonce", "")
+    """        nonce = headers.get("x-wecom-nonce", "")
         return bool(
             encrypted
-''',
-    '''        nonce = headers.get("x-wecom-nonce", "")
+""",
+    """        nonce = headers.get("x-wecom-nonce", "")
         if not self._callback_timestamp_is_fresh(timestamp):
             return False
         return bool(
             encrypted
-''',
+""",
     label="WeCom event freshness",
 )
 
@@ -334,13 +334,13 @@ replace_once(
 FRONTEND = "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ChannelConnectionDialog.tsx"
 replace_once(
     FRONTEND,
-    '''    if (!form.name.trim()) {
+    """    if (!form.name.trim()) {
       setError(t("channels.errors.nameRequired"));
       return;
     }
     setError(null);
-''',
-    '''    if (!form.name.trim()) {
+""",
+    """    if (!form.name.trim()) {
       setError(t("channels.errors.nameRequired"));
       return;
     }
@@ -359,36 +359,36 @@ replace_once(
       return;
     }
     setError(null);
-''',
+""",
     label="frontend provider credential validation",
 )
 replace_once(
     FRONTEND,
-    '''                <Input
+    """                <Input
                   type="password"
                   value={form.webhookSecret}
-''',
-    '''                <Input
+""",
+    """                <Input
                   type="password"
                   required={!isEditing}
                   minLength={16}
                   maxLength={256}
                   pattern="[A-Za-z0-9_-]+"
                   value={form.webhookSecret}
-''',
+""",
     label="Telegram secure secret input",
 )
 replace_once(
     FRONTEND,
-    '''                <Input
+    """                <Input
                   type="password"
                   value={form.verificationToken}
-''',
-    '''                <Input
+""",
+    """                <Input
                   type="password"
                   required={!isEditing}
                   value={form.verificationToken}
-''',
+""",
     label="Feishu required verification token",
 )
 
