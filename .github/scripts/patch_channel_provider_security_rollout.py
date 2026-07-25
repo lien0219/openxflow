@@ -1,4 +1,15 @@
+import sys
+import traceback
 from pathlib import Path
+
+
+def _log_unhandled(exc_type, exc_value, exc_traceback):  # type: ignore[no-untyped-def]
+    with Path("/tmp/channel-provider-security-apply.log").open("a", encoding="utf-8") as log:
+        traceback.print_exception(exc_type, exc_value, exc_traceback, file=log)
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+
+sys.excepthook = _log_unhandled
 
 # Apply persistence/API integration against the current CRUD implementation,
 # then remove the superseded section from the generic rollout script.
