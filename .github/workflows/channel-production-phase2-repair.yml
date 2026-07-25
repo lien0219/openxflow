@@ -46,6 +46,7 @@ jobs:
           if [ "$status" -eq 0 ]; then
             python .github/scripts/patch_channel_policy_defaults.py
             python .github/scripts/patch_channel_principal_compat.py
+            python .github/scripts/patch_channel_dispatch_commit_test.py
           fi
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           exit 0
@@ -84,7 +85,8 @@ jobs:
             src/backend/base/langflow/services/database/models/channel/crud.py \
             src/backend/base/langflow/api/v1/channels.py \
             src/backend/tests/unit/channels/test_production_access_context.py \
-            src/backend/tests/unit/channels/test_channel_access_principals.py
+            src/backend/tests/unit/channels/test_channel_access_principals.py \
+            src/backend/tests/unit/channels/test_dispatch.py
 
       - name: Lint changed Python
         shell: bash
@@ -105,7 +107,8 @@ jobs:
             uvx --quiet ruff check --fix \
               --config src/backend/tests/unit/channels/ruff.toml \
               src/backend/tests/unit/channels/test_production_access_context.py \
-              src/backend/tests/unit/channels/test_channel_access_principals.py
+              src/backend/tests/unit/channels/test_channel_access_principals.py \
+              src/backend/tests/unit/channels/test_dispatch.py
           } 2>&1 | tee /tmp/channel-production-phase2-ruff.log
 
       - name: Upload lint diagnostics
@@ -126,7 +129,8 @@ jobs:
             src/backend/base/langflow/services/database/models/channel/crud.py \
             src/backend/base/langflow/api/v1/channels.py \
             src/backend/tests/unit/channels/test_production_access_context.py \
-            src/backend/tests/unit/channels/test_channel_access_principals.py
+            src/backend/tests/unit/channels/test_channel_access_principals.py \
+            src/backend/tests/unit/channels/test_dispatch.py
 
       - name: Sync backend test environment
         run: uv sync --quiet --frozen --project src/backend/base --group dev
@@ -164,6 +168,7 @@ jobs:
           rm -f .github/scripts/repair_channel_production_phase2.py
           rm -f .github/scripts/patch_channel_policy_defaults.py
           rm -f .github/scripts/patch_channel_principal_compat.py
+          rm -f .github/scripts/patch_channel_dispatch_commit_test.py
           rm -f .github/workflows/channel-production-phase2.yml
           rm -f .github/workflows/channel-production-phase2-finalize.yml
           rm -f .github/workflows/channel-production-phase2-repair.yml
