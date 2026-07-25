@@ -77,20 +77,44 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Format and lint changed Python
+        id: lint
+        shell: bash
         run: |
-          uvx --quiet ruff format \
-            src/backend/base/langflow/channels/services \
-            src/backend/base/langflow/api/v1/channels.py \
-            src/backend/base/langflow/services/database/models/channel/crud.py \
-            src/backend/tests/unit/channels/test_production_access_context.py
-          uvx --quiet ruff check --fix \
-            --config src/backend/base/langflow/channels/ruff.toml \
-            src/backend/base/langflow/channels/services \
-            src/backend/base/langflow/api/v1/channels.py \
-            src/backend/base/langflow/services/database/models/channel/crud.py
-          uvx --quiet ruff check --fix \
-            --config src/backend/tests/unit/channels/ruff.toml \
-            src/backend/tests/unit/channels/test_production_access_context.py
+          set +e
+          {
+            uvx --quiet ruff format \
+              src/backend/base/langflow/channels/services \
+              src/backend/base/langflow/api/v1/channels.py \
+              src/backend/base/langflow/services/database/models/channel/crud.py \
+              src/backend/tests/unit/channels/test_production_access_context.py
+            format_status=$?
+            uvx --quiet ruff check --fix \
+              --config src/backend/base/langflow/channels/ruff.toml \
+              src/backend/base/langflow/channels/services \
+              src/backend/base/langflow/api/v1/channels.py \
+              src/backend/base/langflow/services/database/models/channel/crud.py
+            production_status=$?
+            uvx --quiet ruff check --fix \
+              --config src/backend/tests/unit/channels/ruff.toml \
+              src/backend/tests/unit/channels/test_production_access_context.py
+            test_status=$?
+            status=$((format_status || production_status || test_status))
+            echo "status=${status}" >> "$GITHUB_OUTPUT"
+            exit 0
+          } 2>&1 | tee /tmp/channel-production-phase2-lint.log
+
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-production-phase2-lint
+          path: /tmp/channel-production-phase2-lint.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Stop when lint failed
+        if: steps.lint.outputs.status != '0'
+        run: exit 1
 
       - name: Compile changed Python
         run: |
