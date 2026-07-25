@@ -1,20 +1,20 @@
 name: Channel Production FIFO Queue
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/channel-gateway
+      - main
 
 permissions:
   contents: write
 
 concurrency:
   group: channel-production-fifo-queue
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply-test-commit:
-    if: github.event.head_commit.message == 'feat(channels): enable shared service identity runtime'
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
