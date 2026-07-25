@@ -10,18 +10,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.channels.domain.models import ChannelEvent
 from langflow.channels.services.access_control import effective_context_mode
+from langflow.channels.services.conversation_scope import conversation_scope_id
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelContextMode,
     ChannelConversationBinding,
-)
-
-_SCOPE_METADATA_KEYS = (
-    "conversation_scope_id",
-    "thread_id",
-    "message_thread_id",
-    "topic_id",
-    "message_thread_topic_id",
 )
 
 
@@ -34,16 +27,6 @@ class ChannelQueueDescriptor:
     conversation_scope_id: str
     context_mode: str
     serialized_by_conversation: bool
-
-
-def _conversation_scope_id(event: ChannelEvent) -> str:
-    for key in _SCOPE_METADATA_KEYS:
-        value = event.conversation.metadata.get(key)
-        if value is None:
-            value = event.message.metadata.get(key)
-        if value is not None and str(value).strip():
-            return str(value).strip()
-    return ""
 
 
 def _bounded_queue_key(connection_id: str, scope_type: str, components: tuple[str, ...]) -> str:
@@ -64,7 +47,7 @@ async def resolve_channel_queue_descriptor(
     binding = (await session.exec(statement)).first()
     context_mode = effective_context_mode(connection, binding)
     conversation_type = event.conversation.conversation_type
-    scope_id = _conversation_scope_id(event)
+    scope_id = conversation_scope_id(event)
     serialized_by_conversation = conversation_type != "private" and context_mode in {
         ChannelContextMode.SHARED.value,
         ChannelContextMode.HYBRID.value,

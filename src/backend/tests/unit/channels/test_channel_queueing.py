@@ -14,12 +14,18 @@ class FakeSession:
         return FakeResult()
 
 
-def _event(*, user_id: str, conversation_id: str = "chat-1", conversation_type: str = "group"):
+def _event(
+    *,
+    user_id: str,
+    conversation_id: str = "chat-1",
+    conversation_type: str = "group",
+    scope_id: str | None = None,
+):
     return SimpleNamespace(
         conversation=SimpleNamespace(
             external_conversation_id=conversation_id,
             conversation_type=conversation_type,
-            metadata={},
+            metadata={"message_thread_id": scope_id} if scope_id else {},
         ),
         message=SimpleNamespace(metadata={}),
         user=SimpleNamespace(external_user_id=user_id),
@@ -55,3 +61,12 @@ async def test_private_queue_remains_member_scoped_in_shared_default() -> None:
         _event(user_id="b", conversation_type="private"),
     )
     assert first.queue_key != second.queue_key
+
+
+async def test_shared_group_topics_receive_distinct_fifo_keys() -> None:
+    connection = SimpleNamespace(id=uuid4(), default_context_mode="shared")
+    first = await resolve_channel_queue_descriptor(FakeSession(), connection, _event(user_id="a", scope_id="1"))
+    second = await resolve_channel_queue_descriptor(FakeSession(), connection, _event(user_id="b", scope_id="2"))
+    assert first.queue_key != second.queue_key
+    assert first.conversation_scope_id == "1"
+    assert second.conversation_scope_id == "2"

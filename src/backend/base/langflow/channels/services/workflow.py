@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelMessageType
+from langflow.channels.services.conversation_scope import conversation_scope_id
 from langflow.helpers.flow import get_flow_by_id_or_endpoint_name
 from langflow.services.authorization import FlowAction, ensure_flow_permission
 from langflow.services.database.models.channel.execution_model import ChannelExecutionIdentityType
@@ -30,6 +31,7 @@ def build_channel_session_id(event: ChannelEvent, context_mode: str = ChannelCon
         event.channel.value,
         str(event.connection_id),
         event.conversation.external_conversation_id,
+        conversation_scope_id(event),
     ]
     if context_mode != ChannelContextMode.SHARED.value or event.conversation.conversation_type == "private":
         parts.append(event.user.external_user_id)
@@ -161,6 +163,7 @@ class ChannelWorkflowExecutor:
             "connection_id": str(event.connection_id),
             "conversation_id": event.conversation.external_conversation_id,
             "conversation_type": event.conversation.conversation_type,
+            "conversation_scope_id": conversation_scope_id(event),
             "message_id": event.message.external_message_id,
             "event_id": event.event_id,
             "external_user_id": event.user.external_user_id,

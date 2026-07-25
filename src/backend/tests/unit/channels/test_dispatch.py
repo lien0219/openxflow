@@ -32,21 +32,26 @@ def _event(
     text: str,
     conversation_type: str = "private",
     channel: ChannelType = ChannelType.TELEGRAM,
+    event_type: ChannelEventType | None = None,
+    mentions: list[str] | None = None,
+    scope_id: str | None = None,
 ) -> ChannelEvent:
     return ChannelEvent(
         event_id="1",
         channel=channel,
         connection_id=uuid4(),
-        event_type=ChannelEventType.COMMAND if text.startswith("/") else ChannelEventType.TEXT,
+        event_type=event_type or (ChannelEventType.COMMAND if text.startswith("/") else ChannelEventType.TEXT),
         user=ChannelUser(external_user_id="42"),
         conversation=ChannelConversation(
             external_conversation_id="100",
             conversation_type=conversation_type,
+            metadata={"message_thread_id": scope_id} if scope_id else {},
         ),
         message=ChannelIncomingMessage(
             external_message_id="2",
             message_type=ChannelEventType.COMMAND if text.startswith("/") else ChannelEventType.TEXT,
             text=text,
+            mentions=mentions or [],
         ),
     )
 
@@ -76,6 +81,13 @@ def test_channel_session_id_is_stable_per_user_conversation() -> None:
     assert build_channel_session_id(event).startswith("channel-")
 
 
+def test_channel_session_id_isolated_by_thread_scope() -> None:
+    first = _event(text="hello", conversation_type="supergroup", scope_id="topic-1")
+    second = _event(text="hello", conversation_type="supergroup", scope_id="topic-2")
+    second.connection_id = first.connection_id
+    assert build_channel_session_id(first) != build_channel_session_id(second)
+
+
 def test_plain_group_message_without_mention_is_ignored_by_default() -> None:
     event = _event(text="hello", conversation_type="group")
     assert ChannelDispatchService._should_ignore_group_event(event) is True
@@ -96,6 +108,25 @@ def test_all_messages_binding_accepts_plain_group_text() -> None:
         response_mode="all_messages",
     )
     assert ChannelDispatchService._should_ignore_group_event(event, binding=binding) is False
+
+
+def test_group_file_without_mention_is_filtered_by_default() -> None:
+    event = _event(text="file", conversation_type="group", event_type=ChannelEventType.FILE)
+    assert ChannelDispatchService._should_ignore_group_event(event, response_mode="mention_only") is True
+
+
+def test_commands_only_ignores_mentions_but_all_messages_accepts_files() -> None:
+    mentioned = _event(text="hello", conversation_type="group", mentions=["bot"])
+    uploaded = _event(text="file", conversation_type="group", event_type=ChannelEventType.FILE)
+    assert ChannelDispatchService._should_ignore_group_event(mentioned, response_mode="commands_only") is True
+    assert ChannelDispatchService._should_ignore_group_event(uploaded, response_mode="all_messages") is False
+
+
+def test_disabled_mode_ignores_group_actions_and_commands() -> None:
+    action = _event(text="approve", conversation_type="group", event_type=ChannelEventType.ACTION)
+    command = _event(text="/help", conversation_type="group")
+    assert ChannelDispatchService._should_ignore_group_event(action, response_mode="disabled") is True
+    assert ChannelDispatchService._should_ignore_group_event(command, command="/help", response_mode="disabled") is True
 
 
 def test_mentions_only_binding_filters_plain_group_text() -> None:
@@ -143,9 +174,13 @@ async def test_feishu_workflow_replaces_processing_message_with_final_result() -
     ]
 
 
-async def test_non_feishu_workflow_returns_final_result_without_processing_message() -> None:
+async def test_telegram_workflow_updates_processing_placeholder() -> None:
     event = _event(text="hello", channel=ChannelType.TELEGRAM)
-    adapter = MockChannelAdapter(event.connection_id)
+
+    class TelegramMockAdapter(MockChannelAdapter):
+        channel_type = ChannelType.TELEGRAM
+
+    adapter = TelegramMockAdapter(event.connection_id)
     service = _dispatch_service(adapter)
 
     response = await service._execute_workflow(
@@ -157,9 +192,9 @@ async def test_non_feishu_workflow_returns_final_result_without_processing_messa
         trigger_type="default",
     )
 
-    assert response == ChannelMessage(title="Workflow", markdown="final answer")
-    assert adapter.sent_messages == []
-    assert adapter.updated_messages == []
+    assert response is None
+    assert adapter.sent_messages[0]["message"] == ChannelMessage(text="⏳ 正在处理中，请稍候…")
+    assert adapter.updated_messages[0]["message"] == ChannelMessage(title="Workflow", markdown="final answer")
 
 
 def test_help_message_exposes_interactive_actions() -> None:

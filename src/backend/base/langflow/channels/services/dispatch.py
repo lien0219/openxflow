@@ -18,10 +18,8 @@ from langflow.channels.adapters.base import ChannelAdapter
 from langflow.channels.domain.models import (
     ChannelAction,
     ChannelEvent,
-    ChannelEventType,
     ChannelMessage,
     ChannelMessageType,
-    ChannelType,
 )
 from langflow.channels.services.access_control import (
     ChannelBindingRequiredError,
@@ -33,6 +31,7 @@ from langflow.channels.services.access_control import (
     resolve_execution_principal,
 )
 from langflow.channels.services.binding import discover_channel_identity, issue_channel_binding_code
+from langflow.channels.services.capabilities import get_provider_capability
 from langflow.channels.services.commands import (
     list_available_workflow_commands,
     mark_workflow_command_used,
@@ -47,6 +46,7 @@ from langflow.channels.services.files import (
     resolve_owned_knowledge_base,
 )
 from langflow.channels.services.outbound_delivery import send_outbound_processing_once
+from langflow.channels.services.response_policy import normalize_response_mode, should_process_channel_event
 from langflow.channels.services.retry import retry_channel_operation
 from langflow.channels.services.workflow import ChannelWorkflowExecutor, build_channel_session_id
 from langflow.services.authorization import KnowledgeBaseAction, ensure_knowledge_base_permission
@@ -103,7 +103,8 @@ class ChannelDispatchService:
             ChannelConversationStatus.UNAVAILABLE.value,
         }:
             return None
-        if self._should_ignore_group_event(event, binding=binding, command=command):
+        response_mode = binding.response_mode if binding is not None else self.connection.default_response_mode
+        if self._should_ignore_group_event(event, command=command, response_mode=response_mode):
             return None
 
         if command in {"/start", "/help"}:
@@ -509,18 +510,23 @@ class ChannelDispatchService:
         return response
 
     async def _send_processing_message(self, event: ChannelEvent) -> str | None:
-        if event.channel != ChannelType.FEISHU:
+        capabilities = get_provider_capability(event.channel.value)
+        if (
+            capabilities is None
+            or not capabilities.supports_processing_message
+            or not capabilities.supports_message_update
+        ):
             return None
         processing_message = ChannelMessage(
-            message_type=ChannelMessageType.CARD,
+            message_type=ChannelMessageType(capabilities.processing_message_type),
             text="⏳ 正在处理中，请稍候…",
-            metadata={"feishu_update_multi": True},
+            metadata=dict(capabilities.processing_message_metadata),
         )
 
         async def sender() -> str:
             return await retry_channel_operation(
                 lambda: self.adapter.send_response(event, processing_message),
-                operation_name="feishu.send_processing_message",
+                operation_name=f"{event.channel.value}.send_processing_message",
             )
 
         try:
@@ -528,7 +534,10 @@ class ChannelDispatchService:
                 return await sender()
             return await send_outbound_processing_once(event, processing_message, sender)
         except Exception:  # noqa: BLE001
-            await logger.aexception("Unable to send Feishu processing message; continuing without it")
+            await logger.aexception(
+                "Unable to send %s processing message; continuing without it",
+                event.channel.value,
+            )
             return None
 
     async def _binding_required_message(self, event: ChannelEvent) -> ChannelMessage:
@@ -663,7 +672,7 @@ class ChannelDispatchService:
             context.update(
                 {
                     "conversation_binding_id": str(binding.id),
-                    "response_mode": binding.response_mode,
+                    "response_mode": normalize_response_mode(binding.response_mode),
                     "allow_file_upload": binding.allow_file_upload,
                     "conversation_route_mode": binding.route_mode,
                     "conversation_access_policy": binding.access_policy,
@@ -702,16 +711,18 @@ class ChannelDispatchService:
     def _should_ignore_group_event(
         event: ChannelEvent,
         *,
-        binding: ChannelConversationBinding | None = None,
         command: str | None = None,
+        response_mode: str | None = None,
+        binding: ChannelConversationBinding | None = None,
     ) -> bool:
-        if event.conversation.conversation_type == "private":
-            return False
-        if event.event_type != ChannelEventType.TEXT:
-            return False
-        if command is not None or event.message.mentions:
-            return False
-        return binding is None or binding.response_mode != "all_messages"
+        effective_mode = response_mode
+        if effective_mode is None and binding is not None:
+            effective_mode = binding.response_mode
+        return not should_process_channel_event(
+            event,
+            command=command,
+            response_mode=effective_mode,
+        )
 
     @staticmethod
     def _help_message(*, bound: bool) -> ChannelMessage:

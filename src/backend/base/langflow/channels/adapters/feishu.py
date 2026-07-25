@@ -336,7 +336,8 @@ class FeishuChannelAdapter(ChannelAdapter):
             key = mention.get("key")
             if isinstance(key, str) and key:
                 cleaned = cleaned.replace(key, " ")
-        normalized = " ".join(cleaned.split())
+        normalized_lines = [" ".join(line.split()) for line in cleaned.splitlines()]
+        normalized = "\n".join(line for line in normalized_lines if line)
         return normalized or None
 
     @staticmethod
