@@ -25,8 +25,10 @@ from langflow.channels.security.credentials import decrypt_credentials
 from langflow.channels.services.deduplication import ChannelEventDeduplicator
 from langflow.channels.services.dispatch import ChannelDispatchService
 from langflow.channels.services.gateway import ChannelGateway
-from langflow.channels.services.runtime_config import channel_streams_enabled
+from langflow.channels.services.queueing import resolve_channel_queue_descriptor
+from langflow.channels.services.runtime_config import channel_streams_enabled, durable_webhook_job_config
 from langflow.channels.services.timing_metrics import record_stream_callback
+from langflow.channels.services.webhook_jobs import enqueue_provider_webhook_job
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelConnectionStatus,
@@ -160,6 +162,24 @@ async def process_dingtalk_stream_payload(connection_id: UUID, data: dict[str, A
             api_base_url=str(connection.settings_data.get("api_base_url", "https://api.dingtalk.com")),
             stream_authenticated=True,
         )
+        if durable_webhook_job_config().enabled:
+            event = await adapter.parse_event({}, payload)
+            queue = await resolve_channel_queue_descriptor(session, connection, event)
+            await enqueue_provider_webhook_job(
+                session,
+                connection_id=connection.id,
+                channel_type="dingtalk",
+                external_event_id=event.event_id,
+                headers={},
+                payload=payload,
+                connection=connection,
+                external_conversation_id=queue.external_conversation_id,
+                external_user_id=queue.external_user_id,
+                conversation_type=queue.conversation_type,
+                queue_key=queue.queue_key,
+            )
+            return
+
         gateway = ChannelGateway()
         gateway.register_adapter(connection.id, adapter)
         deduplicator = ChannelEventDeduplicator(session)

@@ -19,12 +19,24 @@ from langflow.services.database.models.channel.webhook_job_model import (
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+_CREATE_CONNECTION_TABLE = """
+CREATE TABLE channel_connection (
+    id CHAR(32) NOT NULL PRIMARY KEY,
+    max_concurrency INTEGER NOT NULL DEFAULT 10,
+    per_user_concurrency INTEGER NOT NULL DEFAULT 1
+)
+"""
+
 _CREATE_JOB_TABLE = """
 CREATE TABLE channel_webhook_job (
     id CHAR(32) NOT NULL PRIMARY KEY,
     connection_id CHAR(32) NOT NULL,
     channel_type VARCHAR(32) NOT NULL,
     external_event_id VARCHAR(255) NOT NULL,
+    external_conversation_id VARCHAR(255) NOT NULL DEFAULT '',
+    external_user_id VARCHAR(255) NOT NULL DEFAULT '',
+    conversation_type VARCHAR(32) NOT NULL DEFAULT 'private',
+    queue_key VARCHAR(768) NOT NULL DEFAULT '',
     headers_data JSON NOT NULL,
     payload BLOB NOT NULL,
     status VARCHAR(32) NOT NULL,
@@ -45,6 +57,7 @@ CREATE TABLE channel_webhook_job (
 async def _session_factory():  # type: ignore[no-untyped-def]
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as connection:
+        await connection.execute(sa.text(_CREATE_CONNECTION_TABLE))
         await connection.execute(sa.text(_CREATE_JOB_TABLE))
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     return engine, factory
@@ -108,6 +121,7 @@ async def test_durable_webhook_job_enqueue_claim_complete_and_cleanup(monkeypatc
             ChannelWebhookJobStatus.PROCESSING.value: 0,
             ChannelWebhookJobStatus.COMPLETED.value: 1,
             ChannelWebhookJobStatus.FAILED.value: 0,
+            ChannelWebhookJobStatus.CANCELLED.value: 0,
         }
 
         old = utc_now() - timedelta(days=2)
@@ -165,5 +179,62 @@ async def test_expired_durable_webhook_lease_can_be_reclaimed() -> None:
         assert second_claim.id == first_claim.id
         assert second_claim.lease_owner == second_worker
         assert second_claim.attempts == 2
+    finally:
+        await engine.dispose()
+
+
+async def test_durable_webhook_jobs_preserve_queue_fifo_and_allow_other_sessions() -> None:
+    engine, factory = await _session_factory()
+    connection_id = uuid4()
+    first_worker = uuid4()
+    second_worker = uuid4()
+
+    try:
+        async with factory() as session:
+            await session.exec(
+                sa.text(
+                    "INSERT INTO channel_connection (id, max_concurrency, per_user_concurrency) VALUES (:id, 10, 1)"
+                ),
+                params={"id": connection_id.hex},
+            )
+            await session.commit()
+            for event_id, queue_key, conversation_id in (
+                ("event-a1", "queue-a", "chat-a"),
+                ("event-a2", "queue-a", "chat-a"),
+                ("event-b1", "queue-b", "chat-b"),
+            ):
+                await enqueue_provider_webhook_job(
+                    session,
+                    connection_id=connection_id,
+                    channel_type="telegram",
+                    external_event_id=event_id,
+                    external_conversation_id=conversation_id,
+                    external_user_id="same-user",
+                    queue_key=queue_key,
+                    headers={},
+                    payload=b"{}",
+                )
+
+        async with factory() as session:
+            first = await claim_provider_webhook_job(session, worker_id=first_worker)
+        assert first is not None
+        assert first.external_event_id == "event-a1"
+
+        async with factory() as session:
+            parallel = await claim_provider_webhook_job(session, worker_id=second_worker)
+        assert parallel is not None
+        assert parallel.external_event_id == "event-b1"
+
+        async with factory() as session:
+            assert await complete_provider_webhook_job(
+                session,
+                job_id=first.id,
+                worker_id=first_worker,
+            )
+
+        async with factory() as session:
+            next_in_fifo = await claim_provider_webhook_job(session, worker_id=uuid4())
+        assert next_in_fifo is not None
+        assert next_in_fifo.external_event_id == "event-a2"
     finally:
         await engine.dispose()

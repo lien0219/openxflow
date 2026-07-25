@@ -19,6 +19,7 @@ from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
 from langflow.channels.services.outbound_delivery_maintenance import (
     outbound_delivery_maintenance_lifespan,
 )
+from langflow.channels.services.queueing import resolve_channel_queue_descriptor
 from langflow.channels.services.runtime_config import durable_webhook_job_config, webhook_max_body_bytes
 from langflow.channels.services.webhook_jobs import (
     durable_webhook_job_lifespan,
@@ -128,6 +129,7 @@ async def _validate_and_schedule_provider_event(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     if durable_webhook_job_config().enabled:
+        queue = await resolve_channel_queue_descriptor(db, connection, event)
         await enqueue_provider_webhook_job(
             db,
             connection_id=connection_id,
@@ -135,6 +137,11 @@ async def _validate_and_schedule_provider_event(
             external_event_id=event.event_id,
             headers=durable_webhook_headers(expected_channel_type, headers),
             payload=payload,
+            connection=connection,
+            external_conversation_id=queue.external_conversation_id,
+            external_user_id=queue.external_user_id,
+            conversation_type=queue.conversation_type,
+            queue_key=queue.queue_key,
         )
         return {"ok": True}
 

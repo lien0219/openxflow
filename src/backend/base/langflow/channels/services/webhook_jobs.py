@@ -33,6 +33,7 @@ from langflow.channels.services.webhook_job_metrics import (
 )
 from langflow.channels.services.webhook_processing import process_provider_webhook
 from langflow.services.database.models.channel.model import (
+    ChannelConnection,
     ChannelEventReceipt,
     ChannelReceiptStatus,
     utc_now,
@@ -52,14 +53,97 @@ async def enqueue_provider_webhook_job(
     external_event_id: str,
     headers: dict[str, str],
     payload: bytes,
+    connection: ChannelConnection | None = None,
+    external_conversation_id: str = "",
+    external_user_id: str = "",
+    conversation_type: str = "private",
+    queue_key: str = "",
 ) -> bool:
-    """Persist a validated callback and commit it before returning a successful provider ACK."""
+    """Persist a validated callback and commit it before returning a successful provider ACK.
+
+    Queue pressure is represented by a durable rejection job instead of dropping
+    an already verified callback. The worker later sends the user-facing rejection
+    through the same idempotent outbound path as a normal response.
+    """
     config = durable_webhook_job_config()
+    now = utc_now()
+    normalized_queue_key = queue_key or f"{connection_id}:legacy:{external_event_id}"
+    persisted_headers = dict(headers)
+    rejection_reason: str | None = None
+    queue_position = 0
+
+    if connection is not None and queue_key:
+        active_statuses = (
+            ChannelWebhookJobStatus.PENDING.value,
+            ChannelWebhookJobStatus.PROCESSING.value,
+        )
+        queue_position = int(
+            (
+                await session.exec(
+                    select(sa.func.count(ChannelWebhookJob.id)).where(
+                        ChannelWebhookJob.connection_id == connection_id,
+                        ChannelWebhookJob.queue_key == queue_key,
+                        ChannelWebhookJob.status.in_(active_statuses),
+                    )
+                )
+            ).one()
+        )
+        pending_count = int(
+            (
+                await session.exec(
+                    select(sa.func.count(ChannelWebhookJob.id)).where(
+                        ChannelWebhookJob.connection_id == connection_id,
+                        ChannelWebhookJob.queue_key == queue_key,
+                        ChannelWebhookJob.status == ChannelWebhookJobStatus.PENDING.value,
+                    )
+                )
+            ).one()
+        )
+        if pending_count >= connection.per_user_queue_limit:
+            rejection_reason = "queue_limit"
+
+        if rejection_reason is None and connection.rate_limit_per_minute > 0:
+            rate_filters = [
+                ChannelWebhookJob.connection_id == connection_id,
+                ChannelWebhookJob.created_at >= now - timedelta(minutes=1),
+            ]
+            if external_user_id:
+                rate_filters.append(ChannelWebhookJob.external_user_id == external_user_id)
+            recent_count = int(
+                (await session.exec(select(sa.func.count(ChannelWebhookJob.id)).where(*rate_filters))).one()
+            )
+            if recent_count >= connection.rate_limit_per_minute:
+                rejection_reason = "rate_limit"
+
+        if rejection_reason is None and connection.daily_quota > 0:
+            day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            daily_count = int(
+                (
+                    await session.exec(
+                        select(sa.func.count(ChannelWebhookJob.id)).where(
+                            ChannelWebhookJob.connection_id == connection_id,
+                            ChannelWebhookJob.created_at >= day_start,
+                        )
+                    )
+                ).one()
+            )
+            if daily_count >= connection.daily_quota:
+                rejection_reason = "daily_quota"
+
+    persisted_headers["x-openxflow-queue-position"] = str(queue_position)
+    if rejection_reason is not None:
+        persisted_headers["x-openxflow-queue-rejection"] = rejection_reason
+        normalized_queue_key = f"{connection_id}:rejected:{external_event_id}"
+
     job = ChannelWebhookJob(
         connection_id=connection_id,
         channel_type=channel_type,
         external_event_id=external_event_id,
-        headers_data=dict(headers),
+        external_conversation_id=external_conversation_id,
+        external_user_id=external_user_id,
+        conversation_type=conversation_type,
+        queue_key=normalized_queue_key,
+        headers_data=persisted_headers,
         payload=payload,
         max_attempts=config.max_attempts,
     )
@@ -134,7 +218,12 @@ async def claim_provider_webhook_job(
     *,
     worker_id: UUID,
 ) -> ChannelWebhookJob | None:
-    """Claim one ready or expired-lease job through a portable conditional update."""
+    """Claim one ready job while preserving per-queue FIFO and connection limits.
+
+    Claimers serialize on the connection row. PostgreSQL therefore cannot race
+    past max_concurrency or claim two jobs for the same queue; SQLite retains its
+    normal single-writer behavior for development and tests.
+    """
     config = durable_webhook_job_config()
     now = utc_now()
     candidate_ids = list(
@@ -142,15 +231,87 @@ async def claim_provider_webhook_job(
             await session.exec(
                 select(ChannelWebhookJob.id)
                 .where(_claimable(now))
-                .order_by(ChannelWebhookJob.next_attempt_at, ChannelWebhookJob.created_at)
-                .limit(16)
+                .order_by(ChannelWebhookJob.next_attempt_at, ChannelWebhookJob.created_at, ChannelWebhookJob.id)
+                .limit(32)
             )
         ).all()
     )
+    active_processing = sa.and_(
+        ChannelWebhookJob.status == ChannelWebhookJobStatus.PROCESSING.value,
+        ChannelWebhookJob.lease_expires_at.is_not(None),
+        ChannelWebhookJob.lease_expires_at > now,
+    )
+
     for candidate_id in candidate_ids:
+        candidate = await session.get(ChannelWebhookJob, candidate_id)
+        if candidate is None:
+            await session.rollback()
+            continue
+
+        limits = (
+            await session.exec(
+                select(
+                    ChannelConnection.max_concurrency,
+                    ChannelConnection.per_user_concurrency,
+                )
+                .where(ChannelConnection.id == candidate.connection_id)
+                .with_for_update()
+            )
+        ).first()
+        max_concurrency = int(limits[0]) if limits is not None else max(1, config.worker_count)
+
+        connection_active = int(
+            (
+                await session.exec(
+                    select(sa.func.count(ChannelWebhookJob.id)).where(
+                        ChannelWebhookJob.connection_id == candidate.connection_id,
+                        active_processing,
+                    )
+                )
+            ).one()
+        )
+        if connection_active >= max_concurrency:
+            await session.rollback()
+            continue
+
+        rejection_job = "x-openxflow-queue-rejection" in candidate.headers_data
+        if not rejection_job:
+            head_id = (
+                await session.exec(
+                    select(ChannelWebhookJob.id)
+                    .where(
+                        ChannelWebhookJob.queue_key == candidate.queue_key,
+                        ChannelWebhookJob.status == ChannelWebhookJobStatus.PENDING.value,
+                    )
+                    .order_by(ChannelWebhookJob.created_at, ChannelWebhookJob.id)
+                    .limit(1)
+                )
+            ).first()
+            if candidate.status == ChannelWebhookJobStatus.PENDING.value and head_id != candidate.id:
+                await session.rollback()
+                continue
+
+            queue_active = int(
+                (
+                    await session.exec(
+                        select(sa.func.count(ChannelWebhookJob.id)).where(
+                            ChannelWebhookJob.queue_key == candidate.queue_key,
+                            active_processing,
+                        )
+                    )
+                ).one()
+            )
+            # Every normalized context key is FIFO. Different members or
+            # conversations still receive distinct keys and can run in parallel.
+            queue_limit = 1
+            if queue_active >= queue_limit:
+                await session.rollback()
+                continue
+
         result = await session.exec(
             sa.update(ChannelWebhookJob)
             .where(ChannelWebhookJob.id == candidate_id, _claimable(now))
+            .execution_options(synchronize_session=False)
             .values(
                 status=ChannelWebhookJobStatus.PROCESSING.value,
                 attempts=ChannelWebhookJob.attempts + 1,
@@ -164,7 +325,8 @@ async def claim_provider_webhook_job(
             await session.rollback()
             continue
         await session.commit()
-        return await session.get(ChannelWebhookJob, candidate_id)
+        await session.refresh(candidate)
+        return candidate
     await session.rollback()
     return None
 
@@ -385,12 +547,25 @@ class DurableWebhookJobWorker:
     async def _execute(self, job: ChannelWebhookJob) -> bool:
         async with session_scope() as session:
             await recover_stale_event_receipt(session, job)
+        created_at = job.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=utc_now().tzinfo)
+        queue_wait_ms = max(0, int((utc_now() - created_at).total_seconds() * 1000))
+        raw_position = job.headers_data.get("x-openxflow-queue-position", "0")
+        try:
+            queue_position = max(0, int(str(raw_position)))
+        except ValueError:
+            queue_position = 0
+        rejection_reason = job.headers_data.get("x-openxflow-queue-rejection")
         return await process_provider_webhook(
             connection_id=job.connection_id,
             expected_channel_type=job.channel_type,
             headers={str(key): str(value) for key, value in job.headers_data.items()},
             payload=job.payload,
             preverified=True,
+            queue_wait_ms=queue_wait_ms,
+            queue_position=queue_position,
+            queue_rejection_reason=str(rejection_reason) if rejection_reason else None,
         )
 
     async def _process(self, job: ChannelWebhookJob) -> None:

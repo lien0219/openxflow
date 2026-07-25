@@ -15,6 +15,7 @@ from lfx.log.logger import logger
 
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
+from langflow.channels.domain.models import ChannelMessage
 from langflow.channels.services.deduplication import ChannelEventDeduplicator
 from langflow.channels.services.dispatch import ChannelDispatchService
 from langflow.channels.services.gateway import ChannelGateway
@@ -347,6 +348,9 @@ async def process_provider_webhook(
     headers: dict[str, str],
     payload: bytes,
     preverified: bool = False,
+    queue_wait_ms: int = 0,
+    queue_position: int = 0,
+    queue_rejection_reason: str | None = None,
 ) -> bool:
     """Process one provider callback in an isolated database session."""
     async with session_scope() as session:
@@ -364,12 +368,29 @@ async def process_provider_webhook(
         deduplicator = ChannelEventDeduplicator(session)
         dispatcher = ChannelDispatchService(session, connection, adapter)
 
+        async def queued_handler(event):  # type: ignore[no-untyped-def]
+            event.message.metadata["queue_wait_ms"] = max(0, queue_wait_ms)
+            event.message.metadata["queue_position"] = max(0, queue_position)
+            if queue_rejection_reason == "queue_limit":
+                return ChannelMessage(text="你已有多个任务正在处理，请等待当前任务完成后再试。")
+            if queue_rejection_reason == "rate_limit":
+                return ChannelMessage(text="当前请求过于频繁，请稍后再试。")
+            if queue_rejection_reason == "daily_quota":
+                return ChannelMessage(text="当前渠道今日调用额度已用完，请联系管理员。")
+            if queue_wait_ms > connection.queue_timeout_seconds * 1000:
+                return ChannelMessage(text="当前请求排队时间过长，任务已取消，请稍后重试。")
+            try:
+                async with asyncio.timeout(connection.task_timeout_seconds):
+                    return await dispatcher.handle(event)
+            except TimeoutError:
+                return ChannelMessage(text="当前任务执行超时，请缩小问题范围后重试。")
+
         try:
             if preverified:
                 await gateway.receive_verified(
                     connection_id,
                     payload,
-                    dispatcher.handle,
+                    queued_handler,
                     deduplicator=deduplicator,
                 )
             else:
@@ -377,7 +398,7 @@ async def process_provider_webhook(
                     connection_id,
                     headers,
                     payload,
-                    dispatcher.handle,
+                    queued_handler,
                     deduplicator=deduplicator,
                 )
         except DuplicateChannelEventError:

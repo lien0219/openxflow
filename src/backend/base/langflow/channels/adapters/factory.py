@@ -50,6 +50,7 @@ def build_channel_adapter(connection: ChannelConnection) -> ChannelAdapter:
             client_secret=credentials.get("client_secret", ""),
             robot_code=credentials.get("robot_code"),
             api_base_url=str(connection.settings_data.get("api_base_url", "https://api.dingtalk.com")),
+            stream_authenticated=getattr(connection, "connection_mode", "webhook") == "stream",
         )
     if channel_type is ChannelType.WECOM:
         return ResilientWeComChannelAdapter(
