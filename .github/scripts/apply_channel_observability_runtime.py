@@ -135,8 +135,7 @@ replace_once(
 replace_once(
     API_ROUTER,
     "router_v1.include_router(channel_management_router)\n",
-    "router_v1.include_router(channel_management_router)\n"
-    "router_v1.include_router(channel_observability_router)\n",
+    "router_v1.include_router(channel_management_router)\nrouter_v1.include_router(channel_observability_router)\n",
     label="mount observability router",
 )
 
@@ -153,7 +152,7 @@ replace_once(
 replace_once(
     EXECUTION_LOGS,
     "async def _fail_stale_channel_executions(session: AsyncSession, connection_id: UUID) -> None:\n",
-    '''async def record_channel_delivery_outcome(
+    """async def record_channel_delivery_outcome(
     *,
     connection_id: UUID,
     external_event_id: str,
@@ -202,7 +201,7 @@ async def safe_record_channel_delivery_outcome(
 
 
 async def _fail_stale_channel_executions(session: AsyncSession, connection_id: UUID) -> None:
-''',
+""",
     label="delivery outcome persistence",
 )
 replace_once(
@@ -226,7 +225,7 @@ replace_once(
     "    if trigger_type:\n"
     "        filters.append(ChannelExecutionLog.trigger_type == trigger_type)\n"
     "    if query and query.strip():\n"
-    "        pattern = f\"%{query.strip()}%\"\n"
+    '        pattern = f"%{query.strip()}%"\n'
     "        filters.append(\n"
     "            sa.or_(\n"
     "                ChannelExecutionLog.external_event_id.ilike(pattern),\n"
@@ -290,7 +289,7 @@ replace_between(
     GATEWAY,
     "        try:\n            if adapter.requires_event_acknowledgement(event):\n",
     "        return event\n",
-    '''        await safe_record_inbound_message(event)
+    """        await safe_record_inbound_message(event)
         try:
             if adapter.requires_event_acknowledgement(event):
 
@@ -361,7 +360,7 @@ replace_between(
             )
             if deduplicator is not None and receipt is not None:
                 await deduplicator.complete(receipt)
-''',
+""",
     label="gateway persistent message lifecycle",
 )
 
@@ -431,7 +430,7 @@ replace_once(
     MESSAGE_RECORDS,
     "        if existing is None:\n            session.add(\n",
     "        if existing is not None and provider_message_id is None:\n"
-    "            values.pop(\"provider_message_id\", None)\n"
+    '            values.pop("provider_message_id", None)\n'
     "        if existing is None:\n"
     "            session.add(\n",
     label="preserve provider message id",
@@ -467,20 +466,20 @@ replace_once(
 )
 replace_once(
     CHANNELS_API,
-    "    else:\n        await db.commit()\n        return result\n\n\n@router.patch(\"/{connection_id}\"",
+    '    else:\n        await db.commit()\n        return result\n\n\n@router.patch("/{connection_id}"',
     "    else:\n"
     "        await record_channel_configuration_audit(\n"
     "            db,\n"
     "            connection_id=result.id,\n"
     "            actor_user_id=current_user.id,\n"
-    "            action=\"create\",\n"
-    "            resource_type=\"connection\",\n"
+    '            action="create",\n'
+    '            resource_type="connection",\n'
     "            resource_id=result.id,\n"
     "            after=result,\n"
     "        )\n"
     "        await db.commit()\n"
     "        return result\n\n\n"
-    "@router.patch(\"/{connection_id}\"",
+    '@router.patch("/{connection_id}"',
     label="connection create audit",
 )
 replace_once(
@@ -494,21 +493,21 @@ replace_once(
 )
 replace_once(
     CHANNELS_API,
-    "    else:\n        await db.commit()\n        return result\n\n\n@router.delete(\"/{connection_id}\"",
+    '    else:\n        await db.commit()\n        return result\n\n\n@router.delete("/{connection_id}"',
     "    else:\n"
     "        await record_channel_configuration_audit(\n"
     "            db,\n"
     "            connection_id=connection.id,\n"
     "            actor_user_id=current_user.id,\n"
-    "            action=\"update\",\n"
-    "            resource_type=\"connection\",\n"
+    '            action="update",\n'
+    '            resource_type="connection",\n'
     "            resource_id=connection.id,\n"
     "            before=before,\n"
     "            after=result,\n"
     "        )\n"
     "        await db.commit()\n"
     "        return result\n\n\n"
-    "@router.delete(\"/{connection_id}\"",
+    '@router.delete("/{connection_id}"',
     label="connection update audit",
 )
 replace_once(
@@ -521,8 +520,8 @@ replace_once(
     "        db,\n"
     "        connection_id=connection.id,\n"
     "        actor_user_id=current_user.id,\n"
-    "        action=\"delete\",\n"
-    "        resource_type=\"connection\",\n"
+    '        action="delete",\n'
+    '        resource_type="connection",\n'
     "        resource_id=connection.id,\n"
     "        before=before,\n"
     "    )\n"
@@ -531,15 +530,14 @@ replace_once(
 )
 replace_once(
     CHANNELS_API,
-    "    result = await upsert_channel_identity(db, connection_id, payload)\n"
-    "    await db.commit()\n",
+    "    result = await upsert_channel_identity(db, connection_id, payload)\n    await db.commit()\n",
     "    result = await upsert_channel_identity(db, connection_id, payload)\n"
     "    await record_channel_configuration_audit(\n"
     "        db,\n"
     "        connection_id=connection_id,\n"
     "        actor_user_id=current_user.id,\n"
-    "        action=\"upsert\",\n"
-    "        resource_type=\"identity\",\n"
+    '        action="upsert",\n'
+    '        resource_type="identity",\n'
     "        resource_id=result.id,\n"
     "        after=result,\n"
     "    )\n"
@@ -549,33 +547,32 @@ replace_once(
 replace_once(
     CHANNELS_API,
     "    if not await delete_channel_identity(db, connection_id, identity_id):\n"
-    "        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"Channel identity not found\")\n"
+    '        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel identity not found")\n'
     "    await db.commit()\n",
     "    if not await delete_channel_identity(db, connection_id, identity_id):\n"
-    "        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"Channel identity not found\")\n"
+    '        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel identity not found")\n'
     "    await record_channel_configuration_audit(\n"
     "        db,\n"
     "        connection_id=connection_id,\n"
     "        actor_user_id=current_user.id,\n"
-    "        action=\"delete\",\n"
-    "        resource_type=\"identity\",\n"
+    '        action="delete",\n'
+    '        resource_type="identity",\n'
     "        resource_id=identity_id,\n"
-    "        before={\"id\": identity_id},\n"
+    '        before={"id": identity_id},\n'
     "    )\n"
     "    await db.commit()\n",
     label="identity delete audit",
 )
 replace_once(
     CHANNELS_API,
-    "    result = await upsert_channel_conversation_binding(db, connection_id, payload)\n"
-    "    await db.commit()\n",
+    "    result = await upsert_channel_conversation_binding(db, connection_id, payload)\n    await db.commit()\n",
     "    result = await upsert_channel_conversation_binding(db, connection_id, payload)\n"
     "    await record_channel_configuration_audit(\n"
     "        db,\n"
     "        connection_id=connection_id,\n"
     "        actor_user_id=current_user.id,\n"
-    "        action=\"upsert\",\n"
-    "        resource_type=\"conversation\",\n"
+    '        action="upsert",\n'
+    '        resource_type="conversation",\n'
     "        resource_id=result.id,\n"
     "        after=result,\n"
     "    )\n"
@@ -584,25 +581,24 @@ replace_once(
 )
 replace_once(
     CHANNELS_API,
-    "    if binding is None:\n        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"Channel conversation not found\")\n"
+    '    if binding is None:\n        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel conversation not found")\n'
     "    await validate_conversation_binding_resources(\n",
     "    if binding is None:\n"
-    "        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"Channel conversation not found\")\n"
+    '        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel conversation not found")\n'
     "    before = channel_resource_snapshot(binding)\n"
     "    await validate_conversation_binding_resources(\n",
     label="conversation update snapshot",
 )
 replace_once(
     CHANNELS_API,
-    "    result = await update_channel_conversation_binding(db, connection, binding, payload)\n"
-    "    await db.commit()\n",
+    "    result = await update_channel_conversation_binding(db, connection, binding, payload)\n    await db.commit()\n",
     "    result = await update_channel_conversation_binding(db, connection, binding, payload)\n"
     "    await record_channel_configuration_audit(\n"
     "        db,\n"
     "        connection_id=connection_id,\n"
     "        actor_user_id=current_user.id,\n"
-    "        action=\"update\",\n"
-    "        resource_type=\"conversation\",\n"
+    '        action="update",\n'
+    '        resource_type="conversation",\n'
     "        resource_id=binding.id,\n"
     "        before=before,\n"
     "        after=result,\n"
@@ -612,15 +608,14 @@ replace_once(
 )
 replace_once(
     CHANNELS_API,
-    "    await delete_legacy_channel_conversation_binding(db, connection_id, binding_id)\n"
-    "    await db.commit()\n",
+    "    await delete_legacy_channel_conversation_binding(db, connection_id, binding_id)\n    await db.commit()\n",
     "    before = channel_resource_snapshot(binding)\n"
     "    await record_channel_configuration_audit(\n"
     "        db,\n"
     "        connection_id=connection_id,\n"
     "        actor_user_id=current_user.id,\n"
-    "        action=\"delete\",\n"
-    "        resource_type=\"conversation\",\n"
+    '        action="delete",\n'
+    '        resource_type="conversation",\n'
     "        resource_id=binding.id,\n"
     "        before=before,\n"
     "    )\n"
@@ -648,63 +643,62 @@ replace_once(
 )
 replace_once(
     MANAGEMENT_API,
-    "    else:\n        await db.commit()\n        return result\n\n\n@router.patch(\"/{connection_id}/commands/{command_id}\"",
+    '    else:\n        await db.commit()\n        return result\n\n\n@router.patch("/{connection_id}/commands/{command_id}"',
     "    else:\n"
     "        await record_channel_configuration_audit(\n"
     "            db,\n"
     "            connection_id=connection_id,\n"
     "            actor_user_id=current_user.id,\n"
-    "            action=\"create\",\n"
-    "            resource_type=\"command\",\n"
+    '            action="create",\n'
+    '            resource_type="command",\n'
     "            resource_id=result.id,\n"
     "            after=result,\n"
     "        )\n"
     "        await db.commit()\n"
     "        return result\n\n\n"
-    "@router.patch(\"/{connection_id}/commands/{command_id}\"",
+    '@router.patch("/{connection_id}/commands/{command_id}"',
     label="command create audit",
 )
 replace_once(
     MANAGEMENT_API,
-    "    if command is None:\n        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"Channel command not found\")\n"
+    '    if command is None:\n        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel command not found")\n'
     "    if payload.flow_id is not None:\n",
     "    if command is None:\n"
-    "        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"Channel command not found\")\n"
+    '        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel command not found")\n'
     "    before = channel_resource_snapshot(command)\n"
     "    if payload.flow_id is not None:\n",
     label="command update snapshot",
 )
 replace_once(
     MANAGEMENT_API,
-    "    else:\n        await db.commit()\n        return result\n\n\n@router.delete(\"/{connection_id}/commands/{command_id}\"",
+    '    else:\n        await db.commit()\n        return result\n\n\n@router.delete("/{connection_id}/commands/{command_id}"',
     "    else:\n"
     "        await record_channel_configuration_audit(\n"
     "            db,\n"
     "            connection_id=connection_id,\n"
     "            actor_user_id=current_user.id,\n"
-    "            action=\"update\",\n"
-    "            resource_type=\"command\",\n"
+    '            action="update",\n'
+    '            resource_type="command",\n'
     "            resource_id=command.id,\n"
     "            before=before,\n"
     "            after=result,\n"
     "        )\n"
     "        await db.commit()\n"
     "        return result\n\n\n"
-    "@router.delete(\"/{connection_id}/commands/{command_id}\"",
+    '@router.delete("/{connection_id}/commands/{command_id}"',
     label="command update audit",
 )
 replace_once(
     MANAGEMENT_API,
-    "    await delete_workflow_command(db, connection, current_user, command)\n"
-    "    await db.commit()\n",
+    "    await delete_workflow_command(db, connection, current_user, command)\n    await db.commit()\n",
     "    before = channel_resource_snapshot(command)\n"
     "    await delete_workflow_command(db, connection, current_user, command)\n"
     "    await record_channel_configuration_audit(\n"
     "        db,\n"
     "        connection_id=connection_id,\n"
     "        actor_user_id=current_user.id,\n"
-    "        action=\"delete\",\n"
-    "        resource_type=\"command\",\n"
+    '        action="delete",\n'
+    '        resource_type="command",\n'
     "        resource_id=command.id,\n"
     "        before=before,\n"
     "    )\n"
@@ -767,8 +761,8 @@ replace_once(
     "            db,\n"
     "            connection_id=connection_id,\n"
     "            actor_user_id=current_user.id,\n"
-    "            action=f\"batch_{payload.action}\",\n"
-    "            resource_type=\"conversation\",\n"
+    '            action=f"batch_{payload.action}",\n'
+    '            resource_type="conversation",\n'
     "            resource_id=row.id,\n"
     "            before=before,\n"
     "            after=updated,\n"
@@ -797,28 +791,19 @@ replace_once(
 replace_once(
     MIGRATION_TEST,
     "    status_index_repair_migration,\n)\n",
-    "    status_index_repair_migration,\n"
-    "    production_controls_migration,\n"
-    "    observability_migration,\n"
-    ")\n",
+    "    status_index_repair_migration,\n    production_controls_migration,\n    observability_migration,\n)\n",
     label="observability migration order",
 )
 replace_once(
     MIGRATION_TEST,
     '        "d1e4f9a8b6c3",\n    ]\n',
-    '        "d1e4f9a8b6c3",\n'
-    '        "e2f5a8c1d7b9",\n'
-    '        "f3a6c9e2b4d7",\n'
-    "    ]\n",
+    '        "d1e4f9a8b6c3",\n        "e2f5a8c1d7b9",\n        "f3a6c9e2b4d7",\n    ]\n',
     label="observability revision assertions",
 )
 replace_once(
     MIGRATION_TEST,
     '        "c0a3e8f7d5b2",\n    ]\n',
-    '        "c0a3e8f7d5b2",\n'
-    '        "d1e4f9a8b6c3",\n'
-    '        "e2f5a8c1d7b9",\n'
-    "    ]\n",
+    '        "c0a3e8f7d5b2",\n        "d1e4f9a8b6c3",\n        "e2f5a8c1d7b9",\n    ]\n',
     label="observability down revision assertions",
 )
 replace_once(
