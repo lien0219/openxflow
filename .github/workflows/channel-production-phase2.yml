@@ -27,6 +27,20 @@ jobs:
           ref: feature/channel-gateway
           fetch-depth: 0
 
+      - name: Correct phase two patch markers
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/scripts/apply_channel_production_phase2.py")
+          content = path.read_text(encoding="utf-8")
+          content = content.replace(
+              '"    def _resolve_default_flow_id(\\n", unknown_block)',
+              '"    def _resolve_default_flow_id(", unknown_block)',
+          )
+          path.write_text(content, encoding="utf-8")
+          PY
+
       - name: Apply production access and context runtime
         id: apply
         shell: bash
