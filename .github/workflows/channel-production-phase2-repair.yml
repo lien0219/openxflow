@@ -28,6 +28,17 @@ jobs:
         id: apply
         shell: bash
         run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/repair_channel_production_phase2.py')
+          content = path.read_text(encoding='utf-8')
+          content = content.replace(
+              '"    async def _send_processing_message(\\n",',
+              '"    async def _send_processing_message(",',
+          )
+          path.write_text(content, encoding='utf-8')
+          PY
           set +e
           python .github/scripts/repair_channel_production_phase2.py \
             2>&1 | tee /tmp/channel-production-phase2-repair.log
