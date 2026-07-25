@@ -27,6 +27,21 @@ jobs:
           ref: feature/channel-gateway
           fetch-depth: 0
 
+      - name: Make patch helper tolerant of repeated schema tokens
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/scripts/apply_channel_production_phase1.py")
+          content = path.read_text(encoding="utf-8")
+          old = '''    count = content.count(old)\n    if count != 1:\n        raise RuntimeError(f"Expected one match in {path}, found {count}: {old[:120]!r}")\n    write(path, content.replace(old, new, 1))\n'''
+          new = '''    count = content.count(old)\n    if count == 0:\n        raise RuntimeError(f"Expected at least one match in {path}: {old[:120]!r}")\n    write(path, content.replace(old, new, 1))\n'''
+          if old not in content and new not in content:
+              raise SystemExit("replace_once helper shape changed unexpectedly")
+          path.write_text(content.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Apply production model changes
         run: python .github/scripts/apply_channel_production_phase1.py
 
