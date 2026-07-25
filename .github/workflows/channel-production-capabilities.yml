@@ -1,6 +1,7 @@
 name: Channel Production Capabilities
 
 on:
+  workflow_dispatch:
   pull_request:
     branches:
       - main
@@ -14,7 +15,7 @@ concurrency:
 
 jobs:
   apply-test-commit:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
