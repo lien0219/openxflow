@@ -1,0 +1,115 @@
+name: Channel Production Phase 2 Repair
+
+on:
+  push:
+    branches:
+      - feature/channel-gateway
+    paths:
+      - ".github/workflows/channel-production-phase2-repair.yml"
+      - ".github/scripts/repair_channel_production_phase2.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: channel-production-phase2-repair
+  cancel-in-progress: false
+
+jobs:
+  repair-apply-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out channel branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/channel-gateway
+          fetch-depth: 0
+
+      - name: Apply repaired production access runtime
+        run: python .github/scripts/repair_channel_production_phase2.py
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Format changed Python
+        run: |
+          uvx --quiet ruff format \
+            src/backend/base/langflow/channels/services/access_control.py \
+            src/backend/base/langflow/channels/services/context.py \
+            src/backend/base/langflow/channels/services/binding.py \
+            src/backend/base/langflow/channels/services/commands.py \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/channels/services/execution_logs.py \
+            src/backend/base/langflow/channels/services/workflow.py \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/base/langflow/api/v1/channels.py \
+            src/backend/tests/unit/channels/test_production_access_context.py \
+            src/backend/tests/unit/channels/test_channel_access_principals.py
+
+      - name: Lint changed Python
+        run: |
+          uvx --quiet ruff check --fix \
+            --config src/backend/base/langflow/channels/ruff.toml \
+            src/backend/base/langflow/channels/services/access_control.py \
+            src/backend/base/langflow/channels/services/context.py \
+            src/backend/base/langflow/channels/services/binding.py \
+            src/backend/base/langflow/channels/services/commands.py \
+            src/backend/base/langflow/channels/services/dispatch.py \
+            src/backend/base/langflow/channels/services/execution_logs.py \
+            src/backend/base/langflow/channels/services/workflow.py \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/base/langflow/api/v1/channels.py
+          uvx --quiet ruff check --fix \
+            --config src/backend/tests/unit/channels/ruff.toml \
+            src/backend/tests/unit/channels/test_production_access_context.py \
+            src/backend/tests/unit/channels/test_channel_access_principals.py
+
+      - name: Compile changed Python
+        run: |
+          python -m compileall -q \
+            src/backend/base/langflow/channels/services \
+            src/backend/base/langflow/services/database/models/channel/crud.py \
+            src/backend/base/langflow/api/v1/channels.py \
+            src/backend/tests/unit/channels/test_production_access_context.py \
+            src/backend/tests/unit/channels/test_channel_access_principals.py
+
+      - name: Sync backend test environment
+        run: uv sync --quiet --frozen --project src/backend/base --group dev
+
+      - name: Run production access regression tests
+        run: |
+          PYTHONPATH=src/backend/base uv run --frozen --project src/backend/base --group dev \
+            pytest -q --tb=short \
+            --confcutdir=src/backend/tests/unit/channels \
+            src/backend/tests/unit/channels/test_channel_access_principals.py \
+            src/backend/tests/unit/channels/test_production_access_context.py \
+            src/backend/tests/unit/channels/test_binding.py \
+            src/backend/tests/unit/channels/test_command_routing.py \
+            src/backend/tests/unit/channels/test_dispatch.py \
+            src/backend/tests/unit/channels/test_workflow_response.py \
+            src/backend/tests/unit/channels/test_channel_core_workflow.py \
+            src/backend/tests/unit/channels/test_models.py
+
+      - name: Remove one-shot rollout resources
+        run: |
+          rm -f .github/scripts/apply_channel_production_phase2.py
+          rm -f .github/scripts/finalize_channel_production_phase2.py
+          rm -f .github/scripts/repair_channel_production_phase2.py
+          rm -f .github/workflows/channel-production-phase2.yml
+          rm -f .github/workflows/channel-production-phase2-finalize.yml
+          rm -f .github/workflows/channel-production-phase2-repair.yml
+
+      - name: Commit production access runtime
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(channels): enable shared service identity runtime"
+          git pull --rebase origin feature/channel-gateway
+          git push origin HEAD:feature/channel-gateway
