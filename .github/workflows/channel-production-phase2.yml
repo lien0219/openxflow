@@ -56,17 +56,12 @@ jobs:
               "context_block",
               "policy_test",
           ):
-              converted = False
               for quote in ("'''", '\"\"\"'):
                   old = f"{name} = {quote}"
                   new = f"{name} = r{quote}"
                   if old in content:
                       content = content.replace(old, new, 1)
-                      converted = True
-                      print(f"made {name} raw")
                       break
-              if not converted:
-                  print(f"skipped raw conversion for {name}")
           path.write_text(content, encoding="utf-8")
           PY
 
@@ -94,30 +89,15 @@ jobs:
         run: exit 1
 
       - name: Harden runtime compatibility
+        shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           access_path = Path("src/backend/base/langflow/channels/services/access_control.py")
           access = access_path.read_text(encoding="utf-8")
-          old = '''def effective_access_policy(
-              connection: ChannelConnection,
-              binding: ChannelConversationBinding | None,
-          ) -> str:
-              if binding is not None and binding.access_policy != ChannelAccessPolicy.INHERIT.value:
-                  return binding.access_policy
-              return connection.access_policy
-
-
-          def effective_context_mode(
-              connection: ChannelConnection,
-              binding: ChannelConversationBinding | None,
-          ) -> str:
-              if binding is not None and binding.context_mode != ChannelContextMode.INHERIT.value:
-                  return binding.context_mode
-              return connection.default_context_mode
-          '''
-          new = '''def effective_access_policy(
+          policy_block = '''def effective_access_policy(
               connection: ChannelConnection,
               binding: ChannelConversationBinding | None,
           ) -> str:
@@ -135,25 +115,25 @@ jobs:
               if binding is not None and binding_mode != ChannelContextMode.INHERIT.value:
                   return binding_mode
               return getattr(connection, "default_context_mode", ChannelContextMode.ISOLATED.value)
+
+
           '''
-          if old not in access:
-              raise SystemExit("policy fallback block not found")
-          access_path.write_text(access.replace(old, new, 1), encoding="utf-8")
+          access, count = re.subn(
+              r"def effective_access_policy\([\s\S]*?(?=async def bound_identity_user)",
+              policy_block,
+              access,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("unable to replace access policy functions")
+          access_path.write_text(access, encoding="utf-8")
 
           dispatch_path = Path("src/backend/base/langflow/channels/services/dispatch.py")
           dispatch = dispatch_path.read_text(encoding="utf-8")
-          dispatch = dispatch.replace("import asyncio\n", "import asyncio\nimport inspect\n", 1)
+          if "import inspect\n" not in dispatch:
+              dispatch = dispatch.replace("import asyncio\n", "import asyncio\nimport inspect\n", 1)
 
-          old_prepare = '''        prepared_input = await prepare_channel_input(
-              self.session,
-              connection=self.connection,
-              binding=binding,
-              event=event,
-              session_id=session_id,
-              input_value=input_value,
-          )
-          '''
-          new_prepare = '''        prepared_input = input_value
+          prepared = '''        prepared_input = input_value
           if self.session is not None:
               prepared_input = await prepare_channel_input(
                   self.session,
@@ -164,32 +144,25 @@ jobs:
                   input_value=input_value,
               )
           '''
-          if old_prepare not in dispatch:
-              raise SystemExit("prepared input block not found")
-          dispatch = dispatch.replace(old_prepare, new_prepare, 1)
+          dispatch, count = re.subn(
+              r"        prepared_input = await prepare_channel_input\([\s\S]*?\n        \)\n",
+              prepared,
+              dispatch,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("unable to replace prepared input block")
 
-          old_commit = '''        await self.session.commit()
-          processing_message_id = await self._send_processing_message(event)
-          '''
-          new_commit = '''        if self.session is not None:
-              await self.session.commit()
-          processing_message_id = await self._send_processing_message(event)
-          '''
-          if old_commit not in dispatch:
-              raise SystemExit("pre-workflow commit block not found")
-          dispatch = dispatch.replace(old_commit, new_commit, 1)
+          dispatch, count = re.subn(
+              r"        await self\.session\.commit\(\)\n        processing_message_id =",
+              "        if self.session is not None:\n            await self.session.commit()\n        processing_message_id =",
+              dispatch,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("unable to guard pre-workflow commit")
 
-          old_execute = '''            response = await self.workflow_executor.execute(
-                  event=event,
-                  user=principal.user,
-                  flow_identifier=flow_identifier,
-                  input_value=prepared_input,
-                  session_id=session_id,
-                  execution_identity_type=principal.identity_type,
-                  channel_context=channel_context,
-              )
-          '''
-          new_execute = '''            executor_kwargs: dict[str, Any] = {
+          execute_call = '''            executor_kwargs: dict[str, Any] = {
                   "event": event,
                   "user": principal.user,
                   "flow_identifier": flow_identifier,
@@ -203,21 +176,16 @@ jobs:
                   executor_kwargs["execution_identity_type"] = principal.identity_type
               response = await self.workflow_executor.execute(**executor_kwargs)
           '''
-          if old_execute not in dispatch:
-              raise SystemExit("workflow executor block not found")
-          dispatch = dispatch.replace(old_execute, new_execute, 1)
+          dispatch, count = re.subn(
+              r"            response = await self\.workflow_executor\.execute\([\s\S]*?\n            \)\n",
+              execute_call,
+              dispatch,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("unable to replace workflow executor call")
 
-          old_record = '''            await record_channel_response(
-                  self.session,
-                  connection=self.connection,
-                  binding=binding,
-                  event=event,
-                  session_id=session_id,
-                  response=response,
-              )
-              await self.session.commit()
-          '''
-          new_record = '''            if self.session is not None:
+          response_record = '''            if self.session is not None:
                   await record_channel_response(
                       self.session,
                       connection=self.connection,
@@ -228,9 +196,15 @@ jobs:
                   )
                   await self.session.commit()
           '''
-          if old_record not in dispatch:
-              raise SystemExit("response context block not found")
-          dispatch_path.write_text(dispatch.replace(old_record, new_record, 1), encoding="utf-8")
+          dispatch, count = re.subn(
+              r"            await record_channel_response\([\s\S]*?\n            await self\.session\.commit\(\)\n",
+              response_record,
+              dispatch,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("unable to guard response context persistence")
+          dispatch_path.write_text(dispatch, encoding="utf-8")
           PY
 
       - name: Set up Python
