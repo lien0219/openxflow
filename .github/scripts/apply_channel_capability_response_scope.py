@@ -235,7 +235,7 @@ replace_between(
     WORKFLOW,
     "def build_channel_session_id(\n",
     "def _collect_text_candidates",
-    '''def build_channel_session_id(event: ChannelEvent, context_mode: str = ChannelContextMode.ISOLATED.value) -> str:
+    """def build_channel_session_id(event: ChannelEvent, context_mode: str = ChannelContextMode.ISOLATED.value) -> str:
     parts = [
         event.channel.value,
         str(event.connection_id),
@@ -248,18 +248,18 @@ replace_between(
     return f"channel-{hashlib.sha256(raw.encode()).hexdigest()[:32]}"
 
 
-''',
+""",
     label="thread-aware session identity",
 )
 replace_once(
     WORKFLOW,
-    '''            "conversation_type": event.conversation.conversation_type,
+    """            "conversation_type": event.conversation.conversation_type,
             "message_id": event.message.external_message_id,
-''',
-    '''            "conversation_type": event.conversation.conversation_type,
+""",
+    """            "conversation_type": event.conversation.conversation_type,
             "conversation_scope_id": conversation_scope_id(event),
             "message_id": event.message.external_message_id,
-''',
+""",
     label="workflow scope context",
 )
 
@@ -279,16 +279,16 @@ replace_once(
 replace_once(
     DISPATCH,
     "        if self._should_ignore_group_event(event, binding=binding, command=command):\n",
-    '''        response_mode = binding.response_mode if binding is not None else self.connection.default_response_mode
+    """        response_mode = binding.response_mode if binding is not None else self.connection.default_response_mode
         if self._should_ignore_group_event(event, command=command, response_mode=response_mode):
-''',
+""",
     label="effective response mode",
 )
 replace_between(
     DISPATCH,
     "    async def _send_processing_message(self, event: ChannelEvent) -> str | None:\n",
     "    async def _binding_required_message",
-    '''    async def _send_processing_message(self, event: ChannelEvent) -> str | None:
+    """    async def _send_processing_message(self, event: ChannelEvent) -> str | None:
         capabilities = get_provider_capability(event.channel.value)
         if (
             capabilities is None
@@ -319,14 +319,14 @@ replace_between(
             )
             return None
 
-''',
+""",
     label="capability-driven processing message",
 )
 replace_between(
     DISPATCH,
     "    @staticmethod\n    def _should_ignore_group_event(\n",
     "    @staticmethod\n    def _help_message",
-    '''    @staticmethod
+    """    @staticmethod
     def _should_ignore_group_event(
         event: ChannelEvent,
         *,
@@ -343,43 +343,43 @@ replace_between(
             response_mode=effective_mode,
         )
 
-''',
+""",
     label="uniform group response policy",
 )
 replace_once(
     DISPATCH,
-    '''                    "response_mode": binding.response_mode,
-''',
-    '''                    "response_mode": normalize_response_mode(binding.response_mode),
-''',
+    """                    "response_mode": binding.response_mode,
+""",
+    """                    "response_mode": normalize_response_mode(binding.response_mode),
+""",
     label="normalized response context",
 )
 
 MODEL = "src/backend/base/langflow/services/database/models/channel/model.py"
 replace_once(
     MODEL,
-    "    default_response_mode: str = Field(default=\"mentions_only\", max_length=32)\n",
-    "    default_response_mode: str = Field(default=\"mention_only\", max_length=32)\n",
+    '    default_response_mode: str = Field(default="mentions_only", max_length=32)\n',
+    '    default_response_mode: str = Field(default="mention_only", max_length=32)\n',
     label="connection response default",
 )
 replace_once(
     MODEL,
-    "    response_mode: str = Field(default=\"mentions_only\", max_length=32)\n",
-    "    response_mode: str = Field(default=\"mention_only\", max_length=32)\n",
+    '    response_mode: str = Field(default="mentions_only", max_length=32)\n',
+    '    response_mode: str = Field(default="mention_only", max_length=32)\n',
     label="conversation response default",
 )
 
 TEST_DISPATCH = "src/backend/tests/unit/channels/test_dispatch.py"
 replace_once(
     TEST_DISPATCH,
-    '''def _event(
+    """def _event(
     *,
     text: str,
     conversation_type: str = "private",
     channel: ChannelType = ChannelType.TELEGRAM,
 ) -> ChannelEvent:
-''',
-    '''def _event(
+""",
+    """def _event(
     *,
     text: str,
     conversation_type: str = "private",
@@ -388,47 +388,47 @@ replace_once(
     mentions: list[str] | None = None,
     scope_id: str | None = None,
 ) -> ChannelEvent:
-''',
+""",
     label="dispatch event test options",
 )
 replace_once(
     TEST_DISPATCH,
-    '''        event_type=ChannelEventType.COMMAND if text.startswith("/") else ChannelEventType.TEXT,
-''',
-    '''        event_type=event_type or (ChannelEventType.COMMAND if text.startswith("/") else ChannelEventType.TEXT),
-''',
+    """        event_type=ChannelEventType.COMMAND if text.startswith("/") else ChannelEventType.TEXT,
+""",
+    """        event_type=event_type or (ChannelEventType.COMMAND if text.startswith("/") else ChannelEventType.TEXT),
+""",
     label="dispatch event type override",
 )
 replace_once(
     TEST_DISPATCH,
-    '''            conversation_type=conversation_type,
+    """            conversation_type=conversation_type,
         ),
-''',
-    '''            conversation_type=conversation_type,
+""",
+    """            conversation_type=conversation_type,
             metadata={"message_thread_id": scope_id} if scope_id else {},
         ),
-''',
+""",
     label="dispatch scope metadata",
 )
 replace_once(
     TEST_DISPATCH,
-    '''            text=text,
+    """            text=text,
         ),
-''',
-    '''            text=text,
+""",
+    """            text=text,
             mentions=mentions or [],
         ),
-''',
+""",
     label="dispatch mentions fixture",
 )
 replace_once(
     TEST_DISPATCH,
-    '''def test_channel_session_id_is_stable_per_user_conversation() -> None:
+    """def test_channel_session_id_is_stable_per_user_conversation() -> None:
     event = _event(text="hello")
     assert build_channel_session_id(event) == build_channel_session_id(event)
     assert build_channel_session_id(event).startswith("channel-")
-''',
-    '''def test_channel_session_id_is_stable_per_user_conversation() -> None:
+""",
+    """def test_channel_session_id_is_stable_per_user_conversation() -> None:
     event = _event(text="hello")
     assert build_channel_session_id(event) == build_channel_session_id(event)
     assert build_channel_session_id(event).startswith("channel-")
@@ -439,14 +439,14 @@ def test_channel_session_id_isolated_by_thread_scope() -> None:
     second = _event(text="hello", conversation_type="supergroup", scope_id="topic-2")
     second.connection_id = first.connection_id
     assert build_channel_session_id(first) != build_channel_session_id(second)
-''',
+""",
     label="thread session regression",
 )
 replace_once(
     TEST_DISPATCH,
-    '''def test_mentions_only_binding_filters_plain_group_text() -> None:
-''',
-    '''def test_group_file_without_mention_is_filtered_by_default() -> None:
+    """def test_mentions_only_binding_filters_plain_group_text() -> None:
+""",
+    """def test_group_file_without_mention_is_filtered_by_default() -> None:
     event = _event(text="file", conversation_type="group", event_type=ChannelEventType.FILE)
     assert ChannelDispatchService._should_ignore_group_event(event, response_mode="mention_only") is True
 
@@ -466,12 +466,12 @@ def test_disabled_mode_ignores_group_actions_and_commands() -> None:
 
 
 def test_mentions_only_binding_filters_plain_group_text() -> None:
-''',
+""",
     label="group response mode regressions",
 )
 replace_once(
     TEST_DISPATCH,
-    '''async def test_non_feishu_workflow_returns_final_result_without_processing_message() -> None:
+    """async def test_non_feishu_workflow_returns_final_result_without_processing_message() -> None:
     event = _event(text="hello", channel=ChannelType.TELEGRAM)
     adapter = MockChannelAdapter(event.connection_id)
     service = _dispatch_service(adapter)
@@ -488,8 +488,8 @@ replace_once(
     assert response == ChannelMessage(title="Workflow", markdown="final answer")
     assert adapter.sent_messages == []
     assert adapter.updated_messages == []
-''',
-    '''async def test_telegram_workflow_updates_processing_placeholder() -> None:
+""",
+    """async def test_telegram_workflow_updates_processing_placeholder() -> None:
     event = _event(text="hello", channel=ChannelType.TELEGRAM)
 
     class TelegramMockAdapter(MockChannelAdapter):
@@ -510,36 +510,36 @@ replace_once(
     assert response is None
     assert adapter.sent_messages[0]["message"] == ChannelMessage(text="⏳ 正在处理中，请稍候…")
     assert adapter.updated_messages[0]["message"] == ChannelMessage(title="Workflow", markdown="final answer")
-''',
+""",
     label="Telegram processing lifecycle",
 )
 
 TEST_QUEUE = "src/backend/tests/unit/channels/test_channel_queueing.py"
 replace_once(
     TEST_QUEUE,
-    '''def _event(*, user_id: str, conversation_id: str = "chat-1", conversation_type: str = "group"):
-''',
-    '''def _event(
+    """def _event(*, user_id: str, conversation_id: str = "chat-1", conversation_type: str = "group"):
+""",
+    """def _event(
     *,
     user_id: str,
     conversation_id: str = "chat-1",
     conversation_type: str = "group",
     scope_id: str | None = None,
 ):
-''',
+""",
     label="queue scope fixture",
 )
 replace_once(
     TEST_QUEUE,
-    '''            metadata={},
+    """            metadata={},
         ),
-''',
-    '''            metadata={"message_thread_id": scope_id} if scope_id else {},
+""",
+    """            metadata={"message_thread_id": scope_id} if scope_id else {},
         ),
-''',
+""",
     label="queue topic metadata",
 )
-queue_scope_test = '''
+queue_scope_test = """
 
 async def test_shared_group_topics_receive_distinct_fifo_keys() -> None:
     connection = SimpleNamespace(id=uuid4(), default_context_mode="shared")
@@ -548,11 +548,11 @@ async def test_shared_group_topics_receive_distinct_fifo_keys() -> None:
     assert first.queue_key != second.queue_key
     assert first.conversation_scope_id == "1"
     assert second.conversation_scope_id == "2"
-'''
+"""
 if "test_shared_group_topics_receive_distinct_fifo_keys" not in read(TEST_QUEUE):
     write(TEST_QUEUE, read(TEST_QUEUE) + queue_scope_test)
 
-capability_tests = '''from langflow.channels.services.capabilities import get_provider_capability, validate_provider_conversation_type
+capability_tests = """from langflow.channels.services.capabilities import get_provider_capability, validate_provider_conversation_type
 from langflow.channels.services.response_policy import normalize_response_mode
 
 
@@ -570,7 +570,7 @@ def test_legacy_mentions_only_normalizes_without_database_migration() -> None:
     assert normalize_response_mode("mentions_only") == "mention_only"
     assert normalize_response_mode("mention_only") == "mention_only"
     assert normalize_response_mode("invalid") == "mention_only"
-'''
+"""
 write("src/backend/tests/unit/channels/test_channel_capabilities_policy.py", capability_tests)
 
 print("Applied provider capabilities, response modes, and conversation scopes")
