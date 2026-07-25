@@ -19,12 +19,15 @@ import {
 import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import useAlertStore from "@/stores/alertStore";
 import AccountsTab from "./components/AccountsTab";
+import AuditLogTab from "./components/AuditLogTab";
 import ChannelConnectionDialog from "./components/ChannelConnectionDialog";
 import CommandsTab from "./components/CommandsTab";
 import ConnectionOverviewTab from "./components/ConnectionOverviewTab";
 import ConversationsTab from "./components/ConversationsTab";
 import DefaultRoutingTab from "./components/DefaultRoutingTab";
+import DeliveriesTab from "./components/DeliveriesTab";
 import ExecutionLogsTab from "./components/ExecutionLogsTab";
+import MessagesTab from "./components/MessagesTab";
 import useChannelCopy from "./use-channel-copy";
 import {
   buildChannelWebhookUrl,
@@ -44,7 +47,10 @@ type DetailTab =
   | "conversations"
   | "commands"
   | "accounts"
-  | "logs";
+  | "messages"
+  | "deliveries"
+  | "logs"
+  | "audits";
 
 const PROVIDERS: Array<{
   id: SupportedChannelType;
@@ -91,7 +97,10 @@ const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: "conversations", label: "会话" },
   { id: "commands", label: "指令" },
   { id: "accounts", label: "账号" },
+  { id: "messages", label: "消息" },
+  { id: "deliveries", label: "投递" },
   { id: "logs", label: "运行记录" },
+  { id: "audits", label: "审计" },
 ];
 
 export default function ChannelsPage() {
@@ -468,8 +477,17 @@ export default function ChannelsPage() {
               {activeTab === "accounts" && (
                 <AccountsTab connectionId={selectedConnection.id} />
               )}
+              {activeTab === "messages" && (
+                <MessagesTab connectionId={selectedConnection.id} />
+              )}
+              {activeTab === "deliveries" && (
+                <DeliveriesTab connectionId={selectedConnection.id} />
+              )}
               {activeTab === "logs" && (
                 <ExecutionLogsTab connectionId={selectedConnection.id} />
+              )}
+              {activeTab === "audits" && (
+                <AuditLogTab connectionId={selectedConnection.id} />
               )}
             </>
           )}

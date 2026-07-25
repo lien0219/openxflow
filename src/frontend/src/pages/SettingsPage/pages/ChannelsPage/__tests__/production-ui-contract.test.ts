@@ -23,11 +23,19 @@ describe("Channel Center production UI contract", () => {
     expect(page).toContain('id: "deliveries"');
     expect(page).toContain('id: "logs"');
     expect(page).toContain('id: "audits"');
-    expect(queryExports).toContain('export * from "./use-get-channel-overview"');
-    expect(queryExports).toContain('export * from "./use-get-channel-messages"');
-    expect(queryExports).toContain('export * from "./use-get-channel-deliveries"');
+    expect(queryExports).toContain(
+      'export * from "./use-get-channel-overview"',
+    );
+    expect(queryExports).toContain(
+      'export * from "./use-get-channel-messages"',
+    );
+    expect(queryExports).toContain(
+      'export * from "./use-get-channel-deliveries"',
+    );
     expect(queryExports).toContain('export * from "./use-get-channel-audits"');
-    expect(queryExports).toContain('export * from "./use-retry-channel-delivery"');
+    expect(queryExports).toContain(
+      'export * from "./use-retry-channel-delivery"',
+    );
   });
 
   it("uses the production response mode spelling and complete execution states", () => {

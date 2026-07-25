@@ -3,10 +3,7 @@ import type { useQueryFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
 import { UseRequestProcessor } from "../../services/request-processor";
-import type {
-  ChannelAuditQuery,
-  ChannelConfigurationAuditPage,
-} from "./types";
+import type { ChannelAuditQuery, ChannelConfigurationAuditPage } from "./types";
 
 export const useGetChannelAudits: useQueryFunctionType<
   ChannelAuditQuery,

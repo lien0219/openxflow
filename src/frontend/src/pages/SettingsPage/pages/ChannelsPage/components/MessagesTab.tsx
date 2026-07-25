@@ -47,7 +47,11 @@ export default function MessagesTab({ connectionId }: MessagesTabProps) {
     setStatus("");
   }, [connectionId]);
 
-  const { data: result, isLoading, isFetching } = useGetChannelMessages(
+  const {
+    data: result,
+    isLoading,
+    isFetching,
+  } = useGetChannelMessages(
     {
       connectionId,
       page,
@@ -82,11 +86,15 @@ export default function MessagesTab({ connectionId }: MessagesTabProps) {
         <div>
           <h3 className="font-semibold">{copy("消息中心")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {copy("统一查看四个渠道经过脱敏处理的收发消息、线程、附件与处理状态。")}
+            {copy(
+              "统一查看四个渠道经过脱敏处理的收发消息、线程、附件与处理状态。",
+            )}
           </p>
         </div>
         {isFetching && !isLoading ? (
-          <span className="text-xs text-muted-foreground">{copy("正在刷新")}</span>
+          <span className="text-xs text-muted-foreground">
+            {copy("正在刷新")}
+          </span>
         ) : null}
       </div>
 
@@ -174,14 +182,18 @@ export default function MessagesTab({ connectionId }: MessagesTabProps) {
             </thead>
             <tbody>
               {(result?.items ?? []).map((message) => (
-                <tr key={message.id} className="border-b align-top last:border-0">
+                <tr
+                  key={message.id}
+                  className="border-b align-top last:border-0"
+                >
                   <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
                     {new Date(message.created_at).toLocaleString()}
                   </td>
                   <td className="px-3 py-3">
                     <div>{copy(DIRECTION_LABELS[message.direction])}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {copy(STATUS_LABELS[message.status])} · {message.message_type}
+                      {copy(STATUS_LABELS[message.status])} ·{" "}
+                      {message.message_type}
                     </div>
                   </td>
                   <td className="px-3 py-3">
@@ -191,7 +203,10 @@ export default function MessagesTab({ connectionId }: MessagesTabProps) {
                     </div>
                   </td>
                   <td className="px-3 py-3 font-mono text-xs">
-                    <div className="max-w-56 truncate" title={message.external_conversation_id}>
+                    <div
+                      className="max-w-56 truncate"
+                      title={message.external_conversation_id}
+                    >
                       {message.external_conversation_id}
                     </div>
                     <div className="mt-1 max-w-56 truncate text-muted-foreground">
@@ -203,19 +218,25 @@ export default function MessagesTab({ connectionId }: MessagesTabProps) {
                       {message.text || copy("无文本内容")}
                     </div>
                     <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-                      {message.external_message_id || message.provider_message_id || "-"}
+                      {message.external_message_id ||
+                        message.provider_message_id ||
+                        "-"}
                     </div>
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
                     {message.has_attachments
-                      ? copy("{{count}} 个", { count: message.attachment_count })
+                      ? copy("{{count}} 个", {
+                          count: message.attachment_count,
+                        })
                       : "-"}
                   </td>
                   <td className="max-w-64 px-3 py-3 text-xs text-destructive">
                     {message.error_code ? (
                       <div className="font-mono">{message.error_code}</div>
                     ) : null}
-                    <div className="line-clamp-3">{message.error_message || "-"}</div>
+                    <div className="line-clamp-3">
+                      {message.error_message || "-"}
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -12,9 +12,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type {
+  ChannelAccessPolicyOverride,
+  ChannelContextModeOverride,
   ChannelConversationBinding,
   ChannelConversationBindingUpdate,
   ChannelConversationRouteMode,
+  ChannelResponseMode,
 } from "@/controllers/API/queries/channels";
 import useChannelCopy from "../use-channel-copy";
 import ChannelResourceSelect from "./ChannelResourceSelect";
@@ -32,7 +35,9 @@ interface ConversationBindingDialogProps {
 interface ConversationFormState {
   displayName: string;
   routeMode: ChannelConversationRouteMode;
-  responseMode: string;
+  responseMode: ChannelResponseMode;
+  accessPolicy: ChannelAccessPolicyOverride;
+  contextMode: ChannelContextModeOverride;
   defaultFlowId: string;
   knowledgeBaseId: string;
   allowFileUpload: boolean;
@@ -53,7 +58,9 @@ export default function ConversationBindingDialog({
   const [form, setForm] = useState<ConversationFormState>({
     displayName: "",
     routeMode: "inherit",
-    responseMode: "mentions_only",
+    responseMode: "mention_only",
+    accessPolicy: "inherit",
+    contextMode: "inherit",
     defaultFlowId: "",
     knowledgeBaseId: "",
     allowFileUpload: true,
@@ -66,6 +73,8 @@ export default function ConversationBindingDialog({
       displayName: binding.display_name ?? "",
       routeMode: binding.route_mode,
       responseMode: binding.response_mode,
+      accessPolicy: binding.access_policy,
+      contextMode: binding.context_mode,
       defaultFlowId: binding.default_flow_id ?? "",
       knowledgeBaseId: binding.knowledge_base_id ?? "",
       allowFileUpload: binding.allow_file_upload,
@@ -85,6 +94,8 @@ export default function ConversationBindingDialog({
       display_name: form.displayName.trim() || null,
       route_mode: form.routeMode,
       response_mode: form.responseMode,
+      access_policy: form.accessPolicy,
+      context_mode: form.contextMode,
       allow_file_upload: form.allowFileUpload,
       settings_data: binding.settings_data,
       default_flow_id:
@@ -181,25 +192,75 @@ export default function ConversationBindingDialog({
             onChange={(value) => setField("knowledgeBaseId", value)}
           />
 
-          {isGroupConversation && supportsMentions && (
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-medium">
-              {t("channels.conversationDialog.responseMode")}
+              {copy("访问策略")}
               <select
                 className="primary-input h-10"
-                value={form.responseMode}
+                value={form.accessPolicy}
                 onChange={(event) =>
-                  setField("responseMode", event.target.value)
+                  setField(
+                    "accessPolicy",
+                    event.target.value as ChannelAccessPolicyOverride,
+                  )
                 }
               >
-                <option value="mentions_only">
-                  {t("channels.conversationDialog.mentionsOnly")}
-                </option>
-                <option value="all_messages">
-                  {t("channels.conversationDialog.allMessages")}
-                </option>
+                <option value="inherit">{copy("继承连接策略")}</option>
+                <option value="shared">{copy("所有成员共享使用")}</option>
+                <option value="bound_only">{copy("仅已绑定账号")}</option>
+                <option value="hybrid">{copy("共享与个人混合")}</option>
               </select>
+              <span className="text-xs font-normal text-muted-foreground">
+                {copy(
+                  "共享能力使用服务身份，个人资源使用已绑定的 OpenXFlow 用户。",
+                )}
+              </span>
             </label>
-          )}
+
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              {copy("会话上下文")}
+              <select
+                className="primary-input h-10"
+                value={form.contextMode}
+                onChange={(event) =>
+                  setField(
+                    "contextMode",
+                    event.target.value as ChannelContextModeOverride,
+                  )
+                }
+              >
+                <option value="inherit">{copy("继承连接设置")}</option>
+                <option value="isolated">{copy("按成员隔离")}</option>
+                <option value="shared">{copy("群内共享上下文")}</option>
+              </select>
+              <span className="text-xs font-normal text-muted-foreground">
+                {isGroupConversation
+                  ? copy("生产环境建议按成员隔离，防止不同成员上下文串线。")
+                  : copy("私聊始终按当前用户和线程形成独立会话。")}
+              </span>
+            </label>
+          </div>
+
+          <label className="flex flex-col gap-2 text-sm font-medium">
+            {t("channels.conversationDialog.responseMode")}
+            <select
+              className="primary-input h-10"
+              value={form.responseMode}
+              onChange={(event) =>
+                setField(
+                  "responseMode",
+                  event.target.value as ChannelResponseMode,
+                )
+              }
+            >
+              {isGroupConversation && supportsMentions ? (
+                <option value="mention_only">{copy("仅被提及时响应")}</option>
+              ) : null}
+              <option value="all_messages">{copy("响应全部消息")}</option>
+              <option value="commands_only">{copy("仅响应指令")}</option>
+              <option value="disabled">{copy("完全停用响应")}</option>
+            </select>
+          </label>
 
           {supportsFileUpload && (
             <div className="flex items-center justify-between rounded-lg border p-4">

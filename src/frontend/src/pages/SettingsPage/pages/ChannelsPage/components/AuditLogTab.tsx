@@ -61,7 +61,9 @@ export default function AuditLogTab({ connectionId }: AuditLogTabProps) {
       <div>
         <h3 className="font-semibold">{copy("配置审计")}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          {copy("追踪连接、会话、账号、指令和人工重试变更；凭据、令牌与密钥始终脱敏。")}
+          {copy(
+            "追踪连接、会话、账号、指令和人工重试变更；凭据、令牌与密钥始终脱敏。",
+          )}
         </p>
       </div>
 
@@ -126,13 +128,21 @@ export default function AuditLogTab({ connectionId }: AuditLogTabProps) {
                     {copy(ACTION_LABELS[audit.action] ?? audit.action)}
                   </td>
                   <td className="px-3 py-3">
-                    <div>{copy(RESOURCE_LABELS[audit.resource_type] ?? audit.resource_type)}</div>
+                    <div>
+                      {copy(
+                        RESOURCE_LABELS[audit.resource_type] ??
+                          audit.resource_type,
+                      )}
+                    </div>
                     <div className="mt-1 max-w-64 truncate font-mono text-xs text-muted-foreground">
                       {audit.resource_id || "-"}
                     </div>
                   </td>
                   <td className="max-w-52 px-3 py-3 font-mono text-xs text-muted-foreground">
-                    <div className="truncate" title={audit.actor_user_id ?? undefined}>
+                    <div
+                      className="truncate"
+                      title={audit.actor_user_id ?? undefined}
+                    >
                       {audit.actor_user_id || copy("系统")}
                     </div>
                   </td>

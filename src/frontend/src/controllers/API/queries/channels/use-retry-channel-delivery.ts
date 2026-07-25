@@ -1,10 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
-import type {
-  ChannelMutationHook,
-  ChannelRetryDeliveryResult,
-} from "./types";
+import type { ChannelMutationHook, ChannelRetryDeliveryResult } from "./types";
 
 export const useRetryChannelDelivery: ChannelMutationHook<
   { connectionId: string; deliveryId: string },

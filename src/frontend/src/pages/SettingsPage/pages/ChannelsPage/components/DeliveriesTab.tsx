@@ -42,7 +42,11 @@ export default function DeliveriesTab({ connectionId }: DeliveriesTabProps) {
     setRetryingId("");
   }, [connectionId]);
 
-  const { data: result, isLoading, isFetching } = useGetChannelDeliveries(
+  const {
+    data: result,
+    isLoading,
+    isFetching,
+  } = useGetChannelDeliveries(
     {
       connectionId,
       page,
@@ -92,7 +96,9 @@ export default function DeliveriesTab({ connectionId }: DeliveriesTabProps) {
           </p>
         </div>
         {isFetching && !isLoading ? (
-          <span className="text-xs text-muted-foreground">{copy("正在刷新")}</span>
+          <span className="text-xs text-muted-foreground">
+            {copy("正在刷新")}
+          </span>
         ) : null}
       </div>
 
@@ -175,7 +181,10 @@ export default function DeliveriesTab({ connectionId }: DeliveriesTabProps) {
             </thead>
             <tbody>
               {(result?.items ?? []).map((delivery) => (
-                <tr key={delivery.id} className="border-b align-top last:border-0">
+                <tr
+                  key={delivery.id}
+                  className="border-b align-top last:border-0"
+                >
                   <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
                     {new Date(delivery.updated_at).toLocaleString()}
                   </td>
@@ -186,18 +195,26 @@ export default function DeliveriesTab({ connectionId }: DeliveriesTabProps) {
                     </span>
                   </td>
                   <td className="max-w-64 px-3 py-3 font-mono text-xs">
-                    <div className="truncate" title={delivery.external_event_id}>
+                    <div
+                      className="truncate"
+                      title={delivery.external_event_id}
+                    >
                       {delivery.external_event_id}
                     </div>
                   </td>
                   <td className="max-w-64 px-3 py-3 font-mono text-xs text-muted-foreground">
-                    <div className="truncate" title={delivery.provider_message_id ?? undefined}>
+                    <div
+                      className="truncate"
+                      title={delivery.provider_message_id ?? undefined}
+                    >
                       {delivery.provider_message_id || "-"}
                     </div>
                   </td>
                   <td className="px-3 py-3">{delivery.attempts}</td>
                   <td className="max-w-80 px-3 py-3 text-xs text-destructive">
-                    <div className="line-clamp-3">{delivery.last_error || "-"}</div>
+                    <div className="line-clamp-3">
+                      {delivery.last_error || "-"}
+                    </div>
                   </td>
                   <td className="px-3 py-3">
                     {delivery.status === "failed" ? (
@@ -207,7 +224,9 @@ export default function DeliveriesTab({ connectionId }: DeliveriesTabProps) {
                         disabled={Boolean(retryingId)}
                         onClick={() => handleRetry(delivery.id)}
                       >
-                        {retryingId === delivery.id ? copy("重新入队中") : copy("重新投递")}
+                        {retryingId === delivery.id
+                          ? copy("重新入队中")
+                          : copy("重新投递")}
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">-</span>

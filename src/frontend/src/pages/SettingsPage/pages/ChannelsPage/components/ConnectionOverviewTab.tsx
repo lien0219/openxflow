@@ -64,7 +64,11 @@ export default function ConnectionOverviewTab({
   const { t, i18n } = useTranslation();
   const copy = useChannelCopy();
   const [windowHours, setWindowHours] = useState(24);
-  const { data: overview, isLoading, isFetching } = useGetChannelOverview(
+  const {
+    data: overview,
+    isLoading,
+    isFetching,
+  } = useGetChannelOverview(
     { connectionId: connection.id, windowHours },
     { enabled: Boolean(connection.id) },
   );
@@ -100,7 +104,9 @@ export default function ConnectionOverviewTab({
             </p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span className="rounded-full bg-muted px-2 py-1">
-                {copy("访问策略：{{value}}", { value: connection.access_policy })}
+                {copy("访问策略：{{value}}", {
+                  value: connection.access_policy,
+                })}
               </span>
               <span className="rounded-full bg-muted px-2 py-1">
                 {copy("上下文：{{value}}", {
@@ -109,7 +115,8 @@ export default function ConnectionOverviewTab({
               </span>
               <span className="rounded-full bg-muted px-2 py-1">
                 {copy("服务身份：{{value}}", {
-                  value: connection.service_user_id?.slice(0, 8) ?? copy("未创建"),
+                  value:
+                    connection.service_user_id?.slice(0, 8) ?? copy("未创建"),
                 })}
               </span>
             </div>
@@ -169,12 +176,16 @@ export default function ConnectionOverviewTab({
           <div>
             <h3 className="font-semibold">{copy("运行概览")}</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              {copy("基于持久化消息、队列、执行和投递记录统计，不依赖单进程内存。")}
+              {copy(
+                "基于持久化消息、队列、执行和投递记录统计，不依赖单进程内存。",
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {isFetching && !isLoading ? (
-              <span className="text-xs text-muted-foreground">{copy("正在刷新")}</span>
+              <span className="text-xs text-muted-foreground">
+                {copy("正在刷新")}
+              </span>
             ) : null}
             <select
               className="primary-input h-9"
@@ -257,25 +268,38 @@ export default function ConnectionOverviewTab({
 
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm">
               <div className="rounded-lg bg-muted/50 p-3">
-                <div className="text-xs text-muted-foreground">{copy("连接并发")}</div>
+                <div className="text-xs text-muted-foreground">
+                  {copy("连接并发")}
+                </div>
                 <div className="mt-1 font-medium">
-                  {connection.max_concurrency} / {copy("单用户")} {connection.per_user_concurrency}
+                  {connection.max_concurrency} / {copy("单用户")}{" "}
+                  {connection.per_user_concurrency}
                 </div>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
-                <div className="text-xs text-muted-foreground">{copy("单用户队列")}</div>
-                <div className="mt-1 font-medium">{connection.per_user_queue_limit}</div>
-              </div>
-              <div className="rounded-lg bg-muted/50 p-3">
-                <div className="text-xs text-muted-foreground">{copy("频率 / 每日配额")}</div>
+                <div className="text-xs text-muted-foreground">
+                  {copy("单用户队列")}
+                </div>
                 <div className="mt-1 font-medium">
-                  {connection.rate_limit_per_minute} / min · {connection.daily_quota || copy("不限")}
+                  {connection.per_user_queue_limit}
                 </div>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
-                <div className="text-xs text-muted-foreground">{copy("排队 / 执行超时")}</div>
+                <div className="text-xs text-muted-foreground">
+                  {copy("频率 / 每日配额")}
+                </div>
                 <div className="mt-1 font-medium">
-                  {connection.queue_timeout_seconds}s / {connection.task_timeout_seconds}s
+                  {connection.rate_limit_per_minute} / min ·{" "}
+                  {connection.daily_quota || copy("不限")}
+                </div>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <div className="text-xs text-muted-foreground">
+                  {copy("排队 / 执行超时")}
+                </div>
+                <div className="mt-1 font-medium">
+                  {connection.queue_timeout_seconds}s /{" "}
+                  {connection.task_timeout_seconds}s
                 </div>
               </div>
             </div>

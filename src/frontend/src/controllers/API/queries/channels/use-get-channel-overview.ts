@@ -3,10 +3,7 @@ import type { useQueryFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
 import { UseRequestProcessor } from "../../services/request-processor";
-import type {
-  ChannelConnectionOverview,
-  ChannelOverviewQuery,
-} from "./types";
+import type { ChannelConnectionOverview, ChannelOverviewQuery } from "./types";
 
 export const useGetChannelOverview: useQueryFunctionType<
   ChannelOverviewQuery,
@@ -27,11 +24,7 @@ export const useGetChannelOverview: useQueryFunctionType<
   };
 
   return query(
-    [
-      "useGetChannelOverview",
-      params.connectionId,
-      params.windowHours ?? 24,
-    ],
+    ["useGetChannelOverview", params.connectionId, params.windowHours ?? 24],
     getOverview,
     {
       enabled: Boolean(params.connectionId),

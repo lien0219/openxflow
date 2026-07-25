@@ -12,10 +12,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type {
+  ChannelAccessPolicy,
   ChannelConnection,
   ChannelConnectionCreate,
   ChannelConnectionUpdate,
+  ChannelContextMode,
+  ChannelResponseMode,
   ChannelType,
+  ChannelUnconfiguredBehavior,
 } from "@/controllers/API/queries/channels";
 import useChannelCopy from "../use-channel-copy";
 import { parseAllowedExtensions, readConnectionSetting } from "../utils";
@@ -45,11 +49,39 @@ interface ConnectionFormState {
   publicBaseUrl: string;
   maxFileSizeMb: string;
   allowedExtensions: string;
+  accessPolicy: ChannelAccessPolicy;
+  defaultContextMode: ChannelContextMode;
+  defaultResponseMode: ChannelResponseMode;
+  unconfiguredBehavior: ChannelUnconfiguredBehavior;
+  maxConcurrency: string;
+  perUserConcurrency: string;
+  perUserQueueLimit: string;
+  rateLimitPerMinute: string;
+  dailyQuota: string;
+  taskTimeoutSeconds: string;
+  queueTimeoutSeconds: string;
+  sharedContextWindow: string;
+  contextRetentionDays: string;
+  autoDiscoverConversations: boolean;
+  pendingNoticeEnabled: boolean;
+  personalCommandsEnabled: boolean;
+  defaultAllowFileUpload: boolean;
   enabled: boolean;
 }
 
 const DEFAULT_EXTENSIONS =
-  "pdf, docx, xlsx, csv, txt, md, json, html, png, jpg, jpeg, webp, gif, mp3, wav, m4a, ogg, mp4";
+  "pdf, docx, xlsx, pptx, csv, txt, md, json, html, rtf, xml, yaml, yml";
+
+function boundedNumber(
+  value: string,
+  fallback: number,
+  minimum: number,
+  maximum?: number,
+): number {
+  const parsed = Number(value);
+  const normalized = Number.isFinite(parsed) ? parsed : fallback;
+  return Math.min(maximum ?? normalized, Math.max(minimum, normalized));
+}
 
 interface ChannelConnectionDialogProps {
   open: boolean;
@@ -94,6 +126,23 @@ function emptyForm(
     publicBaseUrl: "",
     maxFileSizeMb: "10",
     allowedExtensions: DEFAULT_EXTENSIONS,
+    accessPolicy: "hybrid",
+    defaultContextMode: "isolated",
+    defaultResponseMode: "mention_only",
+    unconfiguredBehavior: "notify_pending",
+    maxConcurrency: "10",
+    perUserConcurrency: "1",
+    perUserQueueLimit: "3",
+    rateLimitPerMinute: "20",
+    dailyQuota: "0",
+    taskTimeoutSeconds: "120",
+    queueTimeoutSeconds: "60",
+    sharedContextWindow: "20",
+    contextRetentionDays: "30",
+    autoDiscoverConversations: true,
+    pendingNoticeEnabled: true,
+    personalCommandsEnabled: true,
+    defaultAllowFileUpload: true,
     enabled: true,
   };
 }
@@ -140,6 +189,25 @@ export default function ChannelConnectionDialog({
       ),
       allowedExtensions:
         allowed.length > 0 ? allowed.join(", ") : DEFAULT_EXTENSIONS,
+      accessPolicy: connection?.access_policy ?? "hybrid",
+      defaultContextMode: connection?.default_context_mode ?? "isolated",
+      defaultResponseMode: connection?.default_response_mode ?? "mention_only",
+      unconfiguredBehavior:
+        connection?.unconfigured_behavior ?? "notify_pending",
+      maxConcurrency: String(connection?.max_concurrency ?? 10),
+      perUserConcurrency: String(connection?.per_user_concurrency ?? 1),
+      perUserQueueLimit: String(connection?.per_user_queue_limit ?? 3),
+      rateLimitPerMinute: String(connection?.rate_limit_per_minute ?? 20),
+      dailyQuota: String(connection?.daily_quota ?? 0),
+      taskTimeoutSeconds: String(connection?.task_timeout_seconds ?? 120),
+      queueTimeoutSeconds: String(connection?.queue_timeout_seconds ?? 60),
+      sharedContextWindow: String(connection?.shared_context_window ?? 20),
+      contextRetentionDays: String(connection?.context_retention_days ?? 30),
+      autoDiscoverConversations:
+        connection?.auto_discover_conversations ?? true,
+      pendingNoticeEnabled: connection?.pending_notice_enabled ?? true,
+      personalCommandsEnabled: connection?.personal_commands_enabled ?? true,
+      defaultAllowFileUpload: connection?.default_allow_file_upload ?? true,
       enabled: connection?.enabled ?? true,
     });
   }, [connection, initialChannelType, open, t]);
@@ -168,6 +236,23 @@ export default function ChannelConnectionDialog({
         publicBaseUrl: current.publicBaseUrl,
         maxFileSizeMb: current.maxFileSizeMb,
         allowedExtensions: current.allowedExtensions,
+        accessPolicy: current.accessPolicy,
+        defaultContextMode: current.defaultContextMode,
+        defaultResponseMode: current.defaultResponseMode,
+        unconfiguredBehavior: current.unconfiguredBehavior,
+        maxConcurrency: current.maxConcurrency,
+        perUserConcurrency: current.perUserConcurrency,
+        perUserQueueLimit: current.perUserQueueLimit,
+        rateLimitPerMinute: current.rateLimitPerMinute,
+        dailyQuota: current.dailyQuota,
+        taskTimeoutSeconds: current.taskTimeoutSeconds,
+        queueTimeoutSeconds: current.queueTimeoutSeconds,
+        sharedContextWindow: current.sharedContextWindow,
+        contextRetentionDays: current.contextRetentionDays,
+        autoDiscoverConversations: current.autoDiscoverConversations,
+        pendingNoticeEnabled: current.pendingNoticeEnabled,
+        personalCommandsEnabled: current.personalCommandsEnabled,
+        defaultAllowFileUpload: current.defaultAllowFileUpload,
         enabled: current.enabled,
       };
     });
@@ -251,6 +336,50 @@ export default function ChannelConnectionDialog({
       max_file_size_mb: Math.max(1, Number(form.maxFileSizeMb) || 10),
       allowed_file_extensions: parseAllowedExtensions(form.allowedExtensions),
     };
+    const productionSettings = {
+      auto_discover_conversations: form.autoDiscoverConversations,
+      unconfigured_behavior: form.unconfiguredBehavior,
+      pending_notice_enabled: form.pendingNoticeEnabled,
+      personal_commands_enabled: form.personalCommandsEnabled,
+      default_response_mode: form.defaultResponseMode,
+      default_allow_file_upload: form.defaultAllowFileUpload,
+      access_policy: form.accessPolicy,
+      default_context_mode: form.defaultContextMode,
+      max_concurrency: boundedNumber(form.maxConcurrency, 10, 1, 100),
+      per_user_concurrency: boundedNumber(form.perUserConcurrency, 1, 1, 10),
+      per_user_queue_limit: boundedNumber(form.perUserQueueLimit, 3, 1, 100),
+      rate_limit_per_minute: boundedNumber(
+        form.rateLimitPerMinute,
+        20,
+        0,
+        10000,
+      ),
+      daily_quota: boundedNumber(form.dailyQuota, 0, 0),
+      task_timeout_seconds: boundedNumber(
+        form.taskTimeoutSeconds,
+        120,
+        10,
+        3600,
+      ),
+      queue_timeout_seconds: boundedNumber(
+        form.queueTimeoutSeconds,
+        60,
+        5,
+        3600,
+      ),
+      shared_context_window: boundedNumber(
+        form.sharedContextWindow,
+        20,
+        0,
+        100,
+      ),
+      context_retention_days: boundedNumber(
+        form.contextRetentionDays,
+        30,
+        1,
+        365,
+      ),
+    };
     const connectionMode =
       form.channelType === "dingtalk" ? "stream" : "webhook";
     const payload = isEditing
@@ -258,6 +387,7 @@ export default function ChannelConnectionDialog({
           name: form.name.trim(),
           enabled: form.enabled,
           connection_mode: connectionMode,
+          ...productionSettings,
           settings_data: settingsData,
           ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
         }
@@ -266,6 +396,7 @@ export default function ChannelConnectionDialog({
           channel_type: form.channelType,
           enabled: form.enabled,
           connection_mode: connectionMode,
+          ...productionSettings,
           settings_data: settingsData,
           credentials,
         };
@@ -602,9 +733,187 @@ export default function ChannelConnectionDialog({
                 onChange={(event) =>
                   setField("allowedExtensions", event.target.value)
                 }
-                placeholder="pdf, docx, xlsx, txt, png, jpg, mp3"
+                placeholder="pdf, docx, xlsx, pptx, txt, md, json"
               />
             </label>
+          </div>
+
+          <div className="rounded-xl border p-4">
+            <div>
+              <div className="text-sm font-semibold">
+                {copy("生产策略与容量")}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {copy(
+                  "控制共享身份、群聊上下文、并发、排队、限流、配额和超时。",
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                {copy("访问策略")}
+                <select
+                  className="primary-input h-10"
+                  value={form.accessPolicy}
+                  onChange={(event) =>
+                    setField(
+                      "accessPolicy",
+                      event.target.value as ChannelAccessPolicy,
+                    )
+                  }
+                >
+                  <option value="hybrid">
+                    {copy("混合：共享能力 + 个人资源")}
+                  </option>
+                  <option value="shared">
+                    {copy("共享：群成员共用机器人")}
+                  </option>
+                  <option value="bound_only">
+                    {copy("仅已绑定 OpenXFlow 用户")}
+                  </option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                {copy("默认上下文模式")}
+                <select
+                  className="primary-input h-10"
+                  value={form.defaultContextMode}
+                  onChange={(event) =>
+                    setField(
+                      "defaultContextMode",
+                      event.target.value as ChannelContextMode,
+                    )
+                  }
+                >
+                  <option value="isolated">{copy("按群成员和线程隔离")}</option>
+                  <option value="shared">{copy("群内共享上下文")}</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                {copy("默认响应模式")}
+                <select
+                  className="primary-input h-10"
+                  value={form.defaultResponseMode}
+                  onChange={(event) =>
+                    setField(
+                      "defaultResponseMode",
+                      event.target.value as ChannelResponseMode,
+                    )
+                  }
+                >
+                  <option value="mention_only">{copy("仅被提及时响应")}</option>
+                  <option value="all_messages">{copy("响应全部消息")}</option>
+                  <option value="commands_only">{copy("仅响应指令")}</option>
+                  <option value="disabled">{copy("完全停用响应")}</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                {copy("未配置会话处理")}
+                <select
+                  className="primary-input h-10"
+                  value={form.unconfiguredBehavior}
+                  onChange={(event) =>
+                    setField(
+                      "unconfiguredBehavior",
+                      event.target.value as ChannelUnconfiguredBehavior,
+                    )
+                  }
+                >
+                  <option value="notify_pending">
+                    {copy("记录并提示管理员配置")}
+                  </option>
+                  <option value="use_global_default">
+                    {copy("直接使用全局默认工作流")}
+                  </option>
+                  <option value="ignore">{copy("静默忽略")}</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {[
+                ["maxConcurrency", copy("连接最大并发"), 1, 100],
+                ["perUserConcurrency", copy("单用户并发"), 1, 10],
+                ["perUserQueueLimit", copy("单用户队列上限"), 1, 100],
+                [
+                  "rateLimitPerMinute",
+                  copy("每分钟请求限制，0 为不限"),
+                  0,
+                  10000,
+                ],
+                ["dailyQuota", copy("每日配额，0 为不限"), 0, undefined],
+                ["queueTimeoutSeconds", copy("排队超时（秒）"), 5, 3600],
+                ["taskTimeoutSeconds", copy("执行超时（秒）"), 10, 3600],
+                ["sharedContextWindow", copy("共享上下文窗口"), 0, 100],
+                ["contextRetentionDays", copy("上下文保留天数"), 1, 365],
+              ].map(([key, label, min, max]) => (
+                <label
+                  key={String(key)}
+                  className="flex flex-col gap-2 text-sm font-medium"
+                >
+                  {String(label)}
+                  <Input
+                    type="number"
+                    min={Number(min)}
+                    max={max === undefined ? undefined : Number(max)}
+                    value={form[key as keyof ConnectionFormState] as string}
+                    onChange={(event) =>
+                      setField(
+                        key as keyof ConnectionFormState,
+                        event.target.value as never,
+                      )
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                [
+                  "autoDiscoverConversations",
+                  copy("自动发现会话"),
+                  copy("首次消息自动进入待配置会话列表。"),
+                ],
+                [
+                  "pendingNoticeEnabled",
+                  copy("待配置提示"),
+                  copy("对尚未配置的会话发送一次友好提示。"),
+                ],
+                [
+                  "personalCommandsEnabled",
+                  copy("允许个人指令"),
+                  copy("已绑定成员可使用个人范围的工作流指令。"),
+                ],
+                [
+                  "defaultAllowFileUpload",
+                  copy("默认允许安全文件上传"),
+                  copy("上传文件仍需通过内容扫描与知识库授权。"),
+                ],
+              ].map(([key, label, help]) => (
+                <div
+                  key={String(key)}
+                  className="flex items-center justify-between rounded-lg bg-muted/40 p-3"
+                >
+                  <div>
+                    <div className="text-sm font-medium">{String(label)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {String(help)}
+                    </div>
+                  </div>
+                  <Switch
+                    checked={form[key as keyof ConnectionFormState] as boolean}
+                    onCheckedChange={(checked) =>
+                      setField(
+                        key as keyof ConnectionFormState,
+                        checked as never,
+                      )
+                    }
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border p-4">

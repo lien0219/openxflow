@@ -51,8 +51,12 @@ export default function ExecutionLogsTab({
   const [queryDraft, setQueryDraft] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<ChannelExecutionStatus | "">("");
-  const [triggerType, setTriggerType] = useState<ChannelExecutionTrigger | "">("");
-  const [identityType, setIdentityType] = useState<ChannelExecutionIdentityType | "">("");
+  const [triggerType, setTriggerType] = useState<ChannelExecutionTrigger | "">(
+    "",
+  );
+  const [identityType, setIdentityType] = useState<
+    ChannelExecutionIdentityType | ""
+  >("");
 
   useEffect(() => {
     setPage(1);
@@ -63,7 +67,11 @@ export default function ExecutionLogsTab({
     setIdentityType("");
   }, [connectionId]);
 
-  const { data: result, isLoading, isFetching } = useGetChannelExecutions(
+  const {
+    data: result,
+    isLoading,
+    isFetching,
+  } = useGetChannelExecutions(
     {
       connectionId,
       page,
@@ -91,7 +99,9 @@ export default function ExecutionLogsTab({
           </p>
         </div>
         {isFetching && !isLoading ? (
-          <span className="text-xs text-muted-foreground">{copy("正在刷新")}</span>
+          <span className="text-xs text-muted-foreground">
+            {copy("正在刷新")}
+          </span>
         ) : null}
       </div>
 
@@ -138,7 +148,9 @@ export default function ExecutionLogsTab({
           className="primary-input h-10"
           value={identityType}
           onChange={(event) => {
-            setIdentityType(event.target.value as ChannelExecutionIdentityType | "");
+            setIdentityType(
+              event.target.value as ChannelExecutionIdentityType | "",
+            );
             setPage(1);
           }}
         >
@@ -190,7 +202,10 @@ export default function ExecutionLogsTab({
             </thead>
             <tbody>
               {(result?.items ?? []).map((execution) => (
-                <tr key={execution.id} className="border-b align-top last:border-0">
+                <tr
+                  key={execution.id}
+                  className="border-b align-top last:border-0"
+                >
                   <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
                     {new Date(execution.created_at).toLocaleString()}
                   </td>
@@ -198,20 +213,33 @@ export default function ExecutionLogsTab({
                     <div>{copy(TRIGGER_LABELS[execution.trigger_type])}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
                       {copy(IDENTITY_LABELS[execution.execution_identity_type])}
-                      {execution.command_name ? ` · ${execution.command_name}` : ""}
+                      {execution.command_name
+                        ? ` · ${execution.command_name}`
+                        : ""}
                     </div>
                   </td>
                   <td className="px-3 py-3 font-mono text-xs">
-                    <div>{execution.flow_id?.slice(0, 8) ?? copy("工作流已删除")}</div>
-                    <div className="mt-1 max-w-48 truncate text-muted-foreground" title={execution.external_event_id}>
+                    <div>
+                      {execution.flow_id?.slice(0, 8) ?? copy("工作流已删除")}
+                    </div>
+                    <div
+                      className="mt-1 max-w-48 truncate text-muted-foreground"
+                      title={execution.external_event_id}
+                    >
                       {execution.external_event_id}
                     </div>
                   </td>
                   <td className="px-3 py-3 font-mono text-xs text-muted-foreground">
-                    <div className="max-w-52 truncate" title={execution.external_user_id ?? undefined}>
+                    <div
+                      className="max-w-52 truncate"
+                      title={execution.external_user_id ?? undefined}
+                    >
                       {execution.external_user_id || "-"}
                     </div>
-                    <div className="mt-1 max-w-52 truncate" title={execution.session_id ?? undefined}>
+                    <div
+                      className="mt-1 max-w-52 truncate"
+                      title={execution.session_id ?? undefined}
+                    >
                       {execution.session_id || "-"}
                     </div>
                   </td>
@@ -221,16 +249,32 @@ export default function ExecutionLogsTab({
                     </span>
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
-                    <div>{copy("排队：{{value}}", { value: formatDuration(execution.queue_wait_ms) })}</div>
-                    <div className="mt-1">{copy("执行：{{value}}", { value: formatDuration(execution.duration_ms) })}</div>
-                    <div className="mt-1">{copy("投递：{{value}}", { value: formatDuration(execution.delivery_duration_ms) })}</div>
+                    <div>
+                      {copy("排队：{{value}}", {
+                        value: formatDuration(execution.queue_wait_ms),
+                      })}
+                    </div>
+                    <div className="mt-1">
+                      {copy("执行：{{value}}", {
+                        value: formatDuration(execution.duration_ms),
+                      })}
+                    </div>
+                    <div className="mt-1">
+                      {copy("投递：{{value}}", {
+                        value: formatDuration(execution.delivery_duration_ms),
+                      })}
+                    </div>
                   </td>
-                  <td className="px-3 py-3 text-center">{execution.retry_count}</td>
+                  <td className="px-3 py-3 text-center">
+                    {execution.retry_count}
+                  </td>
                   <td className="max-w-80 px-3 py-3 text-xs text-destructive">
                     {execution.error_code ? (
                       <div className="font-mono">{execution.error_code}</div>
                     ) : null}
-                    <div className="line-clamp-3">{execution.error_message || "-"}</div>
+                    <div className="line-clamp-3">
+                      {execution.error_message || "-"}
+                    </div>
                   </td>
                 </tr>
               ))}

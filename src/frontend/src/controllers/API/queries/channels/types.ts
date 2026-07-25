@@ -52,7 +52,11 @@ export type ChannelMessageStatus =
   | "pending"
   | "sent"
   | "failed";
-export type ChannelMessageKind = "inbound" | "response" | "processing" | "system";
+export type ChannelMessageKind =
+  | "inbound"
+  | "response"
+  | "processing"
+  | "system";
 export type ChannelOutboundDeliveryStatus = "reserved" | "sent" | "failed";
 
 export type ChannelMutationHook<Variables, Data, Error = unknown> = (
