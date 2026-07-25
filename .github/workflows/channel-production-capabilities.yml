@@ -31,6 +31,7 @@ jobs:
           python .github/scripts/patch_channel_capability_rollout.py
           python .github/scripts/apply_channel_capability_response_scope.py \
             2>&1 | tee /tmp/channel-capabilities-apply.log
+          python .github/scripts/patch_channel_capability_rollout.py
 
       - name: Upload application diagnostics
         if: always()
