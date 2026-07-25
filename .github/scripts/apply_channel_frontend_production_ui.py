@@ -36,8 +36,7 @@ INDEX = "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/index.tsx"
 replace_once(
     INDEX,
     'import AccountsTab from "./components/AccountsTab";\n',
-    'import AccountsTab from "./components/AccountsTab";\n'
-    'import AuditLogTab from "./components/AuditLogTab";\n',
+    'import AccountsTab from "./components/AccountsTab";\nimport AuditLogTab from "./components/AuditLogTab";\n',
     label="audit tab import",
 )
 replace_once(
@@ -57,11 +56,7 @@ replace_once(
 replace_once(
     INDEX,
     '  | "accounts"\n  | "logs";\n',
-    '  | "accounts"\n'
-    '  | "messages"\n'
-    '  | "deliveries"\n'
-    '  | "logs"\n'
-    '  | "audits";\n',
+    '  | "accounts"\n  | "messages"\n  | "deliveries"\n  | "logs"\n  | "audits";\n',
     label="detail tab union",
 )
 replace_once(
@@ -76,14 +71,14 @@ replace_once(
 )
 replace_once(
     INDEX,
-    '''              {activeTab === "accounts" && (
+    """              {activeTab === "accounts" && (
                 <AccountsTab connectionId={selectedConnection.id} />
               )}
               {activeTab === "logs" && (
                 <ExecutionLogsTab connectionId={selectedConnection.id} />
               )}
-''',
-    '''              {activeTab === "accounts" && (
+""",
+    """              {activeTab === "accounts" && (
                 <AccountsTab connectionId={selectedConnection.id} />
               )}
               {activeTab === "messages" && (
@@ -98,7 +93,7 @@ replace_once(
               {activeTab === "audits" && (
                 <AuditLogTab connectionId={selectedConnection.id} />
               )}
-''',
+""",
     label="detail tab rendering",
 )
 
@@ -108,13 +103,13 @@ replace_once(
 DIALOG = "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ConversationBindingDialog.tsx"
 replace_once(
     DIALOG,
-    '''import type {
+    """import type {
   ChannelConversationBinding,
   ChannelConversationBindingUpdate,
   ChannelConversationRouteMode,
 } from "@/controllers/API/queries/channels";
-''',
-    '''import type {
+""",
+    """import type {
   ChannelAccessPolicyOverride,
   ChannelContextModeOverride,
   ChannelConversationBinding,
@@ -122,70 +117,70 @@ replace_once(
   ChannelConversationRouteMode,
   ChannelResponseMode,
 } from "@/controllers/API/queries/channels";
-''',
+""",
     label="conversation policy type imports",
 )
 replace_once(
     DIALOG,
-    '''  routeMode: ChannelConversationRouteMode;
+    """  routeMode: ChannelConversationRouteMode;
   responseMode: string;
   defaultFlowId: string;
-''',
-    '''  routeMode: ChannelConversationRouteMode;
+""",
+    """  routeMode: ChannelConversationRouteMode;
   responseMode: ChannelResponseMode;
   accessPolicy: ChannelAccessPolicyOverride;
   contextMode: ChannelContextModeOverride;
   defaultFlowId: string;
-''',
+""",
     label="conversation policy form fields",
 )
 replace_once(
     DIALOG,
-    '''    routeMode: "inherit",
+    """    routeMode: "inherit",
     responseMode: "mentions_only",
     defaultFlowId: "",
-''',
-    '''    routeMode: "inherit",
+""",
+    """    routeMode: "inherit",
     responseMode: "mention_only",
     accessPolicy: "inherit",
     contextMode: "inherit",
     defaultFlowId: "",
-''',
+""",
     label="conversation policy defaults",
 )
 replace_once(
     DIALOG,
-    '''      routeMode: binding.route_mode,
+    """      routeMode: binding.route_mode,
       responseMode: binding.response_mode,
       defaultFlowId: binding.default_flow_id ?? "",
-''',
-    '''      routeMode: binding.route_mode,
+""",
+    """      routeMode: binding.route_mode,
       responseMode: binding.response_mode,
       accessPolicy: binding.access_policy,
       contextMode: binding.context_mode,
       defaultFlowId: binding.default_flow_id ?? "",
-''',
+""",
     label="conversation policy initialization",
 )
 replace_once(
     DIALOG,
-    '''      route_mode: form.routeMode,
+    """      route_mode: form.routeMode,
       response_mode: form.responseMode,
       allow_file_upload: form.allowFileUpload,
-''',
-    '''      route_mode: form.routeMode,
+""",
+    """      route_mode: form.routeMode,
       response_mode: form.responseMode,
       access_policy: form.accessPolicy,
       context_mode: form.contextMode,
       allow_file_upload: form.allowFileUpload,
-''',
+""",
     label="conversation policy submit",
 )
 replace_between(
     DIALOG,
-    '          {isGroupConversation && supportsMentions && (\n',
-    '          {supportsFileUpload && (\n',
-    '''          <div className="grid gap-4 sm:grid-cols-2">
+    "          {isGroupConversation && supportsMentions && (\n",
+    "          {supportsFileUpload && (\n",
+    """          <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-medium">
               {copy("访问策略")}
               <select
@@ -253,7 +248,7 @@ replace_between(
             </select>
           </label>
 
-''',
+""",
     label="conversation access context response controls",
 )
 replace_once(
@@ -275,12 +270,12 @@ replace_once(
 CONNECTION_DIALOG = "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ChannelConnectionDialog.tsx"
 replace_once(
     CONNECTION_DIALOG,
-    '''  ChannelConnection,
+    """  ChannelConnection,
   ChannelConnectionCreate,
   ChannelConnectionUpdate,
   ChannelType,
-''',
-    '''  ChannelAccessPolicy,
+""",
+    """  ChannelAccessPolicy,
   ChannelConnection,
   ChannelConnectionCreate,
   ChannelConnectionUpdate,
@@ -288,16 +283,16 @@ replace_once(
   ChannelResponseMode,
   ChannelType,
   ChannelUnconfiguredBehavior,
-''',
+""",
     label="connection production type imports",
 )
 replace_once(
     CONNECTION_DIALOG,
-    '''  maxFileSizeMb: string;
+    """  maxFileSizeMb: string;
   allowedExtensions: string;
   enabled: boolean;
-''',
-    '''  maxFileSizeMb: string;
+""",
+    """  maxFileSizeMb: string;
   allowedExtensions: string;
   accessPolicy: ChannelAccessPolicy;
   defaultContextMode: ChannelContextMode;
@@ -317,15 +312,15 @@ replace_once(
   personalCommandsEnabled: boolean;
   defaultAllowFileUpload: boolean;
   enabled: boolean;
-''',
+""",
     label="connection production form fields",
 )
 replace_once(
     CONNECTION_DIALOG,
-    '''const DEFAULT_EXTENSIONS =
+    """const DEFAULT_EXTENSIONS =
   "pdf, docx, xlsx, csv, txt, md, json, html, png, jpg, jpeg, webp, gif, mp3, wav, m4a, ogg, mp4";
-''',
-    '''const DEFAULT_EXTENSIONS =
+""",
+    """const DEFAULT_EXTENSIONS =
   "pdf, docx, xlsx, pptx, csv, txt, md, json, html, rtf, xml, yaml, yml";
 
 function boundedNumber(
@@ -338,16 +333,16 @@ function boundedNumber(
   const normalized = Number.isFinite(parsed) ? parsed : fallback;
   return Math.min(maximum ?? normalized, Math.max(minimum, normalized));
 }
-''',
+""",
     label="secure default extensions and number normalization",
 )
 replace_once(
     CONNECTION_DIALOG,
-    '''    maxFileSizeMb: "10",
+    """    maxFileSizeMb: "10",
     allowedExtensions: DEFAULT_EXTENSIONS,
     enabled: true,
-''',
-    '''    maxFileSizeMb: "10",
+""",
+    """    maxFileSizeMb: "10",
     allowedExtensions: DEFAULT_EXTENSIONS,
     accessPolicy: "hybrid",
     defaultContextMode: "isolated",
@@ -367,16 +362,16 @@ replace_once(
     personalCommandsEnabled: true,
     defaultAllowFileUpload: true,
     enabled: true,
-''',
+""",
     label="connection production defaults",
 )
 replace_once(
     CONNECTION_DIALOG,
-    '''      allowedExtensions:
+    """      allowedExtensions:
         allowed.length > 0 ? allowed.join(", ") : DEFAULT_EXTENSIONS,
       enabled: connection?.enabled ?? true,
-''',
-    '''      allowedExtensions:
+""",
+    """      allowedExtensions:
         allowed.length > 0 ? allowed.join(", ") : DEFAULT_EXTENSIONS,
       accessPolicy: connection?.access_policy ?? "hybrid",
       defaultContextMode: connection?.default_context_mode ?? "isolated",
@@ -398,15 +393,15 @@ replace_once(
       personalCommandsEnabled: connection?.personal_commands_enabled ?? true,
       defaultAllowFileUpload: connection?.default_allow_file_upload ?? true,
       enabled: connection?.enabled ?? true,
-''',
+""",
     label="connection production initialization",
 )
 replace_once(
     CONNECTION_DIALOG,
-    '''        allowedExtensions: current.allowedExtensions,
+    """        allowedExtensions: current.allowedExtensions,
         enabled: current.enabled,
-''',
-    '''        allowedExtensions: current.allowedExtensions,
+""",
+    """        allowedExtensions: current.allowedExtensions,
         accessPolicy: current.accessPolicy,
         defaultContextMode: current.defaultContextMode,
         defaultResponseMode: current.defaultResponseMode,
@@ -425,16 +420,16 @@ replace_once(
         personalCommandsEnabled: current.personalCommandsEnabled,
         defaultAllowFileUpload: current.defaultAllowFileUpload,
         enabled: current.enabled,
-''',
+""",
     label="preserve production controls across provider switch",
 )
 replace_once(
     CONNECTION_DIALOG,
-    '''    const connectionMode =
+    """    const connectionMode =
       form.channelType === "dingtalk" ? "stream" : "webhook";
     const payload = isEditing
-''',
-    '''    const productionSettings = {
+""",
+    """    const productionSettings = {
       auto_discover_conversations: form.autoDiscoverConversations,
       unconfigured_behavior: form.unconfiguredBehavior,
       pending_notice_enabled: form.pendingNoticeEnabled,
@@ -491,31 +486,31 @@ replace_once(
     const connectionMode =
       form.channelType === "dingtalk" ? "stream" : "webhook";
     const payload = isEditing
-''',
+""",
     label="normalize production settings",
 )
 replace_once(
     CONNECTION_DIALOG,
-    '''          connection_mode: connectionMode,
+    """          connection_mode: connectionMode,
           settings_data: settingsData,
-''',
-    '''          connection_mode: connectionMode,
+""",
+    """          connection_mode: connectionMode,
           ...productionSettings,
           settings_data: settingsData,
-''',
+""",
     label="connection update production payload",
 )
 replace_once(
     CONNECTION_DIALOG,
-    '''          connection_mode: connectionMode,
+    """          connection_mode: connectionMode,
           settings_data: settingsData,
           credentials,
-''',
-    '''          connection_mode: connectionMode,
+""",
+    """          connection_mode: connectionMode,
           ...productionSettings,
           settings_data: settingsData,
           credentials,
-''',
+""",
     label="connection create production payload",
 )
 replace_once(
@@ -526,12 +521,12 @@ replace_once(
 )
 replace_once(
     CONNECTION_DIALOG,
-    '''          <div className="flex items-center justify-between rounded-lg border p-4">
+    """          <div className="flex items-center justify-between rounded-lg border p-4">
             <div>
               <div className="text-sm font-medium">
                 {t("channels.connectionDialog.enable")}
-''',
-    '''          <div className="rounded-xl border p-4">
+""",
+    """          <div className="rounded-xl border p-4">
             <div>
               <div className="text-sm font-semibold">{copy("生产策略与容量")}</div>
               <div className="mt-1 text-xs text-muted-foreground">
@@ -689,6 +684,6 @@ replace_once(
             <div>
               <div className="text-sm font-medium">
                 {t("channels.connectionDialog.enable")}
-''',
+""",
     label="connection production controls UI",
 )
