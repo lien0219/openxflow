@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -17,7 +18,13 @@ from langflow.channels.services.commands import (
     list_workflow_commands,
     update_workflow_command,
 )
-from langflow.channels.services.conversation_validation import validate_channel_routing_resources
+from langflow.channels.services.configuration_audit import (
+    channel_resource_snapshot,
+    record_channel_configuration_audit,
+)
+from langflow.channels.services.conversation_validation import (
+    validate_channel_routing_resources,
+)
 from langflow.channels.services.execution_logs import list_channel_executions
 from langflow.services.database.models.channel.command_model import (
     ChannelWorkflowCommandCreate,
@@ -25,8 +32,14 @@ from langflow.services.database.models.channel.command_model import (
     ChannelWorkflowCommandRead,
     ChannelWorkflowCommandUpdate,
 )
-from langflow.services.database.models.channel.execution_model import ChannelExecutionLogPage
-from langflow.services.database.models.channel.model import ChannelConnection, ChannelIdentity, ChannelIdentityStatus
+from langflow.services.database.models.channel.execution_model import (
+    ChannelExecutionLogPage,
+)
+from langflow.services.database.models.channel.model import (
+    ChannelConnection,
+    ChannelIdentity,
+    ChannelIdentityStatus,
+)
 
 router = APIRouter(prefix="/channels", tags=["Channel Management"])
 
@@ -114,6 +127,15 @@ async def create_channel_command(
             detail="A command with this name already exists in the selected scope",
         ) from exc
     else:
+        await record_channel_configuration_audit(
+            db,
+            connection_id=connection_id,
+            actor_user_id=current_user.id,
+            action="create",
+            resource_type="command",
+            resource_id=result.id,
+            after=result,
+        )
         await db.commit()
         return result
 
@@ -130,6 +152,7 @@ async def patch_channel_command(
     command = await get_workflow_command(db, connection_id, command_id)
     if command is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel command not found")
+    before = channel_resource_snapshot(command)
     if payload.flow_id is not None:
         await validate_channel_routing_resources(
             db,
@@ -147,6 +170,16 @@ async def patch_channel_command(
             detail="A command with this name already exists in the selected scope",
         ) from exc
     else:
+        await record_channel_configuration_audit(
+            db,
+            connection_id=connection_id,
+            actor_user_id=current_user.id,
+            action="update",
+            resource_type="command",
+            resource_id=command.id,
+            before=before,
+            after=result,
+        )
         await db.commit()
         return result
 
@@ -162,7 +195,17 @@ async def remove_channel_command(
     command = await get_workflow_command(db, connection_id, command_id)
     if command is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel command not found")
+    before = channel_resource_snapshot(command)
     await delete_workflow_command(db, connection, current_user, command)
+    await record_channel_configuration_audit(
+        db,
+        connection_id=connection_id,
+        actor_user_id=current_user.id,
+        action="delete",
+        resource_type="command",
+        resource_id=command.id,
+        before=before,
+    )
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -178,6 +221,14 @@ async def read_channel_executions(
     openxflow_user_id: Annotated[UUID | None, Query()] = None,
     status_filter: Annotated[str | None, Query(alias="status", max_length=32)] = None,
     trigger_type: Annotated[str | None, Query(max_length=32)] = None,
+    query: Annotated[str | None, Query(max_length=255)] = None,
+    external_user_id: Annotated[str | None, Query(max_length=255)] = None,
+    session_id: Annotated[str | None, Query(max_length=255)] = None,
+    execution_identity_type: Annotated[str | None, Query(max_length=32)] = None,
+    flow_id: Annotated[UUID | None, Query()] = None,
+    error_code: Annotated[str | None, Query(max_length=128)] = None,
+    created_from: Annotated[datetime | None, Query()] = None,
+    created_to: Annotated[datetime | None, Query()] = None,
 ) -> ChannelExecutionLogPage:
     await _owned_connection_or_404(db, current_user, connection_id)
     return await list_channel_executions(
@@ -189,4 +240,12 @@ async def read_channel_executions(
         openxflow_user_id=openxflow_user_id,
         status=status_filter,
         trigger_type=trigger_type,
+        query=query,
+        external_user_id=external_user_id,
+        session_id=session_id,
+        execution_identity_type=execution_identity_type,
+        flow_id=flow_id,
+        error_code=error_code,
+        created_from=created_from,
+        created_to=created_to,
     )

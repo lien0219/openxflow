@@ -22,7 +22,13 @@ from langflow.alembic.versions import (
     d5b8f3a1c2e4_add_channel_file_asset_tracking as file_asset_migration,
 )
 from langflow.alembic.versions import (
+    e2f5a8c1d7b9_add_channel_production_controls as production_controls_migration,
+)
+from langflow.alembic.versions import (
     e6c9a4b2d3f5_widen_channel_file_identifier as widen_file_identifier_migration,
+)
+from langflow.alembic.versions import (
+    f3a6c9e2b4d7_add_channel_message_and_config_audit as observability_migration,
 )
 from langflow.alembic.versions import (
     f7d0b5c3e4a6_add_channel_webhook_jobs as webhook_job_migration,
@@ -37,6 +43,8 @@ _MIGRATIONS = (
     routing_migration,
     command_migration,
     status_index_repair_migration,
+    production_controls_migration,
+    observability_migration,
 )
 
 
@@ -58,6 +66,8 @@ def test_channel_migration_revision_chain() -> None:
         "b9f2d7e6c4a1",
         "c0a3e8f7d5b2",
         "d1e4f9a8b6c3",
+        "e2f5a8c1d7b9",
+        "f3a6c9e2b4d7",
     ]
     assert [migration.down_revision for migration in _MIGRATIONS] == [
         "e1705947c729",
@@ -68,6 +78,8 @@ def test_channel_migration_revision_chain() -> None:
         "a8e1c6d4f5b7",
         "b9f2d7e6c4a1",
         "c0a3e8f7d5b2",
+        "d1e4f9a8b6c3",
+        "e2f5a8c1d7b9",
     ]
 
 
@@ -92,6 +104,9 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
             "channel_outbound_delivery",
             "channel_workflow_command",
             "channel_execution_log",
+            "channel_conversation_context_entry",
+            "channel_message_record",
+            "channel_configuration_audit",
         }
         inspector = sa.inspect(connection)
         assert expected_tables.issubset(set(inspector.get_table_names()))

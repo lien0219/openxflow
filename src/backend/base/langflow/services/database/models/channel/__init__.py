@@ -1,3 +1,8 @@
+from langflow.services.database.models.channel.audit_model import (
+    ChannelConfigurationAudit,
+    ChannelConfigurationAuditPage,
+    ChannelConfigurationAuditRead,
+)
 from langflow.services.database.models.channel.binding_model import ChannelBindingCode
 from langflow.services.database.models.channel.command_model import (
     ChannelCommandScope,
@@ -41,6 +46,14 @@ from langflow.services.database.models.channel.file_model import (
     ChannelFileAssetRead,
     ChannelFileStatus,
 )
+from langflow.services.database.models.channel.message_model import (
+    ChannelMessageDirection,
+    ChannelMessageRecord,
+    ChannelMessageRecordKind,
+    ChannelMessageRecordPage,
+    ChannelMessageRecordRead,
+    ChannelMessageRecordStatus,
+)
 from langflow.services.database.models.channel.model import (
     ChannelAccessPolicy,
     ChannelConnection,
@@ -78,6 +91,9 @@ from langflow.services.database.models.channel.webhook_job_model import (
 __all__ = [
     "ChannelAccessPolicy",
     "ChannelBindingCode",
+    "ChannelConfigurationAudit",
+    "ChannelConfigurationAuditPage",
+    "ChannelConfigurationAuditRead",
     "ChannelCommandScope",
     "ChannelConnection",
     "ChannelConnectionCreate",
@@ -109,6 +125,12 @@ __all__ = [
     "ChannelIdentityCreate",
     "ChannelIdentityRead",
     "ChannelIdentityStatus",
+    "ChannelMessageDirection",
+    "ChannelMessageRecord",
+    "ChannelMessageRecordKind",
+    "ChannelMessageRecordPage",
+    "ChannelMessageRecordRead",
+    "ChannelMessageRecordStatus",
     "ChannelOutboundDelivery",
     "ChannelOutboundDeliveryKind",
     "ChannelOutboundDeliveryStatus",

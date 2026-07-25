@@ -13,8 +13,16 @@ from sqlalchemy import func
 from sqlmodel import select
 
 from langflow.api.utils import CurrentActiveUser, DbSession
-from langflow.channels.services.conversation_validation import validate_channel_routing_resources
-from langflow.services.database.models.channel.crud import update_channel_conversation_binding
+from langflow.channels.services.configuration_audit import (
+    channel_resource_snapshot,
+    record_channel_configuration_audit,
+)
+from langflow.channels.services.conversation_validation import (
+    validate_channel_routing_resources,
+)
+from langflow.services.database.models.channel.crud import (
+    update_channel_conversation_binding,
+)
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelConversationBinding,
@@ -136,8 +144,20 @@ async def batch_update_channel_conversations(
     rows = (await db.exec(statement)).all()
     updated_items: list[ChannelConversationBindingRead] = []
     for row in rows:
+        before = channel_resource_snapshot(row)
         update = _batch_update_payload(payload)
-        updated_items.append(await update_channel_conversation_binding(db, connection, row, update))
+        updated = await update_channel_conversation_binding(db, connection, row, update)
+        updated_items.append(updated)
+        await record_channel_configuration_audit(
+            db,
+            connection_id=connection_id,
+            actor_user_id=current_user.id,
+            action=f"batch_{payload.action}",
+            resource_type="conversation",
+            resource_id=row.id,
+            before=before,
+            after=updated,
+        )
     await db.commit()
     return ChannelConversationBatchResponse(updated=len(updated_items), items=updated_items)
 

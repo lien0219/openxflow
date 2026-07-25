@@ -11,9 +11,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import JSONB
-
 from langflow.utils import migration
+from sqlalchemy.dialects.postgresql import JSONB
 
 revision: str = "f3a6c9e2b4d7"  # pragma: allowlist secret
 down_revision: str | None = "e2f5a8c1d7b9"  # pragma: allowlist secret

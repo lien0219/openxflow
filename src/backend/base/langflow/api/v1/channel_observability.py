@@ -22,8 +22,12 @@ from langflow.channels.services.observability import (
     read_connection_overview,
     retry_failed_outbound_delivery,
 )
-from langflow.services.database.models.channel.audit_model import ChannelConfigurationAuditPage
-from langflow.services.database.models.channel.message_model import ChannelMessageRecordPage
+from langflow.services.database.models.channel.audit_model import (
+    ChannelConfigurationAuditPage,
+)
+from langflow.services.database.models.channel.message_model import (
+    ChannelMessageRecordPage,
+)
 from langflow.services.database.models.channel.model import ChannelConnection
 
 router = APIRouter(prefix="/channels", tags=["Channel Observability"])

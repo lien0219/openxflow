@@ -12,6 +12,7 @@ from .auth import (
     SSOUserProfile,
 )
 from .channel import (
+    ChannelConfigurationAudit,
     ChannelConnection,
     ChannelConversationBinding,
     ChannelConversationContextEntry,
@@ -19,6 +20,7 @@ from .channel import (
     ChannelExecutionLog,
     ChannelFileAsset,
     ChannelIdentity,
+    ChannelMessageRecord,
     ChannelOutboundDelivery,
     ChannelWebhookJob,
     ChannelWorkflowCommand,
@@ -33,7 +35,12 @@ from .folder import Folder
 from .ingestion_run import IngestionRun, IngestionRunStatus
 from .jobs import Job
 from .knowledge_base import KnowledgeBaseRecord, KnowledgeBaseStatus
-from .memory_base import MemoryBase, MemoryBaseSession, MemoryBaseWorkflowRun, MessageIngestionRecord
+from .memory_base import (
+    MemoryBase,
+    MemoryBaseSession,
+    MemoryBaseWorkflowRun,
+    MessageIngestionRecord,
+)
 from .message import MessageTable
 from .traces.model import SpanTable, TraceTable
 from .transactions import TransactionTable
@@ -50,6 +57,7 @@ __all__ = [
     "AuthzTeam",
     "AuthzTeamMember",
     "CasbinRule",
+    "ChannelConfigurationAudit",
     "ChannelConnection",
     "ChannelConversationBinding",
     "ChannelConversationContextEntry",
@@ -57,6 +65,7 @@ __all__ = [
     "ChannelExecutionLog",
     "ChannelFileAsset",
     "ChannelIdentity",
+    "ChannelMessageRecord",
     "ChannelOutboundDelivery",
     "ChannelWebhookJob",
     "ChannelWorkflowCommand",

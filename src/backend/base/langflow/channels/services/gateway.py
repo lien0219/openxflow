@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -7,11 +8,18 @@ from uuid import UUID
 from langflow.channels.adapters.base import ChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelType
+from langflow.channels.services.execution_logs import safe_record_channel_delivery_outcome
+from langflow.channels.services.message_records import (
+    safe_mark_inbound_message,
+    safe_record_inbound_message,
+    safe_record_outbound_message,
+)
 from langflow.channels.services.outbound_delivery import (
     send_outbound_acknowledgement_once,
     send_outbound_response_once,
 )
 from langflow.channels.services.retry import retry_channel_operation
+from langflow.services.database.models.channel.message_model import ChannelMessageRecordStatus
 
 if TYPE_CHECKING:
     from langflow.channels.services.deduplication import ChannelEventDeduplicator
@@ -105,6 +113,7 @@ class ChannelGateway:
             if receipt is None:
                 raise DuplicateChannelEventError(event.event_id)
 
+        await safe_record_inbound_message(event)
         try:
             if adapter.requires_event_acknowledgement(event):
 
@@ -125,15 +134,54 @@ class ChannelGateway:
                         operation_name=f"{adapter.channel_type.value}.send_response",
                     )
 
-                if guard_outbound:
-                    await send_outbound_response_once(event, response, response_sender)
+                delivery_started = time.perf_counter()
+                try:
+                    if guard_outbound:
+                        provider_message_id = await send_outbound_response_once(event, response, response_sender)
+                    else:
+                        provider_message_id = await response_sender()
+                except Exception as delivery_error:
+                    duration_ms = max(0, int((time.perf_counter() - delivery_started) * 1000))
+                    await safe_record_outbound_message(
+                        event,
+                        response,
+                        status=ChannelMessageRecordStatus.FAILED.value,
+                        error=delivery_error,
+                    )
+                    await safe_record_channel_delivery_outcome(
+                        connection_id=event.connection_id,
+                        external_event_id=event.event_id,
+                        duration_ms=duration_ms,
+                        error=delivery_error,
+                    )
+                    raise
                 else:
-                    await response_sender()
+                    duration_ms = max(0, int((time.perf_counter() - delivery_started) * 1000))
+                    await safe_record_outbound_message(
+                        event,
+                        response,
+                        status=ChannelMessageRecordStatus.SENT.value,
+                        provider_message_id=provider_message_id,
+                    )
+                    await safe_record_channel_delivery_outcome(
+                        connection_id=event.connection_id,
+                        external_event_id=event.event_id,
+                        duration_ms=duration_ms,
+                    )
         except Exception as exc:
+            await safe_mark_inbound_message(
+                event,
+                status=ChannelMessageRecordStatus.FAILED.value,
+                error=exc,
+            )
             if deduplicator is not None and receipt is not None:
                 await deduplicator.fail(receipt, exc)
             raise
         else:
+            await safe_mark_inbound_message(
+                event,
+                status=ChannelMessageRecordStatus.PROCESSED.value,
+            )
             if deduplicator is not None and receipt is not None:
                 await deduplicator.complete(receipt)
         return event

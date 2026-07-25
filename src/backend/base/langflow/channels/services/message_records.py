@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import math
 from datetime import datetime
 from typing import Any
@@ -39,6 +40,12 @@ _SAFE_METADATA_KEYS = {
     "provider_message_type",
     "content_type",
 }
+
+
+async def _add_to_session(session: AsyncSession, value: Any) -> None:
+    result = session.add(value)
+    if inspect.isawaitable(result):
+        await result
 
 
 def _safe_scalar(value: Any) -> str | int | float | bool | None:
@@ -136,7 +143,7 @@ async def record_inbound_message(event: ChannelEvent) -> None:
                 reply_to_message_id=event.message.reply_to_message_id,
                 metadata_data=_safe_event_metadata(event),
             )
-            session.add(existing)
+            await _add_to_session(session, existing)
         else:
             existing.conversation_binding_id = binding_id or existing.conversation_binding_id
             existing.execution_id = execution_id or existing.execution_id
@@ -144,7 +151,7 @@ async def record_inbound_message(event: ChannelEvent) -> None:
             existing.error_code = None
             existing.error_message = None
             existing.updated_at = now
-            session.add(existing)
+            await _add_to_session(session, existing)
         try:
             await session.commit()
         except IntegrityError:
@@ -230,8 +237,11 @@ async def record_outbound_message(
             "error_code": type(error).__name__[:128] if error else None,
             "error_message": str(error)[:2000] if error else None,
         }
+        if existing is not None and provider_message_id is None:
+            values.pop("provider_message_id", None)
         if existing is None:
-            session.add(
+            await _add_to_session(
+                session,
                 ChannelMessageRecord(
                     connection_id=event.connection_id,
                     external_event_id=event.event_id,
@@ -244,12 +254,12 @@ async def record_outbound_message(
                     message_kind=message_kind,
                     reply_to_message_id=event.message.external_message_id,
                     **values,
-                )
+                ),
             )
         else:
             for key, value in values.items():
                 setattr(existing, key, value)
-            session.add(existing)
+            await _add_to_session(session, existing)
         try:
             await session.commit()
         except IntegrityError:

@@ -1,13 +1,16 @@
 from langflow.api.v1.api_key import router as api_key_router
 from langflow.api.v1.authz_audit import router as authz_audit_router
 from langflow.api.v1.authz_me import router as authz_me_router
-from langflow.api.v1.authz_role_assignments import router as authz_role_assignments_router
+from langflow.api.v1.authz_role_assignments import (
+    router as authz_role_assignments_router,
+)
 from langflow.api.v1.authz_roles import router as authz_roles_router
 from langflow.api.v1.authz_shares import router as authz_shares_router
 from langflow.api.v1.authz_teams import router as authz_teams_router
 from langflow.api.v1.channel_admin import router as channel_admin_router
 from langflow.api.v1.channel_bindings import router as channel_bindings_router
 from langflow.api.v1.channel_management import router as channel_management_router
+from langflow.api.v1.channel_observability import router as channel_observability_router
 from langflow.api.v1.channel_resources import router as channel_resources_router
 from langflow.api.v1.channel_runtime import router as channel_runtime_router
 from langflow.api.v1.channel_webhooks import router as channel_webhooks_router
@@ -49,6 +52,7 @@ __all__ = [
     "channel_admin_router",
     "channel_bindings_router",
     "channel_management_router",
+    "channel_observability_router",
     "channel_resources_router",
     "channel_runtime_router",
     "channel_webhooks_router",

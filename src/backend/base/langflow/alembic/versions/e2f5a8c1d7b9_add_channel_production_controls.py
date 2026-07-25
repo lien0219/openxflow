@@ -213,6 +213,30 @@ def downgrade() -> None:
     if migration.table_exists("channel_conversation_context_entry", conn):
         op.drop_table("channel_conversation_context_entry")
 
+    for table_name, index_names in (
+        (
+            "channel_webhook_job",
+            (
+                "ix_channel_webhook_job_queue",
+                "ix_channel_webhook_job_connection_status",
+                "ix_channel_webhook_job_user_created",
+            ),
+        ),
+        (
+            "channel_execution_log",
+            (
+                "ix_channel_execution_external_user_id",
+                "ix_channel_execution_session_id",
+                "ix_channel_execution_external_user_created",
+            ),
+        ),
+        ("channel_connection", ("ix_channel_connection_service_user_id",)),
+    ):
+        existing_indexes = _indexes(table_name, conn)
+        for index_name in index_names:
+            if index_name in existing_indexes:
+                op.drop_index(index_name, table_name=table_name)
+
     for table_name, columns in (
         (
             "channel_webhook_job",

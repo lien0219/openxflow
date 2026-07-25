@@ -7,6 +7,8 @@ import math
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+import sqlalchemy as sa
+from lfx.log.logger import logger
 from sqlalchemy import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -106,6 +108,54 @@ async def finalize_channel_execution(
     await asyncio.shield(task)
 
 
+async def record_channel_delivery_outcome(
+    *,
+    connection_id: UUID,
+    external_event_id: str,
+    duration_ms: int,
+    error: Exception | None = None,
+) -> None:
+    async with session_scope() as session:
+        execution = (
+            await session.exec(
+                select(ChannelExecutionLog)
+                .where(
+                    ChannelExecutionLog.connection_id == connection_id,
+                    ChannelExecutionLog.external_event_id == external_event_id,
+                )
+                .order_by(ChannelExecutionLog.created_at.desc())
+                .limit(1)
+            )
+        ).first()
+        if execution is None:
+            return
+        execution.delivery_duration_ms = max(0, duration_ms)
+        if error is not None:
+            execution.status = ChannelExecutionStatus.DELIVERY_FAILED.value
+            execution.error_code = type(error).__name__[:128]
+            execution.error_message = str(error)[:4000]
+        session.add(execution)
+        await session.commit()
+
+
+async def safe_record_channel_delivery_outcome(
+    *,
+    connection_id: UUID,
+    external_event_id: str,
+    duration_ms: int,
+    error: Exception | None = None,
+) -> None:
+    try:
+        await record_channel_delivery_outcome(
+            connection_id=connection_id,
+            external_event_id=external_event_id,
+            duration_ms=duration_ms,
+            error=error,
+        )
+    except Exception:  # noqa: BLE001
+        await logger.aexception("Unable to persist channel delivery outcome for %s", external_event_id)
+
+
 async def _fail_stale_channel_executions(session: AsyncSession, connection_id: UUID) -> None:
     cutoff = _utc_now() - timedelta(seconds=webhook_task_timeout_seconds() + 60)
     statement = select(ChannelExecutionLog).where(
@@ -136,6 +186,14 @@ async def list_channel_executions(
     openxflow_user_id: UUID | None = None,
     status: str | None = None,
     trigger_type: str | None = None,
+    query: str | None = None,
+    external_user_id: str | None = None,
+    session_id: str | None = None,
+    execution_identity_type: str | None = None,
+    flow_id: UUID | None = None,
+    error_code: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
 ) -> ChannelExecutionLogPage:
     await _fail_stale_channel_executions(session, connection_id)
     normalized_page = max(1, page)
@@ -149,6 +207,32 @@ async def list_channel_executions(
         filters.append(ChannelExecutionLog.status == status)
     if trigger_type:
         filters.append(ChannelExecutionLog.trigger_type == trigger_type)
+    if query and query.strip():
+        pattern = f"%{query.strip()}%"
+        filters.append(
+            sa.or_(
+                ChannelExecutionLog.external_event_id.ilike(pattern),
+                ChannelExecutionLog.external_user_id.ilike(pattern),
+                ChannelExecutionLog.session_id.ilike(pattern),
+                ChannelExecutionLog.command_name.ilike(pattern),
+                ChannelExecutionLog.error_code.ilike(pattern),
+                ChannelExecutionLog.error_message.ilike(pattern),
+            )
+        )
+    if external_user_id:
+        filters.append(ChannelExecutionLog.external_user_id == external_user_id)
+    if session_id:
+        filters.append(ChannelExecutionLog.session_id == session_id)
+    if execution_identity_type:
+        filters.append(ChannelExecutionLog.execution_identity_type == execution_identity_type)
+    if flow_id is not None:
+        filters.append(ChannelExecutionLog.flow_id == flow_id)
+    if error_code:
+        filters.append(ChannelExecutionLog.error_code == error_code)
+    if created_from is not None:
+        filters.append(ChannelExecutionLog.created_at >= created_from)
+    if created_to is not None:
+        filters.append(ChannelExecutionLog.created_at <= created_to)
 
     total = int((await session.exec(select(func.count()).select_from(ChannelExecutionLog).where(*filters))).one())
     rows = (

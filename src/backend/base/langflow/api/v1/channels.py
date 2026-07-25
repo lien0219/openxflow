@@ -18,6 +18,10 @@ from langflow.channels.services.capabilities import (
     get_provider_capabilities,
     validate_provider_conversation_type,
 )
+from langflow.channels.services.configuration_audit import (
+    channel_resource_snapshot,
+    record_channel_configuration_audit,
+)
 from langflow.channels.services.conversation_validation import (
     validate_connection_routing_resources,
     validate_conversation_binding_resources,
@@ -104,6 +108,15 @@ async def create_channel_connection_route(
             detail="A channel connection with this name already exists",
         ) from exc
     else:
+        await record_channel_configuration_audit(
+            db,
+            connection_id=result.id,
+            actor_user_id=current_user.id,
+            action="create",
+            resource_type="connection",
+            resource_id=result.id,
+            after=result,
+        )
         await db.commit()
         return result
 
@@ -116,6 +129,7 @@ async def update_channel_connection_route(
     current_user: CurrentActiveUser,
 ) -> ChannelConnectionRead:
     connection = await _owned_connection_or_404(db, current_user.id, connection_id)
+    before = channel_resource_snapshot(connection)
     if payload.service_user_id is not None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -136,6 +150,16 @@ async def update_channel_connection_route(
             detail="A channel connection with this name already exists",
         ) from exc
     else:
+        await record_channel_configuration_audit(
+            db,
+            connection_id=connection.id,
+            actor_user_id=current_user.id,
+            action="update",
+            resource_type="connection",
+            resource_id=connection.id,
+            before=before,
+            after=result,
+        )
         await db.commit()
         return result
 
@@ -147,6 +171,16 @@ async def delete_channel_connection_route(
     current_user: CurrentActiveUser,
 ) -> Response:
     connection = await _owned_connection_or_404(db, current_user.id, connection_id)
+    before = channel_resource_snapshot(connection)
+    await record_channel_configuration_audit(
+        db,
+        connection_id=connection.id,
+        actor_user_id=current_user.id,
+        action="delete",
+        resource_type="connection",
+        resource_id=connection.id,
+        before=before,
+    )
     await delete_channel_connection(db, connection)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -249,6 +283,15 @@ async def put_channel_identity(
             detail="Cannot bind this channel identity to another user",
         )
     result = await upsert_channel_identity(db, connection_id, payload)
+    await record_channel_configuration_audit(
+        db,
+        connection_id=connection_id,
+        actor_user_id=current_user.id,
+        action="upsert",
+        resource_type="identity",
+        resource_id=result.id,
+        after=result,
+    )
     await db.commit()
     return result
 
@@ -263,6 +306,15 @@ async def remove_channel_identity(
     await _owned_connection_or_404(db, current_user.id, connection_id)
     if not await delete_channel_identity(db, connection_id, identity_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel identity not found")
+    await record_channel_configuration_audit(
+        db,
+        connection_id=connection_id,
+        actor_user_id=current_user.id,
+        action="delete",
+        resource_type="identity",
+        resource_id=identity_id,
+        before={"id": identity_id},
+    )
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -309,6 +361,15 @@ async def put_channel_conversation(
         )
     await validate_conversation_binding_resources(db, current_user, payload)
     result = await upsert_channel_conversation_binding(db, connection_id, payload)
+    await record_channel_configuration_audit(
+        db,
+        connection_id=connection_id,
+        actor_user_id=current_user.id,
+        action="upsert",
+        resource_type="conversation",
+        resource_id=result.id,
+        after=result,
+    )
     await db.commit()
     return result
 
@@ -325,6 +386,7 @@ async def patch_channel_conversation(
     binding = await get_channel_conversation_binding(db, connection_id, binding_id)
     if binding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel conversation not found")
+    before = channel_resource_snapshot(binding)
     await validate_conversation_binding_resources(
         db,
         current_user,
@@ -332,6 +394,16 @@ async def patch_channel_conversation(
         current_allow_file_upload=binding.allow_file_upload,
     )
     result = await update_channel_conversation_binding(db, connection, binding, payload)
+    await record_channel_configuration_audit(
+        db,
+        connection_id=connection_id,
+        actor_user_id=current_user.id,
+        action="update",
+        resource_type="conversation",
+        resource_id=binding.id,
+        before=before,
+        after=result,
+    )
     await db.commit()
     return result
 
@@ -352,6 +424,16 @@ async def delete_legacy_channel_conversation(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only legacy manual channel conversations can be deleted",
         )
+    before = channel_resource_snapshot(binding)
+    await record_channel_configuration_audit(
+        db,
+        connection_id=connection_id,
+        actor_user_id=current_user.id,
+        action="delete",
+        resource_type="conversation",
+        resource_id=binding.id,
+        before=before,
+    )
     await delete_legacy_channel_conversation_binding(db, connection_id, binding_id)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

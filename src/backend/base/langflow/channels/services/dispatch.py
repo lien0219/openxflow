@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import time
 from datetime import datetime, timezone
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any
@@ -39,12 +40,17 @@ from langflow.channels.services.commands import (
     resolve_workflow_command,
 )
 from langflow.channels.services.context import prepare_channel_input, record_channel_response
-from langflow.channels.services.execution_logs import finalize_channel_execution, start_channel_execution
+from langflow.channels.services.execution_logs import (
+    finalize_channel_execution,
+    safe_record_channel_delivery_outcome,
+    start_channel_execution,
+)
 from langflow.channels.services.files import (
     ChannelFileService,
     list_owned_knowledge_bases,
     resolve_owned_knowledge_base,
 )
+from langflow.channels.services.message_records import safe_record_outbound_message
 from langflow.channels.services.outbound_delivery import send_outbound_processing_once
 from langflow.channels.services.response_policy import normalize_response_mode, should_process_channel_event
 from langflow.channels.services.retry import retry_channel_operation
@@ -56,6 +62,7 @@ if TYPE_CHECKING:
 
 from langflow.services.database.models.channel.crud import discover_channel_conversation
 from langflow.services.database.models.channel.execution_model import ChannelExecutionStatus, ChannelExecutionTrigger
+from langflow.services.database.models.channel.message_model import ChannelMessageRecordStatus
 from langflow.services.database.models.channel.model import (
     ChannelConnection,
     ChannelConversationBinding,
@@ -496,10 +503,23 @@ class ChannelDispatchService:
                     await logger.aexception("Unable to finish channel execution log %s", execution.id)
 
         if processing_message_id is not None:
+            delivery_started = time.perf_counter()
             try:
                 await retry_channel_operation(
                     lambda: self.adapter.update_message(processing_message_id, response),
                     operation_name=f"{self.adapter.channel_type.value}.update_processing_message",
+                )
+                duration_ms = max(0, int((time.perf_counter() - delivery_started) * 1000))
+                await safe_record_outbound_message(
+                    event,
+                    response,
+                    status=ChannelMessageRecordStatus.SENT.value,
+                    provider_message_id=processing_message_id,
+                )
+                await safe_record_channel_delivery_outcome(
+                    connection_id=event.connection_id,
+                    external_event_id=event.event_id,
+                    duration_ms=duration_ms,
                 )
                 return None
             except Exception:  # noqa: BLE001
