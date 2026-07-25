@@ -28,6 +28,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          python .github/scripts/patch_channel_capability_rollout.py
           python .github/scripts/apply_channel_capability_response_scope.py \
             2>&1 | tee /tmp/channel-capabilities-apply.log
 
@@ -139,6 +140,7 @@ jobs:
       - name: Remove one-shot rollout resources
         run: |
           rm -f .github/scripts/apply_channel_capability_response_scope.py
+          rm -f .github/scripts/patch_channel_capability_rollout.py
           rm -f .github/workflows/channel-production-capabilities.yml
 
       - name: Commit capability response and thread scope runtime
