@@ -153,13 +153,7 @@ async def list_channel_configuration_audits(
         filters.append(ChannelConfigurationAudit.created_at <= created_to)
 
     total = int(
-        (
-            await session.exec(
-                select(sa.func.count())
-                .select_from(ChannelConfigurationAudit)
-                .where(*filters)
-            )
-        ).one()
+        (await session.exec(select(sa.func.count()).select_from(ChannelConfigurationAudit).where(*filters))).one()
     )
     rows = (
         await session.exec(
