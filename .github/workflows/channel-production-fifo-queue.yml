@@ -116,7 +116,8 @@ jobs:
             src/backend/tests/unit/channels/test_webhook_processing.py \
             src/backend/tests/unit/channels/test_webhook_queue_timeout.py \
             src/backend/tests/unit/channels/test_dingtalk_stream_runtime.py \
-            src/backend/tests/unit/channels/test_dingtalk_resilient.py \
+            src/backend/tests/unit/channels/test_resilient_adapter_factory.py \
+            src/backend/tests/unit/channels/test_feishu_dingtalk_token_recovery.py \
             src/backend/tests/unit/channels/test_gateway.py \
             src/backend/tests/unit/channels/test_dispatch.py \
             2>&1 | tee /tmp/channel-fifo-pytest.log
