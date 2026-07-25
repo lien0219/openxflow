@@ -12,7 +12,7 @@ if queue_path.exists():
     queue_content = queue_path.read_text(encoding="utf-8")
     if "class ChannelQueueDescriptor:" not in queue_content:
         marker = "def _bounded_queue_key("
-        descriptor = '''@dataclass(frozen=True)
+        descriptor = """@dataclass(frozen=True)
 class ChannelQueueDescriptor:
     queue_key: str
     external_conversation_id: str
@@ -23,7 +23,7 @@ class ChannelQueueDescriptor:
     serialized_by_conversation: bool
 
 
-'''
+"""
         if marker not in queue_content:
             raise RuntimeError("Missing queue descriptor insertion marker")
         queue_path.write_text(queue_content.replace(marker, descriptor + marker, 1), encoding="utf-8")
