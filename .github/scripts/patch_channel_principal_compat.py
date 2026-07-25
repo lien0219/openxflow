@@ -9,7 +9,7 @@ replacement = (
     "            execution_identity_type = principal.identity_type\n"
     "        else:\n"
     "            execution_user = principal\n"
-    "            execution_identity_type = \"bound_user\"\n"
+    '            execution_identity_type = "bound_user"\n'
     "        context_mode = effective_context_mode(self.connection, binding)\n"
 )
 if marker not in content:
