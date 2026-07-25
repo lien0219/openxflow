@@ -29,6 +29,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          python .github/scripts/patch_channel_provider_security_rollout.py
           python .github/scripts/apply_channel_provider_security.py \
             2>&1 | tee /tmp/channel-provider-security-apply.log
 
@@ -189,6 +190,7 @@ jobs:
       - name: Remove one-shot provider security resources
         run: |
           rm -f .github/scripts/apply_channel_provider_security.py
+          rm -f .github/scripts/patch_channel_provider_security_rollout.py
           rm -f .github/workflows/channel-production-provider-security.yml
 
       - name: Commit provider security hardening
