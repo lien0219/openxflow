@@ -11,14 +11,14 @@ if "from langflow.channels.security.provider_credentials import validate_channel
         "from langflow.channels.security.provider_credentials import validate_channel_provider_credentials\n",
         1,
     )
-create_marker = '''async def create_channel_connection(
+create_marker = """async def create_channel_connection(
     session: AsyncSession,
     user_id: UUID,
     payload: ChannelConnectionCreate,
 ) -> ChannelConnectionRead:
     connection = ChannelConnection(
-'''
-create_replacement = '''async def create_channel_connection(
+"""
+create_replacement = """async def create_channel_connection(
     session: AsyncSession,
     user_id: UUID,
     payload: ChannelConnectionCreate,
@@ -29,7 +29,7 @@ create_replacement = '''async def create_channel_connection(
         payload.credentials,
     )
     connection = ChannelConnection(
-'''
+"""
 if create_replacement not in crud:
     if create_marker not in crud:
         raise RuntimeError("Missing current connection create marker")
@@ -39,7 +39,7 @@ update_start = crud.find("async def update_channel_connection(\n")
 update_end = crud.find("async def delete_channel_connection(\n", update_start)
 if update_start < 0 or update_end < 0:
     raise RuntimeError("Missing current connection update block")
-updated_function = '''async def update_channel_connection(
+updated_function = """async def update_channel_connection(
     session: AsyncSession,
     connection: ChannelConnection,
     payload: ChannelConnectionUpdate,
@@ -85,7 +85,7 @@ updated_function = '''async def update_channel_connection(
     return _connection_read(connection)
 
 
-'''
+"""
 crud = crud[:update_start] + updated_function + crud[update_end:]
 crud_path.write_text(crud, encoding="utf-8")
 
@@ -98,11 +98,11 @@ if "from langflow.channels.security.provider_credentials import validate_channel
         "from langflow.channels.security.provider_credentials import validate_channel_provider_credentials\n",
         1,
     )
-factory_marker = '''    channel_type = ChannelType(connection.channel_type)
+factory_marker = """    channel_type = ChannelType(connection.channel_type)
     credentials = decrypt_credentials(connection.credentials_encrypted)
 
-'''
-factory_replacement = '''    channel_type = ChannelType(connection.channel_type)
+"""
+factory_replacement = """    channel_type = ChannelType(connection.channel_type)
     credentials = decrypt_credentials(connection.credentials_encrypted)
     validate_channel_provider_credentials(
         connection.channel_type,
@@ -110,7 +110,7 @@ factory_replacement = '''    channel_type = ChannelType(connection.channel_type)
         credentials,
     )
 
-'''
+"""
 if factory_replacement not in factory:
     if factory_marker not in factory:
         raise RuntimeError("Missing current adapter factory marker")
@@ -126,16 +126,16 @@ if "from langflow.channels.security.provider_credentials import ChannelProviderC
         "from langflow.channels.security.provider_credentials import ChannelProviderCredentialError\n",
         1,
     )
-error_branch = '''    except ChannelProviderCredentialError as exc:
+error_branch = """    except ChannelProviderCredentialError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
-'''
-integrity_marker = '''    except IntegrityError as exc:
+"""
+integrity_marker = """    except IntegrityError as exc:
         await db.rollback()
-'''
+"""
 for route_name in ("async def create_channel_connection_route", "async def update_channel_connection_route"):
     route_start = api.find(route_name)
     route_end = api.find("\n\n@router.", route_start + 1)
