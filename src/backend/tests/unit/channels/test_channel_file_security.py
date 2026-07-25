@@ -6,7 +6,6 @@ from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
-
 from langflow.channels.services.file_security import BuiltinChannelFileScanner
 from langflow.channels.services.files import (
     effective_channel_knowledge_base_id,
@@ -82,8 +81,7 @@ def test_effective_kb_prefers_conversation_override_then_connection_default() ->
     connection = SimpleNamespace(default_knowledge_base_id=default_id)
 
     assert (
-        effective_channel_knowledge_base_id(connection, SimpleNamespace(knowledge_base_id=override_id))
-        == override_id
+        effective_channel_knowledge_base_id(connection, SimpleNamespace(knowledge_base_id=override_id)) == override_id
     )
     assert effective_channel_knowledge_base_id(connection, None) == default_id
 

@@ -12,7 +12,16 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 _TEXT_EXTENSIONS = {
-    ".csv", ".htm", ".html", ".json", ".markdown", ".md", ".txt", ".xml", ".yaml", ".yml",
+    ".csv",
+    ".htm",
+    ".html",
+    ".json",
+    ".markdown",
+    ".md",
+    ".txt",
+    ".xml",
+    ".yaml",
+    ".yml",
 }
 _OFFICE_ARCHIVE_MARKERS = {
     ".docx": "word/document.xml",
