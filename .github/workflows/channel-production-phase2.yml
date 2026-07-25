@@ -34,11 +34,15 @@ jobs:
 
           path = Path(".github/scripts/apply_channel_production_phase2.py")
           content = path.read_text(encoding="utf-8")
-          old = '"    def _resolve_default_flow_id(\\n"'
-          new = '"    def _resolve_default_flow_id("'
-          if old not in content:
-              raise SystemExit("dispatch boundary marker not found")
-          path.write_text(content.replace(old, new, 1), encoding="utf-8")
+          replacements = {
+              '"    def _resolve_default_flow_id(\\n"': '"    def _resolve_default_flow_id("',
+              '"    async def _send_processing_message(\\n"': '"    async def _send_processing_message("',
+          }
+          for old, new in replacements.items():
+              if old not in content:
+                  raise SystemExit(f"dispatch boundary marker not found: {old}")
+              content = content.replace(old, new, 1)
+          path.write_text(content, encoding="utf-8")
           PY
 
       - name: Apply production access and context runtime
