@@ -32,11 +32,9 @@ audit_path.write_text(audit_content, encoding="utf-8")
 
 # SQLite batch table rebuilds must not attempt to restore indexes that depend on
 # columns removed by this downgrade.
-migration_path = Path(
-    "src/backend/base/langflow/alembic/versions/e2f5a8c1d7b9_add_channel_production_controls.py"
-)
+migration_path = Path("src/backend/base/langflow/alembic/versions/e2f5a8c1d7b9_add_channel_production_controls.py")
 migration_content = migration_path.read_text(encoding="utf-8")
-index_cleanup = '''    for table_name, index_names in (
+index_cleanup = """    for table_name, index_names in (
         (
             "channel_webhook_job",
             (
@@ -60,11 +58,11 @@ index_cleanup = '''    for table_name, index_names in (
             if index_name in existing_indexes:
                 op.drop_index(index_name, table_name=table_name)
 
-'''
-index_marker = '''    if migration.table_exists("channel_conversation_context_entry", conn):
+"""
+index_marker = """    if migration.table_exists("channel_conversation_context_entry", conn):
         op.drop_table("channel_conversation_context_entry")
 
-'''
+"""
 if index_cleanup not in migration_content:
     if index_marker not in migration_content:
         raise RuntimeError("Missing production-control downgrade insertion marker")
@@ -77,19 +75,21 @@ message_path = Path("src/backend/base/langflow/channels/services/message_records
 message_content = message_path.read_text(encoding="utf-8")
 if "import inspect\n" not in message_content:
     message_content = message_content.replace("import math\n", "import inspect\nimport math\n", 1)
-add_helper = '''async def _add_to_session(session: AsyncSession, value: Any) -> None:
+add_helper = """async def _add_to_session(session: AsyncSession, value: Any) -> None:
     result = session.add(value)
     if inspect.isawaitable(result):
         await result
 
 
-'''
+"""
 if add_helper not in message_content:
     helper_marker = "def _safe_scalar(value: Any) -> str | int | float | bool | None:\n"
     if helper_marker not in message_content:
         raise RuntimeError("Missing message-session helper insertion marker")
     message_content = message_content.replace(helper_marker, add_helper + helper_marker, 1)
-message_content = message_content.replace("            session.add(existing)\n", "            await _add_to_session(session, existing)\n")
+message_content = message_content.replace(
+    "            session.add(existing)\n", "            await _add_to_session(session, existing)\n"
+)
 message_content = message_content.replace(
     "            session.add(\n                ChannelMessageRecord(\n",
     "            await _add_to_session(\n                session,\n                ChannelMessageRecord(\n",
