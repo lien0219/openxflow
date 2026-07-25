@@ -113,10 +113,9 @@ jobs:
         run: uv sync --quiet --frozen --project src/backend/base --group dev
 
       - name: Run production access regression tests
-        id: regression
         shell: bash
         run: |
-          set +e
+          set -o pipefail
           PYTHONPATH=src/backend/base uv run --frozen --project src/backend/base --group dev \
             pytest -q --tb=short \
             --confcutdir=src/backend/tests/unit/channels \
@@ -129,9 +128,6 @@ jobs:
             src/backend/tests/unit/channels/test_channel_core_workflow.py \
             src/backend/tests/unit/channels/test_models.py \
             2>&1 | tee /tmp/channel-production-phase2-pytest.log
-          status=${PIPESTATUS[0]}
-          echo "status=${status}" >> "$GITHUB_OUTPUT"
-          exit 0
 
       - name: Upload regression diagnostics
         if: always()
@@ -141,10 +137,6 @@ jobs:
           path: /tmp/channel-production-phase2-pytest.log
           if-no-files-found: error
           retention-days: 3
-
-      - name: Stop when regression tests failed
-        if: steps.regression.outputs.status != '0'
-        run: exit 1
 
       - name: Remove one-shot rollout resources
         run: |
