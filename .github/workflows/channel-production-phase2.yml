@@ -153,9 +153,12 @@ jobs:
         run: uv sync --quiet --frozen --project src/backend/base --group dev
 
       - name: Run production access and context tests
+        id: tests
+        shell: bash
         env:
           PYTHONPATH: src/backend/base
         run: |
+          set +e
           uv run --frozen --project src/backend/base --group dev \
             pytest -q --tb=short \
             --confcutdir=src/backend/tests/unit/channels \
@@ -165,7 +168,24 @@ jobs:
             src/backend/tests/unit/channels/test_dispatch.py \
             src/backend/tests/unit/channels/test_workflow_response.py \
             src/backend/tests/unit/channels/test_channel_core_workflow.py \
-            src/backend/tests/unit/channels/test_models.py
+            src/backend/tests/unit/channels/test_models.py \
+            2>&1 | tee /tmp/channel-production-phase2-tests.log
+          status=${PIPESTATUS[0]}
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-production-phase2-tests
+          path: /tmp/channel-production-phase2-tests.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Stop when tests failed
+        if: steps.tests.outputs.status != '0'
+        run: exit 1
 
       - name: Remove one-shot resources
         run: |
