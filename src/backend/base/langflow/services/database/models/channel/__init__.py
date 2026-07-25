@@ -7,6 +7,10 @@ from langflow.services.database.models.channel.command_model import (
     ChannelWorkflowCommandRead,
     ChannelWorkflowCommandUpdate,
 )
+from langflow.services.database.models.channel.context_model import (
+    ChannelContextRole,
+    ChannelConversationContextEntry,
+)
 from langflow.services.database.models.channel.crud import (
     claim_channel_event,
     create_channel_connection,
@@ -25,6 +29,7 @@ from langflow.services.database.models.channel.crud import (
     upsert_channel_identity,
 )
 from langflow.services.database.models.channel.execution_model import (
+    ChannelExecutionIdentityType,
     ChannelExecutionLog,
     ChannelExecutionLogPage,
     ChannelExecutionLogRead,
@@ -37,11 +42,13 @@ from langflow.services.database.models.channel.file_model import (
     ChannelFileStatus,
 )
 from langflow.services.database.models.channel.model import (
+    ChannelAccessPolicy,
     ChannelConnection,
     ChannelConnectionCreate,
     ChannelConnectionRead,
     ChannelConnectionStatus,
     ChannelConnectionUpdate,
+    ChannelContextMode,
     ChannelConversationBinding,
     ChannelConversationBindingPage,
     ChannelConversationBindingRead,
@@ -69,6 +76,7 @@ from langflow.services.database.models.channel.webhook_job_model import (
 )
 
 __all__ = [
+    "ChannelAccessPolicy",
     "ChannelBindingCode",
     "ChannelCommandScope",
     "ChannelConnection",
@@ -81,12 +89,16 @@ __all__ = [
     "ChannelConversationBindingRead",
     "ChannelConversationBindingUpdate",
     "ChannelConversationBindingUpsert",
+    "ChannelConversationContextEntry",
+    "ChannelContextMode",
+    "ChannelContextRole",
     "ChannelConversationRouteMode",
     "ChannelConversationSource",
     "ChannelConversationStatus",
     "ChannelEventReceipt",
     "ChannelExecutionLog",
     "ChannelExecutionLogPage",
+    "ChannelExecutionIdentityType",
     "ChannelExecutionLogRead",
     "ChannelExecutionStatus",
     "ChannelExecutionTrigger",

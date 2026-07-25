@@ -22,6 +22,7 @@ class ChannelWebhookJobStatus(str, Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class ChannelWebhookJob(SQLModel, table=True):  # type: ignore[call-arg]
@@ -36,6 +37,9 @@ class ChannelWebhookJob(SQLModel, table=True):  # type: ignore[call-arg]
         ),
         Index("ix_channel_webhook_job_claim", "status", "next_attempt_at", "created_at"),
         Index("ix_channel_webhook_job_lease", "status", "lease_expires_at"),
+        Index("ix_channel_webhook_job_queue", "queue_key", "status", "created_at"),
+        Index("ix_channel_webhook_job_connection_status", "connection_id", "status", "created_at"),
+        Index("ix_channel_webhook_job_user_created", "connection_id", "external_user_id", "created_at"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -49,6 +53,10 @@ class ChannelWebhookJob(SQLModel, table=True):  # type: ignore[call-arg]
     )
     channel_type: str = Field(nullable=False, max_length=32)
     external_event_id: str = Field(nullable=False, max_length=255)
+    external_conversation_id: str = Field(default="", nullable=False, max_length=255)
+    external_user_id: str = Field(default="", nullable=False, max_length=255)
+    conversation_type: str = Field(default="private", nullable=False, max_length=32)
+    queue_key: str = Field(default="", nullable=False, max_length=768)
     headers_data: dict[str, Any] = Field(
         default_factory=dict,
         sa_column=Column(JsonVariant, nullable=False),

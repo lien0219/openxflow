@@ -28,6 +28,7 @@ class ChannelConnectionStatus(str, Enum):
 
 
 class ChannelIdentityStatus(str, Enum):
+    DISCOVERED = "discovered"
     PENDING = "pending"
     BOUND = "bound"
     DISABLED = "disabled"
@@ -66,6 +67,20 @@ class ChannelUnconfiguredBehavior(str, Enum):
     IGNORE = "ignore"
 
 
+class ChannelAccessPolicy(str, Enum):
+    SHARED = "shared"
+    BOUND_ONLY = "bound_only"
+    HYBRID = "hybrid"
+    INHERIT = "inherit"
+
+
+class ChannelContextMode(str, Enum):
+    ISOLATED = "isolated"
+    SHARED = "shared"
+    HYBRID = "hybrid"
+    INHERIT = "inherit"
+
+
 class ChannelConnectionBase(SQLModel):
     name: str = Field(min_length=1, max_length=128)
     channel_type: str = Field(index=True, max_length=32)
@@ -88,6 +103,17 @@ class ChannelConnectionBase(SQLModel):
     personal_commands_enabled: bool = Field(default=True)
     default_response_mode: str = Field(default="mentions_only", max_length=32)
     default_allow_file_upload: bool = Field(default=True)
+    access_policy: str = Field(default=ChannelAccessPolicy.HYBRID.value, max_length=32)
+    default_context_mode: str = Field(default=ChannelContextMode.ISOLATED.value, max_length=32)
+    max_concurrency: int = Field(default=10, ge=1, le=100)
+    per_user_concurrency: int = Field(default=1, ge=1, le=10)
+    per_user_queue_limit: int = Field(default=3, ge=1, le=100)
+    rate_limit_per_minute: int = Field(default=20, ge=0, le=10000)
+    daily_quota: int = Field(default=0, ge=0)
+    task_timeout_seconds: int = Field(default=120, ge=10, le=3600)
+    queue_timeout_seconds: int = Field(default=60, ge=5, le=3600)
+    shared_context_window: int = Field(default=20, ge=0, le=100)
+    context_retention_days: int = Field(default=30, ge=1, le=365)
     settings_data: dict[str, Any] = Field(
         default_factory=dict,
         sa_column=Column(JsonVariant, nullable=False),
@@ -106,6 +132,15 @@ class ChannelConnection(ChannelConnectionBase, table=True):  # type: ignore[call
             nullable=False,
             index=True,
         )
+    )
+    service_user_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            sa.Uuid(),
+            ForeignKey("user.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
     )
     default_flow_id: UUID | None = Field(
         default=None,
@@ -144,6 +179,7 @@ class ChannelConnection(ChannelConnectionBase, table=True):  # type: ignore[call
 
 class ChannelConnectionCreate(ChannelConnectionBase):
     credentials: dict[str, str] = Field(default_factory=dict)
+    service_user_id: UUID | None = None
     default_flow_id: UUID | None = None
     default_knowledge_base_id: UUID | None = None
 
@@ -160,6 +196,7 @@ class ChannelConnectionUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     enabled: bool | None = None
     connection_mode: str | None = Field(default=None, max_length=32)
+    service_user_id: UUID | None = None
     default_flow_id: UUID | None = None
     default_knowledge_base_id: UUID | None = None
     auto_discover_conversations: bool | None = None
@@ -168,6 +205,17 @@ class ChannelConnectionUpdate(SQLModel):
     personal_commands_enabled: bool | None = None
     default_response_mode: str | None = Field(default=None, max_length=32)
     default_allow_file_upload: bool | None = None
+    access_policy: str | None = Field(default=None, max_length=32)
+    default_context_mode: str | None = Field(default=None, max_length=32)
+    max_concurrency: int | None = Field(default=None, ge=1, le=100)
+    per_user_concurrency: int | None = Field(default=None, ge=1, le=10)
+    per_user_queue_limit: int | None = Field(default=None, ge=1, le=100)
+    rate_limit_per_minute: int | None = Field(default=None, ge=0, le=10000)
+    daily_quota: int | None = Field(default=None, ge=0)
+    task_timeout_seconds: int | None = Field(default=None, ge=10, le=3600)
+    queue_timeout_seconds: int | None = Field(default=None, ge=5, le=3600)
+    shared_context_window: int | None = Field(default=None, ge=0, le=100)
+    context_retention_days: int | None = Field(default=None, ge=1, le=365)
     settings_data: dict[str, Any] | None = None
     credentials: dict[str, str] | None = None
 
@@ -175,6 +223,7 @@ class ChannelConnectionUpdate(SQLModel):
 class ChannelConnectionRead(ChannelConnectionBase):
     id: UUID
     user_id: UUID
+    service_user_id: UUID | None = None
     default_flow_id: UUID | None = None
     default_knowledge_base_id: UUID | None = None
     status: str
@@ -190,7 +239,7 @@ class ChannelIdentityBase(SQLModel):
     external_tenant_id: str = Field(default="", max_length=255)
     external_union_id: str | None = Field(default=None, max_length=255)
     display_name: str | None = Field(default=None, max_length=255)
-    status: str = Field(default=ChannelIdentityStatus.BOUND.value, max_length=32)
+    status: str = Field(default=ChannelIdentityStatus.DISCOVERED.value, max_length=32)
     profile_data: dict[str, Any] = Field(
         default_factory=dict,
         sa_column=Column(JsonVariant, nullable=False),
@@ -217,17 +266,30 @@ class ChannelIdentity(ChannelIdentityBase, table=True):  # type: ignore[call-arg
             index=True,
         )
     )
-    openxflow_user_id: UUID = Field(
+    openxflow_user_id: UUID | None = Field(
+        default=None,
         sa_column=Column(
             sa.Uuid(),
-            ForeignKey("user.id", ondelete="CASCADE"),
-            nullable=False,
+            ForeignKey("user.id", ondelete="SET NULL"),
+            nullable=True,
             index=True,
-        )
+        ),
     )
-    bound_at: datetime = Field(
+    first_seen_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
+    )
+    last_seen_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
+    )
+    last_message_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
+    )
+    bound_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     updated_at: datetime = Field(
         default_factory=utc_now,
@@ -236,14 +298,17 @@ class ChannelIdentity(ChannelIdentityBase, table=True):  # type: ignore[call-arg
 
 
 class ChannelIdentityCreate(ChannelIdentityBase):
-    openxflow_user_id: UUID
+    openxflow_user_id: UUID | None = None
 
 
 class ChannelIdentityRead(ChannelIdentityBase):
     id: UUID
     connection_id: UUID
-    openxflow_user_id: UUID
-    bound_at: datetime
+    openxflow_user_id: UUID | None = None
+    first_seen_at: datetime
+    last_seen_at: datetime
+    last_message_at: datetime
+    bound_at: datetime | None = None
     updated_at: datetime
 
 
@@ -256,6 +321,8 @@ class ChannelConversationBindingBase(SQLModel):
     route_mode: str = Field(default=ChannelConversationRouteMode.INHERIT.value, max_length=32)
     status: str = Field(default=ChannelConversationStatus.PENDING.value, max_length=32, index=True)
     source: str = Field(default=ChannelConversationSource.LEGACY_MANUAL.value, max_length=32)
+    access_policy: str = Field(default=ChannelAccessPolicy.INHERIT.value, max_length=32)
+    context_mode: str = Field(default=ChannelContextMode.INHERIT.value, max_length=32)
     settings_data: dict[str, Any] = Field(
         default_factory=dict,
         sa_column=Column(JsonVariant, nullable=False),
@@ -351,6 +418,8 @@ class ChannelConversationBindingUpdate(SQLModel):
     allow_file_upload: bool | None = None
     route_mode: str | None = Field(default=None, max_length=32)
     status: str | None = Field(default=None, max_length=32)
+    access_policy: str | None = Field(default=None, max_length=32)
+    context_mode: str | None = Field(default=None, max_length=32)
     default_flow_id: UUID | None = None
     knowledge_base_id: UUID | None = None
     settings_data: dict[str, Any] | None = None

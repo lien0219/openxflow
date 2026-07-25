@@ -14,6 +14,7 @@ from .auth import (
 from .channel import (
     ChannelConnection,
     ChannelConversationBinding,
+    ChannelConversationContextEntry,
     ChannelEventReceipt,
     ChannelExecutionLog,
     ChannelFileAsset,
@@ -51,6 +52,7 @@ __all__ = [
     "CasbinRule",
     "ChannelConnection",
     "ChannelConversationBinding",
+    "ChannelConversationContextEntry",
     "ChannelEventReceipt",
     "ChannelExecutionLog",
     "ChannelFileAsset",
