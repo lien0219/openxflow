@@ -1,0 +1,46 @@
+name: Fix Channel Capability Rollout Marker
+
+on:
+  push:
+    branches:
+      - feature/channel-gateway
+    paths:
+      - .github/workflows/fix-channel-capability-rollout-marker.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out channel branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/channel-gateway
+          fetch-depth: 0
+
+      - name: Fix workflow session marker
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/apply_channel_capability_response_scope.py')
+          content = path.read_text(encoding='utf-8')
+          old = '    "def build_channel_session_id(\\n",\n'
+          new = '    "def build_channel_session_id(",\n'
+          if new not in content:
+              if old not in content:
+                  raise SystemExit('capability session marker not found')
+              content = content.replace(old, new, 1)
+              path.write_text(content, encoding='utf-8')
+          PY
+          rm .github/workflows/fix-channel-capability-rollout-marker.yml
+
+      - name: Commit marker fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/scripts/apply_channel_capability_response_scope.py .github/workflows/fix-channel-capability-rollout-marker.yml
+          git commit -m "fix(channels): align capability rollout session marker"
+          git push origin HEAD:feature/channel-gateway
