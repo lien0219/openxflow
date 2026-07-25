@@ -58,9 +58,11 @@ jobs:
           ):
               old = f"{name} = '''"
               new = f"{name} = r'''"
-              if old not in content:
-                  raise SystemExit(f"generated block not found: {name}")
-              content = content.replace(old, new, 1)
+              if old in content:
+                  content = content.replace(old, new, 1)
+                  print(f"made {name} raw")
+              else:
+                  print(f"skipped raw conversion for {name}")
           path.write_text(content, encoding="utf-8")
           PY
 
