@@ -122,7 +122,7 @@ jobs:
             src/backend/tests/unit/channels/test_channel_queueing.py \
             src/backend/tests/unit/channels/test_dispatch.py \
             src/backend/tests/unit/channels/test_conversation_routing.py \
-            src/backend/tests/unit/channels/test_feishu_processing_message.py \
+            src/backend/tests/unit/channels/test_feishu.py \
             src/backend/tests/unit/channels/test_telegram.py \
             src/backend/tests/unit/channels/test_models.py \
             src/backend/tests/unit/channels/test_workflow_response.py \
