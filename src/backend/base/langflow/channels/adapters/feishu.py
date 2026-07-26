@@ -121,7 +121,7 @@ class FeishuChannelAdapter(ChannelAdapter):
         if body.get("encrypt"):
             return False
         if self.verification_token is None:
-            return True
+            return False
         provided = str(body.get("token") or body.get("header", {}).get("token") or "")
         return hmac.compare_digest(provided, self.verification_token)
 

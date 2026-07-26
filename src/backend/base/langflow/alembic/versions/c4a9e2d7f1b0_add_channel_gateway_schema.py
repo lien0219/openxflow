@@ -11,9 +11,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import postgresql
-
 from langflow.utils import migration
+from sqlalchemy.dialects import postgresql
 
 revision: str = "c4a9e2d7f1b0"  # pragma: allowlist secret
 down_revision: str | None = "e1705947c729"  # pragma: allowlist secret
@@ -72,7 +71,7 @@ def upgrade() -> None:
             sa.Column("bound_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
             sa.ForeignKeyConstraint(["connection_id"], ["channel_connection.id"], ondelete="CASCADE"),
-            sa.ForeignKeyConstraint(["openxflow_user_id"], ["user.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["openxflow_user_id"], ["user.id"], ondelete="SET NULL"),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint(
                 "connection_id",

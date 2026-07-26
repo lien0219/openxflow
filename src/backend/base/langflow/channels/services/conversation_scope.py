@@ -15,10 +15,13 @@ _SCOPE_METADATA_KEYS = (
 
 def conversation_scope_id(event: ChannelEvent) -> str:
     """Return a stable thread/topic identifier without knowing the provider."""
+    conversation_metadata = getattr(event.conversation, "metadata", {}) or {}
+    message = getattr(event, "message", None)
+    message_metadata = getattr(message, "metadata", {}) or {}
     for key in _SCOPE_METADATA_KEYS:
-        value = event.conversation.metadata.get(key)
+        value = conversation_metadata.get(key)
         if value is None:
-            value = event.message.metadata.get(key)
+            value = message_metadata.get(key)
         if value is not None and str(value).strip():
             return str(value).strip()
     return ""

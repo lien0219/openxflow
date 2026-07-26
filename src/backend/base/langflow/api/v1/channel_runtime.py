@@ -6,7 +6,6 @@ from dataclasses import asdict
 
 from fastapi import APIRouter, Response
 from prometheus_client import CollectorRegistry, generate_latest
-from prometheus_client.exposition import CONTENT_TYPE_LATEST
 from pydantic import BaseModel
 
 from langflow.api.utils import CurrentActiveUser
@@ -180,5 +179,5 @@ async def read_channel_prometheus_metrics(current_user: CurrentActiveUser) -> Re
     registry.register(TokenCacheMetricsCollector())
     return Response(
         content=generate_latest(registry),
-        headers={"Content-Type": CONTENT_TYPE_LATEST},
+        headers={"Content-Type": "text/plain; version=0.0.4; charset=utf-8"},
     )

@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+MISSING_TARGET_ERROR = "Missing provider-security rollout target: "
+MISSING_BLOCK_ERROR = "Missing provider-security rollout block: "
+MISSING_CONNECTION_UPDATE_ERROR = "Missing connection update credential error marker"
+MIN_EXPECTED_CREDENTIAL_ERROR_BRANCHES = 2
 
 
 def read(path: str) -> str:
@@ -18,7 +22,8 @@ def replace_once(path: str, old: str, new: str, *, label: str) -> None:
     if new in content:
         return
     if old not in content:
-        raise RuntimeError(f"Missing provider-security rollout target: {label}")
+        msg = f"{MISSING_TARGET_ERROR}{label}"
+        raise RuntimeError(msg)
     write(path, content.replace(old, new, 1))
 
 
@@ -27,7 +32,8 @@ def replace_between(path: str, start: str, end: str, replacement: str, *, label:
     start_index = content.find(start)
     end_index = content.find(end, start_index)
     if start_index < 0 or end_index < 0:
-        raise RuntimeError(f"Missing provider-security rollout block: {label}")
+        msg = f"{MISSING_BLOCK_ERROR}{label}"
+        raise RuntimeError(msg)
     write(path, content[:start_index] + replacement + content[end_index:])
 
 
@@ -178,10 +184,10 @@ credential_branch = """    except ChannelProviderCredentialError as exc:
             detail="A channel connection with this name already exists",
         ) from exc
 """
-if content.count("except ChannelProviderCredentialError as exc:") < 2:
+if content.count("except ChannelProviderCredentialError as exc:") < MIN_EXPECTED_CREDENTIAL_ERROR_BRANCHES:
     index = content.find(needle, content.find("async def update_channel_connection_route"))
     if index < 0:
-        raise RuntimeError("Missing connection update credential error marker")
+        raise RuntimeError(MISSING_CONNECTION_UPDATE_ERROR)
     content = content[:index] + credential_branch + content[index + len(needle) :]
     write(CHANNELS_API, content)
 
@@ -348,7 +354,7 @@ replace_once(
       if (!/^[A-Za-z0-9_-]{16,256}$/.test(form.webhookSecret.trim())) {
         setError(
           copy(
-            "Telegram Webhook 密钥必须为 16-256 位，只能包含字母、数字、下划线和短横线。",
+            "Telegram Webhook secret must be 16-256 chars and may contain letters, digits, underscores, and hyphens.",
           ),
         );
         return;

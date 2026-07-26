@@ -157,13 +157,19 @@ class WeComChannelAdapter(ChannelAdapter):
         signature = headers.get("x-wecom-msg-signature", "")
         timestamp = headers.get("x-wecom-timestamp", "")
         nonce = headers.get("x-wecom-nonce", "")
-        return bool(
+        if not (
             encrypted
             and signature
             and timestamp
             and nonce
             and self.crypt.verify_signature(signature, timestamp, nonce, encrypted)
-        )
+        ):
+            return False
+        try:
+            self.crypt.decrypt(encrypted)
+        except WeComCryptoError:
+            return False
+        return True
 
     async def parse_event(self, headers: dict[str, str], payload: bytes) -> ChannelEvent:
         del headers

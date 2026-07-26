@@ -10,7 +10,7 @@ import json
 import time
 from datetime import datetime, timezone
 from typing import Any, ClassVar
-from urllib.parse import unquote_plus, urlparse
+from urllib.parse import unquote, urlparse
 from uuid import UUID
 
 import httpx
@@ -139,7 +139,7 @@ class DingTalkChannelAdapter(ChannelAdapter):
             hashlib.sha256,
         ).digest()
         expected = base64.b64encode(digest).decode()
-        return hmac.compare_digest(unquote_plus(provided_sign), expected)
+        return hmac.compare_digest(unquote(provided_sign), expected)
 
     async def parse_event(self, headers: dict[str, str], payload: bytes) -> ChannelEvent:
         del headers

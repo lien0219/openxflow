@@ -1,10 +1,17 @@
 import sys
+import tempfile
 import traceback
 from pathlib import Path
 
+MISSING_CREATE_MARKER_ERROR = "Missing current connection create marker"
+MISSING_UPDATE_BLOCK_ERROR = "Missing current connection update block"
+MISSING_FACTORY_MARKER_ERROR = "Missing current adapter factory marker"
+MISSING_INTEGRATION_SECTION_ERROR = "Missing generic provider-security integration section"
+
 
 def _log_unhandled(exc_type, exc_value, exc_traceback):  # type: ignore[no-untyped-def]
-    with Path("/tmp/channel-provider-security-apply.log").open("a", encoding="utf-8") as log:
+    log_path = Path(tempfile.gettempdir()) / "channel-provider-security-apply.log"
+    with log_path.open("a", encoding="utf-8") as log:
         traceback.print_exception(exc_type, exc_value, exc_traceback, file=log)
     sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
@@ -16,10 +23,18 @@ sys.excepthook = _log_unhandled
 crud_path = Path("src/backend/base/langflow/services/database/models/channel/crud.py")
 crud = crud_path.read_text(encoding="utf-8")
 if "from langflow.channels.security.provider_credentials import validate_channel_provider_credentials\n" not in crud:
+    credentials_import = (
+        "from langflow.channels.security.credentials import decrypt_credentials, encrypt_credentials, "
+        "list_credential_keys\n"
+    )
+    validated_credentials_import = (
+        "from langflow.channels.security.credentials import decrypt_credentials, encrypt_credentials, "
+        "list_credential_keys\n"
+        "from langflow.channels.security.provider_credentials import validate_channel_provider_credentials\n"
+    )
     crud = crud.replace(
-        "from langflow.channels.security.credentials import decrypt_credentials, encrypt_credentials, list_credential_keys\n",
-        "from langflow.channels.security.credentials import decrypt_credentials, encrypt_credentials, list_credential_keys\n"
-        "from langflow.channels.security.provider_credentials import validate_channel_provider_credentials\n",
+        credentials_import,
+        validated_credentials_import,
         1,
     )
 create_marker = """async def create_channel_connection(
@@ -43,13 +58,13 @@ create_replacement = """async def create_channel_connection(
 """
 if create_replacement not in crud:
     if create_marker not in crud:
-        raise RuntimeError("Missing current connection create marker")
+        raise RuntimeError(MISSING_CREATE_MARKER_ERROR)
     crud = crud.replace(create_marker, create_replacement, 1)
 
 update_start = crud.find("async def update_channel_connection(\n")
 update_end = crud.find("async def delete_channel_connection(", update_start)
 if update_start < 0 or update_end < 0:
-    raise RuntimeError("Missing current connection update block")
+    raise RuntimeError(MISSING_UPDATE_BLOCK_ERROR)
 updated_function = """async def update_channel_connection(
     session: AsyncSession,
     connection: ChannelConnection,
@@ -124,7 +139,7 @@ factory_replacement = """    channel_type = ChannelType(connection.channel_type)
 """
 if factory_replacement not in factory:
     if factory_marker not in factory:
-        raise RuntimeError("Missing current adapter factory marker")
+        raise RuntimeError(MISSING_FACTORY_MARKER_ERROR)
     factory = factory.replace(factory_marker, factory_replacement, 1)
 factory_path.write_text(factory, encoding="utf-8")
 
@@ -157,7 +172,8 @@ for route_name in ("async def create_channel_connection_route", "async def updat
         continue
     marker_index = api.find(integrity_marker, route_start, route_end)
     if marker_index < 0:
-        raise RuntimeError(f"Missing credential error insertion marker for {route_name}")
+        msg = f"Missing credential error insertion marker for {route_name}"
+        raise RuntimeError(msg)
     api = api[:marker_index] + error_branch + api[marker_index:]
 api_path.write_text(api, encoding="utf-8")
 
@@ -166,5 +182,5 @@ apply_content = apply_path.read_text(encoding="utf-8")
 section_start = apply_content.find("# Validate provider credentials before persistence")
 section_end = apply_content.find("# Telegram callback verification", section_start)
 if section_start < 0 or section_end < 0:
-    raise RuntimeError("Missing generic provider-security integration section")
+    raise RuntimeError(MISSING_INTEGRATION_SECTION_ERROR)
 apply_path.write_text(apply_content[:section_start] + apply_content[section_end:], encoding="utf-8")

@@ -23,7 +23,7 @@ from langflow.channels.domain.models import (
     ChannelUser,
 )
 
-_TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token"
+_TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token"  # pragma: allowlist secret
 
 
 class TelegramAPIError(RuntimeError):
@@ -68,7 +68,7 @@ class TelegramChannelAdapter(ChannelAdapter):
     async def verify_event(self, headers: dict[str, str], payload: bytes) -> bool:
         del payload
         if self.webhook_secret is None:
-            return True
+            return False
         provided = headers.get(_TELEGRAM_SECRET_HEADER, "")
         return hmac.compare_digest(provided, self.webhook_secret)
 

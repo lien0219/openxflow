@@ -259,7 +259,10 @@ async def cleanup_outbound_deliveries(session: AsyncSession) -> dict[str, int]:
             )
         ).all()
     )
-    counts = {kind.value: 0 for kind in ChannelOutboundDeliveryKind}
+    counts = {
+        ChannelOutboundDeliveryKind.ACKNOWLEDGEMENT.value: 0,
+        ChannelOutboundDeliveryKind.RESPONSE.value: 0,
+    }
     if not rows:
         await session.rollback()
         return counts
@@ -269,7 +272,7 @@ async def cleanup_outbound_deliveries(session: AsyncSession) -> dict[str, int]:
     for _delivery_id, raw_kind in rows:
         kind = _delivery_kind_value(raw_kind)
         if kind is not None:
-            counts[kind] += 1
+            counts[kind] = counts.get(kind, 0) + 1
     for kind, count in counts.items():
         record_outbound_delivery_cleaned(kind, count)
     return counts

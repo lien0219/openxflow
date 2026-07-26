@@ -255,7 +255,22 @@ def _webhook_limiter_from_env() -> WebhookProcessingLimiter:
 _webhook_limiter = _webhook_limiter_from_env()
 
 
+def _refresh_webhook_limiter_if_idle() -> None:
+    global _webhook_limiter
+    snapshot = _webhook_limiter.snapshot()
+    if snapshot.pending != 0 or snapshot.active != 0 or snapshot.pending_bytes != 0:
+        return
+    limits = webhook_limiter_limits_from_env()
+    if (
+        snapshot.max_concurrency != limits.max_concurrency
+        or snapshot.max_pending != limits.max_pending
+        or snapshot.max_pending_bytes != limits.max_pending_bytes
+    ):
+        _webhook_limiter = _webhook_limiter_from_env()
+
+
 def reserve_provider_webhook_slot(payload_size: int = 0) -> WebhookReservation | None:
+    _refresh_webhook_limiter_if_idle()
     return _webhook_limiter.try_reserve(payload_size)
 
 
@@ -268,6 +283,7 @@ def record_provider_webhook_client_disconnect() -> None:
 
 
 def webhook_limiter_snapshot() -> WebhookLimiterSnapshot:
+    _refresh_webhook_limiter_if_idle()
     return _webhook_limiter.snapshot()
 
 

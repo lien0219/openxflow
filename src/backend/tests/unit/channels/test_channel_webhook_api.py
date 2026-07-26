@@ -134,7 +134,13 @@ async def test_durable_webhook_is_committed_without_background_task(monkeypatch)
     assert captured["channel_type"] == "telegram"
     assert captured["external_event_id"] == "event-1"
     assert captured["payload"] == b'{"message":"hello"}'
-    assert captured["headers"] == {"x-telegram-bot-api-secret-token": "secret"}
+    assert captured["headers"] == {
+        "x-openxflow-preverified": "1",
+        "content-type": "application/json",
+    }
+    assert "authorization" not in captured["headers"]
+    assert "cookie" not in captured["headers"]
+    assert "x-telegram-bot-api-secret-token" not in captured["headers"]
     assert background_tasks.tasks == []
 
 

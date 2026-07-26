@@ -31,6 +31,15 @@ def _indexes(table_name: str, conn) -> set[str]:
     return {index["name"] for index in sa.inspect(conn).get_indexes(table_name)}
 
 
+def _find_foreign_key_name(table_name: str, columns: list[str], referred_table: str, conn) -> str | None:
+    if not migration.table_exists(table_name, conn):
+        return None
+    for foreign_key in sa.inspect(conn).get_foreign_keys(table_name):
+        if foreign_key["constrained_columns"] == columns and foreign_key["referred_table"] == referred_table:
+            return foreign_key["name"]
+    return None
+
+
 def _add_column(table_name: str, column: sa.Column, conn) -> None:
     if column.name not in _columns(table_name, conn):
         op.add_column(table_name, column)
@@ -39,6 +48,22 @@ def _add_column(table_name: str, column: sa.Column, conn) -> None:
 def _create_index(name: str, table_name: str, columns: list[str], conn) -> None:
     if name not in _indexes(table_name, conn):
         op.create_index(name, table_name, columns, unique=False)
+
+
+def _create_foreign_key(
+    name: str,
+    table_name: str,
+    referred_table: str,
+    columns: list[str],
+    referred_columns: list[str],
+    conn,
+    *,
+    ondelete: str,
+) -> None:
+    if _find_foreign_key_name(table_name, columns, referred_table, conn) is not None:
+        return
+    with op.batch_alter_table(table_name, recreate="always" if conn.dialect.name == "sqlite" else "auto") as batch:
+        batch.create_foreign_key(name, referred_table, columns, referred_columns, ondelete=ondelete)
 
 
 def upgrade() -> None:
@@ -60,6 +85,15 @@ def upgrade() -> None:
     ):
         _add_column("channel_connection", column, conn)
     conn.execute(sa.text("UPDATE channel_connection SET service_user_id = user_id WHERE service_user_id IS NULL"))
+    _create_foreign_key(
+        "fk_channel_connection_service_user_id_user",
+        "channel_connection",
+        "user",
+        ["service_user_id"],
+        ["id"],
+        conn,
+        ondelete="SET NULL",
+    )
     _create_index("ix_channel_connection_service_user_id", "channel_connection", ["service_user_id"], conn)
 
     for column in (
@@ -102,8 +136,8 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
     ):
         _add_column("channel_execution_log", column, conn)
-    _create_index("ix_channel_execution_external_user_id", "channel_execution_log", ["external_user_id"], conn)
-    _create_index("ix_channel_execution_session_id", "channel_execution_log", ["session_id"], conn)
+    _create_index("ix_channel_execution_log_external_user_id", "channel_execution_log", ["external_user_id"], conn)
+    _create_index("ix_channel_execution_log_session_id", "channel_execution_log", ["session_id"], conn)
     _create_index(
         "ix_channel_execution_external_user_created",
         "channel_execution_log",
@@ -120,7 +154,8 @@ def upgrade() -> None:
         _add_column("channel_webhook_job", column, conn)
     conn.execute(
         sa.text(
-            "UPDATE channel_webhook_job SET queue_key = CAST(connection_id AS VARCHAR) || ':legacy:' || external_event_id "
+            "UPDATE channel_webhook_job "
+            "SET queue_key = CAST(connection_id AS VARCHAR) || ':legacy:' || external_event_id "
             "WHERE queue_key = ''"
         )
     )
@@ -226,7 +261,9 @@ def downgrade() -> None:
             "channel_execution_log",
             (
                 "ix_channel_execution_external_user_id",
+                "ix_channel_execution_log_external_user_id",
                 "ix_channel_execution_session_id",
+                "ix_channel_execution_log_session_id",
                 "ix_channel_execution_external_user_created",
             ),
         ),
@@ -236,6 +273,14 @@ def downgrade() -> None:
         for index_name in index_names:
             if index_name in existing_indexes:
                 op.drop_index(index_name, table_name=table_name)
+
+    service_user_fk_name = _find_foreign_key_name("channel_connection", ["service_user_id"], "user", conn)
+    if service_user_fk_name is not None:
+        with op.batch_alter_table(
+            "channel_connection",
+            recreate="always" if conn.dialect.name == "sqlite" else "auto",
+        ) as batch:
+            batch.drop_constraint(service_user_fk_name, type_="foreignkey")
 
     for table_name, columns in (
         (

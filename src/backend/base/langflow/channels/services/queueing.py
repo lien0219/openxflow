@@ -40,11 +40,14 @@ async def resolve_channel_queue_descriptor(
     connection: ChannelConnection,
     event: ChannelEvent,
 ) -> ChannelQueueDescriptor:
-    statement = select(ChannelConversationBinding).where(
-        ChannelConversationBinding.connection_id == connection.id,
-        ChannelConversationBinding.external_conversation_id == event.conversation.external_conversation_id,
-    )
-    binding = (await session.exec(statement)).first()
+    binding = None
+    exec_statement = getattr(session, "exec", None)
+    if exec_statement is not None:
+        statement = select(ChannelConversationBinding).where(
+            ChannelConversationBinding.connection_id == connection.id,
+            ChannelConversationBinding.external_conversation_id == event.conversation.external_conversation_id,
+        )
+        binding = (await exec_statement(statement)).first()
     context_mode = effective_context_mode(connection, binding)
     conversation_type = event.conversation.conversation_type
     scope_id = conversation_scope_id(event)
