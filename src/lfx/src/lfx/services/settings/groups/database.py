@@ -60,10 +60,9 @@ class DatabaseSettings(BaseModel):
         "echo": False,
     }
     """Database connection settings optimized for high load scenarios.
-    Note: These settings are most effective with PostgreSQL. For SQLite:
-    - Reduce pool_size and max_overflow if experiencing lock contention
-    - SQLite has limited concurrent write capability even with WAL mode
-    - Best for read-heavy or moderate write workloads
+    Note: These settings are most effective with PostgreSQL. SQLite is forced to a
+    bounded pool so concurrent async tasks do not create dozens of competing
+    writers against SQLite's single-writer lock.
 
     Settings:
     - pool_size: Number of connections to maintain (increase for higher concurrency)
@@ -155,3 +154,32 @@ class DatabaseSettings(BaseModel):
             value = f"sqlite:///{final_path}"
 
         return value
+
+    @field_validator("db_connection_settings", mode="after")
+    @classmethod
+    def serialize_sqlite_pool(cls, value, info):
+        """Bound SQLite connection concurrency without disabling async reads.
+
+        WAL mode and ``busy_timeout`` improve coexistence with readers and short
+        external locks, but SQLite still permits only one writer. The PostgreSQL-
+        oriented default of up to 50 pooled connections creates excessive lock
+        contention for local SQLite. A small bounded pool keeps nested helper
+        sessions working while short write transactions serialize reliably.
+        """
+        database_url = str(os.getenv("LANGFLOW_DATABASE_URL") or info.data.get("database_url") or "")
+        if not database_url.startswith("sqlite"):
+            return value
+
+        connection_settings = dict(value or {})
+        try:
+            pool_size = int(connection_settings.get("pool_size", 5))
+        except (TypeError, ValueError):
+            pool_size = 5
+        connection_settings["pool_size"] = min(5, max(1, pool_size))
+        connection_settings["max_overflow"] = 0
+        try:
+            pool_timeout = int(connection_settings.get("pool_timeout", 30))
+        except (TypeError, ValueError):
+            pool_timeout = 30
+        connection_settings["pool_timeout"] = max(30, pool_timeout)
+        return connection_settings
