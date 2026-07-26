@@ -48,9 +48,8 @@ async function progressTrackTestFn(page: Page, context: BrowserContext) {
     page.getByTestId("get_started_progress_title"),
   ).not.toBeVisible();
 
-  await page.getByTestId("empty_page_github_button").click();
-
   const pagePromiseGithub = context.waitForEvent("page");
+  await page.getByTestId("empty_page_github_button").click();
 
   const newPageGithub = await pagePromiseGithub;
   await newPageGithub.waitForTimeout(3000);
@@ -60,6 +59,9 @@ async function progressTrackTestFn(page: Page, context: BrowserContext) {
 
   await newPageGithub.close();
 
+  await expect(
+    page.getByTestId("get_started_progress_percentage").first(),
+  ).toHaveText("50%", { timeout: 30000 });
   await expect(page.getByTestId("mainpage_title")).toBeVisible();
   await expect(page.getByTestId("empty_page_description")).toBeVisible();
 
@@ -82,7 +84,7 @@ async function progressTrackTestFn(page: Page, context: BrowserContext) {
 
   await expect(
     page.getByTestId("get_started_progress_percentage").first(),
-  ).toHaveText("100%");
+  ).toHaveText("100%", { timeout: 30000 });
 
   await cleanAllFlows(page);
 

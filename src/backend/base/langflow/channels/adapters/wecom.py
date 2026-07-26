@@ -28,6 +28,8 @@ from langflow.channels.domain.models import (
 from langflow.channels.security.wecom_crypto import WeComCryptoError, WeComMessageCrypt
 from langflow.channels.services.loop_lock import LoopLocalAsyncLock
 
+_WECOM_CALLBACK_MAX_AGE_SECONDS = 5 * 60
+
 
 class WeComAPIError(RuntimeError):
     """Raised when Enterprise WeChat returns a non-zero business code."""
@@ -135,6 +137,14 @@ class WeComChannelAdapter(ChannelAdapter):
         if error_code not in {0, "0", None, ""}:
             raise WeComAPIError(str(body.get("errmsg") or error_code))
 
+    @staticmethod
+    def _callback_timestamp_is_fresh(timestamp: str) -> bool:
+        try:
+            callback_time = int(timestamp)
+        except (TypeError, ValueError):
+            return False
+        return abs(int(time.time()) - callback_time) <= _WECOM_CALLBACK_MAX_AGE_SECONDS
+
     def verify_url(
         self,
         *,
@@ -143,6 +153,8 @@ class WeComChannelAdapter(ChannelAdapter):
         nonce: str,
         echo: str,
     ) -> str:
+        if not self._callback_timestamp_is_fresh(timestamp):
+            raise PermissionError("Expired WeCom callback timestamp")
         encrypted = unquote(echo)
         if not self.crypt.verify_signature(signature, timestamp, nonce, encrypted):
             raise PermissionError("Invalid WeCom callback signature")
@@ -157,6 +169,8 @@ class WeComChannelAdapter(ChannelAdapter):
         signature = headers.get("x-wecom-msg-signature", "")
         timestamp = headers.get("x-wecom-timestamp", "")
         nonce = headers.get("x-wecom-nonce", "")
+        if not self._callback_timestamp_is_fresh(timestamp):
+            return False
         if not (
             encrypted
             and signature

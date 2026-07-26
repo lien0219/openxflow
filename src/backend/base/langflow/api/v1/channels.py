@@ -13,6 +13,9 @@ from sqlalchemy.exc import IntegrityError
 from langflow.api.utils import CurrentActiveUser, DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.telegram import TelegramChannelAdapter
+from langflow.channels.security.provider_credentials import (
+    ChannelProviderCredentialError,
+)
 from langflow.channels.services.capabilities import (
     ChannelProviderCapabilities,
     get_provider_capabilities,
@@ -101,6 +104,12 @@ async def create_channel_connection_route(
     await validate_connection_routing_resources(db, current_user, payload)
     try:
         result = await create_channel_connection(db, current_user.id, payload)
+    except ChannelProviderCredentialError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
@@ -143,6 +152,12 @@ async def update_channel_connection_route(
     )
     try:
         result = await update_channel_connection(db, connection, payload)
+    except ChannelProviderCredentialError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(

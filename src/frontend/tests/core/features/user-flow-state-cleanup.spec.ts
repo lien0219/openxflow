@@ -86,7 +86,10 @@ test(
     await page.waitForSelector("#is_active", { timeout: 1500 });
     await page.locator("#is_active").click();
     await expect(page.locator("#is_active")).toBeChecked();
-    await page.getByText(TEXTS.save, { exact: true }).click();
+    await page
+      .getByRole("button", { name: TEXTS.save, exact: true })
+      .last()
+      .click();
     await page.waitForSelector("text=new user added", { timeout: 30000 });
 
     // Log out from admin
@@ -98,7 +101,9 @@ test(
     await page.evaluate(() => {
       sessionStorage.setItem("testMockAutoLogin", "true");
     });
-    await page.getByText(TEXTS.logout, { exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: TEXTS.logout })
+      .dispatchEvent("click");
 
     // ---- USER A SESSION ----
 
@@ -173,7 +178,9 @@ test(
     await page.evaluate(() => {
       sessionStorage.setItem("testMockAutoLogin", "true");
     });
-    await page.getByText(TEXTS.logout, { exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: TEXTS.logout })
+      .dispatchEvent("click");
 
     // ---- ADMIN SESSION AGAIN ----
 

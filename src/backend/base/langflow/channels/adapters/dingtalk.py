@@ -28,7 +28,7 @@ from langflow.channels.domain.models import (
 )
 from langflow.channels.services.loop_lock import LoopLocalAsyncLock
 
-_DINGTALK_SIGNATURE_MAX_AGE_MS = 60 * 60 * 1000
+_DINGTALK_SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000
 _DINGTALK_DOWNLOAD_HOST_SUFFIXES = (".aliyuncs.com", ".dingtalk.com")
 
 
