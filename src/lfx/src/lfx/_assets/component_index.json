@@ -96413,7 +96413,7 @@
                 },
                 {
                   "name": "gassist",
-                  "version": "0.0.1"
+                  "version": null
                 }
               ],
               "total_dependencies": 2
@@ -101148,7 +101148,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": null
+                  "version": "1.11.0"
                 }
               ],
               "total_dependencies": 3
@@ -103120,7 +103120,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": null
+                  "version": "1.11.0"
                 }
               ],
               "total_dependencies": 3
@@ -118991,6 +118991,6 @@
     "num_components": 355,
     "num_modules": 96
   },
-  "sha256": "e22133d066fdc9b07a54c37438a6bd90f116d60db2549ad95d7ef9b4e65a6e15",
+  "sha256": "f0d3697cb2b874935788db260f5691f0e7eb32a41f9d1fa312e4eb845291a8b9",
   "version": "1.10.2"
 }
