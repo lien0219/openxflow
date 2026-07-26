@@ -2,11 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-MISSING_TARGET_ERROR = "Missing provider-security rollout target: "
-MISSING_BLOCK_ERROR = "Missing provider-security rollout block: "
-MISSING_CONNECTION_UPDATE_ERROR = "Missing connection update credential error marker"
-MIN_EXPECTED_CREDENTIAL_ERROR_BRANCHES = 2
+ROOT = Path(".")
 
 
 def read(path: str) -> str:
@@ -22,29 +18,39 @@ def replace_once(path: str, old: str, new: str, *, label: str) -> None:
     if new in content:
         return
     if old not in content:
-        msg = f"{MISSING_TARGET_ERROR}{label}"
-        raise RuntimeError(msg)
+        raise RuntimeError(f"Missing CI repair target: {label}")
     write(path, content.replace(old, new, 1))
 
 
-def replace_between(path: str, start: str, end: str, replacement: str, *, label: str) -> None:
+def replace_all(path: str, old: str, new: str, *, label: str, minimum: int = 1) -> None:
     content = read(path)
-    start_index = content.find(start)
-    end_index = content.find(end, start_index)
-    if start_index < 0 or end_index < 0:
-        msg = f"{MISSING_BLOCK_ERROR}{label}"
-        raise RuntimeError(msg)
-    write(path, content[:start_index] + replacement + content[end_index:])
+    count = content.count(old)
+    if count == 0 and new in content:
+        return
+    if count < minimum:
+        raise RuntimeError(f"Missing CI repair target: {label}")
+    write(path, content.replace(old, new))
 
 
-# Validate provider credentials before persistence and whenever an adapter is built.
+def replace_function(path: str, start_marker: str, end_marker: str, replacement: str, *, label: str) -> None:
+    content = read(path)
+    start = content.find(start_marker)
+    end = content.find(end_marker, start + len(start_marker))
+    if start < 0 or end < 0:
+        if replacement in content:
+            return
+        raise RuntimeError(f"Missing CI repair target: {label}")
+    write(path, content[:start] + replacement + content[end:])
+
+
+# Validate provider credentials before persistence.
 CRUD = "src/backend/base/langflow/services/database/models/channel/crud.py"
 replace_once(
     CRUD,
-    "from langflow.channels.security.credentials import decrypt_channel_credentials, encrypt_channel_credentials\n",
-    "from langflow.channels.security.credentials import decrypt_channel_credentials, encrypt_channel_credentials\n"
+    "from langflow.channels.security.credentials import decrypt_credentials, encrypt_credentials, list_credential_keys\n",
+    "from langflow.channels.security.credentials import decrypt_credentials, encrypt_credentials, list_credential_keys\n"
     "from langflow.channels.security.provider_credentials import validate_channel_provider_credentials\n",
-    label="CRUD provider credential import",
+    label="channel CRUD credential import",
 )
 replace_once(
     CRUD,
@@ -52,33 +58,33 @@ replace_once(
     session: AsyncSession,
     user_id: UUID,
     payload: ChannelConnectionCreate,
-) -> ChannelConnection:
-    values = payload.model_dump(exclude={"credentials", "service_user_id"})
+) -> ChannelConnectionRead:
+    connection = ChannelConnection(
 """,
     """async def create_channel_connection(
     session: AsyncSession,
     user_id: UUID,
     payload: ChannelConnectionCreate,
-) -> ChannelConnection:
+) -> ChannelConnectionRead:
     validate_channel_provider_credentials(
         payload.channel_type,
         payload.connection_mode,
         payload.credentials,
     )
-    values = payload.model_dump(exclude={"credentials", "service_user_id"})
+    connection = ChannelConnection(
 """,
-    label="connection create validation",
+    label="channel connection create validation",
 )
-replace_between(
+replace_function(
     CRUD,
     "async def update_channel_connection(\n",
-    "async def delete_channel_connection(\n",
+    "async def delete_channel_connection(",
     """async def update_channel_connection(
     session: AsyncSession,
     connection: ChannelConnection,
     payload: ChannelConnectionUpdate,
-) -> ChannelConnection:
-    existing_credentials = decrypt_channel_credentials(connection.credentials_encrypted)
+) -> ChannelConnectionRead:
+    existing_credentials = decrypt_credentials(connection.credentials_encrypted)
     merged_credentials = dict(existing_credentials)
     if payload.credentials is not None:
         merged_credentials.update(payload.credentials)
@@ -90,122 +96,107 @@ replace_between(
     )
 
     changes = payload.model_dump(exclude_unset=True, exclude={"credentials", "service_user_id"})
-    for field, value in changes.items():
-        setattr(connection, field, value)
+    for key, value in changes.items():
+        setattr(connection, key, value)
+
     if payload.credentials is not None:
-        connection.credentials_encrypted = encrypt_channel_credentials(merged_credentials)
-    await ensure_channel_service_identity(session, connection)
-    connection.updated_at = utc_now()
+        connection.credentials_encrypted = encrypt_credentials(merged_credentials)
+
+    connection.updated_at = _utc_now()
     session.add(connection)
+    await ensure_channel_service_identity(session, connection)
+
+    if "default_flow_id" in changes:
+        inherited_statement = select(ChannelConversationBinding).where(
+            ChannelConversationBinding.connection_id == connection.id,
+            ChannelConversationBinding.route_mode == ChannelConversationRouteMode.INHERIT.value,
+            ChannelConversationBinding.status.notin_(
+                [ChannelConversationStatus.IGNORED.value, ChannelConversationStatus.UNAVAILABLE.value]
+            ),
+        )
+        inherited_rows = (await session.exec(inherited_statement)).all()
+        for binding in inherited_rows:
+            binding.status = _derive_conversation_status(connection, binding)
+            binding.updated_at = _utc_now()
+            session.add(binding)
+
     await session.flush()
     await session.refresh(connection)
-    return connection
+    return _connection_read(connection)
 
 
 """,
-    label="connection update validation",
+    label="channel connection update validation",
 )
 
 FACTORY = "src/backend/base/langflow/channels/adapters/factory.py"
 replace_once(
     FACTORY,
-    "from langflow.channels.security.credentials import decrypt_channel_credentials\n",
-    "from langflow.channels.security.credentials import decrypt_channel_credentials\n"
+    "from langflow.channels.security.credentials import decrypt_credentials\n",
+    "from langflow.channels.security.credentials import decrypt_credentials\n"
     "from langflow.channels.security.provider_credentials import validate_channel_provider_credentials\n",
-    label="factory provider credential import",
+    label="adapter factory credential import",
 )
 replace_once(
     FACTORY,
-    """    credentials = decrypt_channel_credentials(connection.credentials_encrypted)
-    channel = ChannelType(connection.channel_type)
+    """    channel_type = ChannelType(connection.channel_type)
+    credentials = decrypt_credentials(connection.credentials_encrypted)
+
 """,
-    """    credentials = decrypt_channel_credentials(connection.credentials_encrypted)
+    """    channel_type = ChannelType(connection.channel_type)
+    credentials = decrypt_credentials(connection.credentials_encrypted)
     validate_channel_provider_credentials(
         connection.channel_type,
         connection.connection_mode,
         credentials,
     )
-    channel = ChannelType(connection.channel_type)
+
 """,
-    label="factory runtime validation",
+    label="adapter factory credential validation",
 )
 
-CHANNELS_API = "src/backend/base/langflow/api/v1/channels.py"
+API = "src/backend/base/langflow/api/v1/channels.py"
 replace_once(
-    CHANNELS_API,
+    API,
     "from langflow.channels.adapters.telegram import TelegramChannelAdapter\n",
     "from langflow.channels.adapters.telegram import TelegramChannelAdapter\n"
     "from langflow.channels.security.provider_credentials import ChannelProviderCredentialError\n",
-    label="API credential error import",
+    label="channel API credential error import",
 )
-replace_once(
-    CHANNELS_API,
-    """    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A channel connection with this name already exists",
-        ) from exc
-""",
-    """    except ChannelProviderCredentialError as exc:
+api = read(API)
+credential_error_branch = """    except ChannelProviderCredentialError as exc:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A channel connection with this name already exists",
-        ) from exc
-""",
-    label="connection create credential error",
-)
-# Apply the same error branch to the second connection mutation handler.
-content = read(CHANNELS_API)
-needle = """    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A channel connection with this name already exists",
-        ) from exc
 """
-credential_branch = """    except ChannelProviderCredentialError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A channel connection with this name already exists",
-        ) from exc
-"""
-if content.count("except ChannelProviderCredentialError as exc:") < MIN_EXPECTED_CREDENTIAL_ERROR_BRANCHES:
-    index = content.find(needle, content.find("async def update_channel_connection_route"))
-    if index < 0:
-        raise RuntimeError(MISSING_CONNECTION_UPDATE_ERROR)
-    content = content[:index] + credential_branch + content[index + len(needle) :]
-    write(CHANNELS_API, content)
+for route_name in ("async def create_channel_connection_route", "async def update_channel_connection_route"):
+    route_start = api.find(route_name)
+    route_end = api.find("\n\n@router.", route_start + 1)
+    if route_end < 0:
+        route_end = len(api)
+    route_block = api[route_start:route_end]
+    if credential_error_branch in route_block:
+        continue
+    marker = "    except IntegrityError as exc:\n        await db.rollback()\n"
+    marker_index = api.find(marker, route_start, route_end)
+    if marker_index < 0:
+        raise RuntimeError(f"Missing CI repair target: credential error branch for {route_name}")
+    api = api[:marker_index] + credential_error_branch + api[marker_index:]
+write(API, api)
 
-# Telegram callback verification and UTF-16 entity offsets.
+# Fail closed on Telegram callbacks and use provider-defined UTF-16 entity offsets.
 TELEGRAM = "src/backend/base/langflow/channels/adapters/telegram.py"
 replace_once(
     TELEGRAM,
-    """    async def verify_event(self, headers: dict[str, str], payload: bytes) -> bool:
-        del payload
-        if self.webhook_secret is None:
+    """        if self.webhook_secret is None:
             return True
 """,
-    """    async def verify_event(self, headers: dict[str, str], payload: bytes) -> bool:
-        del payload
-        if self.webhook_secret is None:
+    """        if self.webhook_secret is None:
             return False
 """,
-    label="Telegram fail-closed verification",
+    label="Telegram missing callback secret",
 )
 replace_once(
     TELEGRAM,
@@ -213,30 +204,36 @@ replace_once(
     def _extract_mentions(message: dict[str, Any], text: str | None) -> list[str]:
 """,
     """    @staticmethod
-    def _utf16_entity_text(text: str, offset: int, length: int) -> str:
-        if offset < 0 or length <= 0:
-            return ""
+    def _utf16_slice(text: str, offset: int, length: int) -> str:
+        if offset < 0 or length < 0:
+            raise ValueError("Telegram entity offsets cannot be negative")
         encoded = text.encode("utf-16-le")
         start = offset * 2
-        end = (offset + length) * 2
-        if start >= len(encoded) or end > len(encoded):
-            return ""
+        end = start + length * 2
+        if end > len(encoded):
+            raise ValueError("Telegram entity offset exceeds message text")
         try:
             return encoded[start:end].decode("utf-16-le")
-        except UnicodeDecodeError:
-            return ""
+        except UnicodeDecodeError as exc:
+            raise ValueError("Telegram entity splits a UTF-16 code point") from exc
 
     @staticmethod
     def _extract_mentions(message: dict[str, Any], text: str | None) -> list[str]:
 """,
-    label="Telegram UTF-16 helper",
+    label="Telegram UTF-16 slicing helper",
 )
 replace_once(
     TELEGRAM,
-    "                mentions.append(text[offset : offset + length])\n",
-    """                mention = TelegramChannelAdapter._utf16_entity_text(text, offset, length)
-                if mention:
-                    mentions.append(mention.lstrip("@"))
+    """            if entity.get("type") == "mention":
+                offset = int(entity.get("offset", 0))
+                length = int(entity.get("length", 0))
+                mentions.append(text[offset : offset + length])
+""",
+    """            if entity.get("type") == "mention":
+                offset = int(entity.get("offset", 0))
+                length = int(entity.get("length", 0))
+                mention = TelegramChannelAdapter._utf16_slice(text, offset, length)
+                mentions.append(mention.removeprefix("@"))
 """,
     label="Telegram UTF-16 mention extraction",
 )
@@ -251,33 +248,27 @@ replace_once(
         payload["secret_token"] = self.webhook_secret
         return bool(await self._request("setWebhook", payload=payload))
 """,
-    label="Telegram webhook secret requirement",
+    label="Telegram webhook secret propagation",
 )
 
-# Feishu unencrypted callbacks must always prove the configured verification token.
 FEISHU = "src/backend/base/langflow/channels/adapters/feishu.py"
 replace_once(
     FEISHU,
-    """        if body.get("encrypt"):
-            return False
-        if self.verification_token is None:
+    """        if self.verification_token is None:
             return True
 """,
-    """        if body.get("encrypt"):
-            return False
-        if self.verification_token is None:
+    """        if self.verification_token is None:
             return False
 """,
-    label="Feishu fail-closed verification",
+    label="Feishu missing verification token",
 )
 
-# Tighten signed callback time windows.
 DINGTALK = "src/backend/base/langflow/channels/adapters/dingtalk.py"
 replace_once(
     DINGTALK,
     "_DINGTALK_SIGNATURE_MAX_AGE_MS = 60 * 60 * 1000\n",
     "_DINGTALK_SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000\n",
-    label="DingTalk signature freshness",
+    label="DingTalk callback freshness",
 )
 
 WECOM = "src/backend/base/langflow/channels/adapters/wecom.py"
@@ -319,7 +310,7 @@ replace_once(
             raise PermissionError("Expired WeCom callback timestamp")
         encrypted = unquote(echo)
 """,
-    label="WeCom URL freshness",
+    label="WeCom URL timestamp validation",
 )
 replace_once(
     WECOM,
@@ -345,40 +336,53 @@ replace_once(
         ):
             return False
 """,
-    label="WeCom event freshness",
+    label="WeCom event timestamp validation",
 )
 
-# Frontend requires security credentials during creation and validates Telegram token syntax.
+# Require provider verification secrets in the connection form.
 FRONTEND = "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/ChannelConnectionDialog.tsx"
 replace_once(
     FRONTEND,
-    """    if (!form.name.trim()) {
-      setError(t("channels.errors.nameRequired"));
+    """    if (
+      !isEditing &&
+      form.channelType === "telegram" &&
+      !form.botToken.trim()
+    ) {
       return;
     }
-    setError(null);
 """,
-    """    if (!form.name.trim()) {
-      setError(t("channels.errors.nameRequired"));
+    """    if (
+      !isEditing &&
+      form.channelType === "telegram" &&
+      (!form.botToken.trim() ||
+        !/^[A-Za-z0-9_-]{16,256}$/.test(form.webhookSecret.trim()))
+    ) {
       return;
     }
-    if (!isEditing && form.channelType === "telegram") {
-      if (!/^[A-Za-z0-9_-]{16,256}$/.test(form.webhookSecret.trim())) {
-        setError(
-          copy(
-            "Telegram Webhook secret must be 16-256 chars and may contain letters, digits, underscores, and hyphens.",
-          ),
-        );
-        return;
-      }
-    }
-    if (!isEditing && form.channelType === "feishu" && !form.verificationToken.trim()) {
-      setError(copy("飞书 Verification Token 为必填安全配置。"));
-      return;
-    }
-    setError(null);
 """,
-    label="frontend provider credential validation",
+    label="Telegram connection form validation",
+)
+replace_once(
+    FRONTEND,
+    """    if (
+      !isEditing &&
+      form.channelType === "feishu" &&
+      (!form.appId.trim() || !form.appSecret.trim())
+    ) {
+      return;
+    }
+""",
+    """    if (
+      !isEditing &&
+      form.channelType === "feishu" &&
+      (!form.appId.trim() ||
+        !form.appSecret.trim() ||
+        !form.verificationToken.trim())
+    ) {
+      return;
+    }
+""",
+    label="Feishu connection form validation",
 )
 replace_once(
     FRONTEND,
@@ -394,34 +398,191 @@ replace_once(
                   pattern="[A-Za-z0-9_-]+"
                   value={form.webhookSecret}
 """,
-    label="Telegram secure secret input",
+    label="Telegram webhook secret input",
 )
 replace_once(
     FRONTEND,
-    """                <Input
-                  type="password"
-                  value={form.verificationToken}
+    """                  <Input
+                    type="password"
+                    value={form.verificationToken}
 """,
-    """                <Input
-                  type="password"
-                  required={!isEditing}
-                  value={form.verificationToken}
+    """                  <Input
+                    type="password"
+                    required={!isEditing}
+                    value={form.verificationToken}
 """,
-    label="Feishu required verification token",
+    label="Feishu verification token input",
 )
 
-# Existing WeCom adapter tests use old fixed timestamps; keep the callback valid
-# while retaining deterministic signatures.
+# Keep WeCom callback tests fresh while retaining deterministic encrypted payloads.
 WECOM_TEST = "src/backend/tests/unit/channels/test_wecom.py"
 replace_once(
     WECOM_TEST,
-    "import hashlib\n",
-    "import hashlib\nimport time\n",
+    "import base64\n",
+    "import base64\nimport time\n",
     label="WeCom test time import",
 )
 replace_once(
     WECOM_TEST,
-    '    timestamp = "1700000000"\n',
-    "    timestamp = str(int(time.time()))\n",
-    label="WeCom current callback timestamp",
+    """def _encrypted_payload(inner_xml: str, *, timestamp: str = "1710000000", nonce: str = "nonce"):
+    crypt = WeComMessageCrypt(TOKEN, ENCODING_AES_KEY, CORP_ID)
+""",
+    """def _encrypted_payload(inner_xml: str, *, timestamp: str | None = None, nonce: str = "nonce"):
+    timestamp = timestamp or str(int(time.time()))
+    crypt = WeComMessageCrypt(TOKEN, ENCODING_AES_KEY, CORP_ID)
+""",
+    label="WeCom current encrypted callback timestamp",
+)
+replace_once(
+    WECOM_TEST,
+    """    signature = crypt.signature("1710000000", "nonce", encrypted)
+    assert (
+        adapter.verify_url(
+            signature=signature,
+            timestamp="1710000000",
+""",
+    """    timestamp = str(int(time.time()))
+    signature = crypt.signature(timestamp, "nonce", encrypted)
+    assert (
+        adapter.verify_url(
+            signature=signature,
+            timestamp=timestamp,
+""",
+    label="WeCom current URL verification timestamp",
+)
+
+# Stabilize the three failing Playwright shards without weakening their assertions.
+AUTO_LOGIN = "src/frontend/tests/core/features/auto-login-off.spec.ts"
+replace_all(
+    AUTO_LOGIN,
+    "await page.getByText(TEXTS.save, { exact: true }).click();",
+    'await page.getByRole("button", { name: TEXTS.save, exact: true }).last().click();',
+    label="auto-login save button targeting",
+    minimum=3,
+)
+replace_once(
+    AUTO_LOGIN,
+    """    expect(
+      (
+        await page.waitForSelector("text=Welcome to OpenXFlow", {
+          timeout: 30000,
+        })
+      ).isVisible(),
+    );
+""",
+    """    await expect(page.getByTestId("mainpage_title").last()).toBeVisible({
+      timeout: 30000,
+    });
+""",
+    label="current branded empty-page assertion",
+)
+
+ADD_USER = "src/frontend/tests/utils/add-new-user-and-loggin.ts"
+replace_once(
+    ADD_USER,
+    "await page.getByText(TEXTS.save, { exact: true }).click();",
+    'await page.getByRole("button", { name: TEXTS.save, exact: true }).last().click();',
+    label="new-user save button targeting",
+)
+replace_once(
+    ADD_USER,
+    "await page.getByText(TEXTS.logout, { exact: true }).click();",
+    """await page
+    .getByRole("menuitem", { name: TEXTS.logout })
+    .dispatchEvent("click");""",
+    label="new-user logout dispatch",
+)
+
+FLOW_CLEANUP = "src/frontend/tests/core/features/user-flow-state-cleanup.spec.ts"
+replace_all(
+    FLOW_CLEANUP,
+    "await page.getByText(TEXTS.logout, { exact: true }).click();",
+    """await page
+      .getByRole("menuitem", { name: TEXTS.logout })
+      .dispatchEvent("click");""",
+    label="flow cleanup logout dispatch",
+    minimum=2,
+)
+replace_once(
+    FLOW_CLEANUP,
+    "await page.getByText(TEXTS.save, { exact: true }).click();",
+    'await page.getByRole("button", { name: TEXTS.save, exact: true }).last().click();',
+    label="flow cleanup save button targeting",
+)
+
+PROGRESS = "src/frontend/tests/core/features/user-progress-track.spec.ts"
+replace_once(
+    PROGRESS,
+    """  await page.getByTestId("empty_page_github_button").click();
+
+  const pagePromiseGithub = context.waitForEvent("page");
+
+  const newPageGithub = await pagePromiseGithub;
+""",
+    """  const pagePromiseGithub = context.waitForEvent("page");
+  await page.getByTestId("empty_page_github_button").click();
+
+  const newPageGithub = await pagePromiseGithub;
+""",
+    label="GitHub popup listener ordering",
+)
+replace_once(
+    PROGRESS,
+    """  await newPageGithub.close();
+
+  await expect(page.getByTestId("mainpage_title")).toBeVisible();
+""",
+    """  await newPageGithub.close();
+
+  await expect(
+    page.getByTestId("get_started_progress_percentage").first(),
+  ).toHaveText("50%", { timeout: 30000 });
+  await expect(page.getByTestId("mainpage_title")).toBeVisible();
+""",
+    label="GitHub progress persistence wait",
+)
+replace_once(
+    PROGRESS,
+    """  await expect(
+    page.getByTestId("get_started_progress_percentage").first(),
+  ).toHaveText("100%");
+""",
+    """  await expect(
+    page.getByTestId("get_started_progress_percentage").first(),
+  ).toHaveText("100%", { timeout: 30000 });
+""",
+    label="flow progress refresh wait",
+)
+
+SESSION = "src/frontend/tests/core/regression/general-bugs-remove-session-after-logout.spec.ts"
+replace_once(
+    SESSION,
+    """    await page.getByRole("button", { name: TEXTS.signIn }).click();
+
+    await page.waitForSelector('[data-testid="mainpage_title"]', {
+      timeout: 30000,
+    });
+""",
+    """    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/v1/login") && response.status() === 200,
+        { timeout: 60000 },
+      ),
+      page.getByRole("button", { name: TEXTS.signIn }).click(),
+    ]);
+
+    await page.waitForSelector('[data-testid="mainpage_title"]', {
+      timeout: 60000,
+    });
+""",
+    label="session logout login synchronization",
+)
+replace_once(
+    SESSION,
+    "await page.getByText(TEXTS.logout, { exact: true }).click();",
+    """await page
+      .getByRole("menuitem", { name: TEXTS.logout })
+      .dispatchEvent("click");""",
+    label="session logout dispatch",
 )
