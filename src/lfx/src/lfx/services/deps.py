@@ -52,12 +52,10 @@ def get_service(service_type: ServiceType, default=None):
         # ! Not optimal, but it works for now
 
         service_manager.register_factories(service_manager.get_factories())
-
     if ServiceType.SETTINGS_SERVICE not in service_manager.factories:
         from lfx.services.settings.factory import SettingsServiceFactory
 
         service_manager.register_factory(service_factory=SettingsServiceFactory())
-
     try:
         return service_manager.get(service_type, default)
     except Exception:  # noqa: BLE001
@@ -103,7 +101,6 @@ def get_variable_service() -> VariableServiceProtocol | None:
 
 
 def get_shared_component_cache_service() -> CacheServiceProtocol | None:
-    """Retrieves the shared component cache service instance."""
     from lfx.services.shared_component_cache.factory import SharedComponentCacheServiceFactory
 
     return get_service(ServiceType.SHARED_COMPONENT_CACHE_SERVICE, SharedComponentCacheServiceFactory())
@@ -157,7 +154,7 @@ def get_auth_service() -> AuthServiceProtocol | None:
 
 
 def _get_deployment_registry() -> AdapterRegistry[DeploymentServiceProtocol]:
-    """Retrieve the deployment adapter registry singleton.
+    """Retrieve a singleton deployment adapter instance by key.
 
     Discovery still needs to be triggered separately via
     ``registry.discover(config_dir=...)``.
@@ -214,6 +211,20 @@ async def injectable_session_scope():
         yield session
 
 
+async def _rollback_session(session: AsyncSession) -> None:
+    """Reset a failed transaction without masking the original application error.
+
+    SQLAlchemy marks a session inactive after a flush or commit failure. That
+    inactive state is precisely when an explicit rollback is required before the
+    session can be used or closed cleanly, so checking ``session.is_active`` here
+    is incorrect.
+    """
+    from sqlalchemy.exc import InvalidRequestError
+
+    with suppress(InvalidRequestError):
+        await session.rollback()
+
+
 @asynccontextmanager
 async def session_scope() -> AsyncGenerator[AsyncSession, None]:
     """Context manager for managing an async session scope with auto-commit for write operations.
@@ -238,23 +249,12 @@ async def session_scope() -> AsyncGenerator[AsyncSession, None]:
             # HTTPExceptions are control flow in FastAPI (returning 4xx/5xx responses),
             # not actual errors. Don't log them - FastAPI's exception handlers will
             # take care of the HTTP response. Just rollback any uncommitted changes.
-            if session.is_active:
-                from sqlalchemy.exc import InvalidRequestError
-
-                with suppress(InvalidRequestError):
-                    await session.rollback()
+            await _rollback_session(session)
             raise
         except Exception as e:
             # Actual application/database errors - log at error level
             await logger.aexception("An error occurred during the session scope.", exception=e)
-
-            # Only rollback if session is still in a valid state
-            if session.is_active:
-                from sqlalchemy.exc import InvalidRequestError
-
-                with suppress(InvalidRequestError):
-                    # Session was already rolled back by SQLAlchemy
-                    await session.rollback()
+            await _rollback_session(session)
             raise
         # No explicit close needed - _with_session() handles it
 
