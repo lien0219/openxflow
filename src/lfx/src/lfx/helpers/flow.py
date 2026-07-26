@@ -63,6 +63,14 @@ def get_arg_names(inputs: list[Vertex]) -> list[dict[str, str]]:
     ]
 
 
+def _get_backend_flow_helpers():
+    try:
+        from langflow.helpers import flow as backend_flow
+    except Exception:  # noqa: BLE001
+        return None
+    return backend_flow
+
+
 async def list_flows(*, user_id: str | None = None) -> list[Data]:
     """List flows for a user.
 
@@ -78,6 +86,9 @@ async def list_flows(*, user_id: str | None = None) -> list[Data]:
     if not user_id:
         msg = "Session is invalid"
         raise ValueError(msg)
+    backend_flow = _get_backend_flow_helpers()
+    if backend_flow is not None:
+        return await backend_flow.list_flows(user_id=user_id)
 
     # In lfx, we don't have a database backend by default
     # This is a stub implementation
@@ -89,7 +100,7 @@ async def list_flows_by_flow_folder(
     *,
     user_id: str | None = None,
     flow_id: str | None = None,
-    order_params: dict | None = {"column": "updated_at", "direction": "desc"},  # noqa: B006, ARG001
+    order_params: dict | None = {"column": "updated_at", "direction": "desc"},  # noqa: B006
 ) -> list[Data]:
     """Lists flows for the given user and in the same folder as the specified flow.
 
@@ -124,6 +135,13 @@ async def list_flows_by_flow_folder(
     if not flow_id:
         msg = "Flow ID is required"
         raise ValueError(msg)
+    backend_flow = _get_backend_flow_helpers()
+    if backend_flow is not None:
+        return await backend_flow.list_flows_by_flow_folder(
+            user_id=user_id,
+            flow_id=flow_id,
+            order_params=order_params,
+        )
 
     # In lfx, we don't have a database backend by default
     # This is a stub implementation
@@ -162,6 +180,9 @@ async def list_flows_by_folder_id(
     if not folder_id:
         msg = "Folder ID is required"
         raise ValueError(msg)
+    backend_flow = _get_backend_flow_helpers()
+    if backend_flow is not None:
+        return await backend_flow.list_flows_by_folder_id(user_id=user_id, folder_id=folder_id)
 
     # In lfx, we don't have a database backend by default
     # This is a stub implementation
@@ -195,6 +216,13 @@ async def get_flow_by_id_or_name(
     if not (flow_id or flow_name):
         msg = "Flow ID or Flow Name is required"
         raise ValueError(msg)
+    backend_flow = _get_backend_flow_helpers()
+    if backend_flow is not None:
+        return await backend_flow.get_flow_by_id_or_name(
+            user_id=user_id,
+            flow_id=flow_id,
+            flow_name=flow_name,
+        )
 
     # In lfx, we don't have a database backend by default
     # This is a stub implementation
@@ -203,10 +231,10 @@ async def get_flow_by_id_or_name(
 
 
 async def load_flow(
-    user_id: str,  # noqa: ARG001
+    user_id: str,
     flow_id: str | None = None,
     flow_name: str | None = None,
-    tweaks: dict | None = None,  # noqa: ARG001
+    tweaks: dict | None = None,
 ) -> Graph:
     """Load a flow by ID or name.
 
@@ -225,6 +253,14 @@ async def load_flow(
     if not flow_id and not flow_name:
         msg = "Flow ID or Flow Name is required"
         raise ValueError(msg)
+    backend_flow = _get_backend_flow_helpers()
+    if backend_flow is not None:
+        return await backend_flow.load_flow(
+            user_id=user_id,
+            flow_id=flow_id,
+            flow_name=flow_name,
+            tweaks=tweaks,
+        )
 
     # In lfx, we don't have a database backend by default
     # This is a stub implementation
@@ -234,9 +270,9 @@ async def load_flow(
 
 async def run_flow(
     inputs: dict | list[dict] | None = None,
-    tweaks: dict | None = None,  # noqa: ARG001
-    flow_id: str | None = None,  # noqa: ARG001
-    flow_name: str | None = None,  # noqa: ARG001
+    tweaks: dict | None = None,
+    flow_id: str | None = None,
+    flow_name: str | None = None,
     output_type: str | None = "chat",
     user_id: str | None = None,
     run_id: str | None = None,
@@ -262,6 +298,19 @@ async def run_flow(
     if user_id is None:
         msg = "Session is invalid"
         raise ValueError(msg)
+    backend_flow = _get_backend_flow_helpers()
+    if backend_flow is not None:
+        return await backend_flow.run_flow(
+            inputs=inputs,
+            tweaks=tweaks,
+            flow_id=flow_id,
+            flow_name=flow_name,
+            output_type=output_type,
+            user_id=user_id,
+            run_id=run_id,
+            session_id=session_id,
+            graph=graph,
+        )
 
     if graph is None:
         # In lfx, we can't load flows from database

@@ -324,14 +324,26 @@ replace_once(
 replace_once(
     WECOM,
     """        nonce = headers.get("x-wecom-nonce", "")
-        return bool(
+        if not (
             encrypted
+            and signature
+            and timestamp
+            and nonce
+            and self.crypt.verify_signature(signature, timestamp, nonce, encrypted)
+        ):
+            return False
 """,
     """        nonce = headers.get("x-wecom-nonce", "")
         if not self._callback_timestamp_is_fresh(timestamp):
             return False
-        return bool(
+        if not (
             encrypted
+            and signature
+            and timestamp
+            and nonce
+            and self.crypt.verify_signature(signature, timestamp, nonce, encrypted)
+        ):
+            return False
 """,
     label="WeCom event freshness",
 )

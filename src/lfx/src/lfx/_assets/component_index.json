@@ -70404,6 +70404,213 @@
           },
           "tool_mode": false
         },
+        "MemoryBase": {
+          "base_classes": [
+            "Table"
+          ],
+          "beta": false,
+          "conditional_paths": [],
+          "custom_fields": {},
+          "description": "Retrieve long-term memory from a Memory Base attached to this workflow. When 'Filter by Session' is off, queries run across all sessions.",
+          "display_name": "Memory Base",
+          "documentation": "",
+          "edited": false,
+          "field_order": [
+            "memory_base",
+            "search_query",
+            "top_k",
+            "include_metadata",
+            "filter_by_session"
+          ],
+          "frozen": false,
+          "icon": "brain",
+          "legacy": false,
+          "metadata": {
+            "code_hash": "0871b1fe79e7",
+            "dependencies": {
+              "dependencies": [
+                {
+                  "name": "chromadb",
+                  "version": "1.5.9"
+                },
+                {
+                  "name": "numpy",
+                  "version": "2.4.6"
+                },
+                {
+                  "name": "langchain_chroma",
+                  "version": "0.2.6"
+                },
+                {
+                  "name": "langflow",
+                  "version": null
+                },
+                {
+                  "name": "sqlmodel",
+                  "version": "0.0.39"
+                },
+                {
+                  "name": "lfx",
+                  "version": null
+                }
+              ],
+              "total_dependencies": 6
+            },
+            "module": "lfx.components.files_and_knowledge.memory_retrieval.MemoryBaseComponent"
+          },
+          "minimized": false,
+          "output_types": [],
+          "outputs": [
+            {
+              "allows_loop": false,
+              "cache": true,
+              "display_name": "Results",
+              "group_outputs": false,
+              "method": "retrieve_memory",
+              "name": "retrieve_data",
+              "selected": "Table",
+              "tool_mode": true,
+              "types": [
+                "Table"
+              ],
+              "value": "__UNDEFINED__"
+            }
+          ],
+          "pinned": false,
+          "template": {
+            "_type": "Component",
+            "code": {
+              "advanced": true,
+              "dynamic": true,
+              "fileTypes": [],
+              "file_path": "",
+              "info": "",
+              "list": false,
+              "load_from_db": false,
+              "multiline": true,
+              "name": "code",
+              "password": false,
+              "placeholder": "",
+              "required": true,
+              "show": true,
+              "title_case": false,
+              "type": "code",
+              "value": "\"\"\"Memory Base retrieval component.\n\nQueries the auto-provisioned Chroma KB backing a Memory Base, scoped to the\ncurrent flow's request session. Additional option to filter by session_id if the\ndeveloper wants to turn that on. The component will auto filter based on session_id then.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport uuid\nfrom typing import TYPE_CHECKING, Any\n\nimport chromadb\nimport chromadb.api.client\nimport numpy as np\nfrom langchain_chroma import Chroma\nfrom langflow.api.utils.kb_helpers import KBIngestionHelper\nfrom langflow.services.database.models.memory_base.model import MemoryBase\nfrom langflow.services.database.models.user.crud import get_user_by_id\nfrom langflow.services.memory_base.kb_path_helpers import hash_session_id, validate_kb_path\nfrom sqlmodel import select\n\nfrom lfx.base.vectorstores.chroma_security import chroma_langchain_collection_kwargs\nfrom lfx.components.files_and_knowledge._kb_paths import (\n    get_knowledge_bases_root_path,\n    load_kb_metadata,\n)\nfrom lfx.custom import Component\nfrom lfx.io import BoolInput, DropdownInput, IntInput, MessageTextInput, Output\nfrom lfx.log.logger import logger\nfrom lfx.schema.data import Data\nfrom lfx.schema.dataframe import DataFrame\nfrom lfx.services.deps import session_scope\n\nif TYPE_CHECKING:\n    from pathlib import Path\n\n    from langflow.services.database.models.user.model import User\n    from sqlmodel.ext.asyncio.session import AsyncSession\n\n\ndef _coerce_uuid(value: Any) -> uuid.UUID | None:\n    if value is None:\n        return None\n    if isinstance(value, uuid.UUID):\n        return value\n    try:\n        return uuid.UUID(str(value))\n    except (ValueError, TypeError):\n        return None\n\n\ndef _distance_to_similarity(distance: float) -> float:\n    \"\"\"Chroma returns a distance; flip the sign so larger == more similar.\"\"\"\n    return -1 * distance\n\n\ndef _to_python_scalar(value: Any) -> Any:\n    \"\"\"Convert numpy scalars (int64, float64, bool_, …) to Python primitives.\n\n    Chroma persists integer/float metadata as numpy scalars, which break JSON\n    serialization when this component is consumed as an Agent tool — LangChain's\n    tool-output path calls ``vars()`` / iterates the value, both of which fail\n    on numpy C-extension scalars. Coerce at the boundary so downstream stays\n    primitive-only.\n    \"\"\"\n    if isinstance(value, np.generic):\n        return value.item()\n    return value\n\n\nclass MemoryBaseComponent(Component):\n    display_name = \"Memory Base\"\n    description = (\n        \"Retrieve long-term memory from a Memory Base attached to this workflow. \"\n        \"When 'Filter by Session' is off, queries run across all sessions.\"\n    )\n    icon = \"brain\"\n    name = \"MemoryBase\"\n\n    inputs = [\n        DropdownInput(\n            name=\"memory_base\",\n            display_name=\"Memory Base\",\n            info=\"Memory Base whose captured conversation history will be searched.\",\n            required=True,\n            options=[],\n            refresh_button=True,\n            real_time_refresh=True,\n        ),\n        MessageTextInput(\n            name=\"search_query\",\n            display_name=\"Search Query\",\n            info=\"Query used for semantic retrieval against the memory base.\",\n            tool_mode=True,\n        ),\n        IntInput(\n            name=\"top_k\",\n            display_name=\"Top K Results\",\n            info=\"Number of top results to return.\",\n            value=5,\n            advanced=True,\n            required=False,\n        ),\n        BoolInput(\n            name=\"include_metadata\",\n            display_name=\"Include Metadata\",\n            info=\"Include chunk metadata (session_id, sender, timestamp, …) on each row.\",\n            value=True,\n            advanced=True,\n        ),\n        BoolInput(\n            name=\"filter_by_session\",\n            display_name=\"Filter by Session\",\n            info=(\n                \"If enabled, only memories from the current session will be retrieved. \"\n                \"Disable to allow retrieval across every session ingested into this \"\n                \"Memory Base (useful for cross-conversation recall).\"\n            ),\n            value=True,\n            advanced=True,\n        ),\n    ]\n\n    outputs = [\n        Output(\n            name=\"retrieve_data\",\n            display_name=\"Results\",\n            method=\"retrieve_memory\",\n            info=(\n                \"Returns matching memory chunks. Scoped to the current session by \"\n                \"default; turn 'Filter by Session' off to retrieve across sessions.\"\n            ),\n        ),\n    ]\n\n    def _build_where_clause(self, *, session_id: str | None = None) -> dict | None:\n        \"\"\"Compose the Chroma ``where`` clause based on opt-in filters and manual params.\n\n        Uses the canonical ``$eq`` operator form rather than the implicit\n        ``{\"key\": \"value\"}`` shorthand. Both are accepted by chromadb, but the\n        explicit form is unambiguous across versions and tooling.\n        \"\"\"\n        predicates: list[dict] = []\n        # Defensive bool() — BoolInput coerces strings, but if this attribute is\n        # ever overridden externally with a non-bool value, ``\"false\"`` would be\n        # truthy and silently disable the toggle.\n        if bool(self.filter_by_session) and session_id:\n            predicates.append({\"session_id\": {\"$eq\": str(session_id)}})\n\n        if not predicates:\n            return None\n        if len(predicates) == 1:\n            return predicates[0]\n        return {\"$and\": predicates}\n\n    async def update_build_config(self, build_config, field_value, field_name=None):  # noqa: ARG002\n        if field_name != \"memory_base\":\n            return build_config\n\n        flow_id = _coerce_uuid(self._get_runtime_or_frontend_node_attr(\"flow_id\"))\n        user_uuid = _coerce_uuid(self.user_id)\n        if flow_id is None or user_uuid is None:\n            build_config[\"memory_base\"][\"options\"] = []\n            build_config[\"memory_base\"][\"value\"] = None\n            return build_config\n\n        # At design time self.user_id == the flow developer == MB owner, so this\n        # filters to the same set a Flow-lookup would return but without relying\n        # on the Flow row being persisted yet.\n        async with session_scope() as db:\n            stmt = select(MemoryBase).where(\n                MemoryBase.flow_id == flow_id,\n                MemoryBase.user_id == user_uuid,\n            )\n            mbs = list((await db.exec(stmt)).all())\n\n        options = sorted(mb.name for mb in mbs)\n        build_config[\"memory_base\"][\"options\"] = options\n        if build_config[\"memory_base\"].get(\"value\") not in options:\n            build_config[\"memory_base\"][\"value\"] = None\n        return build_config\n\n    async def _resolve_attached_mb(\n        self,\n        db: AsyncSession,\n        selected: str,\n        flow_id: uuid.UUID,\n    ) -> tuple[MemoryBase, User]:\n        \"\"\"Look up the MB row scoped to the current flow and resolve its owner.\"\"\"\n        mb = (\n            await db.exec(\n                select(MemoryBase).where(\n                    MemoryBase.name == selected,\n                    MemoryBase.flow_id == flow_id,\n                )\n            )\n        ).first()\n        if mb is None:\n            msg = f\"Memory Base '{selected}' is not attached to this flow.\"\n            raise ValueError(msg)\n\n        owner = await get_user_by_id(db, mb.user_id)\n        if owner is None:\n            msg = \"Memory Base owner account could not be resolved.\"\n            raise ValueError(msg)\n        return mb, owner\n\n    def _resolve_kb_location(self, owner_username: str, kb_name: str) -> Path:\n        \"\"\"Build and validate the on-disk KB path for the given owner.\"\"\"\n        kb_root = get_knowledge_bases_root_path()\n        kb_path = kb_root / owner_username / kb_name\n        try:\n            validate_kb_path(kb_root, kb_path)\n        except ValueError as exc:\n            msg = \"Memory Base path is not accessible.\"\n            raise ValueError(msg) from exc\n        return kb_path\n\n    async def _build_chroma(\n        self,\n        kb_path: Path,\n        owner: User,\n        metadata: dict,\n        kb_name: str,\n    ) -> Chroma:\n        \"\"\"Construct a Chroma client wired to the KB's embedding function.\"\"\"\n        provider = metadata.get(\"embedding_provider\")\n        model = metadata.get(\"embedding_model\")\n        embedding_function = await KBIngestionHelper.build_embeddings(provider, model, owner)\n\n        chromadb.api.client.SharedSystemClient.clear_system_cache()\n        return Chroma(\n            persist_directory=str(kb_path),\n            embedding_function=embedding_function,\n            collection_name=kb_name,\n            **chroma_langchain_collection_kwargs(),\n        )\n\n    def _format_results(self, results: list[tuple]) -> DataFrame:\n        \"\"\"Convert Chroma (doc, score) tuples into the component's DataFrame output.\n\n        Metadata values are coerced from numpy scalars to Python primitives so the\n        resulting DataFrame is JSON-serializable when the component is invoked as\n        an Agent tool.\n        \"\"\"\n        data_list: list[Data] = []\n        for doc, score in results:\n            kwargs: dict = {\"content\": doc.page_content}\n            if self.search_query:\n                kwargs[\"_score\"] = _to_python_scalar(_distance_to_similarity(score))\n            if self.include_metadata:\n                for key, value in (doc.metadata or {}).items():\n                    kwargs[key] = _to_python_scalar(value)\n            data_list.append(Data(**kwargs))\n        return DataFrame(data=data_list)\n\n    async def retrieve_memory(self) -> DataFrame:\n        \"\"\"Retrieve chunks from the selected Memory Base.\n\n        Scoped to the current ``session_id`` when ``filter_by_session`` is true; when\n        false, every chunk in the Memory Base is queryable so the agent can recall\n        context from prior conversations across all sessions.\n        \"\"\"\n        session_id = getattr(self.graph, \"session_id\", None)\n        if bool(self.filter_by_session) and not session_id:\n            # Only required when filtering is on, since the value gates the where clause.\n            msg = (\n                \"A session_id is required on the flow request when 'Filter by Session' \"\n                \"is enabled — disable the toggle to allow cross-session retrieval.\"\n            )\n            raise ValueError(msg)\n\n        flow_id = _coerce_uuid(getattr(self.graph, \"flow_id\", None))\n        if flow_id is None:\n            msg = \"flow_id is not available on the graph context; Memory Base retrieval is unavailable.\"\n            raise ValueError(msg)\n\n        selected = self.memory_base\n        if not selected:\n            msg = \"No Memory Base is selected.\"\n            raise ValueError(msg)\n\n        async with session_scope() as db:\n            mb, owner = await self._resolve_attached_mb(db, selected, flow_id)\n            owner_username = owner.username\n            kb_name = mb.kb_name\n\n        kb_path = self._resolve_kb_location(owner_username, kb_name)\n        metadata = load_kb_metadata(kb_path, log_label=f\"memory base '{selected}'\")\n        if not metadata:\n            msg = f\"Memory Base '{selected}' has no embedding metadata on disk.\"\n            raise ValueError(msg)\n\n        chroma = await self._build_chroma(kb_path, owner, metadata, kb_name)\n        where = self._build_where_clause(session_id=session_id)\n\n        logger.debug(\n            \"MemoryBase retrieval mb=%s session_hash=%s where=%s top_k=%s\",\n            selected,\n            hash_session_id(session_id) if session_id else \"<none>\",\n            where,\n            self.top_k,\n        )\n\n        if not self.search_query:\n            # Embedding providers may reject empty input; skip the round-trip entirely.\n            return DataFrame(data=[])\n\n        results = chroma.similarity_search_with_score(\n            query=self.search_query,\n            k=self.top_k,\n            filter=where,\n        )\n        return self._format_results(results)\n"
+            },
+            "filter_by_session": {
+              "_input_type": "BoolInput",
+              "advanced": true,
+              "display_name": "Filter by Session",
+              "dynamic": false,
+              "info": "If enabled, only memories from the current session will be retrieved. Disable to allow retrieval across every session ingested into this Memory Base (useful for cross-conversation recall).",
+              "list": false,
+              "list_add_label": "Add More",
+              "name": "filter_by_session",
+              "override_skip": false,
+              "placeholder": "",
+              "required": false,
+              "show": true,
+              "title_case": false,
+              "tool_mode": false,
+              "trace_as_metadata": true,
+              "track_in_telemetry": true,
+              "type": "bool",
+              "value": true
+            },
+            "include_metadata": {
+              "_input_type": "BoolInput",
+              "advanced": true,
+              "display_name": "Include Metadata",
+              "dynamic": false,
+              "info": "Include chunk metadata (session_id, sender, timestamp, …) on each row.",
+              "list": false,
+              "list_add_label": "Add More",
+              "name": "include_metadata",
+              "override_skip": false,
+              "placeholder": "",
+              "required": false,
+              "show": true,
+              "title_case": false,
+              "tool_mode": false,
+              "trace_as_metadata": true,
+              "track_in_telemetry": true,
+              "type": "bool",
+              "value": true
+            },
+            "memory_base": {
+              "_input_type": "DropdownInput",
+              "advanced": false,
+              "combobox": false,
+              "dialog_inputs": {},
+              "display_name": "Memory Base",
+              "dynamic": false,
+              "external_options": {},
+              "info": "Memory Base whose captured conversation history will be searched.",
+              "name": "memory_base",
+              "options": [],
+              "options_metadata": [],
+              "override_skip": false,
+              "placeholder": "",
+              "real_time_refresh": true,
+              "refresh_button": true,
+              "required": true,
+              "show": true,
+              "title_case": false,
+              "toggle": false,
+              "tool_mode": false,
+              "trace_as_metadata": true,
+              "track_in_telemetry": true,
+              "type": "str",
+              "value": ""
+            },
+            "search_query": {
+              "_input_type": "MessageTextInput",
+              "advanced": false,
+              "display_name": "Search Query",
+              "dynamic": false,
+              "info": "Query used for semantic retrieval against the memory base.",
+              "input_types": [
+                "Message"
+              ],
+              "list": false,
+              "list_add_label": "Add More",
+              "load_from_db": false,
+              "name": "search_query",
+              "override_skip": false,
+              "placeholder": "",
+              "required": false,
+              "show": true,
+              "title_case": false,
+              "tool_mode": true,
+              "trace_as_input": true,
+              "trace_as_metadata": true,
+              "track_in_telemetry": false,
+              "type": "str",
+              "value": ""
+            },
+            "top_k": {
+              "_input_type": "IntInput",
+              "advanced": true,
+              "display_name": "Top K Results",
+              "dynamic": false,
+              "info": "Number of top results to return.",
+              "list": false,
+              "list_add_label": "Add More",
+              "name": "top_k",
+              "override_skip": false,
+              "placeholder": "",
+              "required": false,
+              "show": true,
+              "title_case": false,
+              "tool_mode": false,
+              "trace_as_metadata": true,
+              "track_in_telemetry": true,
+              "type": "int",
+              "value": 5
+            }
+          },
+          "tool_mode": false
+        },
         "SaveToFile": {
           "base_classes": [
             "Message"
@@ -73307,6 +73514,154 @@
               "override_skip": false,
               "placeholder": "",
               "required": true,
+              "show": true,
+              "title_case": false,
+              "tool_mode": false,
+              "trace_as_input": true,
+              "trace_as_metadata": true,
+              "track_in_telemetry": false,
+              "type": "str",
+              "value": ""
+            }
+          },
+          "tool_mode": false
+        },
+        "RunFlow": {
+          "base_classes": [],
+          "beta": true,
+          "conditional_paths": [],
+          "custom_fields": {},
+          "description": "Executes another flow from within the same project. Can also be used as a tool for agents. \n **Select a Flow to use the tool mode**",
+          "display_name": "Run Flow",
+          "documentation": "https://docs.langflow.org/run-flow",
+          "edited": false,
+          "field_order": [
+            "flow_name_selected",
+            "flow_id_selected",
+            "session_id",
+            "cache_flow"
+          ],
+          "frozen": false,
+          "icon": "Workflow",
+          "legacy": false,
+          "metadata": {
+            "code_hash": "ea901208037d",
+            "dependencies": {
+              "dependencies": [
+                {
+                  "name": "lfx",
+                  "version": null
+                }
+              ],
+              "total_dependencies": 1
+            },
+            "module": "lfx.components.flow_controls.run_flow.RunFlowComponent"
+          },
+          "minimized": false,
+          "output_types": [],
+          "outputs": [],
+          "pinned": false,
+          "template": {
+            "_type": "Component",
+            "cache_flow": {
+              "_input_type": "BoolInput",
+              "advanced": true,
+              "display_name": "Cache Flow",
+              "dynamic": false,
+              "info": "Whether to cache the selected flow.",
+              "list": false,
+              "list_add_label": "Add More",
+              "name": "cache_flow",
+              "override_skip": false,
+              "placeholder": "",
+              "required": false,
+              "show": true,
+              "title_case": false,
+              "tool_mode": false,
+              "trace_as_metadata": true,
+              "track_in_telemetry": true,
+              "type": "bool",
+              "value": false
+            },
+            "code": {
+              "advanced": true,
+              "dynamic": true,
+              "fileTypes": [],
+              "file_path": "",
+              "info": "",
+              "list": false,
+              "load_from_db": false,
+              "multiline": true,
+              "name": "code",
+              "password": false,
+              "placeholder": "",
+              "required": true,
+              "show": true,
+              "title_case": false,
+              "type": "code",
+              "value": "from copy import deepcopy\nfrom datetime import datetime\nfrom typing import Any\n\nfrom lfx.base.tools.run_flow import RunFlowBaseComponent\nfrom lfx.log.logger import logger\nfrom lfx.schema.data import Data\nfrom lfx.schema.dotdict import dotdict\n\n\nclass RunFlowComponent(RunFlowBaseComponent):\n    display_name = \"Run Flow\"\n    description = (\n        \"Executes another flow from within the same project. Can also be used as a tool for agents.\"\n        \" \\n **Select a Flow to use the tool mode**\"\n    )\n    documentation: str = \"https://docs.langflow.org/run-flow\"\n    beta = True\n    name = \"RunFlow\"\n    icon = \"Workflow\"\n\n    # Keep the concrete class templates detached from the base-class templates;\n    # Component.__init__ still makes the per-instance copies used at runtime.\n    inputs = deepcopy(RunFlowBaseComponent.get_base_inputs())\n    outputs = deepcopy(RunFlowBaseComponent.get_base_outputs())\n\n    async def update_build_config(\n        self,\n        build_config: dotdict,\n        field_value: Any,\n        field_name: str | None = None,\n    ):\n        missing_keys = [key for key in self.default_keys if key not in build_config]\n        for key in missing_keys:  # TODO: create a defaults dict to avoid hardcoding the defaults here\n            if key == \"flow_name_selected\":\n                build_config[key] = {\"options\": [], \"options_metadata\": [], \"value\": None}\n            elif key == \"flow_id_selected\":\n                build_config[key] = {\"value\": None}\n            elif key == \"cache_flow\":\n                build_config[key] = {\"value\": False}\n            else:\n                build_config[key] = {}\n        if field_name == \"flow_name_selected\" and (build_config.get(\"is_refresh\", False) or field_value is None):\n            # refresh button was clicked or componented was initialized, so list the flows\n            options: list[str] = await self.alist_flows_by_flow_folder()\n            build_config[\"flow_name_selected\"][\"options\"] = [flow.data[\"name\"] for flow in options]\n            build_config[\"flow_name_selected\"][\"options_metadata\"] = []\n            for flow in options:\n                # populate options_metadata\n                build_config[\"flow_name_selected\"][\"options_metadata\"].append(\n                    {\"id\": flow.data[\"id\"], \"updated_at\": flow.data[\"updated_at\"]}\n                )\n                # update selected flow if it is stale\n                if str(flow.data[\"id\"]) == self.flow_id_selected:\n                    await self.check_and_update_stale_flow(flow, build_config)\n        elif field_name in {\"flow_name_selected\", \"flow_id_selected\"} and field_value is not None:\n            # flow was selected by name or id, so get the flow and update the bcfg\n            try:\n                # derive flow id if the field_name is flow_name_selected\n                build_config[\"flow_id_selected\"][\"value\"] = (\n                    self.get_selected_flow_meta(build_config, \"id\") or build_config[\"flow_id_selected\"][\"value\"]\n                )\n                updated_at = self.get_selected_flow_meta(build_config, \"updated_at\")\n                await self.load_graph_and_update_cfg(\n                    build_config, build_config[\"flow_id_selected\"][\"value\"], updated_at\n                )\n            except Exception as e:\n                msg = f\"Error building graph for flow {field_value}\"\n                await logger.aexception(msg)\n                raise RuntimeError(msg) from e\n\n        return build_config\n\n    def get_selected_flow_meta(self, build_config: dotdict, field: str) -> dict:\n        \"\"\"Get the selected flow's metadata from the build config.\"\"\"\n        return build_config.get(\"flow_name_selected\", {}).get(\"selected_metadata\", {}).get(field)\n\n    async def load_graph_and_update_cfg(\n        self,\n        build_config: dotdict,\n        flow_id: str,\n        updated_at: str | datetime,\n    ) -> None:\n        \"\"\"Load a flow's graph and update the build config.\"\"\"\n        graph = await self.get_graph(\n            flow_id_selected=flow_id,\n            updated_at=self.get_str_isots(updated_at),\n        )\n        self.update_build_config_from_graph(build_config, graph)\n\n    def should_update_stale_flow(self, flow: Data, build_config: dotdict) -> bool:\n        \"\"\"Check if the flow should be updated.\"\"\"\n        return (\n            (updated_at := self.get_str_isots(flow.data[\"updated_at\"]))  # true updated_at date just fetched from db\n            and (stale_at := self.get_selected_flow_meta(build_config, \"updated_at\"))  # outdated date in bcfg\n            and self._parse_timestamp(updated_at) > self._parse_timestamp(stale_at)  # stale flow condition\n        )\n\n    async def check_and_update_stale_flow(self, flow: Data, build_config: dotdict) -> None:\n        \"\"\"Check if the flow should be updated and update it if necessary.\"\"\"\n        # TODO: improve contract/return value\n        if self.should_update_stale_flow(flow, build_config):\n            await self.load_graph_and_update_cfg(\n                build_config,\n                flow.data[\"id\"],\n                flow.data[\"updated_at\"],\n            )\n\n    def get_str_isots(self, date: datetime | str) -> str:\n        \"\"\"Get a string timestamp from a datetime or string.\"\"\"\n        return date.isoformat() if hasattr(date, \"isoformat\") else date\n"
+            },
+            "flow_id_selected": {
+              "_input_type": "StrInput",
+              "advanced": false,
+              "display_name": "Flow ID",
+              "dynamic": false,
+              "info": "The ID of the flow to run.",
+              "list": false,
+              "list_add_label": "Add More",
+              "load_from_db": false,
+              "name": "flow_id_selected",
+              "override_skip": true,
+              "placeholder": "",
+              "required": false,
+              "show": false,
+              "title_case": false,
+              "tool_mode": false,
+              "trace_as_metadata": true,
+              "track_in_telemetry": false,
+              "type": "str"
+            },
+            "flow_name_selected": {
+              "_input_type": "DropdownInput",
+              "advanced": false,
+              "combobox": false,
+              "dialog_inputs": {},
+              "display_name": "Flow Name",
+              "dynamic": false,
+              "external_options": {},
+              "info": "The name of the flow to run.",
+              "name": "flow_name_selected",
+              "options": [],
+              "options_metadata": [],
+              "override_skip": false,
+              "placeholder": "",
+              "real_time_refresh": true,
+              "refresh_button": true,
+              "required": false,
+              "show": true,
+              "title_case": false,
+              "toggle": false,
+              "tool_mode": false,
+              "trace_as_metadata": true,
+              "track_in_telemetry": true,
+              "type": "str"
+            },
+            "session_id": {
+              "_input_type": "MessageTextInput",
+              "advanced": true,
+              "display_name": "Session ID",
+              "dynamic": false,
+              "info": "The session ID to run the flow in.",
+              "input_types": [
+                "Message"
+              ],
+              "list": false,
+              "list_add_label": "Add More",
+              "load_from_db": false,
+              "name": "session_id",
+              "override_skip": false,
+              "placeholder": "",
+              "required": false,
               "show": true,
               "title_case": false,
               "tool_mode": false,
@@ -96058,7 +96413,7 @@
                 },
                 {
                   "name": "gassist",
-                  "version": null
+                  "version": "0.0.1"
                 }
               ],
               "total_dependencies": 2
@@ -100793,7 +101148,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": "1.11.0"
+                  "version": null
                 }
               ],
               "total_dependencies": 3
@@ -102765,7 +103120,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": "1.11.0"
+                  "version": null
                 }
               ],
               "total_dependencies": 3
@@ -118633,9 +118988,9 @@
     ]
   ],
   "metadata": {
-    "num_components": 353,
+    "num_components": 355,
     "num_modules": 96
   },
-  "sha256": "09945f39b981ea8b964a186936a16fdad985b48997a5c725bf932405e280202f",
+  "sha256": "e22133d066fdc9b07a54c37438a6bd90f116d60db2549ad95d7ef9b4e65a6e15",
   "version": "1.10.2"
 }
