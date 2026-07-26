@@ -154,7 +154,7 @@ def get_auth_service() -> AuthServiceProtocol | None:
 
 
 def _get_deployment_registry() -> AdapterRegistry[DeploymentServiceProtocol]:
-    """Retrieve a singleton deployment adapter instance by key.
+    """Retrieve the deployment adapter registry singleton.
 
     Discovery still needs to be triggered separately via
     ``registry.discover(config_dir=...)``.
