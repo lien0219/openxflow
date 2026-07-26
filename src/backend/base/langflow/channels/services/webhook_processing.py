@@ -368,7 +368,13 @@ async def process_provider_webhook(
     queue_position: int = 0,
     queue_rejection_reason: str | None = None,
 ) -> bool:
-    """Process one provider callback in an isolated database session."""
+    """Process one provider callback in an isolated database session.
+
+    Database mutations are committed before provider I/O and workflow execution
+    continue. This keeps SQLite write transactions short and lets login, MCP
+    initialization, and other channel tasks share the database without lock
+    starvation.
+    """
     async with session_scope() as session:
         connection = await session.get(ChannelConnection, connection_id)
         if connection is None or connection.channel_type != expected_channel_type or not connection.enabled:
@@ -397,9 +403,21 @@ async def process_provider_webhook(
                 return ChannelMessage(text="当前请求排队时间过长，任务已取消，请稍后重试。")
             try:
                 async with asyncio.timeout(connection.task_timeout_seconds):
-                    return await dispatcher.handle(event)
+                    response = await dispatcher.handle(event)
             except TimeoutError:
+                await session.rollback()
                 return ChannelMessage(text="当前任务执行超时，请缩小问题范围后重试。")
+            except asyncio.CancelledError:
+                await session.rollback()
+                raise
+            except Exception:
+                await session.rollback()
+                raise
+            else:
+                # Release any discovery/context/execution write transaction
+                # before the gateway sends provider acknowledgements or replies.
+                await session.commit()
+                return response
 
         try:
             if preverified:
@@ -426,7 +444,18 @@ async def process_provider_webhook(
             )
             return True
         except Exception:  # noqa: BLE001
-            await session.rollback()
+            # ``ChannelGateway`` records the receipt as failed after its own
+            # best-effort message update. Commit that failure marker instead of
+            # rolling it back, while still recovering a broken transaction.
+            try:
+                await session.commit()
+            except Exception:  # noqa: BLE001
+                await session.rollback()
+                await logger.aexception(
+                    "Unable to persist failed %s channel webhook state for connection %s",
+                    expected_channel_type,
+                    connection_id,
+                )
             await logger.aexception(
                 "Background %s channel webhook processing failed for connection %s",
                 expected_channel_type,
