@@ -4,11 +4,10 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from lfx.services import deps
-from lfx.services.settings.groups.database import DatabaseSettings
-
 from langflow.channels.domain.models import ChannelMessage
 from langflow.channels.services import deduplication, webhook_processing
+from lfx.services import deps
+from lfx.services.settings.groups.database import DatabaseSettings
 
 
 def test_sqlite_settings_use_bounded_connection_pool(monkeypatch, tmp_path) -> None:
