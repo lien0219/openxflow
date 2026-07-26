@@ -27,6 +27,18 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc(value: datetime) -> datetime:
+    """Normalize database datetimes before arithmetic.
+
+    SQLite drops timezone information even when DateTime(timezone=True) is used,
+    while PostgreSQL returns aware values. Normalizing here keeps the execution
+    log API portable and prevents naive/aware subtraction failures.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 async def start_channel_execution(
     session: AsyncSession,
     *,
@@ -75,7 +87,7 @@ async def finish_channel_execution(
     completed_at = _utc_now()
     execution.status = status
     execution.completed_at = completed_at
-    started_at = execution.started_at or execution.created_at
+    started_at = _as_utc(execution.started_at or execution.created_at)
     execution.duration_ms = max(0, int((completed_at - started_at).total_seconds() * 1000))
     execution.error_code = error_code[:128] if error_code else None
     execution.error_message = error_message[:4000] if error_message else None
