@@ -167,9 +167,7 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
         identity_user_foreign_keys = _identity_user_foreign_keys(connection)
         assert len(identity_user_foreign_keys) == 1
         assert _foreign_key_ondelete(identity_user_foreign_keys[0]) == "SET NULL"
-        identity_columns = {
-            column["name"]: column for column in sa.inspect(connection).get_columns("channel_identity")
-        }
+        identity_columns = {column["name"]: column for column in sa.inspect(connection).get_columns("channel_identity")}
         assert identity_columns["openxflow_user_id"]["nullable"] is True
 
         for migration in reversed(_MIGRATIONS):
