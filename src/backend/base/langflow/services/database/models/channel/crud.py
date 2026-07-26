@@ -13,7 +13,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from langflow.channels.security.credentials import decrypt_credentials, encrypt_credentials, list_credential_keys
+from langflow.channels.security.credentials import (
+    decrypt_credentials,
+    encrypt_credentials,
+    list_credential_keys,
+)
+from langflow.channels.security.provider_credentials import (
+    validate_channel_provider_credentials,
+)
 from langflow.channels.services.service_identity import (
     ensure_channel_service_identity,
     remove_channel_service_identity,
@@ -108,6 +115,11 @@ async def create_channel_connection(
     user_id: UUID,
     payload: ChannelConnectionCreate,
 ) -> ChannelConnectionRead:
+    validate_channel_provider_credentials(
+        payload.channel_type,
+        payload.connection_mode,
+        payload.credentials,
+    )
     connection = ChannelConnection(
         user_id=user_id,
         name=payload.name,
@@ -174,14 +186,23 @@ async def update_channel_connection(
     connection: ChannelConnection,
     payload: ChannelConnectionUpdate,
 ) -> ChannelConnectionRead:
+    existing_credentials = decrypt_credentials(connection.credentials_encrypted)
+    merged_credentials = dict(existing_credentials)
+    if payload.credentials is not None:
+        merged_credentials.update(payload.credentials)
+    next_connection_mode = payload.connection_mode or connection.connection_mode
+    validate_channel_provider_credentials(
+        connection.channel_type,
+        next_connection_mode,
+        merged_credentials,
+    )
+
     changes = payload.model_dump(exclude_unset=True, exclude={"credentials", "service_user_id"})
     for key, value in changes.items():
         setattr(connection, key, value)
 
     if payload.credentials is not None:
-        credentials = decrypt_credentials(connection.credentials_encrypted)
-        credentials.update(payload.credentials)
-        connection.credentials_encrypted = encrypt_credentials(credentials)
+        connection.credentials_encrypted = encrypt_credentials(merged_credentials)
 
     connection.updated_at = _utc_now()
     session.add(connection)

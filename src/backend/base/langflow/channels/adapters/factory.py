@@ -10,12 +10,18 @@ from langflow.channels.adapters.telegram import TelegramChannelAdapter
 from langflow.channels.adapters.wecom_resilient import ResilientWeComChannelAdapter
 from langflow.channels.domain.models import ChannelType
 from langflow.channels.security.credentials import decrypt_credentials
+from langflow.channels.security.provider_credentials import validate_channel_provider_credentials
 from langflow.services.database.models.channel.model import ChannelConnection
 
 
 def build_channel_adapter(connection: ChannelConnection) -> ChannelAdapter:
     channel_type = ChannelType(connection.channel_type)
     credentials = decrypt_credentials(connection.credentials_encrypted)
+    validate_channel_provider_credentials(
+        connection.channel_type,
+        connection.connection_mode,
+        credentials,
+    )
 
     if channel_type is ChannelType.MOCK:
         return MockChannelAdapter(

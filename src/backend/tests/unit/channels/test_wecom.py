@@ -1,4 +1,5 @@
 import base64
+import time
 from uuid import uuid4
 
 import pytest
@@ -28,7 +29,8 @@ def _adapter() -> WeComChannelAdapter:
     )
 
 
-def _encrypted_payload(inner_xml: str, *, timestamp: str = "1710000000", nonce: str = "nonce"):
+def _encrypted_payload(inner_xml: str, *, timestamp: str | None = None, nonce: str = "nonce"):
+    timestamp = timestamp or str(int(time.time()))
     crypt = WeComMessageCrypt(TOKEN, ENCODING_AES_KEY, CORP_ID)
     encrypted = crypt.encrypt(inner_xml, random_prefix=b"0123456789abcdef")
     signature = crypt.signature(timestamp, nonce, encrypted)
@@ -55,11 +57,12 @@ def test_wecom_url_verification() -> None:
     adapter = _adapter()
     crypt = WeComMessageCrypt(TOKEN, ENCODING_AES_KEY, CORP_ID)
     encrypted = crypt.encrypt("verified-echo", random_prefix=b"0123456789abcdef")
-    signature = crypt.signature("1710000000", "nonce", encrypted)
+    timestamp = str(int(time.time()))
+    signature = crypt.signature(timestamp, "nonce", encrypted)
     assert (
         adapter.verify_url(
             signature=signature,
-            timestamp="1710000000",
+            timestamp=timestamp,
             nonce="nonce",
             echo=encrypted,
         )

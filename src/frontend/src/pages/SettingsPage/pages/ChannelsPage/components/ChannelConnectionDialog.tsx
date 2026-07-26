@@ -264,14 +264,17 @@ export default function ChannelConnectionDialog({
     if (
       !isEditing &&
       form.channelType === "telegram" &&
-      !form.botToken.trim()
+      (!form.botToken.trim() ||
+        !/^[A-Za-z0-9_-]{16,256}$/.test(form.webhookSecret.trim()))
     ) {
       return;
     }
     if (
       !isEditing &&
       form.channelType === "feishu" &&
-      (!form.appId.trim() || !form.appSecret.trim())
+      (!form.appId.trim() ||
+        !form.appSecret.trim() ||
+        !form.verificationToken.trim())
     ) {
       return;
     }
@@ -486,6 +489,10 @@ export default function ChannelConnectionDialog({
                 Webhook Secret
                 <Input
                   type="password"
+                  required={!isEditing}
+                  minLength={16}
+                  maxLength={256}
+                  pattern="[A-Za-z0-9_-]+"
                   value={form.webhookSecret}
                   onChange={(event) =>
                     setField("webhookSecret", event.target.value)
@@ -535,6 +542,7 @@ export default function ChannelConnectionDialog({
                   Verification Token
                   <Input
                     type="password"
+                    required={!isEditing}
                     value={form.verificationToken}
                     onChange={(event) =>
                       setField("verificationToken", event.target.value)

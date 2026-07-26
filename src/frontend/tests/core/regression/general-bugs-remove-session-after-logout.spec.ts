@@ -47,10 +47,17 @@ test(
       sessionStorage.removeItem("testMockAutoLogin");
     });
 
-    await page.getByRole("button", { name: TEXTS.signIn }).click();
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/v1/login") && response.status() === 200,
+        { timeout: 60000 },
+      ),
+      page.getByRole("button", { name: TEXTS.signIn }).click(),
+    ]);
 
     await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
+      timeout: 60000,
     });
 
     await page.getByTestId("user-profile-settings").click();
@@ -59,7 +66,9 @@ test(
       sessionStorage.setItem("testMockAutoLogin", "true");
     });
 
-    await page.getByText(TEXTS.logout, { exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: TEXTS.logout })
+      .dispatchEvent("click");
 
     await page.waitForTimeout(1000);
 

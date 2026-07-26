@@ -84,7 +84,10 @@ export const addNewUserAndLogin = async (page: Page) => {
 
   await page.locator("#is_active").click();
 
-  await page.getByText(TEXTS.save, { exact: true }).click();
+  await page
+    .getByRole("button", { name: TEXTS.save, exact: true })
+    .last()
+    .click();
 
   await page.waitForSelector("text=new user added", { timeout: 30000 });
 
@@ -102,7 +105,9 @@ export const addNewUserAndLogin = async (page: Page) => {
     sessionStorage.setItem("testMockAutoLogin", "true");
   });
 
-  await page.getByText(TEXTS.logout, { exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: TEXTS.logout })
+    .dispatchEvent("click");
 
   await page.waitForSelector(`text=${TEXTS.authSignInHeader}`, {
     timeout: 30000,

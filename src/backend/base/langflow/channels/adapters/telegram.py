@@ -165,6 +165,20 @@ class TelegramChannelAdapter(ChannelAdapter):
         )
 
     @staticmethod
+    def _utf16_slice(text: str, offset: int, length: int) -> str:
+        if offset < 0 or length < 0:
+            raise ValueError("Telegram entity offsets cannot be negative")
+        encoded = text.encode("utf-16-le")
+        start = offset * 2
+        end = start + length * 2
+        if end > len(encoded):
+            raise ValueError("Telegram entity offset exceeds message text")
+        try:
+            return encoded[start:end].decode("utf-16-le")
+        except UnicodeDecodeError as exc:
+            raise ValueError("Telegram entity splits a UTF-16 code point") from exc
+
+    @staticmethod
     def _extract_mentions(message: dict[str, Any], text: str | None) -> list[str]:
         if not text:
             return []
@@ -173,7 +187,8 @@ class TelegramChannelAdapter(ChannelAdapter):
             if entity.get("type") == "mention":
                 offset = int(entity.get("offset", 0))
                 length = int(entity.get("length", 0))
-                mentions.append(text[offset : offset + length])
+                mention = TelegramChannelAdapter._utf16_slice(text, offset, length)
+                mentions.append(mention.removeprefix("@"))
             elif entity.get("type") == "text_mention" and entity.get("user", {}).get("id") is not None:
                 mentions.append(str(entity["user"]["id"]))
         return mentions
@@ -311,6 +326,7 @@ class TelegramChannelAdapter(ChannelAdapter):
             "allowed_updates": ["message", "edited_message", "callback_query"],
             "drop_pending_updates": drop_pending_updates,
         }
-        if self.webhook_secret:
-            payload["secret_token"] = self.webhook_secret
+        if not self.webhook_secret:
+            raise ValueError("Telegram webhook_secret is required before configuring a webhook")
+        payload["secret_token"] = self.webhook_secret
         return bool(await self._request("setWebhook", payload=payload))

@@ -84,7 +84,10 @@ test(
 
     await page.locator("#is_active").click();
 
-    await page.getByText(TEXTS.save, { exact: true }).click();
+    await page
+      .getByRole("button", { name: TEXTS.save, exact: true })
+      .last()
+      .click();
 
     await page.waitForSelector("text=new user added", { timeout: 30000 });
 
@@ -117,7 +120,10 @@ test(
 
     await page.locator("#is_active").click();
 
-    await page.getByText(TEXTS.save, { exact: true }).click();
+    await page
+      .getByRole("button", { name: TEXTS.save, exact: true })
+      .last()
+      .click();
 
     await page.waitForSelector("text=new user added", { timeout: 30000 });
 
@@ -138,7 +144,10 @@ test(
       .last()
       .fill(secondRandomName);
 
-    await page.getByText(TEXTS.save, { exact: true }).click();
+    await page
+      .getByRole("button", { name: TEXTS.save, exact: true })
+      .last()
+      .click();
 
     await page.waitForSelector("text=user edited", { timeout: 30000 });
 
@@ -223,13 +232,9 @@ test(
 
     await waitForNewProjectButton(page);
 
-    expect(
-      (
-        await page.waitForSelector("text=Welcome to OpenXFlow", {
-          timeout: 30000,
-        })
-      ).isVisible(),
-    );
+    await expect(page.getByTestId("mainpage_title").last()).toBeVisible({
+      timeout: 30000,
+    });
 
     await page.waitForTimeout(2000);
 
