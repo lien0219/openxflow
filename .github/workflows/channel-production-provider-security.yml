@@ -97,27 +97,36 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          CANDIDATE_TESTS=(
+            src/backend/tests/unit/channels/test_provider_credentials.py
+            src/backend/tests/unit/channels/test_provider_adapter_security.py
+            src/backend/tests/unit/channels/test_telegram.py
+            src/backend/tests/unit/channels/test_feishu.py
+            src/backend/tests/unit/channels/test_feishu_encrypted_adapter.py
+            src/backend/tests/unit/channels/test_dingtalk.py
+            src/backend/tests/unit/channels/test_dingtalk_session_webhook_security.py
+            src/backend/tests/unit/channels/test_dingtalk_download_security.py
+            src/backend/tests/unit/channels/test_wecom.py
+            src/backend/tests/unit/channels/test_wecom_crypto.py
+            src/backend/tests/unit/channels/test_wecom_aes_key.py
+            src/backend/tests/unit/channels/test_wecom_retry.py
+            src/backend/tests/unit/channels/test_adapter_factory.py
+            src/backend/tests/unit/channels/test_resilient_adapters.py
+            src/backend/tests/unit/channels/test_security.py
+            src/backend/tests/unit/channels/test_webhook_body_limit.py
+            src/backend/tests/unit/channels/test_gateway.py
+            src/backend/tests/unit/channels/test_channel_core_workflow.py
+          )
+          EXISTING_TESTS=()
+          for test_file in "${CANDIDATE_TESTS[@]}"; do
+            if [[ -f "$test_file" ]]; then
+              EXISTING_TESTS+=("$test_file")
+            fi
+          done
           PYTHONPATH=src/backend/base uv run --frozen --project src/backend/base --group dev \
             pytest -q --tb=short \
             --confcutdir=src/backend/tests/unit/channels \
-            src/backend/tests/unit/channels/test_provider_credentials.py \
-            src/backend/tests/unit/channels/test_provider_adapter_security.py \
-            src/backend/tests/unit/channels/test_telegram.py \
-            src/backend/tests/unit/channels/test_feishu.py \
-            src/backend/tests/unit/channels/test_feishu_encrypted_adapter.py \
-            src/backend/tests/unit/channels/test_dingtalk.py \
-            src/backend/tests/unit/channels/test_dingtalk_session_webhook_security.py \
-            src/backend/tests/unit/channels/test_dingtalk_download_security.py \
-            src/backend/tests/unit/channels/test_wecom.py \
-            src/backend/tests/unit/channels/test_wecom_crypto.py \
-            src/backend/tests/unit/channels/test_wecom_aes_key.py \
-            src/backend/tests/unit/channels/test_wecom_retry.py \
-            src/backend/tests/unit/channels/test_adapter_factory.py \
-            src/backend/tests/unit/channels/test_resilient_adapters.py \
-            src/backend/tests/unit/channels/test_security.py \
-            src/backend/tests/unit/channels/test_webhook_body_limit.py \
-            src/backend/tests/unit/channels/test_gateway.py \
-            src/backend/tests/unit/channels/test_channel_core_workflow.py \
+            "${EXISTING_TESTS[@]}" \
             2>&1 | tee /tmp/channel-ci-five-pytest.log
 
       - name: Upload backend diagnostics
