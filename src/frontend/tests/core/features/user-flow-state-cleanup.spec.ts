@@ -127,16 +127,12 @@ test(
 
     // Create a flow for User A
     await waitForNewProjectButton(page, { timeout: 60000 });
-    // Check that User A starts with an empty flows list
-    expect(
-      (
-        await page.waitForSelector("text=Welcome to LangFlow", {
-          timeout: 30000,
-        })
-      ).isVisible(),
-    );
-
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
+    // Check that User A starts with the current OpenXFlow empty state. Stable
+    // test IDs avoid coupling this regression test to translated brand copy.
+    await expect(page.getByTestId("mainpage_title").last()).toBeVisible({
+      timeout: 30000,
+    });
+    await expect(page.getByTestId("new_project_btn_empty_page")).toBeVisible({
       timeout: 30000,
     });
 

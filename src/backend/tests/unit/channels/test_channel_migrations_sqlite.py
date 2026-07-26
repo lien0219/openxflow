@@ -4,6 +4,9 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from langflow.alembic.versions import (
+    a4c7d0f3e5b9_fix_channel_identity_user_fk as identity_user_fk_migration,
+)
+from langflow.alembic.versions import (
     a8e1c6d4f5b7_add_channel_outbound_delivery as outbound_delivery_migration,
 )
 from langflow.alembic.versions import (
@@ -45,6 +48,7 @@ _MIGRATIONS = (
     status_index_repair_migration,
     production_controls_migration,
     observability_migration,
+    identity_user_fk_migration,
 )
 
 
@@ -54,6 +58,19 @@ def _create_parent_tables(connection: sa.Connection) -> None:
     connection.exec_driver_sql("CREATE TABLE knowledge_base (id CHAR(32) PRIMARY KEY)")
     connection.exec_driver_sql('CREATE TABLE "file" (id CHAR(32) PRIMARY KEY)')
     connection.exec_driver_sql("CREATE TABLE job (job_id CHAR(32) PRIMARY KEY)")
+
+
+def _identity_user_foreign_keys(connection: sa.Connection) -> list[dict]:
+    return [
+        foreign_key
+        for foreign_key in sa.inspect(connection).get_foreign_keys("channel_identity")
+        if foreign_key.get("constrained_columns") == ["openxflow_user_id"]
+        and foreign_key.get("referred_table") == "user"
+    ]
+
+
+def _foreign_key_ondelete(foreign_key: dict) -> str:
+    return str((foreign_key.get("options") or {}).get("ondelete") or "").upper()
 
 
 def test_channel_migration_revision_chain() -> None:
@@ -68,6 +85,7 @@ def test_channel_migration_revision_chain() -> None:
         "d1e4f9a8b6c3",
         "e2f5a8c1d7b9",
         "f3a6c9e2b4d7",
+        "a4c7d0f3e5b9",
     ]
     assert [migration.down_revision for migration in _MIGRATIONS] == [
         "e1705947c729",
@@ -80,6 +98,7 @@ def test_channel_migration_revision_chain() -> None:
         "c0a3e8f7d5b2",
         "d1e4f9a8b6c3",
         "e2f5a8c1d7b9",
+        "f3a6c9e2b4d7",
     ]
 
 
@@ -145,6 +164,14 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
         }
         assert conversation_indexes["ix_channel_conversation_binding_status"] == ("status",)
 
+        identity_user_foreign_keys = _identity_user_foreign_keys(connection)
+        assert len(identity_user_foreign_keys) == 1
+        assert _foreign_key_ondelete(identity_user_foreign_keys[0]) == "SET NULL"
+        identity_columns = {
+            column["name"]: column for column in sa.inspect(connection).get_columns("channel_identity")
+        }
+        assert identity_columns["openxflow_user_id"]["nullable"] is True
+
         for migration in reversed(_MIGRATIONS):
             migration.downgrade()
 
@@ -179,3 +206,35 @@ def test_status_index_repair_handles_already_migrated_sqlite_database(monkeypatc
             for index in sa.inspect(connection).get_indexes("channel_conversation_binding")
         }
         assert indexes_after_downgrade["ix_channel_conversation_binding_status"] == ("status",)
+
+
+def test_identity_user_fk_repair_normalizes_legacy_sqlite_database(monkeypatch) -> None:
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.exec_driver_sql('CREATE TABLE "user" (id CHAR(32) PRIMARY KEY)')
+        connection.exec_driver_sql("CREATE TABLE channel_connection (id CHAR(32) PRIMARY KEY)")
+        connection.exec_driver_sql(
+            "CREATE TABLE channel_identity ("
+            "id CHAR(32) PRIMARY KEY, "
+            "connection_id CHAR(32) NOT NULL, "
+            "openxflow_user_id CHAR(32), "
+            "CONSTRAINT fk_channel_identity_openxflow_user_id_user "
+            'FOREIGN KEY(openxflow_user_id) REFERENCES "user"(id) ON DELETE CASCADE'
+            ")"
+        )
+        context = MigrationContext.configure(connection, opts={"render_as_batch": True})
+        operations = Operations(context)
+        monkeypatch.setattr(identity_user_fk_migration, "op", operations)
+
+        identity_user_fk_migration.upgrade()
+        identity_user_fk_migration.upgrade()
+
+        foreign_keys = _identity_user_foreign_keys(connection)
+        assert len(foreign_keys) == 1
+        assert foreign_keys[0]["name"] == "fk_channel_identity_openxflow_user_id_user"
+        assert _foreign_key_ondelete(foreign_keys[0]) == "SET NULL"
+
+        identity_user_fk_migration.downgrade()
+        downgraded_foreign_keys = _identity_user_foreign_keys(connection)
+        assert len(downgraded_foreign_keys) == 1
+        assert _foreign_key_ondelete(downgraded_foreign_keys[0]) == "CASCADE"

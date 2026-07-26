@@ -6,6 +6,10 @@ from lfx.utils.langflow_utils import has_langflow_memory
 # Globals
 
 _LANGFLOW_HELPER_MODULE_FLOW = "langflow.helpers.flow"
+_BACKEND_NEUTRAL_FLOW_HELPER_MODULES = {
+    _LANGFLOW_HELPER_MODULE_FLOW,
+    "lfx.helpers.flow",
+}
 
 # Helper Functions
 
@@ -53,8 +57,9 @@ class TestDynamicImport:
         except (ImportError, ModuleNotFoundError) as e:
             pytest.fail(f"Failed to dynamically import lfx.helpers.get_flow_inputs: {e}")
 
-        # Helper module should be the langflow implementation
-        assert is_helper_module(get_flow_inputs, _LANGFLOW_HELPER_MODULE_FLOW)
+        # get_flow_inputs is backend-neutral and may already be cached from lfx
+        # before the Langflow package is imported (notably on Python 3.14).
+        assert get_flow_inputs.__module__ in _BACKEND_NEUTRAL_FLOW_HELPER_MODULES
 
     def test_helpers_import_list_flows(self):
         """Test the lfx.helpers.list_flows import."""
