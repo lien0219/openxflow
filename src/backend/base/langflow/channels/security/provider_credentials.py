@@ -6,6 +6,8 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+# Telegram echoes this value in X-Telegram-Bot-Api-Secret-Token, so keep it
+# within the provider-compatible character set before persisting a connection.
 _TELEGRAM_WEBHOOK_SECRET = re.compile(r"^[A-Za-z0-9_-]{16,256}$")
 _WECOM_ENCODING_AES_KEY = re.compile(r"^[A-Za-z0-9+/]{43}$")
 
