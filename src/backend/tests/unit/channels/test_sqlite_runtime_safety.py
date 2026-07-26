@@ -30,6 +30,17 @@ def test_sqlite_settings_use_bounded_connection_pool(monkeypatch, tmp_path) -> N
     }
 
 
+def test_sqlite_default_pool_is_also_bounded(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("LANGFLOW_DATABASE_URL", f"sqlite:///{tmp_path / 'openxflow.db'}")
+
+    settings = DatabaseSettings()
+
+    assert settings.db_connection_settings is not None
+    assert settings.db_connection_settings["pool_size"] == 5
+    assert settings.db_connection_settings["max_overflow"] == 0
+    assert settings.db_connection_settings["pool_timeout"] == 30
+
+
 def test_postgres_settings_keep_configured_pool(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_DATABASE_URL", "postgresql://user:password@localhost/openxflow")
     configured = {
