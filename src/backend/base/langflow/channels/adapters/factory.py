@@ -17,9 +17,13 @@ from langflow.services.database.models.channel.model import ChannelConnection
 def build_channel_adapter(connection: ChannelConnection) -> ChannelAdapter:
     channel_type = ChannelType(connection.channel_type)
     credentials = decrypt_credentials(connection.credentials_encrypted)
+    # Connections created before connection_mode was persisted are webhook
+    # connections. Keep that compatibility default while still validating all
+    # provider credentials before constructing an adapter.
+    connection_mode = getattr(connection, "connection_mode", "webhook")
     validate_channel_provider_credentials(
         connection.channel_type,
-        connection.connection_mode,
+        connection_mode,
         credentials,
     )
 
@@ -56,7 +60,7 @@ def build_channel_adapter(connection: ChannelConnection) -> ChannelAdapter:
             client_secret=credentials.get("client_secret", ""),
             robot_code=credentials.get("robot_code"),
             api_base_url=str(connection.settings_data.get("api_base_url", "https://api.dingtalk.com")),
-            stream_authenticated=getattr(connection, "connection_mode", "webhook") == "stream",
+            stream_authenticated=connection_mode == "stream",
         )
     if channel_type is ChannelType.WECOM:
         return ResilientWeComChannelAdapter(
