@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from shutil import copy2
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from lfx.log.logger import logger
 from lfx.utils.util_strings import is_valid_database_url, sanitize_database_url
@@ -51,14 +51,17 @@ class DatabaseSettings(BaseModel):
     db_driver_connection_settings: dict | None = None
     """Database driver connection settings."""
 
-    db_connection_settings: dict | None = {
-        "pool_size": 20,
-        "max_overflow": 30,
-        "pool_timeout": 30,
-        "pool_pre_ping": True,
-        "pool_recycle": 1800,
-        "echo": False,
-    }
+    db_connection_settings: dict | None = Field(
+        default_factory=lambda: {
+            "pool_size": 20,
+            "max_overflow": 30,
+            "pool_timeout": 30,
+            "pool_pre_ping": True,
+            "pool_recycle": 1800,
+            "echo": False,
+        },
+        validate_default=True,
+    )
     """Database connection settings optimized for high load scenarios.
     Note: These settings are most effective with PostgreSQL. SQLite is forced to a
     bounded pool so concurrent async tasks do not create dozens of competing
