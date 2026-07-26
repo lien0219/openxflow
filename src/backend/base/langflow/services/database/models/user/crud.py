@@ -52,13 +52,25 @@ async def update_user(user_db: User | None, user: UserUpdate, db: AsyncSession) 
     return user_db
 
 
-async def update_user_last_login_at(user_id: UUID, db: AsyncSession):
+async def update_user_last_login_at(user_id: UUID, db: AsyncSession) -> User | None:
+    """Best-effort last-login update that never leaves the request session unusable.
+
+    SQLite can temporarily reject a write while another short transaction owns
+    the file-level writer lock. The login timestamp is auxiliary metadata, so a
+    failed flush must be rolled back and logged instead of poisoning the session
+    used by the remainder of the login request.
+    """
     try:
         user_data = UserUpdate(last_login_at=datetime.now(timezone.utc))
         user = await get_user_by_id(db, user_id)
         return await update_user(user, user_data, db)
     except Exception as e:  # noqa: BLE001
-        await logger.aerror(f"Error updating user last login at: {e!s}")
+        try:
+            await db.rollback()
+        except Exception as rollback_error:  # noqa: BLE001
+            await logger.aerror(f"Error rolling back failed last-login update: {rollback_error!s}")
+        await logger.awarning(f"Unable to update user last login time; continuing login: {e!s}")
+        return None
 
 
 async def get_all_superusers(db: AsyncSession) -> list[User]:

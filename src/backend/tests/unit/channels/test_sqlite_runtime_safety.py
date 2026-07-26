@@ -6,11 +6,12 @@ from uuid import uuid4
 import pytest
 from langflow.channels.domain.models import ChannelMessage
 from langflow.channels.services import deduplication, webhook_processing
+from langflow.services.database.models.user import crud as user_crud
 from lfx.services import deps
 from lfx.services.settings.groups.database import DatabaseSettings
 
 
-def test_sqlite_settings_use_bounded_connection_pool(monkeypatch, tmp_path) -> None:
+def test_sqlite_settings_use_single_connection_pool(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LANGFLOW_DATABASE_URL", f"sqlite:///{tmp_path / 'openxflow.db'}")
 
     settings = DatabaseSettings(
@@ -23,20 +24,20 @@ def test_sqlite_settings_use_bounded_connection_pool(monkeypatch, tmp_path) -> N
     )
 
     assert settings.db_connection_settings == {
-        "pool_size": 5,
+        "pool_size": 1,
         "max_overflow": 0,
         "pool_timeout": 30,
         "pool_pre_ping": True,
     }
 
 
-def test_sqlite_default_pool_is_also_bounded(monkeypatch, tmp_path) -> None:
+def test_sqlite_default_pool_is_also_serialized(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LANGFLOW_DATABASE_URL", f"sqlite:///{tmp_path / 'openxflow.db'}")
 
     settings = DatabaseSettings()
 
     assert settings.db_connection_settings is not None
-    assert settings.db_connection_settings["pool_size"] == 5
+    assert settings.db_connection_settings["pool_size"] == 1
     assert settings.db_connection_settings["max_overflow"] == 0
     assert settings.db_connection_settings["pool_timeout"] == 30
 
@@ -90,6 +91,20 @@ async def test_session_scope_rolls_back_inactive_failed_session(monkeypatch) -> 
     assert session.rollback_calls == 1
 
 
+@pytest.mark.asyncio
+async def test_last_login_failure_rolls_back_request_session(monkeypatch) -> None:
+    session = _FailedSession()
+    monkeypatch.setattr(user_crud, "get_user_by_id", AsyncMock(return_value=object()))
+    monkeypatch.setattr(user_crud, "update_user", AsyncMock(side_effect=RuntimeError("database is locked")))
+    monkeypatch.setattr(user_crud.logger, "awarning", AsyncMock())
+    monkeypatch.setattr(user_crud.logger, "aerror", AsyncMock())
+
+    result = await user_crud.update_user_last_login_at(uuid4(), session)
+
+    assert result is None
+    assert session.rollback_calls == 1
+
+
 class _Result:
     def __init__(self, value) -> None:
         self.value = value
@@ -122,7 +137,6 @@ async def test_deduplication_claim_commits_before_follow_up_writes(monkeypatch) 
     )
 
     result = await deduplication.ChannelEventDeduplicator(session).claim(event, b"payload")
-
     assert result is receipt
     assert session.commit_calls == 1
 
