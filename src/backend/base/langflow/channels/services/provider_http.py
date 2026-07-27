@@ -76,10 +76,7 @@ class _LoopLocalProviderClientPool:
         origin = _origin(base_url)
         normalized_timeout = max(0.1, float(timeout_seconds))
         client_factory_id = id(httpx.AsyncClient)
-        key = (
-            f"{provider.strip().lower()}|{origin}|{normalized_timeout:g}|"
-            f"{int(follow_redirects)}|{client_factory_id}"
-        )
+        key = f"{provider.strip().lower()}|{origin}|{normalized_timeout:g}|{int(follow_redirects)}|{client_factory_id}"
         with self._guard:
             clients = self._clients.get(loop)
             if clients is None:
