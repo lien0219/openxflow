@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,7 +109,9 @@ function Field({ label, children, help }: FieldProps) {
       {label}
       {children}
       {help ? (
-        <span className="text-xs font-normal text-muted-foreground">{help}</span>
+        <span className="text-xs font-normal text-muted-foreground">
+          {help}
+        </span>
       ) : null}
     </label>
   );
@@ -401,8 +403,7 @@ export default function ChannelConnectionDialog({
         credentials.bot_name = form.wecomBotName.trim();
       }
       if (form.wecomPushWebhookUrl.trim()) {
-        credentials.message_push_webhook_url =
-          form.wecomPushWebhookUrl.trim();
+        credentials.message_push_webhook_url = form.wecomPushWebhookUrl.trim();
       }
     } else {
       if (form.corpId.trim()) credentials.corp_id = form.corpId.trim();

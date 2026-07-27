@@ -268,16 +268,18 @@ async def verify_wecom_callback(
     if connection is None or connection.channel_type != "wecom" or not connection.enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
     adapter = build_channel_adapter(connection)
+    if not isinstance(adapter, (WeComAIBotChannelAdapter, WeComChannelAdapter)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Connection is not a WeCom channel",
+        )
     try:
-        if isinstance(adapter, WeComAIBotChannelAdapter) or isinstance(adapter, WeComChannelAdapter):
-            plaintext = adapter.verify_url(
-                signature=msg_signature,
-                timestamp=timestamp,
-                nonce=nonce,
-                echo=echo,
-            )
-        else:
-            raise ValueError("Connection is not a WeCom channel")
+        plaintext = adapter.verify_url(
+            signature=msg_signature,
+            timestamp=timestamp,
+            nonce=nonce,
+            echo=echo,
+        )
     except (PermissionError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
