@@ -143,10 +143,9 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
         client = provider_http_client_for_url("dingtalk-session", webhook_url, self.timeout_seconds)
         response = await client.post(webhook_url, json=payload)
         response.raise_for_status()
-        if response.content:
-            body = response.json()
-            if isinstance(body, dict) and body.get("errcode") not in {None, 0, "0"}:
-                raise DingTalkAPIError(str(body.get("errmsg") or body["errcode"]))
+        body = response_json_object(response)
+        if body is not None and body.get("errcode") not in {None, 0, "0"}:
+            raise DingTalkAPIError(str(body.get("errmsg") or body["errcode"]))
 
     async def download_file(self, external_file_id: str) -> tuple[bytes, dict[str, Any]]:
         identifier = self._decode_file_identifier(external_file_id)
