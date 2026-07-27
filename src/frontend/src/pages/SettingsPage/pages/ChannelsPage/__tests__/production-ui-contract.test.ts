@@ -75,4 +75,17 @@ describe("Channel Center production UI contract", () => {
     expect(connectionDialog).not.toContain('"xls,');
     expect(connectionDialog).not.toContain('"ppt,');
   });
+
+  it("exposes WeCom AI bot group mode separately from internal-app mode", () => {
+    const connectionDialog = read(
+      resolve(channelRoot, "components/ChannelConnectionDialog.tsx"),
+    );
+
+    expect(connectionDialog).toContain('type WeComMode = "ai_bot" | "webhook"');
+    expect(connectionDialog).toContain('option value="ai_bot"');
+    expect(connectionDialog).toContain('credentials.token = form.wecomBotToken.trim()');
+    expect(connectionDialog).toContain(
+      'credentials.message_push_webhook_url =',
+    );
+  });
 });
