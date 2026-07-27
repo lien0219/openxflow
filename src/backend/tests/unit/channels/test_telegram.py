@@ -38,7 +38,32 @@ async def test_telegram_text_message_is_normalized_without_acknowledgement():
     assert event.user.external_user_id == "10"
     assert event.conversation.external_conversation_id == "-20"
     assert event.message.text == "/help"
+    assert event.message.metadata["telegram_update_type"] == "message"
     assert adapter.requires_event_acknowledgement(event) is False
+
+
+async def test_telegram_channel_post_and_topic_metadata_are_normalized():
+    adapter = build_adapter()
+    payload = json.dumps(
+        {
+            "update_id": 104,
+            "channel_post": {
+                "message_id": 12,
+                "sender_chat": {"id": -100, "type": "channel", "title": "Updates"},
+                "chat": {"id": -100, "type": "channel", "title": "Updates"},
+                "message_thread_id": 77,
+                "text": "发布说明",
+            },
+        }
+    ).encode()
+
+    event = await adapter.parse_event({}, payload)
+
+    assert event.user.external_user_id == "-100"
+    assert event.user.display_name == "Updates"
+    assert event.conversation.conversation_type == "channel"
+    assert event.message.metadata["telegram_update_type"] == "channel_post"
+    assert event.message.metadata["message_thread_id"] == 77
 
 
 async def test_telegram_document_is_normalized_without_acknowledgement():
@@ -147,6 +172,59 @@ async def test_telegram_send_message_builds_inline_keyboard(monkeypatch):
 
     assert external_id == "10:9"
     assert captured["method"] == "sendMessage"
+    assert captured["payload"]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "approve"
+
+
+async def test_telegram_send_response_replies_in_original_topic(monkeypatch):
+    adapter = build_adapter()
+    captured = {}
+    event = await adapter.parse_event(
+        {},
+        json.dumps(
+            {
+                "update_id": 105,
+                "message": {
+                    "message_id": 25,
+                    "from": {"id": 10, "first_name": "Li"},
+                    "chat": {"id": -20, "type": "supergroup", "title": "Team"},
+                    "message_thread_id": 88,
+                    "text": "问题",
+                },
+            }
+        ).encode(),
+    )
+
+    async def fake_request(method, *, payload=None):
+        captured["method"] = method
+        captured["payload"] = payload
+        return {"message_id": 26, "chat": {"id": -20}}
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+
+    await adapter.send_response(event, ChannelMessage(text="回答"))
+
+    assert captured["payload"]["reply_parameters"] == {"message_id": 25}
+    assert captured["payload"]["message_thread_id"] == 88
+
+
+async def test_telegram_long_action_uses_action_id_as_callback_fallback(monkeypatch):
+    adapter = build_adapter()
+    captured = {}
+
+    async def fake_request(method, *, payload=None):
+        captured["payload"] = payload
+        return {"message_id": 9, "chat": {"id": 10}}
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+
+    await adapter.send_message(
+        "10",
+        ChannelMessage(
+            text="Run?",
+            actions=[ChannelAction(action_id="approve", label="Approve", value="值" * 100)],
+        ),
+    )
+
     assert captured["payload"]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "approve"
 
 
