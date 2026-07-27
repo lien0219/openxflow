@@ -69,7 +69,7 @@ async def update_user_last_login_at(user_id: UUID, db: AsyncSession) -> User | N
             raise
         try:
             await db.rollback()
-        except Exception as rollback_error:  # noqa: BLE001
+        except Exception as rollback_error:
             await logger.aerror(f"Error rolling back failed last-login update: {rollback_error!s}")
             raise error from rollback_error
         await logger.awarning(f"Unable to update user last login time; continuing login: {error!s}")

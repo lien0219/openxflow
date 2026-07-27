@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
 from weakref import WeakKeyDictionary
 
-from filelock import FileLock, Timeout as FileLockTimeout
+from filelock import FileLock
+from filelock import Timeout as FileLockTimeout
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.sql.elements import TextClause

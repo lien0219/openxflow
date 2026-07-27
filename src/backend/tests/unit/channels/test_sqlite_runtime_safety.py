@@ -402,8 +402,7 @@ async def test_real_sqlite_writes_serialize_while_reads_remain_concurrent(monkey
         async with engine.begin() as connection:
             await connection.execute(
                 sa.text(
-                    "CREATE TABLE runtime_item ("
-                    "id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER NOT NULL UNIQUE)"
+                    "CREATE TABLE runtime_item (id INTEGER PRIMARY KEY AUTOINCREMENT, value INTEGER NOT NULL UNIQUE)"
                 )
             )
 
