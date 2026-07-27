@@ -59,7 +59,10 @@ class _LoopLocalProviderClientPool:
 
     def __init__(self) -> None:
         self._guard = Lock()
-        self._clients: WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, httpx.AsyncClient]] = WeakKeyDictionary()
+        self._clients: WeakKeyDictionary[
+            asyncio.AbstractEventLoop,
+            dict[str, httpx.AsyncClient],
+        ] = WeakKeyDictionary()
 
     def get(
         self,
@@ -72,7 +75,11 @@ class _LoopLocalProviderClientPool:
         loop = asyncio.get_running_loop()
         origin = _origin(base_url)
         normalized_timeout = max(0.1, float(timeout_seconds))
-        key = f"{provider.strip().lower()}|{origin}|{normalized_timeout:g}|{int(follow_redirects)}"
+        client_factory_id = id(httpx.AsyncClient)
+        key = (
+            f"{provider.strip().lower()}|{origin}|{normalized_timeout:g}|"
+            f"{int(follow_redirects)}|{client_factory_id}"
+        )
         with self._guard:
             clients = self._clients.get(loop)
             if clients is None:
@@ -153,6 +160,7 @@ async def reset_provider_http_clients_for_testing() -> None:
 
 
 def provider_http_client_count_for_testing() -> int:
+    """Return current-loop client count for deterministic tests."""
     return _CLIENT_POOL.current_loop_client_count_for_testing()
 
 
