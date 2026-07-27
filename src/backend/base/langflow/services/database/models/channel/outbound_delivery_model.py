@@ -26,7 +26,7 @@ class ChannelOutboundDeliveryStatus(str, Enum):
 
 
 class ChannelOutboundDelivery(SQLModel, table=True):  # type: ignore[call-arg]
-    """One provider delivery slot for one inbound event and delivery kind."""
+    """One provider delivery slot for one inbound event, kind, and logical part."""
 
     __tablename__ = "channel_outbound_delivery"
     __table_args__ = (
@@ -34,7 +34,8 @@ class ChannelOutboundDelivery(SQLModel, table=True):  # type: ignore[call-arg]
             "connection_id",
             "external_event_id",
             "delivery_kind",
-            name="uq_channel_outbound_delivery_event_kind",
+            "delivery_key",
+            name="uq_channel_outbound_delivery_event_kind_key",
         ),
         Index("ix_channel_outbound_delivery_status_updated", "status", "updated_at"),
     )
@@ -50,6 +51,7 @@ class ChannelOutboundDelivery(SQLModel, table=True):  # type: ignore[call-arg]
     )
     external_event_id: str = Field(nullable=False, max_length=255)
     delivery_kind: str = Field(nullable=False, max_length=32)
+    delivery_key: str = Field(default="default", nullable=False, max_length=64)
     response_digest: str = Field(nullable=False, max_length=64)
     status: str = Field(default=ChannelOutboundDeliveryStatus.RESERVED.value, nullable=False, max_length=32)
     attempts: int = Field(default=1, nullable=False)
