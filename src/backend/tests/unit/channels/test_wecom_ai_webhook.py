@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -32,11 +33,12 @@ def _adapter(connection_id):
     )
 
 
-def _encrypted_request(adapter, message, *, timestamp="1710000000", nonce="nonce"):
+def _encrypted_request(adapter, message, *, timestamp=None, nonce="nonce"):
+    resolved_timestamp = timestamp or str(int(time.time()))
     envelope = json.loads(
         adapter.crypt.encrypt_response(
             message,
-            timestamp=timestamp,
+            timestamp=resolved_timestamp,
             nonce=nonce,
             random_prefix=b"0123456789abcdef",
         )
@@ -44,12 +46,12 @@ def _encrypted_request(adapter, message, *, timestamp="1710000000", nonce="nonce
     return (
         json.dumps({"encrypt": envelope["encrypt"]}).encode(),
         envelope["msgsignature"],
-        timestamp,
+        resolved_timestamp,
         nonce,
     )
 
 
-def _decrypt_response(adapter, response, *, timestamp="1710000000", nonce="nonce"):
+def _decrypt_response(adapter, response, *, timestamp, nonce="nonce"):
     envelope = json.loads(response.body)
     return adapter.crypt.decrypt_payload(
         response.body,
@@ -89,7 +91,7 @@ async def test_wecom_ai_initial_callback_returns_pending_stream(monkeypatch) -> 
         timestamp=timestamp,
         nonce=nonce,
     )
-    decoded = _decrypt_response(adapter, response)
+    decoded = _decrypt_response(adapter, response, timestamp=timestamp)
 
     assert decoded["msgtype"] == "stream"
     assert decoded["stream"]["finish"] is False
@@ -125,7 +127,7 @@ async def test_wecom_ai_stream_poll_returns_completed_content(monkeypatch) -> No
         timestamp=timestamp,
         nonce=nonce,
     )
-    decoded = _decrypt_response(adapter, response)
+    decoded = _decrypt_response(adapter, response, timestamp=timestamp)
 
     assert decoded["stream"] == {
         "id": state.stream_id,
