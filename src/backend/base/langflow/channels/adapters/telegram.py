@@ -206,9 +206,7 @@ class TelegramChannelAdapter(ChannelAdapter):
         first_name = str(sender.get("first_name") or "").strip()
         last_name = str(sender.get("last_name") or "").strip()
         display_name = (
-            " ".join(part for part in (first_name, last_name) if part)
-            or sender.get("title")
-            or sender.get("username")
+            " ".join(part for part in (first_name, last_name) if part) or sender.get("title") or sender.get("username")
         )
         sender_id = sender.get("id")
         return ChannelUser(
