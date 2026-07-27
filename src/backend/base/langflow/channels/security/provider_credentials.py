@@ -6,8 +6,6 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-# Telegram echoes this value in X-Telegram-Bot-Api-Secret-Token, so keep it
-# within the provider-compatible character set before persisting a connection.
 _TELEGRAM_WEBHOOK_SECRET = re.compile(r"^[A-Za-z0-9_-]{16,256}$")
 _WECOM_ENCODING_AES_KEY = re.compile(r"^[A-Za-z0-9+/]{43}$")
 
@@ -27,6 +25,14 @@ def _required(credentials: Mapping[str, str], key: str, *, provider: str) -> str
     return value.strip()
 
 
+def _validate_wecom_encoding_key(credentials: Mapping[str, str], *, provider: str) -> None:
+    encoding_key = _required(credentials, "encoding_aes_key", provider=provider)
+    if not _WECOM_ENCODING_AES_KEY.fullmatch(encoding_key):
+        raise ChannelProviderCredentialError(
+            f"{provider} credential 'encoding_aes_key' must be a 43-character EncodingAESKey"
+        )
+
+
 def validate_channel_provider_credentials(
     channel_type: Any,
     connection_mode: Any,
@@ -39,7 +45,12 @@ def validate_channel_provider_credentials(
     if normalized_channel == "mock":
         return
 
-    allowed_modes = {"stream", "webhook"} if normalized_channel == "dingtalk" else {"webhook"}
+    if normalized_channel == "dingtalk":
+        allowed_modes = {"stream", "webhook"}
+    elif normalized_channel == "wecom":
+        allowed_modes = {"webhook", "ai_bot"}
+    else:
+        allowed_modes = {"webhook"}
     if normalized_mode not in allowed_modes:
         allowed = ", ".join(sorted(allowed_modes))
         raise ChannelProviderCredentialError(
@@ -66,6 +77,11 @@ def validate_channel_provider_credentials(
         _required(credentials, "client_secret", provider="DingTalk")
         return
 
+    if normalized_channel == "wecom" and normalized_mode == "ai_bot":
+        _required(credentials, "token", provider="WeCom AI Bot")
+        _validate_wecom_encoding_key(credentials, provider="WeCom AI Bot")
+        return
+
     if normalized_channel == "wecom":
         _required(credentials, "corp_id", provider="WeCom")
         _required(credentials, "corp_secret", provider="WeCom")
@@ -73,11 +89,7 @@ def validate_channel_provider_credentials(
         if not agent_id.isdigit() or int(agent_id) <= 0:
             raise ChannelProviderCredentialError("WeCom credential 'agent_id' must be a positive integer")
         _required(credentials, "callback_token", provider="WeCom")
-        encoding_key = _required(credentials, "encoding_aes_key", provider="WeCom")
-        if not _WECOM_ENCODING_AES_KEY.fullmatch(encoding_key):
-            raise ChannelProviderCredentialError(
-                "WeCom credential 'encoding_aes_key' must be a 43-character EncodingAESKey"
-            )
+        _validate_wecom_encoding_key(credentials, provider="WeCom")
         return
 
     raise ChannelProviderCredentialError(f"Unsupported channel provider '{channel_type}'")
