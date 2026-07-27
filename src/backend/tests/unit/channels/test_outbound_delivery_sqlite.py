@@ -31,6 +31,7 @@ CREATE TABLE channel_outbound_delivery (
     connection_id CHAR(32) NOT NULL,
     external_event_id VARCHAR(255) NOT NULL,
     delivery_kind VARCHAR(32) NOT NULL,
+    delivery_key VARCHAR(64) NOT NULL DEFAULT 'default',
     response_digest VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL,
     attempts INTEGER NOT NULL,
@@ -39,8 +40,8 @@ CREATE TABLE channel_outbound_delivery (
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     sent_at DATETIME,
-    CONSTRAINT uq_channel_outbound_delivery_event_kind
-        UNIQUE (connection_id, external_event_id, delivery_kind)
+    CONSTRAINT uq_channel_outbound_delivery_event_kind_key
+        UNIQUE (connection_id, external_event_id, delivery_kind, delivery_key)
 )
 """
 
@@ -137,6 +138,52 @@ async def test_outbound_delivery_receipts_separate_acknowledgement_and_response(
         await engine.dispose()
 
 
+async def test_outbound_delivery_parts_have_independent_at_most_once_receipts(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    engine, factory = await _database(tmp_path)
+
+    @asynccontextmanager
+    async def test_session_scope():
+        async with factory() as session:
+            yield session
+
+    monkeypatch.setattr(outbound_delivery, "session_scope", test_session_scope)
+    connection_id = uuid4()
+    event = _event(connection_id)
+
+    try:
+        first = await outbound_delivery.reserve_outbound_delivery(
+            event,
+            ChannelMessage(text="part one"),
+            delivery_key="part:1:2",
+        )
+        second = await outbound_delivery.reserve_outbound_delivery(
+            event,
+            ChannelMessage(text="part two"),
+            delivery_key="part:2:2",
+        )
+        assert first.should_send is True
+        assert second.should_send is True
+        assert first.delivery_id != second.delivery_id
+
+        await outbound_delivery.mark_outbound_delivery_sent(
+            first.delivery_id,
+            first.delivery_kind,
+            "provider-part-1",
+        )
+        duplicate_first = await outbound_delivery.reserve_outbound_delivery(
+            event,
+            ChannelMessage(text="part one"),
+            delivery_key="part:1:2",
+        )
+        assert duplicate_first.should_send is False
+        assert duplicate_first.provider_message_id == "provider-part-1"
+    finally:
+        await engine.dispose()
+
+
 async def test_outbound_delivery_cleanup_removes_only_expired_terminal_receipts(
     monkeypatch,
     tmp_path,
@@ -184,7 +231,7 @@ async def test_outbound_delivery_cleanup_removes_only_expired_terminal_receipts(
 
         async with factory() as session:
             counts = await outbound_delivery.cleanup_outbound_deliveries(session)
-        assert counts == {"acknowledgement": 0, "response": 2}
+        assert counts == {"acknowledgement": 0, "processing": 0, "response": 2}
 
         async with factory() as session:
             remaining = list((await session.exec(select(ChannelOutboundDelivery))).all())
