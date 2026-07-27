@@ -58,5 +58,26 @@ def test_wecom_requires_positive_agent_and_valid_encoding_key() -> None:
         )
 
 
+def test_wecom_ai_bot_mode_uses_bot_token_credentials() -> None:
+    credentials = {
+        "token": "ai-bot-token",
+        "encoding_aes_key": "A" * 43,
+        "bot_name": "OpenXFlow",
+    }
+    validate_channel_provider_credentials("wecom", "ai_bot", credentials)
+
+    with pytest.raises(ChannelProviderCredentialError, match="token"):
+        validate_channel_provider_credentials(
+            "wecom",
+            "ai_bot",
+            {"encoding_aes_key": "A" * 43},
+        )
+
+
+def test_wecom_rejects_unknown_connection_mode() -> None:
+    with pytest.raises(ChannelProviderCredentialError, match="Unsupported"):
+        validate_channel_provider_credentials("wecom", "group_robot", {})
+
+
 def test_mock_provider_remains_available_for_isolated_tests() -> None:
     validate_channel_provider_credentials("mock", "test", {})
