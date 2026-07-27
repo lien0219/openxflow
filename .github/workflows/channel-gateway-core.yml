@@ -85,6 +85,21 @@ jobs:
           --output-format concise
           src/backend/tests/unit/channels
 
+      - name: Ruff SQLite runtime integration
+        shell: bash
+        run: |
+          set +e
+          uvx --quiet ruff check --config pyproject.toml --output-format concise \
+            src/backend/base/langflow/services/database/models/user/crud.py \
+            src/backend/tests/unit/channels/test_sqlite_runtime_safety.py \
+            src/lfx/src/lfx/services/deps.py \
+            src/lfx/src/lfx/services/sqlite_runtime.py \
+            src/lfx/src/lfx/services/settings/groups/database.py \
+            2>&1 | tee /tmp/sqlite-ruff.log
+          sqlite_ruff_status=${PIPESTATUS[0]}
+          printf 'sqlite_ruff_status=%s\n' "$sqlite_ruff_status" | tee /tmp/sqlite-ruff-status.log
+          exit "$sqlite_ruff_status"
+
       - name: Compile channel and SQLite runtime code
         run: >-
           python -m compileall -q
@@ -151,5 +166,7 @@ jobs:
             /tmp/channel-adapters.log
             /tmp/channel-database.log
             /tmp/channel-status.log
+            /tmp/sqlite-ruff.log
+            /tmp/sqlite-ruff-status.log
           if-no-files-found: error
           retention-days: 7
