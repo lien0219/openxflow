@@ -45,18 +45,37 @@ _SQLITE_WRITE_PREFIXES = {
 }
 _DEFAULT_WRITE_WAIT_SECONDS = 10.0
 _DEFAULT_PROCESS_LOCK_WAIT_SECONDS = 0.0
+_SQLITE_GUARD_INSTALLED_KEY = "openxflow_sqlite_guard_installed"
 
 
 class SQLiteNestedWriteError(RuntimeError):
     """Raised when one task opens a second write session before committing the first."""
 
+    def __init__(self) -> None:
+        super().__init__(
+            "Nested SQLite write sessions were detected in the same task. "
+            "Commit or roll back the outer session before opening an independent write session."
+        )
+
 
 class SQLiteWriteTimeoutError(TimeoutError):
     """Raised when a SQLite write transaction cannot enter the application write queue."""
 
+    def __init__(self, wait_seconds: float) -> None:
+        super().__init__(
+            f"SQLite write queue wait exceeded {wait_seconds:g} seconds. "
+            "A transaction is likely being held open across network or workflow work."
+        )
+
 
 class SQLiteConcurrentSessionUseError(RuntimeError):
     """Raised when one guarded session is written from multiple asyncio tasks."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "A SQLite AsyncSession was used for writes by multiple asyncio tasks. "
+            "Create one session per task and commit each transaction before sharing results."
+        )
 
 
 def is_sqlite_url(database_url: str | None) -> bool:
@@ -134,23 +153,14 @@ class SQLiteWriteCoordinator:
         current_task = asyncio.current_task()
         if self._owner is owner:
             if current_task is not None and self._owner_task is not current_task:
-                raise SQLiteConcurrentSessionUseError(
-                    "A SQLite AsyncSession was used for writes by multiple asyncio tasks. "
-                    "Create one session per task and commit each transaction before sharing results."
-                )
+                raise SQLiteConcurrentSessionUseError
             return
         if current_task is not None and self._owner_task is current_task:
-            raise SQLiteNestedWriteError(
-                "Nested SQLite write sessions were detected in the same task. "
-                "Commit or roll back the outer session before opening an independent write session."
-            )
+            raise SQLiteNestedWriteError
         try:
             await asyncio.wait_for(self._lock.acquire(), timeout=self.wait_seconds)
         except TimeoutError as exc:
-            raise SQLiteWriteTimeoutError(
-                f"SQLite write queue wait exceeded {self.wait_seconds:g} seconds. "
-                "A transaction is likely being held open across network or workflow work."
-            ) from exc
+            raise SQLiteWriteTimeoutError(self.wait_seconds) from exc
         self._owner = owner
         self._owner_task = current_task
 
@@ -171,7 +181,6 @@ class _ProcessLockEntry:
 
 _PROCESS_LOCK_GUARD = threading.Lock()
 _PROCESS_LOCKS: dict[Path, _ProcessLockEntry] = {}
-_PROCESS_LOCKS_REGISTERED = False
 
 
 def _release_all_process_locks() -> None:
@@ -181,6 +190,9 @@ def _release_all_process_locks() -> None:
     for entry in entries:
         if entry.file_lock.is_locked:
             entry.file_lock.release(force=True)
+
+
+atexit.register(_release_all_process_locks)
 
 
 class SQLiteProcessLock:
@@ -198,8 +210,6 @@ class SQLiteProcessLock:
         *,
         wait_seconds: float = _DEFAULT_PROCESS_LOCK_WAIT_SECONDS,
     ) -> SQLiteProcessLock:
-        global _PROCESS_LOCKS_REGISTERED
-
         resolved = database_path.resolve()
         with _PROCESS_LOCK_GUARD:
             existing = _PROCESS_LOCKS.get(resolved)
@@ -219,9 +229,6 @@ class SQLiteProcessLock:
                 )
                 raise RuntimeError(msg) from exc
             _PROCESS_LOCKS[resolved] = _ProcessLockEntry(file_lock=file_lock)
-            if not _PROCESS_LOCKS_REGISTERED:
-                atexit.register(_release_all_process_locks)
-                _PROCESS_LOCKS_REGISTERED = True
             return cls(resolved, file_lock)
 
     def close(self) -> None:
@@ -280,7 +287,7 @@ def install_sqlite_session_guard(
     if not is_sqlite_url(database_url):
         return
     validate_sqlite_worker_count(database_url, workers)
-    if getattr(session, "_openxflow_sqlite_guard_installed", False):
+    if session.info.get(_SQLITE_GUARD_INSTALLED_KEY, False):
         return
 
     coordinator = _coordinator_for_current_loop(database_url, write_wait_seconds)
@@ -369,13 +376,13 @@ def install_sqlite_session_guard(
         else:
             release_guard()
 
-    async def guarded_rollback() -> None:
+    async def guared_rollback() -> None:
         try:
             await original_rollback()
         finally:
             release_guard()
 
-    async def guarded_close() -> None:
+    async def guared_close() -> None:
         try:
             await original_close()
         finally:
@@ -389,7 +396,7 @@ def install_sqlite_session_guard(
     session.commit = guarded_commit  # type: ignore[method-assign]
     session.rollback = guarded_rollback  # type: ignore[method-assign]
     session.close = guarded_close  # type: ignore[method-assign]
-    session._openxflow_sqlite_guard_installed = True  # type: ignore[attr-defined]
+    session.info[_SQLITE_GUARD_INSTALLED_KEY] = True
 
 
 _RUNTIME_LOCK_GUARD = threading.Lock()

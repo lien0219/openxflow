@@ -61,7 +61,9 @@ export default function AuditLogTab({ connectionId }: AuditLogTabProps) {
       <div>
         <h3 className="font-semibold">{copy("配置审计")}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          {copy("追踪连接、会话、账号、指令和人工重试变更；凭据、令牌与密钥始终脱敏。")}
+          {copy(
+            "追踪连接、会话、账号、指令和人工重试变更；凭据、令牌与密钥始终脱敏。",
+          )}
         </p>
       </div>
 
@@ -91,14 +93,18 @@ export default function AuditLogTab({ connectionId }: AuditLogTabProps) {
         >
           <option value="">{copy("全部资源")}</option>
           {Object.entries(RESOURCE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>{copy(label)}</option>
+            <option key={value} value={value}>
+              {copy(label)}
+            </option>
           ))}
         </select>
       </div>
 
       <div className="min-h-44 min-w-0">
         {isLoading ? (
-          <div className="flex min-h-44 w-full items-center justify-center"><Loading /></div>
+          <div className="flex min-h-44 w-full items-center justify-center">
+            <Loading />
+          </div>
         ) : (result?.items.length ?? 0) === 0 ? (
           <div className="flex min-h-44 items-center justify-center rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
             {copy("当前筛选条件下暂无审计记录")}
@@ -117,18 +123,42 @@ export default function AuditLogTab({ connectionId }: AuditLogTabProps) {
               </thead>
               <tbody>
                 {(result?.items ?? []).map((audit) => (
-                  <tr key={audit.id} className="border-b align-top last:border-0">
-                    <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">{new Date(audit.created_at).toLocaleString()}</td>
-                    <td className="px-3 py-3">{copy(ACTION_LABELS[audit.action] ?? audit.action)}</td>
+                  <tr
+                    key={audit.id}
+                    className="border-b align-top last:border-0"
+                  >
+                    <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                      {new Date(audit.created_at).toLocaleString()}
+                    </td>
                     <td className="px-3 py-3">
-                      <div>{copy(RESOURCE_LABELS[audit.resource_type] ?? audit.resource_type)}</div>
-                      <div className="mt-1 truncate font-mono text-xs text-muted-foreground" title={audit.resource_id ?? undefined}>{audit.resource_id || "-"}</div>
+                      {copy(ACTION_LABELS[audit.action] ?? audit.action)}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div>
+                        {copy(
+                          RESOURCE_LABELS[audit.resource_type] ??
+                            audit.resource_type,
+                        )}
+                      </div>
+                      <div
+                        className="mt-1 truncate font-mono text-xs text-muted-foreground"
+                        title={audit.resource_id ?? undefined}
+                      >
+                        {audit.resource_id || "-"}
+                      </div>
                     </td>
                     <td className="px-3 py-3 font-mono text-xs text-muted-foreground">
-                      <div className="truncate" title={audit.actor_user_id ?? undefined}>{audit.actor_user_id || copy("系统")}</div>
+                      <div
+                        className="truncate"
+                        title={audit.actor_user_id ?? undefined}
+                      >
+                        {audit.actor_user_id || copy("系统")}
+                      </div>
                     </td>
                     <td className="min-w-0 px-3 py-3">
-                      <pre className="max-h-52 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-3 text-xs">{formatChanges(audit.changes_data)}</pre>
+                      <pre className="max-h-52 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-3 text-xs">
+                        {formatChanges(audit.changes_data)}
+                      </pre>
                     </td>
                   </tr>
                 ))}
@@ -139,14 +169,43 @@ export default function AuditLogTab({ connectionId }: AuditLogTabProps) {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
-        <div className="text-muted-foreground">{copy("共 {{count}} 条记录", { count: result?.total ?? 0 })}</div>
+        <div className="text-muted-foreground">
+          {copy("共 {{count}} 条记录", { count: result?.total ?? 0 })}
+        </div>
         <div className="flex items-center gap-2">
-          <select className="primary-input h-9 w-24" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
-            {[20, 50, 100].map((size) => <option key={size} value={size}>{copy("{{count}} 条", { count: size })}</option>)}
+          <select
+            className="primary-input h-9 w-24"
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+          >
+            {[20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {copy("{{count}} 条", { count: size })}
+              </option>
+            ))}
           </select>
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>{copy("上一页")}</Button>
-          <span>{page} / {Math.max(1, result?.total_pages ?? 0)}</span>
-          <Button variant="outline" size="sm" disabled={page >= (result?.total_pages ?? 0)} onClick={() => setPage((current) => current + 1)}>{copy("下一页")}</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            {copy("上一页")}
+          </Button>
+          <span>
+            {page} / {Math.max(1, result?.total_pages ?? 0)}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= (result?.total_pages ?? 0)}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            {copy("下一页")}
+          </Button>
         </div>
       </div>
     </div>
