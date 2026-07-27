@@ -8,12 +8,10 @@ import hashlib
 import ipaddress
 import json
 import time
-from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
-import httpx
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from langflow.channels.adapters.base import ChannelAdapter
@@ -257,7 +255,9 @@ class WeComAIBotChannelAdapter(ChannelAdapter):
             address = None
         if address is not None and (address.is_private or address.is_loopback or address.is_link_local):
             raise ValueError("WeCom AI Bot media URL cannot target a private address")
-        if address is None and not any(host == suffix[1:] or host.endswith(suffix) for suffix in _ALLOWED_MEDIA_HOST_SUFFIXES):
+        if address is None and not any(
+            host == suffix[1:] or host.endswith(suffix) for suffix in _ALLOWED_MEDIA_HOST_SUFFIXES
+        ):
             raise ValueError("Untrusted WeCom AI Bot media host")
 
     async def download_file(self, external_file_id: str) -> tuple[bytes, dict[str, Any]]:
@@ -309,9 +309,7 @@ class WeComAIBotChannelAdapter(ChannelAdapter):
     async def send_message(self, target_id: str, message: ChannelMessage) -> str:
         del target_id
         if not self.message_push_webhook_url:
-            raise NotImplementedError(
-                "WeCom AI Bot proactive delivery requires a message_push_webhook_url credential"
-            )
+            raise NotImplementedError("WeCom AI Bot proactive delivery requires a message_push_webhook_url credential")
         content = self.render_message_text(message)
         client = provider_http_client_for_url(
             "wecom-ai-push",

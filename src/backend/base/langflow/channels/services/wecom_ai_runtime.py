@@ -8,7 +8,6 @@ import json
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any
 from uuid import UUID
 from weakref import WeakKeyDictionary
 
@@ -101,9 +100,7 @@ class WeComAIResponseRuntime:
 
     def _cleanup_locked(self, now: float) -> None:
         expired = [
-            stream_id
-            for stream_id, state in self._by_stream.items()
-            if now - state.updated_at > self.ttl_seconds
+            stream_id for stream_id, state in self._by_stream.items() if now - state.updated_at > self.ttl_seconds
         ]
         if not expired:
             return
