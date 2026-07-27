@@ -7,6 +7,7 @@ from langflow.channels.services.capabilities import get_provider_capability
 
 _MIN_BOUNDARY_RATIO = 0.45
 _BOUNDARY_MARKERS = ("\n\n", "\n", "。", "！", "？", ". ", "! ", "? ", "；", "; ", "，", ", ", " ")
+_TITLE_SEPARATOR = "\n\n"
 
 
 def _find_split_index(value: str, limit: int) -> int:
@@ -22,7 +23,7 @@ def _find_split_index(value: str, limit: int) -> int:
 
 
 def split_channel_text(value: str, limit: int) -> list[str]:
-    """Split Unicode text on semantic boundaries without dropping content."""
+    """Split Unicode text on semantic boundaries without producing oversized chunks."""
     if limit <= 0:
         raise ValueError("limit must be positive")
     remaining = value.strip()
@@ -43,6 +44,20 @@ def split_channel_text(value: str, limit: int) -> list[str]:
     return chunks
 
 
+def _split_with_first_limit(value: str, first_limit: int, next_limit: int) -> list[str]:
+    if first_limit <= 0 or next_limit <= 0:
+        raise ValueError("message limits must be positive")
+    if len(value) <= first_limit:
+        return [value]
+    first_index = _find_split_index(value, first_limit)
+    first = value[:first_index].rstrip()
+    if not first:
+        first = value[:first_limit]
+        first_index = first_limit
+    remaining = value[first_index:].lstrip()
+    return [first, *split_channel_text(remaining, next_limit)] if remaining else [first]
+
+
 def _content_source(message: ChannelMessage) -> tuple[str, str]:
     if message.markdown:
         return "markdown", message.markdown
@@ -60,15 +75,26 @@ def plan_channel_messages(channel_type: str, message: ChannelMessage) -> list[Ch
         return [message]
 
     source_field, source = _content_source(message)
-    if len(source) <= capabilities.max_text_length:
+    title = message.title if source_field != "title" else None
+    maximum = capabilities.max_text_length
+
+    if title and len(title) + len(_TITLE_SEPARATOR) >= maximum:
+        source = f"{title}{_TITLE_SEPARATOR}{source}" if source else title
+        title = None
+        source_field = "markdown" if message.markdown else "text"
+
+    rendered_length = len(source) + (len(title) + len(_TITLE_SEPARATOR) if title else 0)
+    actions_fit = len(message.actions) <= capabilities.max_actions
+    if rendered_length <= maximum and actions_fit:
         return [message]
 
-    chunks = split_channel_text(source, capabilities.max_text_length)
+    first_limit = maximum - (len(title) + len(_TITLE_SEPARATOR) if title else 0)
+    chunks = _split_with_first_limit(source, max(1, first_limit), maximum)
     planned: list[ChannelMessage] = []
     total = len(chunks)
     for index, chunk in enumerate(chunks):
         update = {
-            "title": message.title if index == 0 and source_field != "title" else None,
+            "title": title if index == 0 else None,
             "text": chunk if source_field in {"text", "title"} else None,
             "markdown": chunk if source_field == "markdown" else None,
             "actions": message.actions[: capabilities.max_actions] if index == total - 1 else [],
