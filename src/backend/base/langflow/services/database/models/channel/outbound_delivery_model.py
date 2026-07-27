@@ -51,7 +51,14 @@ class ChannelOutboundDelivery(SQLModel, table=True):  # type: ignore[call-arg]
     )
     external_event_id: str = Field(nullable=False, max_length=255)
     delivery_kind: str = Field(nullable=False, max_length=32)
-    delivery_key: str = Field(default="default", nullable=False, max_length=64)
+    delivery_key: str = Field(
+        default="default",
+        sa_column=Column(
+            sa.String(length=64),
+            nullable=False,
+            server_default="default",
+        ),
+    )
     response_digest: str = Field(nullable=False, max_length=64)
     status: str = Field(default=ChannelOutboundDeliveryStatus.RESERVED.value, nullable=False, max_length=32)
     attempts: int = Field(default=1, nullable=False)
