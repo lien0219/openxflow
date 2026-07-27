@@ -80,7 +80,7 @@ PROVIDER_CAPABILITIES: dict[str, ChannelProviderCapabilities] = {
         supports_interactive_card=True,
         max_text_length=1800,
         max_actions=6,
-        group_chat_scope="application_created_chats",
+        group_chat_scope="ai_bot_mode",
     ),
     "mock": ChannelProviderCapabilities(
         conversation_types=("private", "group"),
