@@ -80,6 +80,8 @@ def plan_channel_messages(channel_type: str, message: ChannelMessage) -> list[Ch
             },
         }
         if total > 1 and message.message_type is ChannelMessageType.CARD:
-            update["message_type"] = ChannelMessageType.MARKDOWN if source_field == "markdown" else ChannelMessageType.TEXT
+            update["message_type"] = (
+                ChannelMessageType.MARKDOWN if source_field == "markdown" else ChannelMessageType.TEXT
+            )
         planned.append(message.model_copy(update=update))
     return planned
