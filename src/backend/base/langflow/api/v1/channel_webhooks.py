@@ -14,6 +14,7 @@ from langflow.api.utils import DbSession
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.feishu import FeishuChannelAdapter
 from langflow.channels.adapters.wecom import WeComChannelAdapter
+from langflow.channels.adapters.wecom_ai import WeComAIBotChannelAdapter
 from langflow.channels.security.webhook_headers import durable_webhook_headers
 from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
 from langflow.channels.services.outbound_delivery_maintenance import (
@@ -31,6 +32,10 @@ from langflow.channels.services.webhook_processing import (
     release_provider_webhook_slot,
     reserve_provider_webhook_slot,
     webhook_limiter_snapshot,
+)
+from langflow.channels.services.wecom_ai_runtime import (
+    process_wecom_ai_event,
+    wecom_ai_response_runtime,
 )
 from langflow.services.database.models.channel.model import ChannelConnection
 
@@ -98,6 +103,15 @@ async def _read_limited_body(request: Request) -> bytes:
     return bytes(payload)
 
 
+def _request_headers(
+    request: Request,
+    provider_headers: dict[str, str] | None = None,
+) -> dict[str, str]:
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    headers.update({key.lower(): value for key, value in (provider_headers or {}).items()})
+    return headers
+
+
 async def _validate_and_schedule_provider_event(
     *,
     connection_id: UUID,
@@ -113,8 +127,7 @@ async def _validate_and_schedule_provider_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
 
     payload = preloaded_payload if preloaded_payload is not None else await _read_limited_body(request)
-    headers = {key.lower(): value for key, value in request.headers.items()}
-    headers.update({key.lower(): value for key, value in (provider_headers or {}).items()})
+    headers = _request_headers(request, provider_headers)
     adapter = build_channel_adapter(connection)
 
     try:
@@ -205,7 +218,7 @@ async def receive_feishu_webhook(
     if not isinstance(adapter, FeishuChannelAdapter):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a Feishu channel")
 
-    headers = {key.lower(): value for key, value in request.headers.items()}
+    headers = _request_headers(request)
     if adapter.is_url_verification(payload):
         if not await adapter.verify_event(headers, payload):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Feishu verification token")
@@ -251,20 +264,95 @@ async def verify_wecom_callback(
     if connection is None or connection.channel_type != "wecom" or not connection.enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
     adapter = build_channel_adapter(connection)
-    if not isinstance(adapter, WeComChannelAdapter):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a WeCom channel")
     try:
-        plaintext = adapter.verify_url(
-            signature=msg_signature,
-            timestamp=timestamp,
-            nonce=nonce,
-            echo=echo,
-        )
+        if isinstance(adapter, WeComAIBotChannelAdapter):
+            plaintext = adapter.verify_url(
+                signature=msg_signature,
+                timestamp=timestamp,
+                nonce=nonce,
+                echo=echo,
+            )
+        elif isinstance(adapter, WeComChannelAdapter):
+            plaintext = adapter.verify_url(
+                signature=msg_signature,
+                timestamp=timestamp,
+                nonce=nonce,
+                echo=echo,
+            )
+        else:
+            raise ValueError("Connection is not a WeCom channel")
     except (PermissionError, ValueError) as exc:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid WeCom callback verification"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid WeCom callback verification",
         ) from exc
     return PlainTextResponse(plaintext)
+
+
+async def _receive_wecom_ai_callback(
+    *,
+    connection: ChannelConnection,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    msg_signature: str,
+    timestamp: str,
+    nonce: str,
+) -> PlainTextResponse:
+    adapter = build_channel_adapter(connection)
+    if not isinstance(adapter, WeComAIBotChannelAdapter):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connection is not a WeCom AI Bot")
+    payload = await _read_limited_body(request)
+    headers = _request_headers(
+        request,
+        {
+            "x-wecom-msg-signature": msg_signature,
+            "x-wecom-timestamp": timestamp,
+            "x-wecom-nonce": nonce,
+        },
+    )
+    try:
+        decrypted = adapter.decrypt_event(headers, payload)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid WeCom AI Bot callback") from exc
+
+    msg_type = str(decrypted.get("msgtype") or "").lower()
+    runtime = wecom_ai_response_runtime()
+    if msg_type == "stream":
+        stream = decrypted.get("stream") if isinstance(decrypted.get("stream"), dict) else {}
+        stream_id = str(stream.get("id") or "")
+        state = await runtime.poll(stream_id) if stream_id else None
+        response = adapter.encrypted_stream_response(
+            stream_id=stream_id or "unknown",
+            content=state.content if state is not None else "",
+            finish=state.finished if state is not None else True,
+            timestamp=timestamp,
+            nonce=nonce,
+        )
+        return PlainTextResponse(response, media_type="application/json")
+
+    if msg_type == "event":
+        return PlainTextResponse("success")
+
+    try:
+        event = adapter.parse_decrypted_event(decrypted)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    state, is_new = await runtime.reserve(connection.id, event.event_id)
+    if is_new:
+        background_tasks.add_task(
+            process_wecom_ai_event,
+            connection_id=connection.id,
+            event=event,
+            stream_id=state.stream_id,
+        )
+    response = adapter.encrypted_stream_response(
+        stream_id=state.stream_id,
+        content=state.content,
+        finish=state.finished,
+        timestamp=timestamp,
+        nonce=nonce,
+    )
+    return PlainTextResponse(response, media_type="application/json")
 
 
 @router.post("/wecom/{connection_id}", response_class=PlainTextResponse)
@@ -277,6 +365,18 @@ async def receive_wecom_callback(
     timestamp: Annotated[str, Query()],
     nonce: Annotated[str, Query()],
 ) -> PlainTextResponse:
+    connection = await db.get(ChannelConnection, connection_id)
+    if connection is None or connection.channel_type != "wecom" or not connection.enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
+    if connection.connection_mode == "ai_bot":
+        return await _receive_wecom_ai_callback(
+            connection=connection,
+            request=request,
+            background_tasks=background_tasks,
+            msg_signature=msg_signature,
+            timestamp=timestamp,
+            nonce=nonce,
+        )
     await _validate_and_schedule_provider_event(
         connection_id=connection_id,
         request=request,
