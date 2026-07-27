@@ -49,16 +49,30 @@ jobs:
         run: npm ci --ignore-scripts --loglevel=error
 
       - name: Check Channel Center formatting and lint
-        run: >-
-          npx --no-install biome check
-          src/controllers/API/queries/channels
-          src/pages/SettingsPage/pages/ChannelsPage
-          src/controllers/API/helpers/constants.ts
-          src/pages/SettingsPage/index.tsx
-          src/routes.tsx
-          src/i18n.ts
-          src/locales/channelTranslations.ts
-          tsconfig.channels.json
+        shell: bash
+        run: |
+          set +e
+          npx --no-install biome check \
+            src/controllers/API/queries/channels \
+            src/pages/SettingsPage/pages/ChannelsPage \
+            src/controllers/API/helpers/constants.ts \
+            src/pages/SettingsPage/index.tsx \
+            src/routes.tsx \
+            src/i18n.ts \
+            src/locales/channelTranslations.ts \
+            tsconfig.channels.json 2>&1 | tee /tmp/channel-biome.log
+          biome_status=${PIPESTATUS[0]}
+          set -e
+          exit "$biome_status"
+
+      - name: Upload Channel Center Biome diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: channel-biome-log
+          path: /tmp/channel-biome.log
+          if-no-files-found: ignore
+          retention-days: 2
 
   unit-tests:
     runs-on: ubuntu-latest
