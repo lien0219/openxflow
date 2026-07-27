@@ -9,7 +9,7 @@ from typing import Any, ClassVar
 import httpx
 
 from langflow.channels.adapters.wecom import WeComAPIError, WeComChannelAdapter
-from langflow.channels.domain.models import ChannelEvent, ChannelMessage
+from langflow.channels.domain.models import ChannelEvent
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
 from langflow.channels.services.provider_http import (
     DownloadedProviderFile,
@@ -147,35 +147,7 @@ class ResilientWeComChannelAdapter(WeComChannelAdapter):
                 raise ValueError("WeCom callback AgentID must be an integer") from exc
             if parsed_agent_id != self.agent_id:
                 raise ValueError("WeCom callback AgentID does not match this channel connection")
-        normalized = super()._normalize_message(message)
-        chat_id = message.get("ChatId", "").strip()
-        if chat_id:
-            normalized.conversation.external_conversation_id = f"group:{chat_id}"
-            normalized.conversation.conversation_type = "group"
-            normalized.conversation.metadata["chat_id"] = chat_id
-        return normalized
-
-    async def send_message(self, target_id: str, message: ChannelMessage) -> str:
-        if not target_id.startswith("group:"):
-            return await super().send_message(target_id, message)
-        chat_id = target_id.removeprefix("group:").strip()
-        if not chat_id:
-            raise ValueError("WeCom app-chat target ID is required")
-        content = message.markdown or message.text or message.title or "OpenXFlow"
-        if message.actions:
-            action_lines = [f"{action.label}：{action.value or action.action_id}" for action in message.actions]
-            content = f"{content}\n\n" + "\n".join(action_lines)
-        body = await self._api_request(
-            "POST",
-            "/cgi-bin/appchat/send",
-            payload={
-                "chatid": chat_id,
-                "msgtype": "text",
-                "text": {"content": content[:2048]},
-                "safe": 0,
-            },
-        )
-        return str(body.get("msgid") or body.get("response_code") or "")
+        return super()._normalize_message(message)
 
     @staticmethod
     def _download_error_body(content: bytes, content_type: str | None) -> dict[str, Any] | None:
