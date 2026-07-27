@@ -16,7 +16,11 @@ on:
       - "src/backend/base/langflow/alembic/versions/f7d0b5c3e4a6_add_channel_webhook_jobs.py"
       - "src/backend/base/langflow/alembic/versions/a8e1c6d4f5b7_add_channel_outbound_delivery.py"
       - "src/backend/base/langflow/services/database/models/channel/**"
+      - "src/backend/base/langflow/services/database/models/user/crud.py"
       - "src/backend/tests/unit/channels/**"
+      - "src/lfx/src/lfx/services/deps.py"
+      - "src/lfx/src/lfx/services/sqlite_runtime.py"
+      - "src/lfx/src/lfx/services/settings/groups/database.py"
   workflow_dispatch:
 
 permissions:
@@ -81,11 +85,15 @@ jobs:
           --output-format concise
           src/backend/tests/unit/channels
 
-      - name: Compile channel code
+      - name: Compile channel and SQLite runtime code
         run: >-
           python -m compileall -q
           src/backend/base/langflow/channels
+          src/backend/base/langflow/services/database/models/user/crud.py
           src/backend/tests/unit/channels
+          src/lfx/src/lfx/services/deps.py
+          src/lfx/src/lfx/services/sqlite_runtime.py
+          src/lfx/src/lfx/services/settings/groups/database.py
 
       - name: Run all channel contract suites
         shell: bash
@@ -121,6 +129,7 @@ jobs:
             --confcutdir=src/backend/tests/unit/channels \
             src/backend/tests/unit/channels/test_channel_migrations_sqlite.py \
             src/backend/tests/unit/channels/test_outbound_delivery_model.py \
+            src/backend/tests/unit/channels/test_sqlite_runtime_safety.py \
             2>&1 | tee /tmp/channel-database.log
           database_status=${PIPESTATUS[0]}
 

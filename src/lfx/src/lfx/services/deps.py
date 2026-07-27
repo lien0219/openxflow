@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from lfx.log.logger import logger
 from lfx.services.config_discovery import resolve_config_dir
 from lfx.services.schema import ServiceType
+from lfx.services.sqlite_runtime import ensure_sqlite_process_safety, install_sqlite_session_guard, is_sqlite_url
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -110,7 +111,7 @@ def get_extension_events_service():
     """Retrieves the ExtensionEventsService instance.
 
     Returns None if the service manager is not initialised (e.g. in unit-test
-    environments that don't boot the full service stack).  Callers must guard
+    environments that don't boot the full service stack). Callers must guard
     against None and fall back to structured logging.
     """
     from lfx.services.extension_events.factory import ExtensionEventsServiceFactory
@@ -119,46 +120,35 @@ def get_extension_events_service():
 
 
 def get_chat_service() -> ChatServiceProtocol | None:
-    """Retrieves the chat service instance."""
+    """Retrieves the ChatService instance."""
     from lfx.services.schema import ServiceType
 
     return get_service(ServiceType.CHAT_SERVICE)
 
 
 def get_tracing_service() -> TracingServiceProtocol | None:
-    """Retrieves the tracing service instance."""
+    """Retrieves the TracingService instance."""
     from lfx.services.schema import ServiceType
 
     return get_service(ServiceType.TRACING_SERVICE)
 
 
 def get_transaction_service() -> TransactionServiceProtocol | None:
-    """Retrieves the transaction service instance.
-
-    Returns the transaction service for logging component executions.
-    Returns None if no transaction service is registered.
-    """
+    """Retrieves the transaction service for component execution logs."""
     from lfx.services.schema import ServiceType
 
     return get_service(ServiceType.TRANSACTION_SERVICE)
 
 
 def get_auth_service() -> AuthServiceProtocol | None:
-    """Retrieves the auth service instance.
-
-    Returns the pluggable auth service (minimal LFX or full Langflow when configured).
-    """
+    """Retrieves the pluggable authentication service."""
     from lfx.services.schema import ServiceType
 
     return get_service(ServiceType.AUTH_SERVICE)
 
 
 def _get_deployment_registry() -> AdapterRegistry[DeploymentServiceProtocol]:
-    """Retrieve the deployment adapter registry singleton.
-
-    Discovery still needs to be triggered separately via
-    ``registry.discover(config_dir=...)``.
-    """
+    """Retrieve the deployment adapter registry singleton."""
     from lfx.services.adapters.registry import get_adapter_registry
     from lfx.services.adapters.schema import AdapterType
 
@@ -174,15 +164,10 @@ _deployment_discovery_lock = threading.Lock()
 def get_deployment_adapter(
     adapter_key: str,
 ) -> DeploymentServiceProtocol | None:
-    """Resolve a singleton deployment adapter instance by key.
-
-    Args:
-        adapter_key: Deployment adapter registry key (for example ``"local"``).
-    """
+    """Resolve a singleton deployment adapter instance by key."""
     registry = _get_deployment_registry()
     if not registry.is_discovered:
         with _deployment_discovery_lock:
-            # Double-check after acquiring lock to avoid redundant discovery.
             if not registry.is_discovered:
                 registry.discover(config_dir=_resolve_adapter_config_dir())
     instance = registry.get_instance(adapter_key, factory=lambda adapter_class: adapter_class())
@@ -212,51 +197,57 @@ async def injectable_session_scope():
 
 
 async def _rollback_session(session: AsyncSession) -> None:
-    """Reset a failed transaction without masking the original application error.
-
-    SQLAlchemy marks a session inactive after a flush or commit failure. That
-    inactive state is precisely when an explicit rollback is required before the
-    session can be used or closed cleanly, so checking ``session.is_active`` here
-    is incorrect.
-    """
+    """Reset a failed transaction without masking the original application error."""
     from sqlalchemy.exc import InvalidRequestError
 
     with suppress(InvalidRequestError):
         await session.rollback()
 
 
+def _database_runtime_values(db_service: DatabaseServiceProtocol) -> tuple[str, int, float]:
+    database_url = str(getattr(db_service, "database_url", "") or "")
+    settings_service = getattr(db_service, "settings_service", None)
+    settings = getattr(settings_service, "settings", None)
+    workers = int(getattr(settings, "workers", 1) or 1)
+    connect_timeout = float(getattr(settings, "db_connect_timeout", 30) or 30)
+    return database_url, workers, min(10.0, max(1.0, connect_timeout))
+
+
+def _configure_sqlite_session(
+    db_service: DatabaseServiceProtocol,
+    session: AsyncSession,
+    *,
+    writable: bool,
+) -> None:
+    database_url, workers, write_wait_seconds = _database_runtime_values(db_service)
+    if not is_sqlite_url(database_url):
+        return
+    ensure_sqlite_process_safety(database_url, workers)
+    if writable:
+        install_sqlite_session_guard(
+            session,
+            database_url=database_url,
+            workers=workers,
+            write_wait_seconds=write_wait_seconds,
+        )
+
+
 @asynccontextmanager
 async def session_scope() -> AsyncGenerator[AsyncSession, None]:
-    """Context manager for managing an async session scope with auto-commit for write operations.
-
-    This is used with `async with session_scope() as session:` for direct session management.
-    It ensures that the session is properly committed if no exceptions occur,
-    and rolled back if an exception is raised.
-    Use session_scope_readonly() for read-only operations to avoid unnecessary commits and locks.
-
-    Yields:
-        AsyncSession: The async session object.
-
-    Raises:
-        Exception: If an error occurs during the session scope.
-    """
+    """Manage an async write session with commit, rollback, and SQLite coordination."""
     db_service = get_db_service()
     async with db_service._with_session() as session:  # noqa: SLF001
+        _configure_sqlite_session(db_service, session, writable=True)
         try:
             yield session
             await session.commit()
         except HTTPException:
-            # HTTPExceptions are control flow in FastAPI (returning 4xx/5xx responses),
-            # not actual errors. Don't log them - FastAPI's exception handlers will
-            # take care of the HTTP response. Just rollback any uncommitted changes.
             await _rollback_session(session)
             raise
         except Exception as e:
-            # Actual application/database errors - log at error level
             await logger.aexception("An error occurred during the session scope.", exception=e)
             await _rollback_session(session)
             raise
-        # No explicit close needed - _with_session() handles it
 
 
 async def injectable_session_scope_readonly():
@@ -266,17 +257,8 @@ async def injectable_session_scope_readonly():
 
 @asynccontextmanager
 async def session_scope_readonly() -> AsyncGenerator[AsyncSession, None]:
-    """Context manager for managing a read-only async session scope.
-
-    This is used with `async with session_scope_readonly() as session:` for direct session management
-    when only reading data. No auto-commit or rollback - the session is simply closed after use.
-
-    Yields:
-        AsyncSession: The async session object.
-    """
+    """Manage a read-only session without commit while preserving concurrent SQLite reads."""
     db_service = get_db_service()
     async with db_service._with_session() as session:  # noqa: SLF001
+        _configure_sqlite_session(db_service, session, writable=False)
         yield session
-        # No commit - read-only
-        # No clean up - client is responsible (plus, read only sessions are not committed)
-        # No explicit close needed - _with_session() handles it

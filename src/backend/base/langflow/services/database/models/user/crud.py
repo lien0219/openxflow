@@ -3,7 +3,8 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from lfx.log.logger import logger
-from sqlalchemy.exc import IntegrityError
+from lfx.services.sqlite_runtime import is_sqlite_lock_error
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -53,23 +54,25 @@ async def update_user(user_db: User | None, user: UserUpdate, db: AsyncSession) 
 
 
 async def update_user_last_login_at(user_id: UUID, db: AsyncSession) -> User | None:
-    """Best-effort last-login update that never leaves the request session unusable.
+    """Best-effort last-login update for transient SQLite lock contention only.
 
-    SQLite can temporarily reject a write while another short transaction owns
-    the file-level writer lock. The login timestamp is auxiliary metadata, so a
-    failed flush must be rolled back and logged instead of poisoning the session
-    used by the remainder of the login request.
+    The timestamp is auxiliary metadata. A temporary SQLite lock must not poison
+    the request session or block login, but schema, disk, permission, and logic
+    errors must still surface instead of being silently hidden.
     """
     try:
         user_data = UserUpdate(last_login_at=datetime.now(timezone.utc))
         user = await get_user_by_id(db, user_id)
         return await update_user(user, user_data, db)
-    except Exception as e:  # noqa: BLE001
+    except OperationalError as error:
+        if not is_sqlite_lock_error(error):
+            raise
         try:
             await db.rollback()
         except Exception as rollback_error:  # noqa: BLE001
             await logger.aerror(f"Error rolling back failed last-login update: {rollback_error!s}")
-        await logger.awarning(f"Unable to update user last login time; continuing login: {e!s}")
+            raise error from rollback_error
+        await logger.awarning(f"Unable to update user last login time; continuing login: {error!s}")
         return None
 
 

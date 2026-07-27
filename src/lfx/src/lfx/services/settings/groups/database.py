@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from shutil import copy2
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from lfx.log.logger import logger
 from lfx.utils.util_strings import is_valid_database_url, sanitize_database_url
@@ -45,7 +45,12 @@ class DatabaseSettings(BaseModel):
     If not provided, a hash of the database URL will be used. Useful when multiple Langflow
     instances share the same database and need coordinated migration locking."""
 
-    sqlite_pragmas: dict | None = {"synchronous": "NORMAL", "journal_mode": "WAL", "busy_timeout": 30000}
+    sqlite_pragmas: dict | None = {
+        "synchronous": "NORMAL",
+        "journal_mode": "WAL",
+        "busy_timeout": 5000,
+        "wal_autocheckpoint": 1000,
+    }
     """SQLite pragmas to use when connecting to the database."""
 
     db_driver_connection_settings: dict | None = None
@@ -63,9 +68,9 @@ class DatabaseSettings(BaseModel):
         validate_default=True,
     )
     """Database connection settings optimized for high load scenarios.
-    Note: These settings are most effective with PostgreSQL. SQLite is forced to a
-    single pooled connection so async tasks queue instead of competing for SQLite's
-    single-writer lock.
+    Note: These settings are most effective with PostgreSQL. File-backed SQLite
+    uses a small pool for concurrent WAL readers, while application-level
+    coordination serializes write transactions.
 
     Settings:
     - pool_size: Number of connections to maintain (increase for higher concurrency)
@@ -158,24 +163,50 @@ class DatabaseSettings(BaseModel):
 
         return value
 
+    @model_validator(mode="after")
+    def validate_sqlite_worker_mode(self):
+        """Fail fast when multiple server workers target one SQLite file."""
+        database_url = str(os.getenv("LANGFLOW_DATABASE_URL") or self.database_url or "")
+        if not database_url.startswith("sqlite"):
+            return self
+        raw_workers = os.getenv("LANGFLOW_WORKERS", str(getattr(self, "workers", 1) or 1))
+        try:
+            workers = int(raw_workers)
+        except (TypeError, ValueError):
+            workers = 1
+        if workers != 1:
+            msg = (
+                "SQLite requires LANGFLOW_WORKERS=1. Multiple OpenXFlow workers cannot safely share "
+                "one SQLite file; use one worker locally or PostgreSQL for multi-worker deployments."
+            )
+            raise ValueError(msg)
+        return self
+
     @field_validator("db_connection_settings", mode="after")
     @classmethod
-    def serialize_sqlite_pool(cls, value, info):
-        """Serialize runtime access to SQLite through one pooled connection.
+    def configure_sqlite_pool(cls, value, info):
+        """Keep file-backed SQLite reads concurrent without multiplying writers.
 
-        WAL mode and ``busy_timeout`` improve coexistence with readers and short
-        external locks, but SQLite still permits only one writer. Allowing several
-        async pooled connections makes login, MCP initialization, and channel jobs
-        race for the same file-level write lock. A single pooled connection keeps
-        those operations ordered inside one OpenXFlow process while PostgreSQL
-        retains its configured parallel pool.
+        WAL permits readers on separate connections while one writer is active.
+        Runtime session coordination serializes writes, so a small pool avoids
+        the single-connection queue bottleneck and still bounds resource usage.
+        In-memory SQLite remains single-connection because each connection would
+        otherwise receive an independent database.
         """
         database_url = str(os.getenv("LANGFLOW_DATABASE_URL") or info.data.get("database_url") or "")
         if not database_url.startswith("sqlite"):
             return value
 
         connection_settings = dict(value or {})
-        connection_settings["pool_size"] = 1
+        is_memory = database_url in {"sqlite://", "sqlite:///:memory:"} or ":memory:" in database_url
+        if is_memory:
+            connection_settings["pool_size"] = 1
+        else:
+            try:
+                pool_size = int(connection_settings.get("pool_size", 5))
+            except (TypeError, ValueError):
+                pool_size = 5
+            connection_settings["pool_size"] = min(5, max(2, pool_size))
         connection_settings["max_overflow"] = 0
         try:
             pool_timeout = int(connection_settings.get("pool_timeout", 30))
