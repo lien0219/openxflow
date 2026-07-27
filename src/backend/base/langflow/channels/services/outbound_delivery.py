@@ -36,6 +36,7 @@ from langflow.services.database.models.channel.outbound_delivery_model import (
 from langflow.services.deps import session_scope
 
 _ACKNOWLEDGEMENT_DIGEST = hashlib.sha256(b"acknowledgement").hexdigest()
+_DEFAULT_DELIVERY_KEY = "default"
 _TERMINAL_STATUSES = (
     ChannelOutboundDeliveryStatus.SENT.value,
     ChannelOutboundDeliveryStatus.FAILED.value,
@@ -60,12 +61,23 @@ def channel_response_digest(message: ChannelMessage) -> str:
     return hashlib.sha256(serialized).hexdigest()
 
 
+def _normalized_delivery_key(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        return _DEFAULT_DELIVERY_KEY
+    if len(normalized) <= 64:
+        return normalized
+    return hashlib.sha256(normalized.encode()).hexdigest()
+
+
 async def _reserve_outbound_delivery(
     event: ChannelEvent,
     *,
     delivery_kind: ChannelOutboundDeliveryKind,
     response_digest: str,
+    delivery_key: str = _DEFAULT_DELIVERY_KEY,
 ) -> OutboundDeliveryDecision:
+    normalized_key = _normalized_delivery_key(delivery_key)
     async with session_scope() as session:
         existing = (
             await session.exec(
@@ -73,6 +85,7 @@ async def _reserve_outbound_delivery(
                     ChannelOutboundDelivery.connection_id == event.connection_id,
                     ChannelOutboundDelivery.external_event_id == event.event_id,
                     ChannelOutboundDelivery.delivery_kind == delivery_kind.value,
+                    ChannelOutboundDelivery.delivery_key == normalized_key,
                 )
             )
         ).first()
@@ -111,6 +124,7 @@ async def _reserve_outbound_delivery(
             connection_id=event.connection_id,
             external_event_id=event.event_id,
             delivery_kind=delivery_kind.value,
+            delivery_key=normalized_key,
             response_digest=response_digest,
         )
         session.add(delivery)
@@ -120,10 +134,14 @@ async def _reserve_outbound_delivery(
             await session.rollback()
             concurrent = (
                 await session.exec(
-                    select(ChannelOutboundDelivery.id).where(
+                    select(
+                        ChannelOutboundDelivery.id,
+                        ChannelOutboundDelivery.provider_message_id,
+                    ).where(
                         ChannelOutboundDelivery.connection_id == event.connection_id,
                         ChannelOutboundDelivery.external_event_id == event.event_id,
                         ChannelOutboundDelivery.delivery_kind == delivery_kind.value,
+                        ChannelOutboundDelivery.delivery_key == normalized_key,
                     )
                 )
             ).first()
@@ -131,7 +149,13 @@ async def _reserve_outbound_delivery(
                 record_outbound_delivery_state_error(delivery_kind)
                 raise
             record_outbound_delivery_suppressed(delivery_kind)
-            return OutboundDeliveryDecision(False, concurrent, delivery_kind)
+            delivery_id, provider_message_id = concurrent
+            return OutboundDeliveryDecision(
+                False,
+                delivery_id,
+                delivery_kind,
+                provider_message_id,
+            )
         record_outbound_delivery_reserved(delivery_kind)
         return OutboundDeliveryDecision(True, delivery.id, delivery_kind)
 
@@ -139,11 +163,14 @@ async def _reserve_outbound_delivery(
 async def reserve_outbound_delivery(
     event: ChannelEvent,
     message: ChannelMessage,
+    *,
+    delivery_key: str = _DEFAULT_DELIVERY_KEY,
 ) -> OutboundDeliveryDecision:
     return await _reserve_outbound_delivery(
         event,
         delivery_kind=ChannelOutboundDeliveryKind.RESPONSE,
         response_digest=channel_response_digest(message),
+        delivery_key=delivery_key,
     )
 
 
@@ -261,6 +288,7 @@ async def cleanup_outbound_deliveries(session: AsyncSession) -> dict[str, int]:
     )
     counts = {
         ChannelOutboundDeliveryKind.ACKNOWLEDGEMENT.value: 0,
+        ChannelOutboundDeliveryKind.PROCESSING.value: 0,
         ChannelOutboundDeliveryKind.RESPONSE.value: 0,
     }
     if not rows:
@@ -343,10 +371,16 @@ async def send_outbound_response_once(
     event: ChannelEvent,
     message: ChannelMessage,
     sender: Callable[[], Awaitable[str]],
+    *,
+    delivery_key: str = _DEFAULT_DELIVERY_KEY,
 ) -> str | None:
-    decision = await reserve_outbound_delivery(event, message)
+    decision = await reserve_outbound_delivery(
+        event,
+        message,
+        delivery_key=delivery_key,
+    )
     if not decision.should_send or decision.delivery_id is None:
-        return None
+        return decision.provider_message_id
     try:
         provider_message_id = await sender()
     except Exception as provider_error:
