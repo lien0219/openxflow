@@ -128,16 +128,14 @@ class ChannelGateway:
 
             response = await handler(event)
             if response is not None:
-
-                async def response_sender() -> str:
-                    return await self._send_planned_response(adapter, event, response)
-
                 delivery_started = time.perf_counter()
                 try:
-                    if guard_outbound:
-                        provider_message_id = await send_outbound_response_once(event, response, response_sender)
-                    else:
-                        provider_message_id = await response_sender()
+                    provider_message_id = await self._send_planned_response(
+                        adapter,
+                        event,
+                        response,
+                        guard_outbound=guard_outbound,
+                    )
                 except Exception as delivery_error:
                     duration_ms = max(0, int((time.perf_counter() - delivery_started) * 1000))
                     await safe_record_outbound_message(
@@ -189,14 +187,31 @@ class ChannelGateway:
         adapter: ChannelAdapter,
         event: ChannelEvent,
         message: ChannelMessage,
+        *,
+        guard_outbound: bool = False,
     ) -> str:
         planned = plan_channel_messages(adapter.channel_type.value, message)
         provider_message_id = ""
+        total = len(planned)
         for index, part in enumerate(planned, start=1):
-            provider_message_id = await retry_channel_operation(
-                lambda part=part: adapter.send_response(event, part),
-                operation_name=f"{adapter.channel_type.value}.send_response.part_{index}",
-            )
+
+            async def send_part(part: ChannelMessage = part, index: int = index) -> str:
+                return await retry_channel_operation(
+                    lambda: adapter.send_response(event, part),
+                    operation_name=f"{adapter.channel_type.value}.send_response.part_{index}",
+                )
+
+            if guard_outbound:
+                result = await send_outbound_response_once(
+                    event,
+                    part,
+                    send_part,
+                    delivery_key=f"part:{index}:{total}",
+                )
+                if result:
+                    provider_message_id = result
+            else:
+                provider_message_id = await send_part()
         return provider_message_id
 
     @staticmethod
