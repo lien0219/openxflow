@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,7 @@ type ConfigurableChannelType = Extract<
   ChannelType,
   "telegram" | "feishu" | "dingtalk" | "wecom"
 >;
+type WeComMode = "ai_bot" | "webhook";
 
 interface ConnectionFormState {
   channelType: ConfigurableChannelType;
@@ -41,6 +43,10 @@ interface ConnectionFormState {
   clientId: string;
   clientSecret: string;
   robotCode: string;
+  wecomMode: WeComMode;
+  wecomBotToken: string;
+  wecomBotName: string;
+  wecomPushWebhookUrl: string;
   corpId: string;
   corpSecret: string;
   agentId: string;
@@ -72,16 +78,12 @@ interface ConnectionFormState {
 const DEFAULT_EXTENSIONS =
   "pdf, docx, xlsx, pptx, csv, txt, md, json, html, rtf, xml, yaml, yml";
 
-function boundedNumber(
-  value: string,
-  fallback: number,
-  minimum: number,
-  maximum?: number,
-): number {
-  const parsed = Number(value);
-  const normalized = Number.isFinite(parsed) ? parsed : fallback;
-  return Math.min(maximum ?? normalized, Math.max(minimum, normalized));
-}
+const PROVIDER_KEYS: Record<ConfigurableChannelType, string> = {
+  telegram: "channels.provider.telegram",
+  feishu: "channels.provider.feishu",
+  dingtalk: "channels.provider.dingtalk",
+  wecom: "channels.provider.wecom",
+};
 
 interface ChannelConnectionDialogProps {
   open: boolean;
@@ -95,12 +97,58 @@ interface ChannelConnectionDialogProps {
   }) => Promise<void>;
 }
 
-const PROVIDER_KEYS: Record<ConfigurableChannelType, string> = {
-  telegram: "channels.provider.telegram",
-  feishu: "channels.provider.feishu",
-  dingtalk: "channels.provider.dingtalk",
-  wecom: "channels.provider.wecom",
-};
+interface FieldProps {
+  label: ReactNode;
+  children: ReactNode;
+  help?: ReactNode;
+}
+
+function Field({ label, children, help }: FieldProps) {
+  return (
+    <label className="flex flex-col gap-2 text-sm font-medium">
+      {label}
+      {children}
+      {help ? (
+        <span className="text-xs font-normal text-muted-foreground">{help}</span>
+      ) : null}
+    </label>
+  );
+}
+
+interface ToggleCardProps {
+  label: ReactNode;
+  help: ReactNode;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}
+
+function ToggleCard({
+  label,
+  help,
+  checked,
+  onCheckedChange,
+}: ToggleCardProps) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg bg-muted/40 p-3">
+      <div>
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-muted-foreground">{help}</div>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
+}
+
+function boundedNumber(
+  value: string,
+  fallback: number,
+  minimum: number,
+  maximum?: number,
+): number {
+  const parsed = Number(value);
+  const normalized = Number.isFinite(parsed) ? parsed : fallback;
+  return Math.min(maximum ?? normalized, Math.max(minimum, normalized));
+}
 
 function emptyForm(
   channelType: ConfigurableChannelType,
@@ -118,6 +166,10 @@ function emptyForm(
     clientId: "",
     clientSecret: "",
     robotCode: "",
+    wecomMode: "ai_bot",
+    wecomBotToken: "",
+    wecomBotName: "OpenXFlow",
+    wecomPushWebhookUrl: "",
     corpId: "",
     corpSecret: "",
     agentId: "",
@@ -183,6 +235,11 @@ export default function ChannelConnectionDialog({
     setForm({
       ...emptyForm(channelType, providerName),
       name: connection?.name ?? providerName,
+      wecomMode:
+        connection?.channel_type === "wecom" &&
+        connection.connection_mode === "webhook"
+          ? "webhook"
+          : "ai_bot",
       publicBaseUrl: readConnectionSetting(connection, "public_base_url", ""),
       maxFileSizeMb: String(
         readConnectionSetting(connection, "max_file_size_mb", 10),
@@ -258,11 +315,21 @@ export default function ChannelConnectionDialog({
     });
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const connectionMode =
+    form.channelType === "dingtalk"
+      ? "stream"
+      : form.channelType === "wecom"
+        ? form.wecomMode
+        : "webhook";
+  const changingMode =
+    isEditing && connection?.connection_mode !== connectionMode;
+  const credentialsRequired = !isEditing || changingMode;
+
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.name.trim()) return;
     if (
-      !isEditing &&
+      credentialsRequired &&
       form.channelType === "telegram" &&
       (!form.botToken.trim() ||
         !/^[A-Za-z0-9_-]{16,256}$/.test(form.webhookSecret.trim()))
@@ -270,7 +337,7 @@ export default function ChannelConnectionDialog({
       return;
     }
     if (
-      !isEditing &&
+      credentialsRequired &&
       form.channelType === "feishu" &&
       (!form.appId.trim() ||
         !form.appSecret.trim() ||
@@ -279,23 +346,27 @@ export default function ChannelConnectionDialog({
       return;
     }
     if (
-      !isEditing &&
+      credentialsRequired &&
       form.channelType === "dingtalk" &&
       (!form.clientId.trim() || !form.clientSecret.trim())
     ) {
       return;
     }
-    if (
-      !isEditing &&
-      form.channelType === "wecom" &&
-      (!form.corpId.trim() ||
-        !form.corpSecret.trim() ||
-        !form.agentId.trim() ||
-        !form.callbackToken.trim() ||
-        form.encodingAesKey.trim().length !== 43 ||
-        !form.publicBaseUrl.trim())
-    ) {
-      return;
+    if (credentialsRequired && form.channelType === "wecom") {
+      const invalidAiBot =
+        form.wecomMode === "ai_bot" &&
+        (!form.wecomBotToken.trim() ||
+          form.encodingAesKey.trim().length !== 43);
+      const invalidInternalApp =
+        form.wecomMode === "webhook" &&
+        (!form.corpId.trim() ||
+          !form.corpSecret.trim() ||
+          !form.agentId.trim() ||
+          !form.callbackToken.trim() ||
+          form.encodingAesKey.trim().length !== 43);
+      if (invalidAiBot || invalidInternalApp || !form.publicBaseUrl.trim()) {
+        return;
+      }
     }
 
     const credentials: Record<string, string> = {};
@@ -319,6 +390,20 @@ export default function ChannelConnectionDialog({
         credentials.client_secret = form.clientSecret.trim();
       }
       if (form.robotCode.trim()) credentials.robot_code = form.robotCode.trim();
+    } else if (form.wecomMode === "ai_bot") {
+      if (form.wecomBotToken.trim()) {
+        credentials.token = form.wecomBotToken.trim();
+      }
+      if (form.encodingAesKey.trim()) {
+        credentials.encoding_aes_key = form.encodingAesKey.trim();
+      }
+      if (form.wecomBotName.trim()) {
+        credentials.bot_name = form.wecomBotName.trim();
+      }
+      if (form.wecomPushWebhookUrl.trim()) {
+        credentials.message_push_webhook_url =
+          form.wecomPushWebhookUrl.trim();
+      }
     } else {
       if (form.corpId.trim()) credentials.corp_id = form.corpId.trim();
       if (form.corpSecret.trim()) {
@@ -383,8 +468,6 @@ export default function ChannelConnectionDialog({
         365,
       ),
     };
-    const connectionMode =
-      form.channelType === "dingtalk" ? "stream" : "webhook";
     const payload = isEditing
       ? {
           name: form.name.trim(),
@@ -428,10 +511,10 @@ export default function ChannelConnectionDialog({
             {t("channels.connectionDialog.description")}
           </DialogDescription>
         </DialogHeader>
+
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              {t("channels.connectionDialog.name")}
+            <Field label={t("channels.connectionDialog.name")}>
               <Input
                 value={form.name}
                 onChange={(event) => setField("name", event.target.value)}
@@ -440,9 +523,8 @@ export default function ChannelConnectionDialog({
                 })}
                 required
               />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              {t("channels.connectionDialog.channelType")}
+            </Field>
+            <Field label={t("channels.connectionDialog.channelType")}>
               <select
                 className="primary-input h-10"
                 value={form.channelType}
@@ -466,13 +548,12 @@ export default function ChannelConnectionDialog({
                   {t("channels.connectionDialog.wecomOption")}
                 </option>
               </select>
-            </label>
+            </Field>
           </div>
 
-          {form.channelType === "telegram" && (
-            <>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Bot Token
+          {form.channelType === "telegram" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Bot Token">
                 <Input
                   type="password"
                   value={form.botToken}
@@ -482,14 +563,13 @@ export default function ChannelConnectionDialog({
                       ? t("channels.connectionDialog.keepToken")
                       : "123456:ABC..."
                   }
-                  required={!isEditing}
+                  required={credentialsRequired}
                 />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Webhook Secret
+              </Field>
+              <Field label="Webhook Secret">
                 <Input
                   type="password"
-                  required={!isEditing}
+                  required={credentialsRequired}
                   minLength={16}
                   maxLength={256}
                   pattern="[A-Za-z0-9_-]+"
@@ -502,27 +582,25 @@ export default function ChannelConnectionDialog({
                     t("channels.connectionDialog.randomSecret")
                   }
                 />
-              </label>
-            </>
-          )}
+              </Field>
+            </div>
+          ) : null}
 
-          {form.channelType === "feishu" && (
+          {form.channelType === "feishu" ? (
             <>
               <div className="rounded-lg border bg-muted/40 p-4 text-sm">
                 {t("channels.connectionDialog.feishuHelp")}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  App ID
+                <Field label="App ID">
                   <Input
                     value={form.appId}
                     onChange={(event) => setField("appId", event.target.value)}
                     placeholder={keepValuePlaceholder ?? "cli_xxxxxxxxx"}
-                    required={!isEditing}
+                    required={credentialsRequired}
                   />
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  App Secret
+                </Field>
+                <Field label="App Secret">
                   <Input
                     type="password"
                     value={form.appSecret}
@@ -533,16 +611,12 @@ export default function ChannelConnectionDialog({
                       keepValuePlaceholder ??
                       t("channels.connectionDialog.feishuSecret")
                     }
-                    required={!isEditing}
+                    required={credentialsRequired}
                   />
-                </label>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  Verification Token
+                </Field>
+                <Field label="Verification Token">
                   <Input
                     type="password"
-                    required={!isEditing}
                     value={form.verificationToken}
                     onChange={(event) =>
                       setField("verificationToken", event.target.value)
@@ -553,10 +627,10 @@ export default function ChannelConnectionDialog({
                         "channels.connectionDialog.verificationTokenPlaceholder",
                       )
                     }
+                    required={credentialsRequired}
                   />
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  Encrypt Key
+                </Field>
+                <Field label="Encrypt Key">
                   <Input
                     type="password"
                     value={form.encryptKey}
@@ -568,30 +642,28 @@ export default function ChannelConnectionDialog({
                       t("channels.connectionDialog.encryptKeyPlaceholder")
                     }
                   />
-                </label>
+                </Field>
               </div>
             </>
-          )}
+          ) : null}
 
-          {form.channelType === "dingtalk" && (
+          {form.channelType === "dingtalk" ? (
             <>
               <div className="rounded-lg border bg-muted/40 p-4 text-sm">
                 {t("channels.connectionDialog.dingtalkHelp")}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  Client ID / AppKey
+                <Field label="Client ID / AppKey">
                   <Input
                     value={form.clientId}
                     onChange={(event) =>
                       setField("clientId", event.target.value)
                     }
                     placeholder={keepValuePlaceholder ?? "dingxxxxxxxx"}
-                    required={!isEditing}
+                    required={credentialsRequired}
                   />
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  Client Secret / AppSecret
+                </Field>
+                <Field label="Client Secret / AppSecret">
                   <Input
                     type="password"
                     value={form.clientSecret}
@@ -602,12 +674,11 @@ export default function ChannelConnectionDialog({
                       keepValuePlaceholder ??
                       t("channels.connectionDialog.dingtalkSecret")
                     }
-                    required={!isEditing}
+                    required={credentialsRequired}
                   />
-                </label>
+                </Field>
               </div>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Robot Code
+              <Field label="Robot Code">
                 <Input
                   value={form.robotCode}
                   onChange={(event) =>
@@ -617,93 +688,175 @@ export default function ChannelConnectionDialog({
                     "channels.connectionDialog.robotCodePlaceholder",
                   )}
                 />
-              </label>
+              </Field>
             </>
-          )}
+          ) : null}
 
-          {form.channelType === "wecom" && (
+          {form.channelType === "wecom" ? (
             <>
               <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-                {t("channels.connectionDialog.wecomHelp")}
+                {form.wecomMode === "ai_bot"
+                  ? copy(
+                      "推荐使用智能机器人 API 模式：支持企业微信私聊、内部群聊、加密回调和流式响应。",
+                    )
+                  : copy(
+                      "自建应用模式适合员工与应用私聊；需要群成员共享机器人时请切换为智能机器人模式。",
+                    )}
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  {t("channels.connectionDialog.corpId")}
-                  <Input
-                    value={form.corpId}
-                    onChange={(event) => setField("corpId", event.target.value)}
-                    placeholder={keepValuePlaceholder ?? "wwxxxxxxxxxxxxxxxx"}
-                    required={!isEditing}
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  {t("channels.connectionDialog.agentId")}
-                  <Input
-                    type="number"
-                    min={1}
-                    value={form.agentId}
-                    onChange={(event) =>
-                      setField("agentId", event.target.value)
-                    }
-                    placeholder={keepValuePlaceholder ?? "1000002"}
-                    required={!isEditing}
-                  />
-                </label>
-              </div>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                {t("channels.connectionDialog.corpSecret")}
-                <Input
-                  type="password"
-                  value={form.corpSecret}
+              <Field label={copy("企业微信接入模式")}>
+                <select
+                  className="primary-input h-10"
+                  value={form.wecomMode}
                   onChange={(event) =>
-                    setField("corpSecret", event.target.value)
+                    setField("wecomMode", event.target.value as WeComMode)
                   }
-                  placeholder={
-                    keepValuePlaceholder ??
-                    t("channels.connectionDialog.corpSecretPlaceholder")
-                  }
-                  required={!isEditing}
-                />
-              </label>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  {t("channels.connectionDialog.callbackToken")}
-                  <Input
-                    type="password"
-                    value={form.callbackToken}
-                    onChange={(event) =>
-                      setField("callbackToken", event.target.value)
-                    }
-                    placeholder={
-                      keepValuePlaceholder ??
-                      t("channels.connectionDialog.callbackTokenPlaceholder")
-                    }
-                    required={!isEditing}
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-medium">
-                  EncodingAESKey
-                  <Input
-                    type="password"
-                    minLength={43}
-                    maxLength={43}
-                    value={form.encodingAesKey}
-                    onChange={(event) =>
-                      setField("encodingAesKey", event.target.value)
-                    }
-                    placeholder={
-                      keepValuePlaceholder ??
-                      t("channels.connectionDialog.encodingKeyPlaceholder")
-                    }
-                    required={!isEditing}
-                  />
-                </label>
-              </div>
-            </>
-          )}
+                >
+                  <option value="ai_bot">
+                    {copy("智能机器人 API（私聊 + 群聊，推荐）")}
+                  </option>
+                  <option value="webhook">
+                    {copy("企业自建应用（员工私聊）")}
+                  </option>
+                </select>
+              </Field>
 
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            {t("channels.connectionDialog.publicUrl")}
+              {form.wecomMode === "ai_bot" ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label={copy("智能机器人 Token")}>
+                    <Input
+                      type="password"
+                      value={form.wecomBotToken}
+                      onChange={(event) =>
+                        setField("wecomBotToken", event.target.value)
+                      }
+                      placeholder={keepValuePlaceholder ?? copy("机器人 Token")}
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label="EncodingAESKey">
+                    <Input
+                      type="password"
+                      minLength={43}
+                      maxLength={43}
+                      value={form.encodingAesKey}
+                      onChange={(event) =>
+                        setField("encodingAesKey", event.target.value)
+                      }
+                      placeholder={
+                        keepValuePlaceholder ??
+                        t("channels.connectionDialog.encodingKeyPlaceholder")
+                      }
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label={copy("机器人名称")}>
+                    <Input
+                      value={form.wecomBotName}
+                      onChange={(event) =>
+                        setField("wecomBotName", event.target.value)
+                      }
+                      placeholder="OpenXFlow"
+                    />
+                  </Field>
+                  <Field
+                    label={copy("主动消息推送 Webhook（可选）")}
+                    help={copy(
+                      "仅在需要主动推送或超出回调窗口后发送消息时配置，必须使用企业微信官方群机器人 Webhook。",
+                    )}
+                  >
+                    <Input
+                      type="url"
+                      value={form.wecomPushWebhookUrl}
+                      onChange={(event) =>
+                        setField("wecomPushWebhookUrl", event.target.value)
+                      }
+                      placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+                    />
+                  </Field>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label={t("channels.connectionDialog.corpId")}>
+                    <Input
+                      value={form.corpId}
+                      onChange={(event) =>
+                        setField("corpId", event.target.value)
+                      }
+                      placeholder={keepValuePlaceholder ?? "wwxxxxxxxxxxxxxxxx"}
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label={t("channels.connectionDialog.agentId")}>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={form.agentId}
+                      onChange={(event) =>
+                        setField("agentId", event.target.value)
+                      }
+                      placeholder={keepValuePlaceholder ?? "1000002"}
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label={t("channels.connectionDialog.corpSecret")}>
+                    <Input
+                      type="password"
+                      value={form.corpSecret}
+                      onChange={(event) =>
+                        setField("corpSecret", event.target.value)
+                      }
+                      placeholder={
+                        keepValuePlaceholder ??
+                        t("channels.connectionDialog.corpSecretPlaceholder")
+                      }
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label={t("channels.connectionDialog.callbackToken")}>
+                    <Input
+                      type="password"
+                      value={form.callbackToken}
+                      onChange={(event) =>
+                        setField("callbackToken", event.target.value)
+                      }
+                      placeholder={
+                        keepValuePlaceholder ??
+                        t("channels.connectionDialog.callbackTokenPlaceholder")
+                      }
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label="EncodingAESKey">
+                    <Input
+                      type="password"
+                      minLength={43}
+                      maxLength={43}
+                      value={form.encodingAesKey}
+                      onChange={(event) =>
+                        setField("encodingAesKey", event.target.value)
+                      }
+                      placeholder={
+                        keepValuePlaceholder ??
+                        t("channels.connectionDialog.encodingKeyPlaceholder")
+                      }
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                </div>
+              )}
+            </>
+          ) : null}
+
+          <Field
+            label={t("channels.connectionDialog.publicUrl")}
+            help={
+              form.channelType === "dingtalk"
+                ? t("channels.connectionDialog.publicUrlStreamHelp")
+                : form.channelType === "wecom"
+                  ? t("channels.connectionDialog.publicUrlWecomHelp")
+                  : t("channels.connectionDialog.publicUrlHelp")
+            }
+          >
             <Input
               type="url"
               value={form.publicBaseUrl}
@@ -713,18 +866,10 @@ export default function ChannelConnectionDialog({
               placeholder="https://openxflow.example.com"
               required={form.channelType === "wecom"}
             />
-            <span className="text-xs font-normal text-muted-foreground">
-              {form.channelType === "dingtalk"
-                ? t("channels.connectionDialog.publicUrlStreamHelp")
-                : form.channelType === "wecom"
-                  ? t("channels.connectionDialog.publicUrlWecomHelp")
-                  : t("channels.connectionDialog.publicUrlHelp")}
-            </span>
-          </label>
+          </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              {t("channels.connectionDialog.maxFileSize")}
+            <Field label={t("channels.connectionDialog.maxFileSize")}>
               <Input
                 type="number"
                 min={1}
@@ -733,9 +878,8 @@ export default function ChannelConnectionDialog({
                   setField("maxFileSizeMb", event.target.value)
                 }
               />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              {t("channels.connectionDialog.allowedExtensions")}
+            </Field>
+            <Field label={t("channels.connectionDialog.allowedExtensions")}>
               <Input
                 value={form.allowedExtensions}
                 onChange={(event) =>
@@ -743,7 +887,7 @@ export default function ChannelConnectionDialog({
                 }
                 placeholder="pdf, docx, xlsx, pptx, txt, md, json"
               />
-            </label>
+            </Field>
           </div>
 
           <div className="rounded-xl border p-4">
@@ -759,8 +903,7 @@ export default function ChannelConnectionDialog({
             </div>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                {copy("访问策略")}
+              <Field label={copy("访问策略")}>
                 <select
                   className="primary-input h-10"
                   value={form.accessPolicy}
@@ -781,9 +924,8 @@ export default function ChannelConnectionDialog({
                     {copy("仅已绑定 OpenXFlow 用户")}
                   </option>
                 </select>
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                {copy("默认上下文模式")}
+              </Field>
+              <Field label={copy("默认上下文模式")}>
                 <select
                   className="primary-input h-10"
                   value={form.defaultContextMode}
@@ -797,9 +939,8 @@ export default function ChannelConnectionDialog({
                   <option value="isolated">{copy("按群成员和线程隔离")}</option>
                   <option value="shared">{copy("群内共享上下文")}</option>
                 </select>
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                {copy("默认响应模式")}
+              </Field>
+              <Field label={copy("默认响应模式")}>
                 <select
                   className="primary-input h-10"
                   value={form.defaultResponseMode}
@@ -815,9 +956,8 @@ export default function ChannelConnectionDialog({
                   <option value="commands_only">{copy("仅响应指令")}</option>
                   <option value="disabled">{copy("完全停用响应")}</option>
                 </select>
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                {copy("未配置会话处理")}
+              </Field>
+              <Field label={copy("未配置会话处理")}>
                 <select
                   className="primary-input h-10"
                   value={form.unconfiguredBehavior}
@@ -836,7 +976,7 @@ export default function ChannelConnectionDialog({
                   </option>
                   <option value="ignore">{copy("静默忽略")}</option>
                 </select>
-              </label>
+              </Field>
             </div>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -856,11 +996,7 @@ export default function ChannelConnectionDialog({
                 ["sharedContextWindow", copy("共享上下文窗口"), 0, 100],
                 ["contextRetentionDays", copy("上下文保留天数"), 1, 365],
               ].map(([key, label, min, max]) => (
-                <label
-                  key={String(key)}
-                  className="flex flex-col gap-2 text-sm font-medium"
-                >
-                  {String(label)}
+                <Field key={String(key)} label={String(label)}>
                   <Input
                     type="number"
                     min={Number(min)}
@@ -873,54 +1009,43 @@ export default function ChannelConnectionDialog({
                       )
                     }
                   />
-                </label>
+                </Field>
               ))}
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {[
-                [
-                  "autoDiscoverConversations",
-                  copy("自动发现会话"),
-                  copy("首次消息自动进入待配置会话列表。"),
-                ],
-                [
-                  "pendingNoticeEnabled",
-                  copy("待配置提示"),
-                  copy("对尚未配置的会话发送一次友好提示。"),
-                ],
-                [
-                  "personalCommandsEnabled",
-                  copy("允许个人指令"),
-                  copy("已绑定成员可使用个人范围的工作流指令。"),
-                ],
-                [
-                  "defaultAllowFileUpload",
-                  copy("默认允许安全文件上传"),
-                  copy("上传文件仍需通过内容扫描与知识库授权。"),
-                ],
-              ].map(([key, label, help]) => (
-                <div
-                  key={String(key)}
-                  className="flex items-center justify-between rounded-lg bg-muted/40 p-3"
-                >
-                  <div>
-                    <div className="text-sm font-medium">{String(label)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {String(help)}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={form[key as keyof ConnectionFormState] as boolean}
-                    onCheckedChange={(checked) =>
-                      setField(
-                        key as keyof ConnectionFormState,
-                        checked as never,
-                      )
-                    }
-                  />
-                </div>
-              ))}
+              <ToggleCard
+                label={copy("自动发现会话")}
+                help={copy("首次消息自动进入待配置会话列表。")}
+                checked={form.autoDiscoverConversations}
+                onCheckedChange={(checked) =>
+                  setField("autoDiscoverConversations", checked)
+                }
+              />
+              <ToggleCard
+                label={copy("待配置提示")}
+                help={copy("对尚未配置的会话发送一次友好提示。")}
+                checked={form.pendingNoticeEnabled}
+                onCheckedChange={(checked) =>
+                  setField("pendingNoticeEnabled", checked)
+                }
+              />
+              <ToggleCard
+                label={copy("允许个人指令")}
+                help={copy("已绑定成员可使用个人范围的工作流指令。")}
+                checked={form.personalCommandsEnabled}
+                onCheckedChange={(checked) =>
+                  setField("personalCommandsEnabled", checked)
+                }
+              />
+              <ToggleCard
+                label={copy("默认允许安全文件上传")}
+                help={copy("上传文件仍需通过内容扫描与知识库授权。")}
+                checked={form.defaultAllowFileUpload}
+                onCheckedChange={(checked) =>
+                  setField("defaultAllowFileUpload", checked)
+                }
+              />
             </div>
           </div>
 
