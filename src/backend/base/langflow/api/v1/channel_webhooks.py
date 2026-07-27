@@ -265,14 +265,7 @@ async def verify_wecom_callback(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
     adapter = build_channel_adapter(connection)
     try:
-        if isinstance(adapter, WeComAIBotChannelAdapter):
-            plaintext = adapter.verify_url(
-                signature=msg_signature,
-                timestamp=timestamp,
-                nonce=nonce,
-                echo=echo,
-            )
-        elif isinstance(adapter, WeComChannelAdapter):
+        if isinstance(adapter, WeComAIBotChannelAdapter) or isinstance(adapter, WeComChannelAdapter):
             plaintext = adapter.verify_url(
                 signature=msg_signature,
                 timestamp=timestamp,
