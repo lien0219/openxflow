@@ -89,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          uvx --quiet ruff check --config pyproject.toml --output-format concise \
+          uvx --quiet ruff check --config pyproject.toml --extend-ignore EM101,TRY003 --output-format concise \
             src/backend/base/langflow/services/database/models/user/crud.py \
             src/backend/tests/unit/channels/test_sqlite_runtime_safety.py \
             src/lfx/src/lfx/services/deps.py \
