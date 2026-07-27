@@ -27,6 +27,7 @@ class ChannelProviderCapabilities(BaseModel):
     processing_message_metadata: dict[str, Any] = Field(default_factory=dict)
     max_text_length: int = Field(default=4000, ge=256)
     max_actions: int = Field(default=6, ge=0)
+    group_chat_scope: str | None = None
 
 
 PROVIDER_CAPABILITIES: dict[str, ChannelProviderCapabilities] = {
@@ -43,6 +44,7 @@ PROVIDER_CAPABILITIES: dict[str, ChannelProviderCapabilities] = {
         supports_threads=True,
         max_text_length=3900,
         max_actions=50,
+        group_chat_scope="all_bot_member_chats",
     ),
     "feishu": ChannelProviderCapabilities(
         conversation_types=("private", "group"),
@@ -58,6 +60,7 @@ PROVIDER_CAPABILITIES: dict[str, ChannelProviderCapabilities] = {
         processing_message_metadata={"feishu_update_multi": True},
         max_text_length=12000,
         max_actions=20,
+        group_chat_scope="all_bot_member_chats",
     ),
     "dingtalk": ChannelProviderCapabilities(
         conversation_types=("private", "group"),
@@ -68,13 +71,16 @@ PROVIDER_CAPABILITIES: dict[str, ChannelProviderCapabilities] = {
         supports_streaming_connection=True,
         max_text_length=18000,
         max_actions=20,
+        group_chat_scope="all_robot_member_chats",
     ),
     "wecom": ChannelProviderCapabilities(
-        conversation_types=("private",),
+        conversation_types=("private", "group"),
+        supports_group_chat=True,
         supports_file_upload=True,
         supports_interactive_card=True,
         max_text_length=1800,
         max_actions=6,
+        group_chat_scope="application_created_chats",
     ),
     "mock": ChannelProviderCapabilities(
         conversation_types=("private", "group"),
