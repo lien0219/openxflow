@@ -20,6 +20,7 @@ from langflow.channels.services.dingtalk_stream import channel_stream_lifespan
 from langflow.channels.services.outbound_delivery_maintenance import (
     outbound_delivery_maintenance_lifespan,
 )
+from langflow.channels.services.provider_http import close_provider_http_clients
 from langflow.channels.services.queueing import resolve_channel_queue_descriptor
 from langflow.channels.services.runtime_config import durable_webhook_job_config, webhook_max_body_bytes
 from langflow.channels.services.webhook_jobs import (
@@ -45,12 +46,15 @@ _EVENT_CONNECTION_MISMATCH = "Parsed channel event does not match the configured
 
 @asynccontextmanager
 async def channel_webhook_lifespan(app):  # type: ignore[no-untyped-def]
-    """Run Stream ownership, durable consumers, and outbound receipt maintenance together."""
-    async with AsyncExitStack() as stack:
-        await stack.enter_async_context(channel_stream_lifespan(app))
-        await stack.enter_async_context(durable_webhook_job_lifespan(app))
-        await stack.enter_async_context(outbound_delivery_maintenance_lifespan(app))
-        yield
+    """Run channel workers and close pooled provider clients on application shutdown."""
+    try:
+        async with AsyncExitStack() as stack:
+            await stack.enter_async_context(channel_stream_lifespan(app))
+            await stack.enter_async_context(durable_webhook_job_lifespan(app))
+            await stack.enter_async_context(outbound_delivery_maintenance_lifespan(app))
+            yield
+    finally:
+        await close_provider_http_clients()
 
 
 router = APIRouter(
@@ -265,7 +269,14 @@ async def verify_wecom_callback(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
     adapter = build_channel_adapter(connection)
     try:
-        if isinstance(adapter, WeComAIBotChannelAdapter) or isinstance(adapter, WeComChannelAdapter):
+        if isinstance(adapter, WeComAIBotChannelAdapter):
+            plaintext = adapter.verify_url(
+                signature=msg_signature,
+                timestamp=timestamp,
+                nonce=nonce,
+                echo=echo,
+            )
+        elif isinstance(adapter, WeComChannelAdapter):
             plaintext = adapter.verify_url(
                 signature=msg_signature,
                 timestamp=timestamp,
