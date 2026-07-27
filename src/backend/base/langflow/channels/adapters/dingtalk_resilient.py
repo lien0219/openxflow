@@ -9,6 +9,12 @@ import httpx
 
 from langflow.channels.adapters.dingtalk import DingTalkAPIError, DingTalkChannelAdapter
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
+from langflow.channels.services.provider_http import (
+    channel_download_limit_bytes,
+    download_provider_file,
+    provider_http_client,
+    provider_http_client_for_url,
+)
 from langflow.channels.services.token_cache import (
     InvalidProviderTokenResponseError,
     get_cached_provider_token,
@@ -44,12 +50,15 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
             secret=self.client_secret,
         )
 
+    @property
+    def _http_client(self) -> httpx.AsyncClient:
+        return provider_http_client("dingtalk", self.api_base_url, self.timeout_seconds)
+
     async def _fetch_access_token_entry(self) -> tuple[str, float]:
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(
-                f"{self.api_base_url}/v1.0/oauth2/accessToken",
-                json={"clientId": self.client_id, "clientSecret": self.client_secret},
-            )
+        response = await self._http_client.post(
+            f"{self.api_base_url}/v1.0/oauth2/accessToken",
+            json={"clientId": self.client_id, "clientSecret": self.client_secret},
+        )
         response.raise_for_status()
         body = response_json_object(response)
         if body is None:
@@ -95,13 +104,12 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         async def send(token: str) -> tuple[httpx.Response, dict[str, Any] | None]:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.request(
-                    method,
-                    f"{self.api_base_url}/{path.lstrip('/')}",
-                    json=payload,
-                    headers={"x-acs-dingtalk-access-token": token},
-                )
+            response = await self._http_client.request(
+                method,
+                f"{self.api_base_url}/{path.lstrip('/')}",
+                json=payload,
+                headers={"x-acs-dingtalk-access-token": token},
+            )
             return response, response_json_object(response)
 
         def is_rejected(result: tuple[httpx.Response, dict[str, Any] | None]) -> bool:
@@ -129,3 +137,45 @@ class ResilientDingTalkChannelAdapter(DingTalkChannelAdapter):
         if body.get("code") not in {None, "", 0, "0"}:
             raise DingTalkAPIError(str(body.get("message") or body.get("msg") or body["code"]))
         return body
+
+    async def _post_session_webhook(self, webhook_url: str, payload: dict[str, Any]) -> None:
+        self._validate_session_webhook(webhook_url)
+        client = provider_http_client_for_url("dingtalk-session", webhook_url, self.timeout_seconds)
+        response = await client.post(webhook_url, json=payload)
+        response.raise_for_status()
+        if response.content:
+            body = response.json()
+            if isinstance(body, dict) and body.get("errcode") not in {None, 0, "0"}:
+                raise DingTalkAPIError(str(body.get("errmsg") or body["errcode"]))
+
+    async def download_file(self, external_file_id: str) -> tuple[bytes, dict[str, Any]]:
+        identifier = self._decode_file_identifier(external_file_id)
+        response = await self._api_request(
+            "POST",
+            "/v1.0/robot/messageFiles/download",
+            payload={
+                "robotCode": identifier.get("robot_code") or self.robot_code,
+                "downloadCode": identifier["download_code"],
+            },
+        )
+        download_url = str(response.get("downloadUrl") or "")
+        if not download_url:
+            raise DingTalkAPIError("DingTalk download URL is missing")
+        self._validate_download_url(download_url)
+        client = provider_http_client_for_url(
+            "dingtalk-download",
+            download_url,
+            self.timeout_seconds,
+            follow_redirects=False,
+        )
+        downloaded = await download_provider_file(
+            client,
+            download_url,
+            max_bytes=channel_download_limit_bytes(),
+        )
+        return downloaded.content, {
+            "content_type": downloaded.headers.get("content-type"),
+            "provider": "dingtalk",
+            "filename": identifier.get("filename"),
+            "size_bytes": len(downloaded.content),
+        }
