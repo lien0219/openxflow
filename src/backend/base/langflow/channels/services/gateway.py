@@ -9,6 +9,7 @@ from langflow.channels.adapters.base import ChannelAdapter
 from langflow.channels.domain.exceptions import DuplicateChannelEventError
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelType
 from langflow.channels.services.execution_logs import safe_record_channel_delivery_outcome
+from langflow.channels.services.message_planning import plan_channel_messages
 from langflow.channels.services.message_records import (
     safe_mark_inbound_message,
     safe_record_inbound_message,
@@ -129,10 +130,7 @@ class ChannelGateway:
             if response is not None:
 
                 async def response_sender() -> str:
-                    return await retry_channel_operation(
-                        lambda: adapter.send_response(event, response),
-                        operation_name=f"{adapter.channel_type.value}.send_response",
-                    )
+                    return await self._send_planned_response(adapter, event, response)
 
                 delivery_started = time.perf_counter()
                 try:
@@ -186,12 +184,39 @@ class ChannelGateway:
                 await deduplicator.complete(receipt)
         return event
 
+    @staticmethod
+    async def _send_planned_response(
+        adapter: ChannelAdapter,
+        event: ChannelEvent,
+        message: ChannelMessage,
+    ) -> str:
+        planned = plan_channel_messages(adapter.channel_type.value, message)
+        provider_message_id = ""
+        for index, part in enumerate(planned, start=1):
+            provider_message_id = await retry_channel_operation(
+                lambda part=part: adapter.send_response(event, part),
+                operation_name=f"{adapter.channel_type.value}.send_response.part_{index}",
+            )
+        return provider_message_id
+
+    @staticmethod
+    async def _send_planned_message(
+        adapter: ChannelAdapter,
+        target_id: str,
+        message: ChannelMessage,
+    ) -> str:
+        planned = plan_channel_messages(adapter.channel_type.value, message)
+        provider_message_id = ""
+        for index, part in enumerate(planned, start=1):
+            provider_message_id = await retry_channel_operation(
+                lambda part=part: adapter.send_message(target_id, part),
+                operation_name=f"{adapter.channel_type.value}.send_message.part_{index}",
+            )
+        return provider_message_id
+
     async def send(self, connection_id: UUID, target_id: str, message: ChannelMessage) -> str:
         adapter = self.get_adapter(connection_id)
-        return await retry_channel_operation(
-            lambda: adapter.send_message(target_id, message),
-            operation_name=f"{adapter.channel_type.value}.send_message",
-        )
+        return await self._send_planned_message(adapter, target_id, message)
 
     async def healthcheck(self, connection_id: UUID) -> dict:
         adapter = self.get_adapter(connection_id)
