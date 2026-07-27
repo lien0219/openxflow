@@ -161,6 +161,9 @@ def is_retryable_channel_error(exc: Exception) -> bool:
         return exc.response.status_code in _RETRYABLE_STATUS_CODES
     if isinstance(exc, httpx.RequestError):
         return True
+    structured_retryable = getattr(exc, "retryable", None)
+    if isinstance(structured_retryable, bool):
+        return structured_retryable
     return _is_retryable_provider_api_error(exc)
 
 
@@ -169,6 +172,9 @@ def channel_error_reason(exc: Exception) -> str:
         return f"http_{exc.response.status_code}"
     if isinstance(exc, httpx.RequestError):
         return type(exc).__name__.lower()
+    category = getattr(exc, "category", None)
+    if isinstance(category, str) and category.strip():
+        return category.strip().lower()
     if _is_provider_api_error(exc):
         normalized = str(exc).casefold()
         if _contains_any(normalized, _PROVIDER_RATE_LIMIT_HINTS):
@@ -177,6 +183,9 @@ def channel_error_reason(exc: Exception) -> str:
             return "provider_busy"
         if _contains_any(normalized, _PROVIDER_TIMEOUT_HINTS):
             return "provider_timeout"
+        code = getattr(exc, "code", None)
+        if code not in {None, ""}:
+            return f"provider_{str(code).strip().lower()}"
     return type(exc).__name__.lower()
 
 
@@ -210,6 +219,9 @@ def _is_provider_api_error(exc: Exception) -> bool:
 def _is_retryable_provider_api_error(exc: Exception) -> bool:
     if not _is_provider_api_error(exc):
         return False
+    structured_retryable = getattr(exc, "retryable", None)
+    if isinstance(structured_retryable, bool):
+        return structured_retryable
     normalized = str(exc).casefold()
     return _contains_any(
         normalized,
