@@ -97,8 +97,10 @@ async def test_send_outbound_response_once_marks_success(monkeypatch) -> None:
     delivery_id = uuid4()
     sent = []
     marked = []
+    captured = {}
 
-    async def reserve(_event, _message):
+    async def reserve(_event, _message, *, delivery_key="default"):
+        captured["delivery_key"] = delivery_key
         return OutboundDeliveryDecision(True, delivery_id, ChannelOutboundDeliveryKind.RESPONSE)
 
     async def sender() -> str:
@@ -111,19 +113,30 @@ async def test_send_outbound_response_once_marks_success(monkeypatch) -> None:
     monkeypatch.setattr(outbound_delivery, "reserve_outbound_delivery", reserve)
     monkeypatch.setattr(outbound_delivery, "mark_outbound_delivery_sent", mark_sent)
 
-    result = await send_outbound_response_once(_event(), ChannelMessage(text="world"), sender)
+    result = await send_outbound_response_once(
+        _event(),
+        ChannelMessage(text="world"),
+        sender,
+        delivery_key="part:1:2",
+    )
 
     assert result == "provider-message-1"
     assert sent == [True]
+    assert captured["delivery_key"] == "part:1:2"
     assert marked == [(delivery_id, ChannelOutboundDeliveryKind.RESPONSE, "provider-message-1")]
 
 
 @pytest.mark.asyncio
-async def test_send_outbound_response_once_skips_existing_reservation(monkeypatch) -> None:
+async def test_send_outbound_response_once_reuses_existing_provider_message(monkeypatch) -> None:
     called = False
 
-    async def reserve(_event, _message):
-        return OutboundDeliveryDecision(False, uuid4(), ChannelOutboundDeliveryKind.RESPONSE)
+    async def reserve(_event, _message, **_kwargs):
+        return OutboundDeliveryDecision(
+            False,
+            uuid4(),
+            ChannelOutboundDeliveryKind.RESPONSE,
+            "provider-message-existing",
+        )
 
     async def sender() -> str:
         nonlocal called
@@ -134,7 +147,7 @@ async def test_send_outbound_response_once_skips_existing_reservation(monkeypatc
 
     result = await send_outbound_response_once(_event(), ChannelMessage(text="world"), sender)
 
-    assert result is None
+    assert result == "provider-message-existing"
     assert called is False
 
 
@@ -143,7 +156,7 @@ async def test_send_outbound_response_once_marks_known_failure(monkeypatch) -> N
     delivery_id = uuid4()
     failures = []
 
-    async def reserve(_event, _message):
+    async def reserve(_event, _message, **_kwargs):
         return OutboundDeliveryDecision(True, delivery_id, ChannelOutboundDeliveryKind.RESPONSE)
 
     async def sender() -> str:
@@ -165,7 +178,7 @@ async def test_send_outbound_response_once_marks_known_failure(monkeypatch) -> N
 async def test_provider_error_is_preserved_when_failure_state_write_also_fails(monkeypatch) -> None:
     delivery_id = uuid4()
 
-    async def reserve(_event, _message):
+    async def reserve(_event, _message, **_kwargs):
         return OutboundDeliveryDecision(True, delivery_id, ChannelOutboundDeliveryKind.RESPONSE)
 
     async def sender() -> str:
