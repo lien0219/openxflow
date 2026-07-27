@@ -149,8 +149,34 @@ function Test-DependenciesReady {
     return (Test-Path $pythonPath) -and (Test-Path $nodeModulesPath)
 }
 
+function Assert-PortAvailable {
+    param(
+        [int]$Port,
+        [string]$ServiceName
+    )
+
+    if (-not (Get-Command "Get-NetTCPConnection" -ErrorAction SilentlyContinue)) {
+        return
+    }
+
+    $listeners = @(
+        Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique
+    )
+    if ($listeners.Count -eq 0) {
+        return
+    }
+
+    $processSummary = ($listeners | ForEach-Object {
+        $process = Get-Process -Id $_ -ErrorAction SilentlyContinue
+        if ($process) { "PID $($_) ($($process.ProcessName))" } else { "PID $($_)" }
+    }) -join ", "
+    throw "$ServiceName port $Port is already in use by $processSummary. Close the existing OpenXFlow window or stop that process before starting again."
+}
+
 function Start-BackendService {
     Assert-Command -Name "uv" -InstallHint "Run '.\dev.ps1 install' first."
+    Assert-PortAvailable -Port $BackendPort -ServiceName "Backend"
     Set-Location $ProjectRoot
     Ensure-EnvironmentFile
 
@@ -168,6 +194,7 @@ function Start-BackendService {
 
 function Start-FrontendService {
     Assert-Command -Name "npm" -InstallHint "Run '.\dev.ps1 install' first."
+    Assert-PortAvailable -Port $FrontendPort -ServiceName "Frontend"
     $env:VITE_HOST = $ListenHost
     $env:VITE_PORT = "$FrontendPort"
     $env:VITE_PROXY_TARGET = "http://127.0.0.1:$BackendPort"

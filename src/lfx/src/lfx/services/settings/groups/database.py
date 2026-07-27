@@ -185,13 +185,13 @@ class DatabaseSettings(BaseModel):
     @field_validator("db_connection_settings", mode="after")
     @classmethod
     def configure_sqlite_pool(cls, value, info):
-        """Keep file-backed SQLite reads concurrent without multiplying writers.
+        """Use loop-neutral pools for SQLite async engines.
 
-        WAL permits readers on separate connections while one writer is active.
-        Runtime session coordination serializes writes, so a small pool avoids
-        the single-connection queue bottleneck and still bounds resource usage.
-        In-memory SQLite remains single-connection because each connection would
-        otherwise receive an independent database.
+        File-backed SQLite uses ``NullPool`` so SQLAlchemy never keeps an
+        event-loop-bound ``asyncio.Queue`` between sessions. In-memory
+        SQLite uses ``StaticPool`` to preserve one shared database without
+        introducing an async queue. WAL and the application write
+        coordinator continue to provide read concurrency and safe writes.
         """
         database_url = str(os.getenv("LANGFLOW_DATABASE_URL") or info.data.get("database_url") or "")
         if not database_url.startswith("sqlite"):
@@ -199,18 +199,8 @@ class DatabaseSettings(BaseModel):
 
         connection_settings = dict(value or {})
         is_memory = database_url in {"sqlite://", "sqlite:///:memory:"} or ":memory:" in database_url
-        if is_memory:
-            connection_settings["pool_size"] = 1
-        else:
-            try:
-                pool_size = int(connection_settings.get("pool_size", 5))
-            except (TypeError, ValueError):
-                pool_size = 5
-            connection_settings["pool_size"] = min(5, max(2, pool_size))
-        connection_settings["max_overflow"] = 0
-        try:
-            pool_timeout = int(connection_settings.get("pool_timeout", 30))
-        except (TypeError, ValueError):
-            pool_timeout = 30
-        connection_settings["pool_timeout"] = max(30, pool_timeout)
+        connection_settings["poolclass"] = "StaticPool" if is_memory else "NullPool"
+        for pool_option in ("pool_size", "max_overflow", "pool_timeout", "pool_recycle"):
+            connection_settings.pop(pool_option, None)
+        connection_settings["pool_pre_ping"] = True
         return connection_settings

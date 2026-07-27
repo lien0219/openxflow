@@ -365,16 +365,22 @@ class DatabaseService(Service):
             dict: Connection kwargs with deprecated settings overriding db_connection_settings
         """
         settings = self.settings_service.settings
-        # Start with db_connection_settings as base
         connection_kwargs = settings.db_connection_settings.copy()
 
-        # Override individual settings if explicitly set
         if "pool_size" in settings.model_fields_set:
             logger.warning("pool_size is deprecated. Use db_connection_settings['pool_size'] instead.")
             connection_kwargs["pool_size"] = settings.pool_size
         if "max_overflow" in settings.model_fields_set:
             logger.warning("max_overflow is deprecated. Use db_connection_settings['max_overflow'] instead.")
             connection_kwargs["max_overflow"] = settings.max_overflow
+
+        if self.database_url.startswith("sqlite"):
+            # AsyncAdaptedQueuePool owns an asyncio.Queue and cannot be reused
+            # from another event loop. Use queue-free pools for SQLite.
+            database = make_url(self.database_url).database
+            connection_kwargs["poolclass"] = "StaticPool" if database in {None, "", ":memory:"} else "NullPool"
+            for pool_option in ("pool_size", "max_overflow", "pool_timeout", "pool_recycle"):
+                connection_kwargs.pop(pool_option, None)
 
         return connection_kwargs
 

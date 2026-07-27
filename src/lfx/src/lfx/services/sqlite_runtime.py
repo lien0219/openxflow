@@ -1,8 +1,8 @@
 """SQLite runtime coordination for async OpenXFlow sessions.
 
 SQLite permits concurrent readers in WAL mode but only one writer. This module
-keeps a small read-capable connection pool while serializing write transactions
-inside one process, rejects unsafe multi-worker use, and prevents two OpenXFlow
+uses loop-neutral SQLite connections while serializing write transactions across
+all event loops in one process, rejects unsafe multi-worker use, and prevents two OpenXFlow
 backend processes from opening the same database file at the same time.
 """
 
@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
-from weakref import WeakKeyDictionary
 
 from filelock import FileLock
 from filelock import Timeout as FileLockTimeout
@@ -146,35 +145,46 @@ def _statement_is_write(statement: Any) -> bool:
 
 
 class SQLiteWriteCoordinator:
-    """Serialize SQLite writers while allowing independent read sessions."""
+    """Serialize SQLite writers across threads and asyncio event loops."""
 
     def __init__(self, wait_seconds: float = _DEFAULT_WRITE_WAIT_SECONDS) -> None:
         self.wait_seconds = max(0.1, wait_seconds)
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()
+        self._state_guard = threading.Lock()
         self._owner: object | None = None
         self._owner_task: asyncio.Task[Any] | None = None
 
     async def acquire(self, owner: object) -> None:
         current_task = asyncio.current_task()
-        if self._owner is owner:
-            if current_task is not None and self._owner_task is not current_task:
-                raise SQLiteConcurrentSessionUseError
-            return
-        if current_task is not None and self._owner_task is current_task:
-            raise SQLiteNestedWriteError
-        try:
-            await asyncio.wait_for(self._lock.acquire(), timeout=self.wait_seconds)
-        except TimeoutError as exc:
-            raise SQLiteWriteTimeoutError(self.wait_seconds) from exc
-        self._owner = owner
-        self._owner_task = current_task
+        with self._state_guard:
+            if self._owner is owner:
+                if current_task is not None and self._owner_task is not current_task:
+                    raise SQLiteConcurrentSessionUseError
+                return
+            if current_task is not None and self._owner_task is current_task:
+                raise SQLiteNestedWriteError
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.wait_seconds
+        while not self._lock.acquire(blocking=False):
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise SQLiteWriteTimeoutError(self.wait_seconds)
+            await asyncio.sleep(min(0.025, remaining))
+
+        with self._state_guard:
+            self._owner = owner
+            self._owner_task = current_task
 
     def release(self, owner: object) -> None:
-        if self._owner is not owner:
-            return
-        self._owner = None
-        self._owner_task = None
-        if self._lock.locked():
+        should_release = False
+        with self._state_guard:
+            if self._owner is not owner:
+                return
+            self._owner = None
+            self._owner_task = None
+            should_release = True
+        if should_release and self._lock.locked():
             self._lock.release()
 
 
@@ -254,7 +264,7 @@ class SQLiteProcessLock:
 
 
 _COORDINATOR_GUARD = threading.Lock()
-_COORDINATORS: WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, SQLiteWriteCoordinator]] = WeakKeyDictionary()
+_COORDINATORS: dict[str, SQLiteWriteCoordinator] = {}
 
 
 def _database_runtime_key(database_url: str) -> str:
@@ -262,15 +272,13 @@ def _database_runtime_key(database_url: str) -> str:
     return str(path.resolve()) if path is not None else database_url
 
 
-def _coordinator_for_current_loop(database_url: str, wait_seconds: float) -> SQLiteWriteCoordinator:
-    loop = asyncio.get_running_loop()
+def _coordinator_for_database(database_url: str, wait_seconds: float) -> SQLiteWriteCoordinator:
     database_key = _database_runtime_key(database_url)
     with _COORDINATOR_GUARD:
-        loop_coordinators = _COORDINATORS.setdefault(loop, {})
-        coordinator = loop_coordinators.get(database_key)
+        coordinator = _COORDINATORS.get(database_key)
         if coordinator is None:
             coordinator = SQLiteWriteCoordinator(wait_seconds)
-            loop_coordinators[database_key] = coordinator
+            _COORDINATORS[database_key] = coordinator
         return coordinator
 
 
@@ -297,7 +305,7 @@ def install_sqlite_session_guard(
     if session.info.get(_SQLITE_GUARD_INSTALLED_KEY, False):
         return
 
-    coordinator = _coordinator_for_current_loop(database_url, write_wait_seconds)
+    coordinator = _coordinator_for_database(database_url, write_wait_seconds)
     owner = object()
     guard_held = False
 

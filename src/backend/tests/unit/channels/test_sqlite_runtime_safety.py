@@ -1,5 +1,7 @@
 import asyncio
 import sqlite3
+import threading
+import time
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -20,10 +22,11 @@ from lfx.services.sqlite_runtime import (
 )
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
 
 
-def test_sqlite_settings_keep_small_read_pool(monkeypatch, tmp_path) -> None:
+def test_sqlite_settings_use_loop_neutral_null_pool(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LANGFLOW_DATABASE_URL", f"sqlite:///{tmp_path / 'openxflow.db'}")
 
     settings = DatabaseSettings(
@@ -31,37 +34,39 @@ def test_sqlite_settings_keep_small_read_pool(monkeypatch, tmp_path) -> None:
             "pool_size": 20,
             "max_overflow": 30,
             "pool_timeout": 5,
+            "pool_recycle": 1800,
             "pool_pre_ping": True,
         }
     )
 
     assert settings.db_connection_settings == {
-        "pool_size": 5,
-        "max_overflow": 0,
-        "pool_timeout": 30,
         "pool_pre_ping": True,
+        "poolclass": "NullPool",
     }
 
 
-def test_sqlite_default_pool_keeps_concurrent_read_capacity(monkeypatch, tmp_path) -> None:
+def test_sqlite_default_pool_is_loop_neutral(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LANGFLOW_DATABASE_URL", f"sqlite:///{tmp_path / 'openxflow.db'}")
 
     settings = DatabaseSettings()
 
     assert settings.db_connection_settings is not None
-    assert settings.db_connection_settings["pool_size"] == 5
-    assert settings.db_connection_settings["max_overflow"] == 0
-    assert settings.db_connection_settings["pool_timeout"] == 30
+    assert settings.db_connection_settings["poolclass"] == "NullPool"
+    assert "pool_size" not in settings.db_connection_settings
+    assert "max_overflow" not in settings.db_connection_settings
+    assert "pool_timeout" not in settings.db_connection_settings
+    assert "pool_recycle" not in settings.db_connection_settings
 
 
-def test_sqlite_memory_database_remains_single_connection(monkeypatch) -> None:
+def test_sqlite_memory_database_uses_static_pool(monkeypatch) -> None:
     monkeypatch.setenv("LANGFLOW_DATABASE_URL", "sqlite:///:memory:")
 
     settings = DatabaseSettings()
 
     assert settings.db_connection_settings is not None
-    assert settings.db_connection_settings["pool_size"] == 1
-    assert settings.db_connection_settings["max_overflow"] == 0
+    assert settings.db_connection_settings["poolclass"] == "StaticPool"
+    assert "pool_size" not in settings.db_connection_settings
+    assert "max_overflow" not in settings.db_connection_settings
 
 
 def test_postgres_settings_keep_configured_pool(monkeypatch) -> None:
@@ -352,6 +357,76 @@ async def test_webhook_failure_commits_receipt_failure_marker(monkeypatch) -> No
     assert session.committed_failure_marker is True
 
 
+def test_sqlite_null_pool_engine_is_reusable_across_event_loops(tmp_path) -> None:
+    database_url = f"sqlite+aiosqlite:///{tmp_path / 'cross-loop.db'}"
+    engine = create_async_engine(database_url, poolclass=NullPool)
+
+    async def initialize() -> None:
+        async with engine.begin() as connection:
+            await connection.execute(sa.text("CREATE TABLE sample (value INTEGER NOT NULL)"))
+            await connection.execute(sa.text("INSERT INTO sample (value) VALUES (1)"))
+
+    async def read_value() -> int:
+        async with engine.connect() as connection:
+            return int((await connection.execute(sa.text("SELECT value FROM sample"))).scalar_one())
+
+    asyncio.run(initialize())
+    assert asyncio.run(read_value()) == 1
+    asyncio.run(engine.dispose())
+
+
+def test_sqlite_writer_coordinator_serializes_different_event_loops() -> None:
+    coordinator = SQLiteWriteCoordinator(wait_seconds=2)
+    first_acquired = threading.Event()
+    release_first = threading.Event()
+    elapsed: list[float] = []
+    errors: list[BaseException] = []
+
+    def first_writer() -> None:
+        async def run() -> None:
+            owner = object()
+            await coordinator.acquire(owner)
+            first_acquired.set()
+            await asyncio.to_thread(release_first.wait, 1)
+            coordinator.release(owner)
+
+        try:
+            asyncio.run(run())
+        except BaseException as exc:  # pragma: no cover - surfaced below
+            errors.append(exc)
+
+    def second_writer() -> None:
+        first_acquired.wait(1)
+
+        async def run() -> None:
+            owner = object()
+            started = time.monotonic()
+            await coordinator.acquire(owner)
+            elapsed.append(time.monotonic() - started)
+            coordinator.release(owner)
+
+        try:
+            asyncio.run(run())
+        except BaseException as exc:  # pragma: no cover - surfaced below
+            errors.append(exc)
+
+    first_thread = threading.Thread(target=first_writer)
+    second_thread = threading.Thread(target=second_writer)
+    first_thread.start()
+    second_thread.start()
+    assert first_acquired.wait(1)
+    time.sleep(0.15)
+    release_first.set()
+    first_thread.join(timeout=2)
+    second_thread.join(timeout=2)
+
+    assert not errors
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert elapsed
+    assert elapsed[0] >= 0.1
+
+
 class _RealDBService:
     def __init__(self, database_url, session_maker) -> None:
         self.database_url = database_url
@@ -375,8 +450,7 @@ async def test_real_sqlite_writes_serialize_while_reads_remain_concurrent(monkey
     database_url = f"sqlite+aiosqlite:///{database_path}"
     engine = create_async_engine(
         database_url,
-        pool_size=5,
-        max_overflow=0,
+        poolclass=NullPool,
         connect_args={"check_same_thread": False, "timeout": 1},
     )
 
