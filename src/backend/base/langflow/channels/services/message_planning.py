@@ -1,0 +1,85 @@
+"""Provider-aware planning for long outbound channel messages."""
+
+from __future__ import annotations
+
+from langflow.channels.domain.models import ChannelMessage, ChannelMessageType
+from langflow.channels.services.capabilities import get_provider_capability
+
+_MIN_BOUNDARY_RATIO = 0.45
+_BOUNDARY_MARKERS = ("\n\n", "\n", "。", "！", "？", ". ", "! ", "? ", "；", "; ", "，", ", ", " ")
+
+
+def _find_split_index(value: str, limit: int) -> int:
+    if len(value) <= limit:
+        return len(value)
+    lower_bound = max(1, int(limit * _MIN_BOUNDARY_RATIO))
+    window = value[: limit + 1]
+    for marker in _BOUNDARY_MARKERS:
+        index = window.rfind(marker, lower_bound, limit + 1)
+        if index >= lower_bound:
+            return index + len(marker)
+    return limit
+
+
+def split_channel_text(value: str, limit: int) -> list[str]:
+    """Split Unicode text on semantic boundaries without dropping content."""
+    if limit <= 0:
+        raise ValueError("limit must be positive")
+    remaining = value.strip()
+    if not remaining:
+        return [""]
+
+    chunks: list[str] = []
+    while len(remaining) > limit:
+        split_index = _find_split_index(remaining, limit)
+        chunk = remaining[:split_index].rstrip()
+        if not chunk:
+            chunk = remaining[:limit]
+            split_index = limit
+        chunks.append(chunk)
+        remaining = remaining[split_index:].lstrip()
+    if remaining:
+        chunks.append(remaining)
+    return chunks
+
+
+def _content_source(message: ChannelMessage) -> tuple[str, str]:
+    if message.markdown:
+        return "markdown", message.markdown
+    if message.text:
+        return "text", message.text
+    if message.title:
+        return "title", message.title
+    return "text", ""
+
+
+def plan_channel_messages(channel_type: str, message: ChannelMessage) -> list[ChannelMessage]:
+    """Convert one logical response into one or more provider-safe messages."""
+    capabilities = get_provider_capability(channel_type)
+    if capabilities is None:
+        return [message]
+
+    source_field, source = _content_source(message)
+    if len(source) <= capabilities.max_text_length:
+        return [message]
+
+    chunks = split_channel_text(source, capabilities.max_text_length)
+    planned: list[ChannelMessage] = []
+    total = len(chunks)
+    for index, chunk in enumerate(chunks):
+        update = {
+            "title": message.title if index == 0 and source_field != "title" else None,
+            "text": chunk if source_field in {"text", "title"} else None,
+            "markdown": chunk if source_field == "markdown" else None,
+            "actions": message.actions[: capabilities.max_actions] if index == total - 1 else [],
+            "attachments": message.attachments if index == 0 else [],
+            "metadata": {
+                **message.metadata,
+                "openxflow_chunk_index": index + 1,
+                "openxflow_chunk_total": total,
+            },
+        }
+        if total > 1 and message.message_type is ChannelMessageType.CARD:
+            update["message_type"] = ChannelMessageType.MARKDOWN if source_field == "markdown" else ChannelMessageType.TEXT
+        planned.append(message.model_copy(update=update))
+    return planned
