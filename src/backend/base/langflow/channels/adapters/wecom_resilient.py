@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any, ClassVar
 
 import httpx
 
 from langflow.channels.adapters.wecom import WeComAPIError, WeComChannelAdapter
+from langflow.channels.domain.models import ChannelEvent
 from langflow.channels.services.keyed_loop_lock import LoopLocalKeyedLockPool
+from langflow.channels.services.provider_http import (
+    channel_download_limit_bytes,
+    download_provider_file,
+    provider_http_client,
+)
 from langflow.channels.services.token_cache import (
     InvalidProviderTokenResponseError,
     get_cached_provider_token,
@@ -39,12 +46,15 @@ class ResilientWeComChannelAdapter(WeComChannelAdapter):
             secret=self.corp_secret,
         )
 
+    @property
+    def _http_client(self) -> httpx.AsyncClient:
+        return provider_http_client("wecom", self.api_base_url, self.timeout_seconds)
+
     async def _fetch_access_token_entry(self) -> tuple[str, float]:
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.get(
-                f"{self.api_base_url}/cgi-bin/gettoken",
-                params={"corpid": self.corp_id, "corpsecret": self.corp_secret},
-            )
+        response = await self._http_client.get(
+            f"{self.api_base_url}/cgi-bin/gettoken",
+            params={"corpid": self.corp_id, "corpsecret": self.corp_secret},
+        )
         response.raise_for_status()
         body = response_json_object(response)
         if body is None:
@@ -104,13 +114,12 @@ class ResilientWeComChannelAdapter(WeComChannelAdapter):
     ) -> dict[str, Any]:
         async def send(token: str) -> tuple[httpx.Response, dict[str, Any] | None]:
             request_params = {"access_token": token, **(params or {})}
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.request(
-                    method,
-                    f"{self.api_base_url}/{path.lstrip('/')}",
-                    params=request_params,
-                    json=payload,
-                )
+            response = await self._http_client.request(
+                method,
+                f"{self.api_base_url}/{path.lstrip('/')}",
+                params=request_params,
+                json=payload,
+            )
             return response, response_json_object(response)
 
         response, body = await request_with_token_refresh(
@@ -128,33 +137,53 @@ class ResilientWeComChannelAdapter(WeComChannelAdapter):
         self._raise_for_business_error(body)
         return body
 
+    def _normalize_message(self, message: dict[str, str]) -> ChannelEvent:
+        callback_agent_id = message.get("AgentID", "").strip()
+        if callback_agent_id:
+            try:
+                parsed_agent_id = int(callback_agent_id)
+            except ValueError as exc:
+                raise ValueError("WeCom callback AgentID must be an integer") from exc
+            if parsed_agent_id != self.agent_id:
+                raise ValueError("WeCom callback AgentID does not match this channel connection")
+        return super()._normalize_message(message)
+
+    @staticmethod
+    def _download_error_body(content: bytes, content_type: str | None) -> dict[str, Any] | None:
+        if not content or "json" not in str(content_type).lower():
+            return None
+        try:
+            value = json.loads(content.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    async def _download_with_token(self, token: str, media_id: str):  # type: ignore[no-untyped-def]
+        return await download_provider_file(
+            self._http_client,
+            f"{self.api_base_url}/cgi-bin/media/get",
+            params={"access_token": token, "media_id": media_id},
+            max_bytes=channel_download_limit_bytes(),
+        )
+
     async def download_file(self, external_file_id: str) -> tuple[bytes, dict[str, Any]]:
         prefix, separator, media_id = external_file_id.partition(":")
         if prefix != "wecom" or not separator or not media_id:
             raise ValueError("Invalid WeCom media identifier")
 
-        async def send(token: str) -> tuple[httpx.Response, dict[str, Any] | None]:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=False) as client:
-                response = await client.get(
-                    f"{self.api_base_url}/cgi-bin/media/get",
-                    params={"access_token": token, "media_id": media_id},
-                )
-            return response, response_json_object(response)
-
-        response, body = await request_with_token_refresh(
-            get_token=self._access_token,
-            refresh_token=self._refresh_rejected_access_token,
-            send=send,
-            is_rejected=self._is_token_rejection,
-            provider="wecom",
-        )
-        response.raise_for_status()
-        content_type = response.headers.get("content-type", "")
+        token = await self._access_token()
+        downloaded = await self._download_with_token(token, media_id)
+        body = self._download_error_body(downloaded.content, downloaded.headers.get("content-type"))
+        if body is not None and str(body.get("errcode")) in _WECOM_ACCESS_TOKEN_REJECTION_CODES:
+            token = await self._refresh_rejected_access_token(token)
+            downloaded = await self._download_with_token(token, media_id)
+            body = self._download_error_body(downloaded.content, downloaded.headers.get("content-type"))
         if body is not None:
             self._raise_for_business_error(body)
             raise WeComAPIError("WeCom media response did not contain a file")
-        return response.content, {
+        return downloaded.content, {
             "provider": "wecom",
-            "content_type": content_type or None,
-            "filename": self._response_filename(response.headers.get("content-disposition")),
+            "content_type": downloaded.headers.get("content-type"),
+            "filename": self._response_filename(downloaded.headers.get("content-disposition")),
+            "size_bytes": len(downloaded.content),
         }
