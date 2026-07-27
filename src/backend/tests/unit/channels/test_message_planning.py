@@ -27,7 +27,36 @@ def test_long_telegram_card_is_split_and_actions_only_appear_on_last_part() -> N
     assert planned[0].actions == []
     assert planned[-1].actions[0].action_id == "continue"
     assert all(part.message_type is ChannelMessageType.MARKDOWN for part in planned)
-    assert all(len(part.markdown or "") <= 3900 for part in planned)
+    assert all(
+        len(part.markdown or "") + len(part.title or "") + (2 if part.title else 0) <= 3900
+        for part in planned
+    )
+
+
+def test_title_and_body_are_counted_together() -> None:
+    message = ChannelMessage(
+        title="T" * 100,
+        text="正文。" * 600,
+    )
+
+    planned = plan_channel_messages("wecom", message)
+
+    assert len(planned) > 1
+    assert all(
+        len(part.text or "") + len(part.title or "") + (2 if part.title else 0) <= 1800
+        for part in planned
+    )
+
+
+def test_oversized_action_list_is_capped() -> None:
+    message = ChannelMessage(
+        text="选择",
+        actions=[ChannelAction(action_id=f"action-{index}", label=str(index)) for index in range(10)],
+    )
+
+    planned = plan_channel_messages("wecom", message)
+
+    assert len(planned[-1].actions) == 6
 
 
 def test_short_message_keeps_original_shape() -> None:
