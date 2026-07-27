@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -120,9 +120,7 @@ def _next_connection_credentials(
     mode_changed = next_mode != connection.connection_mode
     if mode_changed:
         if payload.credentials is None:
-            raise ChannelProviderCredentialError(
-                "Channel credentials are required when changing the connection mode"
-            )
+            raise ChannelProviderCredentialError("Channel credentials are required when changing the connection mode")
         return dict(payload.credentials), next_mode, True
 
     existing = decrypt_credentials(connection.credentials_encrypted)
@@ -313,8 +311,10 @@ async def list_conversation_bindings(
     sort: str = "-last_message_at",
 ) -> ChannelConversationBindingPage:
     base = select(ChannelConversationBinding).where(ChannelConversationBinding.connection_id == connection_id)
-    count_statement = select(func.count()).select_from(ChannelConversationBinding).where(
-        ChannelConversationBinding.connection_id == connection_id
+    count_statement = (
+        select(func.count())
+        .select_from(ChannelConversationBinding)
+        .where(ChannelConversationBinding.connection_id == connection_id)
     )
     if query:
         pattern = f"%{query.strip()}%"
