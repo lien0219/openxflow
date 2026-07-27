@@ -1,9 +1,9 @@
 """SQLite runtime coordination for async OpenXFlow sessions.
 
-SQLite supports concurrent readers in WAL mode but only one writer. This module
+SQLite permits concurrent readers in WAL mode but only one writer. This module
 keeps a small read-capable connection pool while serializing write transactions
-inside one process, rejects unsafe multi-worker use, and prevents a second
-OpenXFlow process from opening the same database file.
+inside one process, rejects unsafe multi-worker use, and prevents two OpenXFlow
+backend processes from opening the same database file at the same time.
 """
 
 from __future__ import annotations
@@ -27,7 +27,11 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-_SQLITE_LOCK_MESSAGES = ("database is locked", "database table is locked", "database schema is locked")
+_SQLITE_LOCK_MESSAGES = (
+    "database is locked",
+    "database table is locked",
+    "database schema is locked",
+)
 _SQLITE_WRITE_PREFIXES = {
     "ALTER",
     "ANALYZE",
@@ -44,12 +48,12 @@ _SQLITE_WRITE_PREFIXES = {
     "VACUUM",
 }
 _DEFAULT_WRITE_WAIT_SECONDS = 10.0
-_DEFAULT_PROCESS_LOCK_WAIT_SECONDS = 0.0
+_DEFAULT_PROCESS_LOCK_WAIT_SECONDS = 10.0
 _SQLITE_GUARD_INSTALLED_KEY = "openxflow_sqlite_guard_installed"
 
 
 class SQLiteNestedWriteError(RuntimeError):
-    """Raised when one task opens a second write session before committing the first."""
+    """Raised when one task starts a second write session before finishing the first."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -59,7 +63,7 @@ class SQLiteNestedWriteError(RuntimeError):
 
 
 class SQLiteWriteTimeoutError(TimeoutError):
-    """Raised when a SQLite write transaction cannot enter the application write queue."""
+    """Raised when a SQLite write cannot enter the application writer queue."""
 
     def __init__(self, wait_seconds: float) -> None:
         super().__init__(
@@ -79,6 +83,7 @@ class SQLiteConcurrentSessionUseError(RuntimeError):
 
 
 def is_sqlite_url(database_url: str | None) -> bool:
+    """Return whether a database URL uses SQLite."""
     return bool(database_url and database_url.startswith("sqlite"))
 
 
@@ -135,8 +140,8 @@ def _statement_is_write(statement: Any) -> bool:
     if prefix in _SQLITE_WRITE_PREFIXES:
         return True
     if prefix == "WITH":
-        normalized = " ".join(text.upper().split())
-        return any(f" {keyword} " in f" {normalized} " for keyword in ("INSERT", "UPDATE", "DELETE", "REPLACE"))
+        normalized = f" {' '.join(text.upper().split())} "
+        return any(f" {keyword} " in normalized for keyword in ("INSERT", "UPDATE", "DELETE", "REPLACE"))
     return prefix == "BEGIN" and "IMMEDIATE" in text.upper()
 
 
@@ -210,6 +215,7 @@ class SQLiteProcessLock:
         *,
         wait_seconds: float = _DEFAULT_PROCESS_LOCK_WAIT_SECONDS,
     ) -> SQLiteProcessLock:
+        """Acquire a process lock, allowing a short reload-worker handover window."""
         resolved = database_path.resolve()
         with _PROCESS_LOCK_GUARD:
             existing = _PROCESS_LOCKS.get(resolved)
@@ -279,10 +285,11 @@ def install_sqlite_session_guard(
     workers: int,
     write_wait_seconds: float = _DEFAULT_WRITE_WAIT_SECONDS,
 ) -> None:
-    """Install lazy write serialization on one real SQLAlchemy async session.
+    """Install lazy write serialization on a SQLAlchemy async session.
 
-    Reads remain concurrent. The first write or pending autoflush acquires the
-    process-local writer queue and retains it until commit/rollback/close.
+    Reads remain concurrent. The first DML statement, pending autoflush, or
+    commit with pending ORM changes acquires the process-local writer queue and
+    retains it until commit, rollback, or close.
     """
     if not is_sqlite_url(database_url):
         return
@@ -376,13 +383,13 @@ def install_sqlite_session_guard(
         else:
             release_guard()
 
-    async def guared_rollback() -> None:
+    async def guarded_rollback() -> None:
         try:
             await original_rollback()
         finally:
             release_guard()
 
-    async def guared_close() -> None:
+    async def guarded_close() -> None:
         try:
             await original_close()
         finally:
@@ -420,7 +427,7 @@ def ensure_sqlite_process_safety(database_url: str | None, workers: int) -> SQLi
 
 
 def release_sqlite_process_safety(database_url: str | None) -> None:
-    """Release a cached process lock, primarily for orderly service teardown and tests."""
+    """Release a cached process lock, primarily for orderly teardown and tests."""
     path = sqlite_database_path(database_url)
     if path is None:
         return
