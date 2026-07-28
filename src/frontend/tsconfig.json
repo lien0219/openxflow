@@ -18,8 +18,8 @@
     "jsx": "react-jsx",
     "noImplicitAny": false,
     "paths": {
-      "@/*": ["src/*"],
-      "@queries/*": ["src/controllers/API/queries/*"]
+      "@/*": ["./src/*"],
+      "@queries/*": ["./src/controllers/API/queries/*"]
     }
   },
   "include": [
