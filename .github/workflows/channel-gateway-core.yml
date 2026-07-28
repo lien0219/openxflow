@@ -119,6 +119,7 @@ jobs:
             pytest -q -x --tb=short \
             --confcutdir=src/backend/tests/unit/channels \
             src/backend/tests/unit/channels/test_channel_core_workflow.py \
+            src/backend/tests/unit/channels/test_channel_knowledge_base_delegation.py \
             src/backend/tests/unit/channels/test_channel_file_security.py \
             src/backend/tests/unit/channels/test_channel_media_file_security.py \
             src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py \

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -15,8 +16,13 @@ from langflow.channels.services.conversation_scope import conversation_scope_id
 from langflow.helpers.flow import get_flow_by_id_or_endpoint_name
 from langflow.services.authorization import FlowAction, ensure_flow_permission
 from langflow.services.database.models.channel.execution_model import ChannelExecutionIdentityType
-from langflow.services.database.models.channel.model import ChannelContextMode
+from langflow.services.database.models.channel.model import (
+    ChannelConnection,
+    ChannelContextMode,
+    ChannelConversationBinding,
+)
 from langflow.services.database.models.flow.model import Flow
+from langflow.services.database.models.knowledge_base.model import KnowledgeBaseRecord
 from langflow.services.database.models.user.model import User
 from langflow.services.deps import get_variable_service, session_scope
 
@@ -208,6 +214,171 @@ async def _prepare_service_flow_credentials(flow: Flow) -> tuple[Flow, dict[str,
     return flow.model_copy(update={"data": graph_data}), request_variables
 
 
+async def _build_service_knowledge_base_access(
+    *,
+    channel_context: dict[str, Any] | None,
+    service_user_id: UUID,
+    flow_owner_user_id: UUID,
+) -> dict[str, str] | None:
+    """Validate and return one explicitly granted KB owner delegation."""
+    context = channel_context or {}
+    raw_knowledge_base_id = context.get("knowledge_base_id")
+    if not raw_knowledge_base_id:
+        return None
+
+    try:
+        connection_id = UUID(str(context.get("connection_id") or ""))
+        knowledge_base_id = UUID(str(raw_knowledge_base_id))
+        raw_binding_id = context.get("conversation_binding_id")
+        binding_id = UUID(str(raw_binding_id)) if raw_binding_id else None
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid channel knowledge-base grant context",
+        ) from exc
+
+    async with session_scope() as session:
+        connection = await session.get(ChannelConnection, connection_id)
+        knowledge_base = await session.get(KnowledgeBaseRecord, knowledge_base_id)
+        binding = await session.get(ChannelConversationBinding, binding_id) if binding_id is not None else None
+
+    if connection is None or knowledge_base is None or (binding_id is not None and binding is None):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge base grant not found")
+    if connection.service_user_id != service_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The channel service identity is not granted this knowledge base",
+        )
+    if connection.user_id != flow_owner_user_id or knowledge_base.user_id != flow_owner_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Shared workflows can only use the connection owner's knowledge base",
+        )
+    if binding is not None and binding.connection_id != connection.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The conversation knowledge-base grant belongs to another connection",
+        )
+
+    expected_knowledge_base_id = (
+        binding.knowledge_base_id
+        if binding is not None and binding.knowledge_base_id is not None
+        else connection.default_knowledge_base_id
+    )
+    if expected_knowledge_base_id != knowledge_base.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The knowledge base is not explicitly granted to this channel route",
+        )
+
+    configured_name = str(context.get("knowledge_base_name") or "").strip()
+    if configured_name and configured_name != knowledge_base.name:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The channel knowledge-base grant does not match the selected resource",
+        )
+
+    return {
+        "connection_id": str(connection.id),
+        "knowledge_base_id": str(knowledge_base.id),
+        "knowledge_base_name": knowledge_base.name,
+        "resource_owner_user_id": str(knowledge_base.user_id),
+        "service_user_id": str(service_user_id),
+    }
+
+
+_CHANNEL_KB_USER_SCOPE_MARKER = "# OpenXFlow channel knowledge-base owner scope"
+_CHANNEL_KB_USER_SCOPE_PROPERTY = """
+    # OpenXFlow channel knowledge-base owner scope
+    @property
+    def user_id(self):
+        current_user_id = super().user_id
+        try:
+            channel_context = self.graph.context.get("channel") or {}
+            access = channel_context.get("knowledge_base_access") or {}
+        except (AttributeError, TypeError):
+            return current_user_id
+        if channel_context.get("execution_identity_type") != "service":
+            return current_user_id
+        if str(access.get("service_user_id") or "") != str(current_user_id):
+            return current_user_id
+        if str(access.get("connection_id") or "") != str(channel_context.get("connection_id") or ""):
+            return current_user_id
+        if str(access.get("knowledge_base_id") or "") != str(channel_context.get("knowledge_base_id") or ""):
+            return current_user_id
+        selected_knowledge_base = str(getattr(self, "knowledge_base", "") or "")
+        if str(access.get("knowledge_base_name") or "") != selected_knowledge_base:
+            return current_user_id
+        owner_user_id = access.get("resource_owner_user_id")
+        if not owner_user_id:
+            return current_user_id
+        try:
+            return type(current_user_id)(str(owner_user_id))
+        except (TypeError, ValueError):
+            return str(owner_user_id)
+"""
+_CHANNEL_KB_CLASS_MARKERS = (
+    "class KnowledgeComponent(Component):\n",
+    "class KnowledgeBaseComponent(Component):\n",
+    "class KnowledgeBaseComponent(KnowledgeComponent):\n",
+    "class KnowledgeIngestionComponent(Component):\n",
+    "class KnowledgeIngestionComponent(KnowledgeComponent):\n",
+)
+
+
+def _apply_service_knowledge_base_scope(flow: Flow, access: dict[str, str] | None) -> Flow:
+    """Patch only selected Knowledge nodes in the in-memory service-run flow copy.
+
+    Flow nodes persist a source snapshot of their component. Updating the installed
+    component module alone does not repair already-saved workflows, so the scoped
+    user-id property is injected into the transient flow copy used for this run.
+    """
+    if access is None or not isinstance(flow.data, dict):
+        return flow
+
+    selected_name = access.get("knowledge_base_name")
+    if not selected_name:
+        return flow
+
+    graph_data = deepcopy(flow.data)
+    nodes = graph_data.get("nodes")
+    if not isinstance(nodes, list):
+        return flow
+
+    patched_nodes = 0
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        node_data = (node.get("data") or {}).get("node")
+        if not isinstance(node_data, dict):
+            continue
+        template = node_data.get("template")
+        if not isinstance(template, dict):
+            continue
+        knowledge_base_field = template.get("knowledge_base")
+        if not isinstance(knowledge_base_field, dict) or knowledge_base_field.get("value") != selected_name:
+            continue
+        code_field = template.get("code")
+        if not isinstance(code_field, dict):
+            continue
+        code = code_field.get("value")
+        if not isinstance(code, str) or _CHANNEL_KB_USER_SCOPE_MARKER in code:
+            continue
+        class_marker = next((candidate for candidate in _CHANNEL_KB_CLASS_MARKERS if candidate in code), None)
+        if class_marker is None:
+            continue
+        code_field["value"] = code.replace(
+            class_marker,
+            f"{class_marker}{_CHANNEL_KB_USER_SCOPE_PROPERTY}",
+            1,
+        )
+        patched_nodes += 1
+
+    if patched_nodes == 0:
+        return flow
+    return flow.model_copy(update={"data": graph_data})
+
+
 def render_run_response(response: RunResponse) -> str:
     payload = response.model_dump(exclude_none=True)
     outputs = payload.get("outputs")
@@ -240,6 +411,7 @@ class ChannelWorkflowExecutor:
         from langflow.api.v1.schemas import SimplifiedAPIRequest
 
         delegated_request_variables: dict[str, Any] = {}
+        delegated_knowledge_base_access: dict[str, str] | None = None
         if execution_identity_type == ChannelExecutionIdentityType.SERVICE.value:
             granted_flow_id = str((channel_context or {}).get("granted_flow_id") or "")
             if not granted_flow_id or granted_flow_id != flow_identifier:
@@ -258,7 +430,13 @@ class ChannelWorkflowExecutor:
                 flow = await session.get(Flow, flow_id)
             if flow is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
+            delegated_knowledge_base_access = await _build_service_knowledge_base_access(
+                channel_context=channel_context,
+                service_user_id=user.id,
+                flow_owner_user_id=flow.user_id,
+            )
             flow, delegated_request_variables = await _prepare_service_flow_credentials(flow)
+            flow = _apply_service_knowledge_base_scope(flow, delegated_knowledge_base_access)
         else:
             flow = await get_flow_by_id_or_endpoint_name(flow_identifier, user.id, widen_for_shares=True)
             await ensure_flow_permission(
@@ -286,6 +464,9 @@ class ChannelWorkflowExecutor:
         }
         if channel_context:
             context_payload.update(channel_context)
+        context_payload.pop("knowledge_base_access", None)
+        if delegated_knowledge_base_access is not None:
+            context_payload["knowledge_base_access"] = delegated_knowledge_base_access
         request = SimplifiedAPIRequest(
             input_value=input_value,
             input_type="chat",
