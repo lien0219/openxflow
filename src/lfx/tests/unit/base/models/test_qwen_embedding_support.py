@@ -1,4 +1,7 @@
+from langchain_openai import OpenAIEmbeddings
+
 from lfx.base.models.qwen_constants import QWEN_EMBEDDING_MODELS_DETAILED
+from lfx.base.models.qwen_embedding_model import QwenEmbeddings
 from lfx.base.models.unified_models import embedding_instantiation
 from lfx.base.models.unified_models.class_registry import (
     EMBEDDING_PARAM_MAPPINGS,
@@ -25,12 +28,24 @@ def test_qwen_embedding_catalog_contains_text_embedding_v4() -> None:
     ]
 
 
-def test_qwen_embedding_uses_openai_compatible_mapping() -> None:
-    assert EMBEDDING_PROVIDER_CLASS_MAPPING["Qwen"] == "OpenAIEmbeddings"
+def test_qwen_embedding_uses_dedicated_openai_compatible_class() -> None:
+    assert EMBEDDING_PROVIDER_CLASS_MAPPING["Qwen"] == "QwenEmbeddings"
+    assert EMBEDDING_PROVIDER_CLASS_MAPPING["OpenAI"] == "OpenAIEmbeddings"
+    assert issubclass(QwenEmbeddings, OpenAIEmbeddings)
     assert EMBEDDING_PARAM_MAPPINGS["Qwen"]["model"] == "model"
     assert EMBEDDING_PARAM_MAPPINGS["Qwen"]["api_key"] == "api_key"
     assert EMBEDDING_PARAM_MAPPINGS["Qwen"]["api_base"] == "base_url"
     assert EMBEDDING_PARAM_MAPPINGS["Qwen"]["dimensions"] == "dimensions"
+
+
+def test_qwen_embedding_disables_token_id_input_conversion() -> None:
+    embeddings = QwenEmbeddings(
+        model="text-embedding-v4",
+        api_key="test-dashscope-key",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+
+    assert embeddings.check_embedding_ctx_length is False
 
 
 def test_qwen_embedding_resolves_configured_dashscope_base_url(monkeypatch) -> None:

@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from uuid import UUID
 
 
+_OPENAI_COMPATIBLE_EMBEDDING_CLASSES = {"OpenAIEmbeddings", "QwenEmbeddings"}
+
+
 def _env_if_allowed(key: str | None) -> str | None:
     """Return an environment variable unless request isolation disables fallback."""
     if not key or is_env_fallback_disabled():
@@ -79,7 +82,7 @@ def get_embeddings(
         not resolved_api_base
         and provider
         and provider != "OpenAI"
-        and EMBEDDING_PROVIDER_CLASS_MAPPING.get(provider) == "OpenAIEmbeddings"
+        and EMBEDDING_PROVIDER_CLASS_MAPPING.get(provider) in _OPENAI_COMPATIBLE_EMBEDDING_CLASSES
     ):
         resolved_api_base = _resolve_openai_compatible_embedding_base_url(provider, user_id)
 

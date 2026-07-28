@@ -36,6 +36,11 @@ _MODEL_CLASS_IMPORTS: dict[str, tuple[str, str, str | None]] = {
 
 _EMBEDDING_CLASS_IMPORTS: dict[str, tuple[str, str, str | None]] = {
     "OpenAIEmbeddings": ("langchain_openai", "OpenAIEmbeddings", None),
+    "QwenEmbeddings": (
+        "lfx.base.models.qwen_embedding_model",
+        "QwenEmbeddings",
+        "langchain-openai",
+    ),
     "GoogleGenerativeAIEmbeddings": (
         "langchain_google_genai",
         "GoogleGenerativeAIEmbeddings",
@@ -50,7 +55,7 @@ _EMBEDDING_CLASS_IMPORTS: dict[str, tuple[str, str, str | None]] = {
 # which PyPI package a given embedding provider needs at runtime.
 EMBEDDING_PROVIDER_CLASS_MAPPING: dict[str, str] = {
     "OpenAI": "OpenAIEmbeddings",
-    "Qwen": "OpenAIEmbeddings",
+    "Qwen": "QwenEmbeddings",
     "Google Generative AI": "GoogleGenerativeAIEmbeddings",
     "Ollama": "OllamaEmbeddings",
     "IBM WatsonX": "WatsonxEmbeddings",
