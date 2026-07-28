@@ -13,8 +13,10 @@ from sqlalchemy import func
 from sqlmodel import select
 
 from langflow.api.utils import CurrentActiveUser, DbSession
+from langflow.services.authorization import FlowAction, KnowledgeBaseAction
 from langflow.services.database.models.flow.model import Flow
 from langflow.services.database.models.knowledge_base.model import KnowledgeBaseRecord
+from langflow.services.deps import get_authorization_service, get_settings_service
 
 router = APIRouter(prefix="/channels/resources", tags=["Channel Resources"])
 
@@ -50,6 +52,34 @@ class ChannelKnowledgeBaseOptionPage(BaseModel):
     total_pages: int
 
 
+async def _visible_resource_filter(
+    current_user: CurrentActiveUser,
+    *,
+    resource_type: str,
+    action: str,
+    id_column,
+    owner_column,
+):
+    """Return a SQL predicate for owner plus RBAC/share-visible resources."""
+    if current_user.is_superuser:
+        return None
+    settings = get_settings_service()
+    if not settings.auth_settings.AUTHZ_ENABLED:
+        return owner_column == current_user.id
+
+    visible_ids = await get_authorization_service().list_visible_resource_ids(
+        user_id=current_user.id,
+        resource_type=resource_type,
+        act=action,
+        context={"is_superuser": current_user.is_superuser},
+    )
+    if visible_ids is None:
+        return None
+    if not visible_ids:
+        return owner_column == current_user.id
+    return sa.or_(owner_column == current_user.id, id_column.in_(visible_ids))
+
+
 @router.get("/flows", response_model=ChannelFlowOptionPage)
 async def read_channel_flow_options(
     db: DbSession,
@@ -58,10 +88,16 @@ async def read_channel_flow_options(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     query: Annotated[str | None, Query(max_length=255)] = None,
 ) -> ChannelFlowOptionPage:
-    filters: list[Any] = [
-        Flow.user_id == current_user.id,
-        sa.or_(Flow.is_component.is_(False), Flow.is_component.is_(None)),
-    ]
+    filters: list[Any] = [sa.or_(Flow.is_component.is_(False), Flow.is_component.is_(None))]
+    visibility = await _visible_resource_filter(
+        current_user,
+        resource_type="flow",
+        action=FlowAction.READ.value,
+        id_column=Flow.id,
+        owner_column=Flow.user_id,
+    )
+    if visibility is not None:
+        filters.append(visibility)
     if query and query.strip():
         pattern = f"%{query.strip()}%"
         filters.append(
@@ -108,7 +144,16 @@ async def read_channel_knowledge_base_options(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     query: Annotated[str | None, Query(max_length=255)] = None,
 ) -> ChannelKnowledgeBaseOptionPage:
-    filters: list[Any] = [KnowledgeBaseRecord.user_id == current_user.id]
+    filters: list[Any] = []
+    visibility = await _visible_resource_filter(
+        current_user,
+        resource_type="knowledge_base",
+        action=KnowledgeBaseAction.READ.value,
+        id_column=KnowledgeBaseRecord.id,
+        owner_column=KnowledgeBaseRecord.user_id,
+    )
+    if visibility is not None:
+        filters.append(visibility)
     if query and query.strip():
         filters.append(KnowledgeBaseRecord.name.ilike(f"%{query.strip()}%"))
 

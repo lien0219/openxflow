@@ -12,6 +12,11 @@ on:
       - "src/backend/base/pyproject.toml"
       - "src/backend/base/langflow/channels/**"
       - "src/backend/base/langflow/api/v1/channel*.py"
+      - "src/backend/base/langflow/api/v1/message_pages.py"
+      - "src/backend/base/langflow/api/v1/authz_*.py"
+      - "src/backend/base/langflow/api/v1/schemas/authz_*.py"
+      - "src/backend/base/langflow/services/authorization/**"
+      - "src/backend/base/langflow/services/database/models/auth/**"
       - "src/backend/base/langflow/alembic/versions/*channel*"
       - "src/backend/base/langflow/alembic/versions/f7d0b5c3e4a6_add_channel_webhook_jobs.py"
       - "src/backend/base/langflow/alembic/versions/a8e1c6d4f5b7_add_channel_outbound_delivery.py"
@@ -85,6 +90,18 @@ jobs:
           --output-format concise
           src/backend/tests/unit/channels
 
+      - name: Ruff RBAC and message pagination
+        run: >-
+          uvx --quiet ruff check
+          --config pyproject.toml
+          --extend-ignore EM101,TRY003
+          --output-format concise
+          src/backend/base/langflow/api/v1/message_pages.py
+          src/backend/base/langflow/api/v1/authz_me.py
+          src/backend/base/langflow/api/v1/authz_role_assignments.py
+          src/backend/base/langflow/api/v1/schemas/authz_roles.py
+          src/backend/base/langflow/services/authorization
+
       - name: Ruff SQLite runtime integration
         shell: bash
         run: |
@@ -100,10 +117,15 @@ jobs:
           printf 'sqlite_ruff_status=%s\n' "$sqlite_ruff_status" | tee /tmp/sqlite-ruff-status.log
           exit "$sqlite_ruff_status"
 
-      - name: Compile channel and SQLite runtime code
+      - name: Compile channel, RBAC and pagination code
         run: >-
           python -m compileall -q
           src/backend/base/langflow/channels
+          src/backend/base/langflow/api/v1/message_pages.py
+          src/backend/base/langflow/api/v1/authz_me.py
+          src/backend/base/langflow/api/v1/authz_role_assignments.py
+          src/backend/base/langflow/api/v1/schemas/authz_roles.py
+          src/backend/base/langflow/services/authorization
           src/backend/base/langflow/services/database/models/user/crud.py
           src/backend/tests/unit/channels
           src/lfx/src/lfx/services/deps.py
@@ -120,6 +142,10 @@ jobs:
             --confcutdir=src/backend/tests/unit/channels \
             src/backend/tests/unit/channels/test_channel_core_workflow.py \
             src/backend/tests/unit/channels/test_channel_knowledge_base_delegation.py \
+            src/backend/tests/unit/channels/test_channel_model_provider_delegation.py \
+            src/backend/tests/unit/channels/test_channel_authorization.py \
+            src/backend/tests/unit/channels/test_builtin_rbac.py \
+            src/backend/tests/unit/channels/test_message_pages.py \
             src/backend/tests/unit/channels/test_channel_file_security.py \
             src/backend/tests/unit/channels/test_channel_media_file_security.py \
             src/backend/tests/unit/channels/test_frontend_channel_mutation_contract.py \

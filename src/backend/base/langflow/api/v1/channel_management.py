@@ -8,9 +8,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import select
 
 from langflow.api.utils import CurrentActiveUser, DbSession
+from langflow.channels.services.authorization import authorize_channel_connection
 from langflow.channels.services.commands import (
     create_workflow_command,
     delete_workflow_command,
@@ -22,24 +22,17 @@ from langflow.channels.services.configuration_audit import (
     channel_resource_snapshot,
     record_channel_configuration_audit,
 )
-from langflow.channels.services.conversation_validation import (
-    validate_channel_routing_resources,
-)
+from langflow.channels.services.conversation_validation import validate_channel_routing_resources
 from langflow.channels.services.execution_logs import list_channel_executions
+from langflow.services.authorization import ChannelAction
 from langflow.services.database.models.channel.command_model import (
     ChannelWorkflowCommandCreate,
     ChannelWorkflowCommandPage,
     ChannelWorkflowCommandRead,
     ChannelWorkflowCommandUpdate,
 )
-from langflow.services.database.models.channel.execution_model import (
-    ChannelExecutionLogPage,
-)
-from langflow.services.database.models.channel.model import (
-    ChannelConnection,
-    ChannelIdentity,
-    ChannelIdentityStatus,
-)
+from langflow.services.database.models.channel.execution_model import ChannelExecutionLogPage
+from langflow.services.database.models.channel.model import ChannelConnection
 
 router = APIRouter(prefix="/channels", tags=["Channel Management"])
 
@@ -49,30 +42,22 @@ async def _accessible_connection_or_404(
     current_user: CurrentActiveUser,
     connection_id: UUID,
 ) -> ChannelConnection:
-    connection = await db.get(ChannelConnection, connection_id)
-    if connection is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
-    if current_user.is_superuser or connection.user_id == current_user.id:
-        return connection
-    identity_statement = select(ChannelIdentity.id).where(
-        ChannelIdentity.connection_id == connection_id,
-        ChannelIdentity.openxflow_user_id == current_user.id,
-        ChannelIdentity.status == ChannelIdentityStatus.BOUND.value,
+    return await authorize_channel_connection(
+        db,
+        current_user,
+        connection_id,
+        ChannelAction.READ,
+        allow_bound_read=True,
     )
-    if (await db.exec(identity_statement)).first() is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
-    return connection
 
 
-async def _owned_connection_or_404(
+async def _administrable_connection_or_404(
     db: DbSession,
     current_user: CurrentActiveUser,
     connection_id: UUID,
+    action: ChannelAction = ChannelAction.WRITE,
 ) -> ChannelConnection:
-    connection = await db.get(ChannelConnection, connection_id)
-    if connection is None or (connection.user_id != current_user.id and not current_user.is_superuser):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
-    return connection
+    return await authorize_channel_connection(db, current_user, connection_id, action)
 
 
 @router.get("/{connection_id}/commands", response_model=ChannelWorkflowCommandPage)
@@ -230,7 +215,7 @@ async def read_channel_executions(
     created_from: Annotated[datetime | None, Query()] = None,
     created_to: Annotated[datetime | None, Query()] = None,
 ) -> ChannelExecutionLogPage:
-    await _owned_connection_or_404(db, current_user, connection_id)
+    await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.AUDIT)
     return await list_channel_executions(
         db,
         connection_id,

@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlmodel import select
 
 from langflow.api.utils import CurrentActiveUser, DbSession
+from langflow.channels.services.authorization import authorize_channel_connection
 from langflow.channels.services.configuration_audit import (
     channel_resource_snapshot,
     record_channel_configuration_audit,
@@ -20,6 +21,7 @@ from langflow.channels.services.configuration_audit import (
 from langflow.channels.services.conversation_validation import (
     validate_channel_routing_resources,
 )
+from langflow.services.authorization import ChannelAction
 from langflow.services.database.models.channel.crud import (
     update_channel_conversation_binding,
 )
@@ -60,11 +62,10 @@ async def _owned_connection_or_404(
     db: DbSession,
     current_user: CurrentActiveUser,
     connection_id: UUID,
+    *,
+    action: ChannelAction = ChannelAction.WRITE,
 ) -> ChannelConnection:
-    connection = await db.get(ChannelConnection, connection_id)
-    if connection is None or (connection.user_id != current_user.id and not current_user.is_superuser):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
-    return connection
+    return await authorize_channel_connection(db, current_user, connection_id, action)
 
 
 @router.get("/{connection_id}/identities/page", response_model=ChannelIdentityPage)
@@ -77,7 +78,7 @@ async def read_channel_identities_page(
     query: Annotated[str | None, Query(max_length=255)] = None,
     status_filter: Annotated[str | None, Query(alias="status", max_length=32)] = None,
 ) -> ChannelIdentityPage:
-    await _owned_connection_or_404(db, current_user, connection_id)
+    await _owned_connection_or_404(db, current_user, connection_id, action=ChannelAction.READ)
     filters: list[Any] = [ChannelIdentity.connection_id == connection_id]
     if query and query.strip():
         pattern = f"%{query.strip()}%"
@@ -116,7 +117,7 @@ async def batch_update_channel_conversations(
     db: DbSession,
     current_user: CurrentActiveUser,
 ) -> ChannelConversationBatchResponse:
-    connection = await _owned_connection_or_404(db, current_user, connection_id)
+    connection = await _owned_connection_or_404(db, current_user, connection_id, action=ChannelAction.WRITE)
     supported_actions = {"inherit", "override", "ignore", "restore", "disable", "enable"}
     if payload.action not in supported_actions:
         raise HTTPException(

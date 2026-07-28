@@ -9,6 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
 from langflow.api.utils import CurrentActiveUser, DbSession
+from langflow.channels.services.authorization import authorize_channel_connection
 from langflow.channels.services.configuration_audit import (
     list_channel_configuration_audits,
     record_channel_configuration_audit,
@@ -22,26 +23,15 @@ from langflow.channels.services.observability import (
     read_connection_overview,
     retry_failed_outbound_delivery,
 )
+from langflow.services.authorization import ChannelAction
 from langflow.services.database.models.channel.audit_model import (
     ChannelConfigurationAuditPage,
 )
 from langflow.services.database.models.channel.message_model import (
     ChannelMessageRecordPage,
 )
-from langflow.services.database.models.channel.model import ChannelConnection
 
 router = APIRouter(prefix="/channels", tags=["Channel Observability"])
-
-
-async def _owned_connection_or_404(
-    db: DbSession,
-    current_user: CurrentActiveUser,
-    connection_id: UUID,
-) -> ChannelConnection:
-    connection = await db.get(ChannelConnection, connection_id)
-    if connection is None or (connection.user_id != current_user.id and not current_user.is_superuser):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
-    return connection
 
 
 @router.get("/{connection_id}/overview", response_model=ChannelConnectionOverview)
@@ -51,7 +41,7 @@ async def read_channel_connection_overview(
     current_user: CurrentActiveUser,
     window_hours: Annotated[int, Query(ge=1, le=24 * 90)] = 24,
 ) -> ChannelConnectionOverview:
-    await _owned_connection_or_404(db, current_user, connection_id)
+    await authorize_channel_connection(db, current_user, connection_id, ChannelAction.READ)
     return await read_connection_overview(db, connection_id, window_hours=window_hours)
 
 
@@ -71,7 +61,7 @@ async def read_channel_messages(
     created_from: Annotated[datetime | None, Query()] = None,
     created_to: Annotated[datetime | None, Query()] = None,
 ) -> ChannelMessageRecordPage:
-    await _owned_connection_or_404(db, current_user, connection_id)
+    await authorize_channel_connection(db, current_user, connection_id, ChannelAction.READ)
     return await list_channel_messages(
         db,
         connection_id,
@@ -101,7 +91,7 @@ async def read_channel_deliveries(
     created_from: Annotated[datetime | None, Query()] = None,
     created_to: Annotated[datetime | None, Query()] = None,
 ) -> ChannelOutboundDeliveryPage:
-    await _owned_connection_or_404(db, current_user, connection_id)
+    await authorize_channel_connection(db, current_user, connection_id, ChannelAction.READ)
     return await list_outbound_deliveries(
         db,
         connection_id,
@@ -122,7 +112,7 @@ async def retry_channel_delivery(
     db: DbSession,
     current_user: CurrentActiveUser,
 ) -> ChannelRetryDeliveryResult:
-    await _owned_connection_or_404(db, current_user, connection_id)
+    await authorize_channel_connection(db, current_user, connection_id, ChannelAction.EXECUTE)
     try:
         result = await retry_failed_outbound_delivery(
             db,
@@ -160,7 +150,7 @@ async def read_channel_configuration_audits(
     created_from: Annotated[datetime | None, Query()] = None,
     created_to: Annotated[datetime | None, Query()] = None,
 ) -> ChannelConfigurationAuditPage:
-    await _owned_connection_or_404(db, current_user, connection_id)
+    await authorize_channel_connection(db, current_user, connection_id, ChannelAction.AUDIT)
     return await list_channel_configuration_audits(
         db,
         connection_id,

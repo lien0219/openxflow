@@ -1,7 +1,6 @@
 name: Channel Gateway Frontend
 
-# Keep this workflow scoped to Channel Center changes so PR validation stays fast.
-# This check also serves as the final automated gate before manual channel acceptance.
+# Keep this workflow scoped to Channel Center and message-management changes.
 on:
   pull_request:
     branches:
@@ -12,8 +11,11 @@ on:
       - "src/frontend/package-lock.json"
       - "src/frontend/tsconfig.channels.json"
       - "src/frontend/src/controllers/API/queries/channels/**"
+      - "src/frontend/src/controllers/API/queries/messages/**"
+      - "src/frontend/src/controllers/API/services/request-processor.ts"
       - "src/frontend/src/controllers/API/helpers/constants.ts"
       - "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/**"
+      - "src/frontend/src/pages/SettingsPage/pages/messagesPage/**"
       - "src/frontend/src/i18n.ts"
       - "src/frontend/src/locales/channelTranslations.ts"
       - "src/frontend/src/pages/SettingsPage/index.tsx"
@@ -48,13 +50,18 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --ignore-scripts --loglevel=error
 
-      - name: Check Channel Center formatting and lint
+      - name: Check Channel Center and message pagination formatting
         shell: bash
         run: |
           set +e
           npx --no-install biome check \
             src/controllers/API/queries/channels \
+            src/controllers/API/queries/messages/index.ts \
+            src/controllers/API/queries/messages/use-delete-messages.ts \
+            src/controllers/API/queries/messages/use-get-messages-page.ts \
+            src/controllers/API/services/request-processor.ts \
             src/pages/SettingsPage/pages/ChannelsPage \
+            src/pages/SettingsPage/pages/messagesPage \
             src/controllers/API/helpers/constants.ts \
             src/pages/SettingsPage/index.tsx \
             src/routes.tsx \
@@ -121,7 +128,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --ignore-scripts --loglevel=error
 
-      - name: Type-check Channel Center
+      - name: Type-check Channel Center and message pagination
         shell: bash
         run: |
           set +e
@@ -129,9 +136,9 @@ jobs:
           tsc_status=${PIPESTATUS[0]}
           set -e
 
-          channel_error_pattern='^src/(controllers/API/queries/channels|pages/SettingsPage/pages/ChannelsPage).*error TS[0-9]+:'
+          channel_error_pattern='^src/(controllers/API/queries/(channels|messages)|controllers/API/services/request-processor\.ts|pages/SettingsPage/pages/(ChannelsPage|messagesPage)).*error TS[0-9]+:'
           if grep -E "$channel_error_pattern" /tmp/channel-tsc.log; then
-            echo "Channel Center type errors detected."
+            echo "Channel or message pagination type errors detected."
             exit 1
           fi
 

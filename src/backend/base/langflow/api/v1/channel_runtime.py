@@ -31,6 +31,8 @@ from langflow.channels.services.webhook_job_metrics import (
     durable_webhook_job_metrics_snapshot,
 )
 from langflow.channels.services.webhook_processing import webhook_limiter_snapshot
+from langflow.services.authorization import ChannelAction
+from langflow.services.authorization.guards import ensure_permission
 
 router = APIRouter(prefix="/channel-runtime", tags=["Channels"])
 
@@ -130,9 +132,21 @@ class ChannelRuntimeRead(BaseModel):
     token_cache: ChannelTokenCacheRuntimeRead
 
 
+async def _authorize_runtime(current_user: CurrentActiveUser) -> None:
+    if current_user.is_superuser:
+        return
+    await ensure_permission(
+        current_user,
+        domain="*",
+        obj="channel:*",
+        act=ChannelAction.AUDIT.value,
+        context={"runtime_scope": "global"},
+    )
+
+
 @router.get("/", response_model=ChannelRuntimeRead)
 async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntimeRead:
-    del current_user
+    await _authorize_runtime(current_user)
     stream_runtime = dingtalk_stream_runtime_snapshot()
     webhook = webhook_limiter_snapshot()
     durable_config = durable_webhook_job_config()
@@ -169,8 +183,8 @@ async def read_channel_runtime(current_user: CurrentActiveUser) -> ChannelRuntim
 
 @router.get("/metrics", response_class=Response)
 async def read_channel_prometheus_metrics(current_user: CurrentActiveUser) -> Response:
-    """Return authenticated Prometheus exposition for channel-specific metrics."""
-    del current_user
+    """Return authorization-gated Prometheus exposition for channel metrics."""
+    await _authorize_runtime(current_user)
     registry = CollectorRegistry(auto_describe=True)
     registry.register(ChannelMetricsCollector())
     registry.register(ChannelTimingMetricsCollector())

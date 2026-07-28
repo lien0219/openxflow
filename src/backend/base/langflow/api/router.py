@@ -31,6 +31,7 @@ from langflow.api.v1 import (
     mcp_projects_router,
     mcp_router,
     memories_router,
+    message_pages_router,
     model_options_router,
     models_router,
     monitor_router,
@@ -49,13 +50,8 @@ from langflow.api.v2 import mcp_router as mcp_router_v2
 from langflow.api.v2 import registration_router as registration_router_v2
 from langflow.api.v2 import workflow_router as workflow_router_v2
 
-router_v1 = APIRouter(
-    prefix="/v1",
-)
-
-router_v2 = APIRouter(
-    prefix="/v2",
-)
+router_v1 = APIRouter(prefix="/v1")
+router_v2 = APIRouter(prefix="/v2")
 
 
 def include_deployment_router(target_router: APIRouter) -> None:
@@ -79,6 +75,7 @@ router_v1.include_router(login_router)
 router_v1.include_router(variables_router)
 router_v1.include_router(files_router)
 router_v1.include_router(monitor_router)
+router_v1.include_router(message_pages_router)
 router_v1.include_router(traces_router)
 router_v1.include_router(folders_router)
 router_v1.include_router(projects_router)
@@ -106,24 +103,11 @@ router_v1.include_router(channel_bindings_router)
 router_v1.include_router(channel_runtime_router)
 router_v1.include_router(channel_webhooks_router)
 
-
-# Extension reload is Mode A (local-dev / pip-installed) only.  The route is
-# always mounted; a per-request guard in ``langflow.api.v1.extensions`` reads
-# the live ``settings.enable_extension_reload`` and returns 404 when the flag
-# is off, which means the route is indistinguishable from "not mounted" on
-# production deployments that leave it unset.
-#
-# Mounting unconditionally avoids the import-time / env-file ordering
-# coupling: ``langflow.__main__`` imports ``setup_app`` (and hence this
-# router module) before ``load_dotenv(env_file)`` runs, so any module-level
-# read of ``LANGFLOW_ENABLE_EXTENSION_RELOAD`` would miss the value supplied
-# via ``--env-file``.  The runtime guard sees the post-env-file value
-# because it executes per-request, after settings have been built.
+# Extension reload is guarded per request so import order cannot bypass the flag.
 router_v1.include_router(extensions_router)
 include_deployment_router(router_v1)
 
 
-# Agentic flow execution - lazy import to avoid circular dependency
 def _include_agentic_router():
     from langflow.agentic.api.files_router import router as agentic_files_router
     from langflow.agentic.api.router import router as agentic_router
@@ -141,8 +125,6 @@ router_v2.include_router(mcp_router_v2)
 router_v2.include_router(registration_router_v2)
 router_v2.include_router(workflow_router_v2)
 
-router = APIRouter(
-    prefix="/api",
-)
+router = APIRouter(prefix="/api")
 router.include_router(router_v1)
 router.include_router(router_v2)
