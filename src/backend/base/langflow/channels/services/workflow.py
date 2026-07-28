@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from lfx.log.logger import logger
 
 from langflow.channels.domain.models import ChannelEvent, ChannelMessage, ChannelMessageType
 from langflow.channels.services.conversation_scope import conversation_scope_id
@@ -17,13 +18,21 @@ from langflow.services.database.models.channel.execution_model import ChannelExe
 from langflow.services.database.models.channel.model import ChannelContextMode
 from langflow.services.database.models.flow.model import Flow
 from langflow.services.database.models.user.model import User
-from langflow.services.deps import session_scope
+from langflow.services.deps import get_variable_service, session_scope
 
 if TYPE_CHECKING:
     from langflow.api.v1.schemas import RunResponse
 
 _TELEGRAM_SAFE_TEXT_LIMIT = 3900
 _PREFERRED_OUTPUT_KEYS = ("text", "message", "content", "result", "results", "data")
+_TABLE_LOAD_FROM_DB_FIELDS = "__load_from_db_fields"
+
+
+async def apply_global_variable_defaults(graph_data: dict[str, Any], user_id: UUID) -> dict[str, Any]:
+    """Load the API helper lazily so channel service imports cannot form a router cycle."""
+    from langflow.api.v1.global_variable_defaults import apply_global_variable_defaults as apply_defaults
+
+    return await apply_defaults(graph_data, user_id)
 
 
 def build_channel_session_id(event: ChannelEvent, context_mode: str = ChannelContextMode.ISOLATED.value) -> str:
@@ -98,6 +107,107 @@ def _collect_chat_output_messages(value: Any) -> list[str]:
     return candidates
 
 
+def _table_cell_loads_from_db(metadata: Any, column_name: str) -> bool:
+    if isinstance(metadata, dict) and column_name in metadata:
+        return bool(metadata[column_name])
+    if isinstance(metadata, list):
+        return column_name in metadata
+    return True
+
+
+def _collect_delegated_variable_names(graph_data: dict[str, Any]) -> set[str]:
+    """Return only global-variable names explicitly referenced by the workflow."""
+    names: set[str] = set()
+    nodes = graph_data.get("nodes")
+    if not isinstance(nodes, list):
+        return names
+
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        template = (node.get("data") or {}).get("node", {}).get("template")
+        if not isinstance(template, dict):
+            continue
+
+        for field in template.values():
+            if not isinstance(field, dict):
+                continue
+
+            if field.get("load_from_db") is True:
+                variable_name = field.get("value")
+                if isinstance(variable_name, str) and variable_name.strip():
+                    names.add(variable_name.strip())
+
+            if field.get("type") != "table":
+                continue
+            table_schema = field.get("table_schema")
+            table_data = field.get("value")
+            if not isinstance(table_schema, list) or not isinstance(table_data, list):
+                continue
+
+            load_columns = {
+                column.get("name")
+                for column in table_schema
+                if isinstance(column, dict) and column.get("load_from_db") and isinstance(column.get("name"), str)
+            }
+            for row in table_data:
+                if not isinstance(row, dict):
+                    continue
+                metadata = row.get(_TABLE_LOAD_FROM_DB_FIELDS)
+                for column_name in load_columns:
+                    if not _table_cell_loads_from_db(metadata, column_name):
+                        continue
+                    variable_name = row.get(column_name)
+                    if isinstance(variable_name, str) and variable_name.strip():
+                        names.add(variable_name.strip())
+
+    return names
+
+
+async def _load_delegated_request_variables(
+    graph_data: dict[str, Any],
+    *,
+    owner_user_id: UUID,
+) -> dict[str, Any]:
+    """Load the flow owner's referenced variables without changing the execution identity."""
+    variable_names = _collect_delegated_variable_names(graph_data)
+    if not variable_names:
+        return {}
+
+    variable_service = get_variable_service()
+    resolved: dict[str, Any] = {}
+    async with session_scope() as session:
+        for variable_name in sorted(variable_names):
+            try:
+                resolved[variable_name] = await variable_service.get_variable(
+                    user_id=owner_user_id,
+                    name=variable_name,
+                    field="channel_service",
+                    session=session,
+                )
+            except (TypeError, ValueError) as exc:
+                await logger.adebug(
+                    "Channel service identity could not resolve delegated variable %s for flow owner %s: %s",
+                    variable_name,
+                    owner_user_id,
+                    exc,
+                )
+    return resolved
+
+
+async def _prepare_service_flow_credentials(flow: Flow) -> tuple[Flow, dict[str, Any]]:
+    """Prepare a service-run copy of the flow with least-privilege credential delegation."""
+    if not isinstance(flow.data, dict):
+        return flow, {}
+
+    graph_data = await apply_global_variable_defaults(flow.data, flow.user_id)
+    request_variables = await _load_delegated_request_variables(
+        graph_data,
+        owner_user_id=flow.user_id,
+    )
+    return flow.model_copy(update={"data": graph_data}), request_variables
+
+
 def render_run_response(response: RunResponse) -> str:
     payload = response.model_dump(exclude_none=True)
     outputs = payload.get("outputs")
@@ -129,6 +239,7 @@ class ChannelWorkflowExecutor:
         from langflow.api.v1.endpoints import simple_run_flow
         from langflow.api.v1.schemas import SimplifiedAPIRequest
 
+        delegated_request_variables: dict[str, Any] = {}
         if execution_identity_type == ChannelExecutionIdentityType.SERVICE.value:
             granted_flow_id = str((channel_context or {}).get("granted_flow_id") or "")
             if not granted_flow_id or granted_flow_id != flow_identifier:
@@ -147,6 +258,7 @@ class ChannelWorkflowExecutor:
                 flow = await session.get(Flow, flow_id)
             if flow is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
+            flow, delegated_request_variables = await _prepare_service_flow_credentials(flow)
         else:
             flow = await get_flow_by_id_or_endpoint_name(flow_identifier, user.id, widen_for_shares=True)
             await ensure_flow_permission(
@@ -181,11 +293,14 @@ class ChannelWorkflowExecutor:
             session_id=session_id,
             user_id=f"{event.channel.value}:{event.user.external_user_id}",
         )
+        run_context: dict[str, Any] = {"channel": context_payload}
+        if delegated_request_variables:
+            run_context["request_variables"] = delegated_request_variables
         response = await simple_run_flow(
             flow,
             request,
             api_key_user=user,
-            context={"channel": context_payload},
+            context=run_context,
         )
         return ChannelMessage(
             message_type=ChannelMessageType.MARKDOWN,
