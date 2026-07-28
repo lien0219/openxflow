@@ -25,6 +25,19 @@ export interface GetModelProvidersParams {
   includeUnsupported?: boolean;
 }
 
+export const normalizeModelProviderStatus = (
+  providerInfo: ModelProviderInfo,
+): ModelProviderWithStatus => ({
+  ...providerInfo,
+  // A configured provider is available to catalog consumers even when the
+  // user has not explicitly toggled an individual model yet. Keeping these
+  // states separate on the backend is useful for model-management screens,
+  // but treating only `is_enabled` as availability caused knowledge-base
+  // embedding pickers to hide valid configured providers.
+  is_enabled: providerInfo.is_enabled || providerInfo.is_configured === true,
+  icon: providerInfo.icon || getProviderIcon(providerInfo.provider),
+});
+
 export const useGetModelProviders: useQueryFunctionType<
   GetModelProvidersParams | undefined,
   ModelProviderWithStatus[]
@@ -50,10 +63,7 @@ export const useGetModelProviders: useQueryFunctionType<
     const response = await api.get<ModelProviderInfo[]>(url);
     const providersData = response.data;
 
-    return providersData.map((providerInfo) => ({
-      ...providerInfo,
-      icon: providerInfo.icon || getProviderIcon(providerInfo.provider),
-    }));
+    return providersData.map(normalizeModelProviderStatus);
   };
 
   const queryResult = query(
