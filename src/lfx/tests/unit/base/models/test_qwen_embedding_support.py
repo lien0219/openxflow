@@ -45,6 +45,29 @@ def test_qwen_embedding_disables_token_id_input_conversion() -> None:
     )
 
     assert embeddings.check_embedding_ctx_length is False
+    assert embeddings.chunk_size == 10
+
+
+def test_qwen_embedding_caps_explicit_batch_size() -> None:
+    embeddings = QwenEmbeddings(
+        model="text-embedding-v4",
+        api_key="test-dashscope-key",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        chunk_size=1000,
+    )
+
+    assert embeddings.chunk_size == 10
+
+
+def test_qwen_embedding_preserves_smaller_batch_size() -> None:
+    embeddings = QwenEmbeddings(
+        model="text-embedding-v4",
+        api_key="test-dashscope-key",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        chunk_size=5,
+    )
+
+    assert embeddings.chunk_size == 5
 
 
 def test_qwen_embedding_resolves_configured_dashscope_base_url(monkeypatch) -> None:
