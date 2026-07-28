@@ -47,3 +47,11 @@ Role assignments support `global`, `organization`, `workspace`, `project` and
   base and model-provider scope of the connection owner.
 - Personal channel routes execute as the bound OpenXFlow user.
 - Every guarded decision can be written to the authorization audit table.
+
+## Acceptance validation
+
+The channel gateway acceptance suite covers service-identity model-provider and
+knowledge-base delegation, channel-scoped authorization, built-in RBAC role and
+share decisions, message server-side pagination, SQLite runtime safety and the
+existing provider adapter contracts. Manual acceptance must still verify private
+and group conversations against real Feishu, DingTalk, WeCom and Telegram apps.
