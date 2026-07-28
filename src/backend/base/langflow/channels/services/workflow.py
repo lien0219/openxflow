@@ -88,9 +88,7 @@ def _collect_chat_output_messages(value: Any) -> list[str]:
     candidates: list[str] = []
     for raw_run_output in value:
         run_output = (
-            raw_run_output.model_dump(exclude_none=True)
-            if hasattr(raw_run_output, "model_dump")
-            else raw_run_output
+            raw_run_output.model_dump(exclude_none=True) if hasattr(raw_run_output, "model_dump") else raw_run_output
         )
         if not isinstance(run_output, dict):
             continue
@@ -110,9 +108,7 @@ def _collect_chat_output_messages(value: Any) -> list[str]:
                 continue
             for raw_message in messages:
                 message = (
-                    raw_message.model_dump(exclude_none=True)
-                    if hasattr(raw_message, "model_dump")
-                    else raw_message
+                    raw_message.model_dump(exclude_none=True) if hasattr(raw_message, "model_dump") else raw_message
                 )
                 if not isinstance(message, dict):
                     continue
