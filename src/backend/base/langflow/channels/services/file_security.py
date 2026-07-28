@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import stat
+import struct
 import zipfile
 from dataclasses import dataclass, field
 from io import BytesIO
@@ -22,6 +23,23 @@ _TEXT_EXTENSIONS = {
     ".xml",
     ".yaml",
     ".yml",
+}
+_IMAGE_EXTENSIONS = {
+    ".bmp",
+    ".gif",
+    ".jpeg",
+    ".jpg",
+    ".png",
+    ".tif",
+    ".tiff",
+    ".webp",
+}
+_VIDEO_EXTENSIONS = {
+    ".avi",
+    ".m4v",
+    ".mov",
+    ".mp4",
+    ".webm",
 }
 _OFFICE_ARCHIVE_MARKERS = {
     ".docx": "word/document.xml",
@@ -41,6 +59,21 @@ _EXECUTABLE_SIGNATURES = (
 )
 _MACRO_MARKERS = ("vbaproject.bin", "vbadata.xml", "xl/macrosheets/", "word/vba", "ppt/vba")
 _OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_JPEG_START_OF_FRAME_MARKERS = {
+    0xC0,
+    0xC1,
+    0xC2,
+    0xC3,
+    0xC5,
+    0xC6,
+    0xC7,
+    0xC9,
+    0xCA,
+    0xCB,
+    0xCD,
+    0xCE,
+    0xCF,
+}
 
 
 @dataclass(frozen=True)
@@ -73,7 +106,7 @@ class ChannelFileScanner(Protocol):
 
 
 class BuiltinChannelFileScanner:
-    """Validate signatures, archives and text without trusting provider MIME data."""
+    """Validate signatures, archives, media and text without trusting provider MIME data."""
 
     def __init__(
         self,
@@ -81,10 +114,12 @@ class BuiltinChannelFileScanner:
         max_archive_entries: int = 2_000,
         max_archive_uncompressed_bytes: int = 256 * 1024 * 1024,
         max_archive_ratio: float = 200.0,
+        max_image_pixels: int = 100_000_000,
     ) -> None:
         self.max_archive_entries = max_archive_entries
         self.max_archive_uncompressed_bytes = max_archive_uncompressed_bytes
         self.max_archive_ratio = max_archive_ratio
+        self.max_image_pixels = max_image_pixels
 
     def scan(
         self,
@@ -99,7 +134,7 @@ class BuiltinChannelFileScanner:
         extension = Path(filename).suffix.lower()
         self._reject_executable_signature(content)
 
-        archive_metadata: dict[str, Any] = {}
+        content_metadata: dict[str, Any] = {}
         if extension == ".pdf":
             if not content.startswith(b"%PDF-"):
                 raise ValueError("文件扩展名与实际内容不一致：不是有效的 PDF。")
@@ -112,7 +147,7 @@ class BuiltinChannelFileScanner:
                 raise ValueError("文件扩展名与实际内容不一致：不是有效的旧版 Office 文件。")
             raise ValueError("旧版 Office 二进制格式无法可靠检查宏，请转换为 docx、xlsx 或 pptx。")
         elif extension in _OFFICE_ARCHIVE_MARKERS:
-            archive_metadata = self._validate_office_archive(extension, content)
+            content_metadata = self._validate_office_archive(extension, content)
             detected_mime_type = {
                 ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -140,17 +175,21 @@ class BuiltinChannelFileScanner:
                 ".yaml": "application/yaml",
                 ".yml": "application/yaml",
             }.get(extension, "text/plain")
+        elif extension in _IMAGE_EXTENSIONS:
+            detected_mime_type, content_metadata = self._validate_image(extension, content)
+        elif extension in _VIDEO_EXTENSIONS:
+            detected_mime_type, content_metadata = self._validate_video(extension, content)
         else:
             raise ValueError(f"没有可用于 {extension or '无扩展名'} 文件的内容校验器。")
 
         return ChannelFileScanResult(
             detected_mime_type=detected_mime_type,
             metadata={
-                "scanner_version": 1,
+                "scanner_version": 2,
                 "extension": extension,
                 "declared_mime_type": declared_mime_type,
                 "sha256": hashlib.sha256(content).hexdigest(),
-                **archive_metadata,
+                **content_metadata,
             },
         )
 
@@ -160,6 +199,117 @@ class BuiltinChannelFileScanner:
         for signature, label in _EXECUTABLE_SIGNATURES:
             if prefix.startswith(signature):
                 raise ValueError(f"检测到伪装的可执行文件（{label}），已拒绝处理。")
+
+    def _validate_image(self, extension: str, content: bytes) -> tuple[str, dict[str, Any]]:
+        if extension in {".jpg", ".jpeg"}:
+            width, height = self._jpeg_dimensions(content)
+            mime_type = "image/jpeg"
+            format_name = "jpeg"
+        elif extension == ".png":
+            if len(content) < 33 or not content.startswith(b"\x89PNG\r\n\x1a\n"):
+                raise ValueError("文件扩展名与实际内容不一致：不是有效的 PNG 图片。")
+            if content[12:16] != b"IHDR" or b"IEND" not in content[-32:]:
+                raise ValueError("PNG 图片结构不完整。")
+            width, height = struct.unpack(">II", content[16:24])
+            mime_type = "image/png"
+            format_name = "png"
+        elif extension == ".gif":
+            if len(content) < 13 or content[:6] not in {b"GIF87a", b"GIF89a"}:
+                raise ValueError("文件扩展名与实际内容不一致：不是有效的 GIF 图片。")
+            width, height = struct.unpack("<HH", content[6:10])
+            mime_type = "image/gif"
+            format_name = "gif"
+        elif extension == ".webp":
+            if len(content) < 16 or content[:4] != b"RIFF" or content[8:12] != b"WEBP":
+                raise ValueError("文件扩展名与实际内容不一致：不是有效的 WebP 图片。")
+            width, height = 0, 0
+            mime_type = "image/webp"
+            format_name = "webp"
+        elif extension == ".bmp":
+            if len(content) < 26 or not content.startswith(b"BM"):
+                raise ValueError("文件扩展名与实际内容不一致：不是有效的 BMP 图片。")
+            width, height = struct.unpack("<ii", content[18:26])
+            width, height = abs(width), abs(height)
+            mime_type = "image/bmp"
+            format_name = "bmp"
+        else:
+            signatures = {b"II*\x00", b"MM\x00*"}
+            if len(content) < 8 or content[:4] not in signatures:
+                raise ValueError("文件扩展名与实际内容不一致：不是有效的 TIFF 图片。")
+            width, height = 0, 0
+            mime_type = "image/tiff"
+            format_name = "tiff"
+
+        self._validate_image_dimensions(width, height)
+        metadata: dict[str, Any] = {"media_kind": "image", "format": format_name}
+        if width and height:
+            metadata.update({"width": width, "height": height, "pixels": width * height})
+        return mime_type, metadata
+
+    def _jpeg_dimensions(self, content: bytes) -> tuple[int, int]:
+        if len(content) < 12 or not content.startswith(b"\xff\xd8") or b"\xff\xd9" not in content[2:]:
+            raise ValueError("文件扩展名与实际内容不一致：不是有效的 JPEG 图片。")
+
+        offset = 2
+        while offset + 4 <= len(content):
+            if content[offset] != 0xFF:
+                offset += 1
+                continue
+            while offset < len(content) and content[offset] == 0xFF:
+                offset += 1
+            if offset >= len(content):
+                break
+            marker = content[offset]
+            offset += 1
+            if marker in {0xD8, 0xD9}:
+                continue
+            if marker == 0xDA:
+                break
+            if offset + 2 > len(content):
+                break
+            segment_length = int.from_bytes(content[offset : offset + 2], "big")
+            if segment_length < 2 or offset + segment_length > len(content):
+                raise ValueError("JPEG 图片结构无效。")
+            if marker in _JPEG_START_OF_FRAME_MARKERS:
+                if segment_length < 7:
+                    raise ValueError("JPEG 图片尺寸信息无效。")
+                height = int.from_bytes(content[offset + 3 : offset + 5], "big")
+                width = int.from_bytes(content[offset + 5 : offset + 7], "big")
+                self._validate_image_dimensions(width, height)
+                return width, height
+            offset += segment_length
+        raise ValueError("JPEG 图片缺少有效的尺寸信息。")
+
+    def _validate_image_dimensions(self, width: int, height: int) -> None:
+        if width < 0 or height < 0:
+            raise ValueError("图片尺寸无效。")
+        if (width == 0) != (height == 0):
+            raise ValueError("图片尺寸信息不完整。")
+        if width and height and width * height > self.max_image_pixels:
+            raise ValueError("图片像素数量超过安全限制。")
+
+    @staticmethod
+    def _validate_video(extension: str, content: bytes) -> tuple[str, dict[str, Any]]:
+        if extension in {".mp4", ".m4v", ".mov"}:
+            if len(content) < 16 or content[4:8] != b"ftyp":
+                raise ValueError("文件扩展名与实际内容不一致：不是有效的 MP4/MOV 视频。")
+            box_size = int.from_bytes(content[:4], "big")
+            if box_size < 16 or box_size > len(content):
+                raise ValueError("MP4/MOV 文件头结构无效。")
+            major_brand = content[8:12].decode("ascii", errors="replace")
+            mime_type = "video/quicktime" if extension == ".mov" else "video/mp4"
+            return mime_type, {
+                "media_kind": "video",
+                "container": "iso-bmff",
+                "major_brand": major_brand,
+            }
+        if extension == ".webm":
+            if len(content) < 8 or not content.startswith(b"\x1aE\xdf\xa3"):
+                raise ValueError("文件扩展名与实际内容不一致：不是有效的 WebM 视频。")
+            return "video/webm", {"media_kind": "video", "container": "webm"}
+        if len(content) < 12 or content[:4] != b"RIFF" or content[8:12] != b"AVI ":
+            raise ValueError("文件扩展名与实际内容不一致：不是有效的 AVI 视频。")
+        return "video/x-msvideo", {"media_kind": "video", "container": "avi"}
 
     def _validate_office_archive(self, extension: str, content: bytes) -> dict[str, Any]:
         try:
