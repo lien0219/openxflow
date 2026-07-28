@@ -50,6 +50,7 @@ _EMBEDDING_CLASS_IMPORTS: dict[str, tuple[str, str, str | None]] = {
 # which PyPI package a given embedding provider needs at runtime.
 EMBEDDING_PROVIDER_CLASS_MAPPING: dict[str, str] = {
     "OpenAI": "OpenAIEmbeddings",
+    "Qwen": "OpenAIEmbeddings",
     "Google Generative AI": "GoogleGenerativeAIEmbeddings",
     "Ollama": "OllamaEmbeddings",
     "IBM WatsonX": "WatsonxEmbeddings",
@@ -65,6 +66,17 @@ EMBEDDING_PROVIDER_CLASS_MAPPING: dict[str, str] = {
 # ``/models`` endpoint instead of ``get_embedding_model_options``).
 EMBEDDING_PARAM_MAPPINGS: dict[str, dict[str, str]] = {
     "OpenAI": {
+        "model": "model",
+        "api_key": "api_key",
+        "api_base": "base_url",
+        "dimensions": "dimensions",
+        "chunk_size": "chunk_size",
+        "request_timeout": "timeout",
+        "max_retries": "max_retries",
+        "show_progress_bar": "show_progress_bar",
+        "model_kwargs": "model_kwargs",
+    },
+    "Qwen": {
         "model": "model",
         "api_key": "api_key",
         "api_base": "base_url",
