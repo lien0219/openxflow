@@ -1,5 +1,4 @@
 from langchain_openai import OpenAIEmbeddings
-
 from lfx.base.models.qwen_constants import QWEN_EMBEDDING_MODELS_DETAILED
 from lfx.base.models.qwen_embedding_model import QwenEmbeddings
 from lfx.base.models.unified_models import embedding_instantiation
