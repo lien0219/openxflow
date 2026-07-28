@@ -23,3 +23,18 @@ QWEN_MODELS_DETAILED = [
         tool_calling=True,
     ),
 ]
+
+QWEN_EMBEDDING_MODEL_NAMES = [
+    "text-embedding-v4",
+]
+
+QWEN_EMBEDDING_MODELS_DETAILED = [
+    create_model_metadata(
+        provider="Qwen",
+        name=name,
+        icon="Qwen",
+        model_type="embeddings",
+        default=True,
+    )
+    for name in QWEN_EMBEDDING_MODEL_NAMES
+]
