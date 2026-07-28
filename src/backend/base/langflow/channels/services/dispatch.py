@@ -47,13 +47,18 @@ from langflow.channels.services.execution_logs import (
 )
 from langflow.channels.services.files import (
     ChannelFileService,
-    list_owned_knowledge_bases,
     resolve_owned_knowledge_base,
 )
 from langflow.channels.services.message_records import safe_record_outbound_message
 from langflow.channels.services.outbound_delivery import send_outbound_processing_once
 from langflow.channels.services.response_policy import normalize_response_mode, should_process_channel_event
 from langflow.channels.services.retry import retry_channel_operation
+from langflow.channels.services.system_commands import (
+    SystemCommandDefinition,
+    can_use_system_command,
+    resolve_system_command,
+    visible_system_commands,
+)
 from langflow.channels.services.workflow import ChannelWorkflowExecutor, build_channel_session_id
 from langflow.services.authorization import KnowledgeBaseAction, ensure_knowledge_base_permission
 
@@ -92,7 +97,9 @@ class ChannelDispatchService:
         self.file_service = ChannelFileService(session, connection, adapter)
 
     async def handle(self, event: ChannelEvent) -> ChannelMessage | None:
-        command, argument = self._parse_command(event.message.text)
+        raw_command, argument = self._parse_command(event.message.text)
+        system_command = resolve_system_command(raw_command)
+        command = system_command.command if system_command is not None else raw_command
         binding = await discover_channel_conversation(self.session, self.connection, event)
         if binding is None:
             binding = await self._get_conversation_binding(event)
@@ -114,39 +121,16 @@ class ChannelDispatchService:
         if self._should_ignore_group_event(event, command=command, response_mode=response_mode):
             return None
 
-        if command in {"/start", "/help"}:
-            return self._help_message(bound=bound_user is not None)
-        if command == "/bind":
-            if bound_user is not None:
-                return ChannelMessage(
-                    title="账号已绑定",
-                    text=f"当前渠道账号已绑定 OpenXFlow 用户：{bound_user.username}",
-                )
-            return await self._binding_required_message(event)
-        if command == "/commands":
-            if access_policy == "bound_only" and bound_user is None:
-                return await self._binding_required_message(event)
-            return await self._commands_message(personal_user_id, binding)
-
-        if command == "/flow":
-            if bound_user is None or (bound_user.id != self.connection.user_id and not bound_user.is_superuser):
-                return ChannelMessage(text="未知命令。发送 /commands 查看当前可用指令。")
-            flow_identifier, _, input_value = argument.partition(" ")
-            if not flow_identifier:
-                return ChannelMessage(text="管理员用法：/flow <工作流 ID 或 endpoint_name> [输入内容]")
-            principal = ChannelExecutionPrincipal(
-                user=bound_user,
-                identity_type="bound_user",
+        if system_command is not None:
+            return await self._execute_system_command(
+                system_command,
+                event=event,
                 identity=identity,
-            )
-            return await self._execute_workflow(
-                event,
-                principal,
-                flow_identifier,
-                input_value or None,
+                bound_user=bound_user,
                 binding=binding,
-                trigger_type=ChannelExecutionTrigger.ADMIN_FLOW.value,
-                flow_id=self._try_uuid(flow_identifier),
+                argument=argument,
+                access_policy=access_policy,
+                personal_user_id=personal_user_id,
             )
 
         if command is not None:
@@ -160,7 +144,14 @@ class ChannelDispatchService:
             )
             if custom_response is not None:
                 return custom_response
-            return await self._unknown_command_message(personal_user_id, binding, command)
+            return await self._unknown_command_message(
+                personal_user_id,
+                binding,
+                command,
+                bound_user=bound_user,
+                access_policy=access_policy,
+                conversation_type=event.conversation.conversation_type,
+            )
 
         try:
             principal = await resolve_execution_principal(
@@ -208,6 +199,105 @@ class ChannelDispatchService:
             trigger_type=ChannelExecutionTrigger.DEFAULT.value,
             flow_id=flow_id,
         )
+
+    async def _execute_system_command(
+        self,
+        definition: SystemCommandDefinition,
+        *,
+        event: ChannelEvent,
+        identity,
+        bound_user: User | None,
+        binding: ChannelConversationBinding | None,
+        argument: str,
+        access_policy: str,
+        personal_user_id: UUID | None,
+    ) -> ChannelMessage | None:
+        command = definition.command
+        is_admin = self._is_channel_admin(bound_user)
+        shared_access = access_policy != "bound_only"
+        is_allowed = can_use_system_command(
+            definition,
+            is_bound=bound_user is not None,
+            is_admin=is_admin,
+            shared_access=shared_access,
+        )
+        if not is_allowed:
+            if definition.permission == "admin":
+                return ChannelMessage(text=f"指令 {command} 仅限渠道管理员使用。")
+            return await self._binding_required_message(event)
+
+        if command == "/help":
+            return self._help_message(
+                bound_user=bound_user,
+                is_admin=is_admin,
+                access_policy=access_policy,
+                conversation_type=event.conversation.conversation_type,
+            )
+        if command == "/bind":
+            if bound_user is not None:
+                return ChannelMessage(
+                    title="账号已绑定",
+                    text=f"当前渠道账号已绑定 OpenXFlow 用户：{bound_user.username}",
+                )
+            return await self._binding_required_message(event)
+        if command == "/commands":
+            return await self._commands_message(
+                personal_user_id,
+                binding,
+                bound_user=bound_user,
+                is_admin=is_admin,
+                access_policy=access_policy,
+                conversation_type=event.conversation.conversation_type,
+            )
+        if command == "/whoami":
+            return self._whoami_message(
+                event,
+                bound_user=bound_user,
+                access_policy=access_policy,
+                is_admin=is_admin,
+            )
+        if command in {"/files", "/knowledge"}:
+            try:
+                principal = await resolve_execution_principal(
+                    self.session,
+                    self.connection,
+                    binding,
+                    identity,
+                )
+            except ChannelBindingRequiredError:
+                return await self._binding_required_message(event)
+            except ChannelServiceIdentityUnavailableError:
+                return ChannelMessage(text="当前渠道共享执行身份尚未配置或已停用，请联系管理员。")
+            if command == "/files":
+                return await self._recent_files_message(event, principal.user)
+            return await self._knowledge_message(binding)
+        if command == "/flow":
+            if bound_user is None:
+                return ChannelMessage(text="指令 /flow 仅限渠道管理员使用。")
+            flow_identifier, _, input_value = argument.partition(" ")
+            if not flow_identifier:
+                return ChannelMessage(text="管理员用法：/flow <工作流 ID 或 endpoint_name> [输入内容]")
+            principal = ChannelExecutionPrincipal(
+                user=bound_user,
+                identity_type="bound_user",
+                identity=identity,
+            )
+            return await self._execute_workflow(
+                event,
+                principal,
+                flow_identifier,
+                input_value or None,
+                binding=binding,
+                trigger_type=ChannelExecutionTrigger.ADMIN_FLOW.value,
+                flow_id=self._try_uuid(flow_identifier),
+            )
+        if command == "/use-kb":
+            if bound_user is None:
+                return ChannelMessage(text="指令 /use-kb 仅限渠道管理员使用。")
+            return await self._bind_knowledge_base(event, bound_user, binding, argument)
+        if command == "/status":
+            return self._status_message(binding, access_policy=access_policy)
+        return None
 
     async def _execute_custom_command(
         self,
@@ -278,33 +368,63 @@ class ChannelDispatchService:
         self,
         user_id: UUID | None,
         binding: ChannelConversationBinding | None,
+        *,
+        bound_user: User | None,
+        is_admin: bool,
+        access_policy: str,
+        conversation_type: str,
     ) -> ChannelMessage:
-        if binding is None:
-            return ChannelMessage(title="可用指令", text="当前会话尚未完成自动发现。")
-        commands = await list_available_workflow_commands(
-            self.session,
-            connection_id=self.connection.id,
-            conversation_binding_id=binding.id,
-            user_id=user_id,
+        system_commands = visible_system_commands(
+            is_bound=bound_user is not None,
+            is_admin=is_admin,
+            conversation_type=conversation_type,
+            shared_access=access_policy != "bound_only",
         )
-        if not commands:
-            return ChannelMessage(title="可用指令", text="当前会话还没有配置自定义指令。")
-        lines = []
-        for item in commands[:50]:
-            description = f" — {item.description}" if item.description else ""
-            lines.append(f"{item.command}{description}")
+        custom_commands: list[ChannelWorkflowCommand] = []
+        if binding is not None:
+            custom_commands = await list_available_workflow_commands(
+                self.session,
+                connection_id=self.connection.id,
+                conversation_binding_id=binding.id,
+                user_id=user_id,
+            )
+
+        sections = ["系统指令"]
+        sections.extend(f"{item.command} — {item.description}" for item in system_commands)
+        if custom_commands:
+            sections.append("\n业务指令")
+            for item in custom_commands[:50]:
+                description = f" — {item.description}" if item.description else ""
+                sections.append(f"{item.command}{description}")
+        elif binding is None:
+            sections.append("\n业务指令\n当前会话尚未完成自动发现。")
+        else:
+            sections.append("\n业务指令\n当前会话还没有配置自定义指令。")
+
+        action_items = [
+            ChannelAction(
+                action_id=f"system:{item.command.removeprefix('/')}",
+                label=item.command,
+                value=item.command,
+                style="primary" if item.command == "/commands" else "default",
+            )
+            for item in system_commands
+            if item.command in {"/commands", "/whoami", "/files", "/knowledge", "/status"}
+        ][:4]
+        remaining = max(0, 6 - len(action_items))
+        action_items.extend(
+            ChannelAction(
+                action_id=f"command:{item.normalized_command}",
+                label=item.command,
+                value=item.command,
+            )
+            for item in custom_commands[:remaining]
+        )
         return ChannelMessage(
             message_type=ChannelMessageType.CARD,
             title="当前可用指令",
-            text="\n".join(lines),
-            actions=[
-                ChannelAction(
-                    action_id=f"command:{item.normalized_command}",
-                    label=item.command,
-                    value=item.command,
-                )
-                for item in commands[:6]
-            ],
+            text="\n".join(sections),
+            actions=action_items,
         )
 
     async def _unknown_command_message(
@@ -312,7 +432,45 @@ class ChannelDispatchService:
         user_id: UUID | None,
         binding: ChannelConversationBinding | None,
         command_name: str,
+        *,
+        bound_user: User | None,
+        access_policy: str,
+        conversation_type: str,
     ) -> ChannelMessage:
+        is_admin = self._is_channel_admin(bound_user)
+        system_commands = visible_system_commands(
+            is_bound=bound_user is not None,
+            is_admin=is_admin,
+            conversation_type=conversation_type,
+            shared_access=access_policy != "bound_only",
+        )
+        system_by_name = {name: item for item in system_commands for name in item.names}
+        system_by_name["/help"] = resolve_system_command("/help")
+        system_suggestions = get_close_matches(command_name.lower(), list(system_by_name), n=3, cutoff=0.45)
+        if system_suggestions:
+            suggested = []
+            seen: set[str] = set()
+            for name in system_suggestions:
+                item = system_by_name[name]
+                if item is not None and item.command not in seen:
+                    seen.add(item.command)
+                    suggested.append(item)
+            if suggested:
+                suggested_text = "、".join(item.command for item in suggested)
+                return ChannelMessage(
+                    message_type=ChannelMessageType.CARD,
+                    title="没有找到该指令",
+                    text=f"你是否想使用：{suggested_text}？\n\n发送 /commands 查看全部指令。",
+                    actions=[
+                        ChannelAction(
+                            action_id=f"suggested:{item.command.removeprefix('/')}",
+                            label=item.command,
+                            value=item.command,
+                        )
+                        for item in suggested
+                    ],
+                )
+
         commands: list[ChannelWorkflowCommand] = []
         if binding is not None:
             commands = await list_available_workflow_commands(
@@ -600,25 +758,23 @@ class ChannelDispatchService:
         await self.session.refresh(binding)
         return binding
 
-    async def _knowledge_message(
-        self,
-        user: User,
-        binding: ChannelConversationBinding | None,
-    ) -> ChannelMessage:
-        knowledge_bases = await list_owned_knowledge_bases(self.session, user.id)
-        if not knowledge_bases:
+    async def _knowledge_message(self, binding: ChannelConversationBinding | None) -> ChannelMessage:
+        knowledge_base_id = (
+            binding.knowledge_base_id
+            if binding is not None and binding.knowledge_base_id is not None
+            else self.connection.default_knowledge_base_id
+        )
+        if knowledge_base_id is None:
             return ChannelMessage(
-                title="知识库",
-                text="当前账号还没有知识库，请先在 OpenXFlow 网页端创建。",
+                title="当前知识库",
+                text="当前会话尚未绑定知识库。管理员可在渠道中心配置，或使用 /use-kb 切换。",
             )
-        current_id = binding.knowledge_base_id if binding else self.connection.default_knowledge_base_id
-        lines = []
-        for kb in knowledge_bases[:20]:
-            marker = "✅" if kb.id == current_id else "•"
-            lines.append(f"{marker} {kb.name}（{kb.status}，{kb.chunks} 个分块）")
+        knowledge_base = await self.session.get(KnowledgeBaseRecord, knowledge_base_id)
+        if knowledge_base is None:
+            return ChannelMessage(title="当前知识库", text="已配置的知识库不存在或已被删除，请联系管理员。")
         return ChannelMessage(
-            title="可用知识库",
-            text=("\n".join(lines) + "\n\n请在 OpenXFlow 渠道中心配置会话知识库。"),
+            title="当前知识库",
+            text=f"{knowledge_base.name}\n状态：{knowledge_base.status}\n分块：{knowledge_base.chunks}",
         )
 
     async def _bind_knowledge_base(
@@ -630,7 +786,7 @@ class ChannelDispatchService:
     ) -> ChannelMessage:
         normalized = identifier.strip()
         if not normalized:
-            return ChannelMessage(text="请在 OpenXFlow 渠道中心配置当前会话知识库。")
+            return ChannelMessage(text="管理员用法：/use-kb <知识库名称或 ID>；使用 /use-kb clear 可解除绑定。")
 
         binding = binding or await self._ensure_conversation_binding(event)
         if normalized.lower() in {"none", "off", "clear"} or normalized in {"取消", "关闭", "解除"}:
@@ -680,6 +836,65 @@ class ChannelDispatchService:
         ]
         return ChannelMessage(title="最近文件", text="\n".join(lines))
 
+    def _whoami_message(
+        self,
+        event: ChannelEvent,
+        *,
+        bound_user: User | None,
+        access_policy: str,
+        is_admin: bool,
+    ) -> ChannelMessage:
+        account = bound_user.username if bound_user is not None else "未绑定"
+        if access_policy == "shared":
+            execution_mode = "渠道共享服务身份"
+        elif bound_user is not None:
+            execution_mode = "已绑定 OpenXFlow 账号"
+        elif access_policy == "hybrid":
+            execution_mode = "渠道共享服务身份"
+        else:
+            execution_mode = "等待账号绑定"
+        role = "渠道管理员" if is_admin else "普通成员"
+        display_name = event.user.display_name or "未提供"
+        return ChannelMessage(
+            message_type=ChannelMessageType.CARD,
+            title="当前渠道身份",
+            text=(
+                f"渠道：{self.connection.channel_type}\n"
+                f"会话：{event.conversation.conversation_type}\n"
+                f"渠道昵称：{display_name}\n"
+                f"OpenXFlow 账号：{account}\n"
+                f"角色：{role}\n"
+                f"默认执行方式：{execution_mode}"
+            ),
+        )
+
+    def _status_message(
+        self,
+        binding: ChannelConversationBinding | None,
+        *,
+        access_policy: str,
+    ) -> ChannelMessage:
+        enabled = "已启用" if getattr(self.connection, "enabled", True) else "已停用"
+        response_mode = binding.response_mode if binding is not None else self.connection.default_response_mode
+        route_mode = binding.route_mode if binding is not None else "connection_default"
+        context_mode = effective_context_mode(self.connection, binding)
+        flow_id = self._resolve_default_flow_id(binding)
+        conversation_status = binding.status if binding is not None else "discovering"
+        return ChannelMessage(
+            message_type=ChannelMessageType.CARD,
+            title="渠道运行状态",
+            text=(
+                f"连接：{enabled}\n"
+                f"渠道：{self.connection.channel_type}\n"
+                f"会话状态：{conversation_status}\n"
+                f"响应模式：{response_mode}\n"
+                f"访问策略：{access_policy}\n"
+                f"上下文模式：{context_mode}\n"
+                f"路由模式：{route_mode}\n"
+                f"默认工作流：{'已配置' if flow_id is not None else '未配置'}"
+            ),
+        )
+
     async def _build_bound_context(
         self,
         binding: ChannelConversationBinding | None,
@@ -710,6 +925,9 @@ class ChannelDispatchService:
             if kb is not None:
                 context["knowledge_base_name"] = kb.name
         return context
+
+    def _is_channel_admin(self, user: User | None) -> bool:
+        return bool(user is not None and (user.is_superuser or user.id == self.connection.user_id))
 
     @staticmethod
     def _try_uuid(value: str) -> UUID | None:
@@ -745,26 +963,42 @@ class ChannelDispatchService:
         )
 
     @staticmethod
-    def _help_message(*, bound: bool) -> ChannelMessage:
-        binding_line = "账号状态：已绑定。\n\n" if bound else "账号状态：未绑定。\n\n"
+    def _help_message(
+        *,
+        bound_user: User | None,
+        is_admin: bool,
+        access_policy: str,
+        conversation_type: str,
+    ) -> ChannelMessage:
+        account_line = (
+            f"账号状态：已绑定（{bound_user.username}）。\n\n" if bound_user is not None else "账号状态：未绑定。\n\n"
+        )
+        commands = visible_system_commands(
+            is_bound=bound_user is not None,
+            is_admin=is_admin,
+            conversation_type=conversation_type,
+            shared_access=access_policy != "bound_only",
+        )
+        lines = ["/help — 查看使用帮助", *(f"{item.command} — {item.description}" for item in commands)]
+        command_text = "\n".join(lines)
+        action_values = [
+            item.command
+            for item in commands
+            if item.command in {"/commands", "/whoami", "/files", "/knowledge", "/status"}
+        ][:4]
         return ChannelMessage(
             message_type=ChannelMessageType.CARD,
             title="OpenXFlow 渠道助手",
             text=(
-                f"{binding_line}"
-                "可用系统指令：\n"
-                "/bind — 绑定或查看账号状态\n"
-                "/commands — 查看当前可用的自定义指令\n"
-                "/help — 查看帮助\n\n"
-                "普通消息会自动运行当前会话或渠道连接的默认工作流。"
+                f"{account_line}可用系统指令：\n{command_text}\n\n普通消息会自动运行当前会话或渠道连接的默认工作流。"
             ),
             actions=[
-                ChannelAction(action_id="account", label="账号状态", value="/bind"),
                 ChannelAction(
-                    action_id="commands",
-                    label="可用指令",
-                    value="/commands",
-                    style="primary",
-                ),
+                    action_id=f"help:{value.removeprefix('/')}",
+                    label=value,
+                    value=value,
+                    style="primary" if value == "/commands" else "default",
+                )
+                for value in action_values
             ],
         )

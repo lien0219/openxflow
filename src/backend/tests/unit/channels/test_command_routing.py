@@ -14,6 +14,7 @@ from langflow.channels.services.commands import (
     normalize_command,
     render_command_input,
 )
+from langflow.channels.services.system_commands import RESERVED_COMMAND_NAMES
 from langflow.services.database.models.channel.command_model import (
     ChannelCommandScope,
     ChannelWorkflowCommand,
@@ -25,14 +26,20 @@ def test_normalize_command_supports_chinese_and_adds_prefix() -> None:
     assert normalize_command("/Review_Code") == "/review_code"
 
 
-def test_normalize_command_rejects_reserved_and_invalid_commands() -> None:
-    with pytest.raises(HTTPException) as reserved_error:
-        normalize_command("/help")
-    assert reserved_error.value.status_code == 409
+def test_normalize_command_rejects_system_commands_and_aliases() -> None:
+    for command in ("/help", "/帮助", "/status", "/状态", "/切换知识库"):
+        with pytest.raises(HTTPException) as reserved_error:
+            normalize_command(command)
+        assert reserved_error.value.status_code == 409
 
     with pytest.raises(HTTPException) as invalid_error:
         normalize_command("/bad command")
     assert invalid_error.value.status_code == 422
+
+
+def test_run_is_released_for_custom_workflow_commands() -> None:
+    assert "/run" not in RESERVED_COMMAND_NAMES
+    assert normalize_command("/run") == "/run"
 
 
 def test_normalize_aliases_deduplicates_and_limits_values() -> None:
@@ -113,9 +120,10 @@ def test_provider_capabilities_expose_provider_specific_conversation_types() -> 
     )
     assert capabilities["feishu"].conversation_types == ("private", "group")
     assert capabilities["dingtalk"].conversation_types == ("private", "group")
-    assert capabilities["wecom"].conversation_types == ("private",)
+    assert capabilities["wecom"].conversation_types == ("private", "group")
 
 
 def test_provider_conversation_type_validation_rejects_unsupported_type() -> None:
     assert validate_provider_conversation_type("feishu", "group") is True
-    assert validate_provider_conversation_type("wecom", "group") is False
+    assert validate_provider_conversation_type("wecom", "group") is True
+    assert validate_provider_conversation_type("wecom", "supergroup") is False

@@ -14,6 +14,7 @@ from sqlalchemy import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from langflow.channels.services.system_commands import RESERVED_COMMAND_NAMES
 from langflow.services.database.models.channel.command_model import (
     ChannelCommandScope,
     ChannelWorkflowCommand,
@@ -26,18 +27,6 @@ from langflow.services.database.models.channel.model import ChannelConnection, C
 from langflow.services.database.models.user.model import User
 
 _COMMAND_PATTERN = re.compile(r"^/[A-Za-z0-9_\u4e00-\u9fff-]{1,32}$")
-_RESERVED_COMMANDS = {
-    "/start",
-    "/help",
-    "/bind",
-    "/commands",
-    "/flow",
-    "/run",
-    "/whoami",
-    "/knowledge",
-    "/use-kb",
-    "/files",
-}
 
 
 def normalize_command(value: str) -> str:
@@ -50,7 +39,7 @@ def normalize_command(value: str) -> str:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Command must contain 1-32 Chinese, English, numeric, dash, or underscore characters",
         )
-    if normalized in _RESERVED_COMMANDS:
+    if normalized in RESERVED_COMMAND_NAMES:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Command {normalized} is reserved by OpenXFlow",
