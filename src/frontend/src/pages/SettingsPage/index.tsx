@@ -12,9 +12,11 @@ import useAuthStore from "@/stores/authStore";
 import { useStoreStore } from "@/stores/storeStore";
 import ForwardedIconComponent from "../../components/common/genericIconComponent";
 import PageLayout from "../../components/common/pageLayout";
+
 export default function SettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const autoLogin = useAuthStore((state) => state.autoLogin);
+  const isAdmin = useAuthStore((state) => state.isAdmin);
   const hasStore = useStoreStore((state) => state.hasStore);
 
   const showGeneralSettings = ENABLE_PROFILE_ICONS || hasStore || !autoLogin;
@@ -120,6 +122,19 @@ export default function SettingsPage(): JSX.Element {
       ),
     },
   );
+
+  if (isAdmin && !autoLogin) {
+    sidebarNavItems.push({
+      title: t("settings.nav.permissions"),
+      href: "/settings/permissions",
+      icon: (
+        <ForwardedIconComponent
+          name="ShieldCheck"
+          className="w-4 flex-shrink-0 justify-start stroke-[1.5]"
+        />
+      ),
+    });
+  }
 
   if (!ENABLE_DATASTAX_LANGFLOW) {
     const langflowItems = CustomStoreSidebar(true, ENABLE_LANGFLOW_STORE);
