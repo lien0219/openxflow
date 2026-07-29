@@ -4,15 +4,18 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
+from pydantic import ValidationError
+
 from langflow.api.v1.authz_audit import _audit_domain_context
 from langflow.api.v1.authz_me import _summary_domain_context
 from langflow.api.v1.authz_role_assignments import _domain_context
 from langflow.api.v1.schemas.authz_role_assignments import RoleAssignmentCreate
+from langflow.api.v1.schemas.authz_roles import RoleCreate
 from langflow.services.authorization.bootstrap import (
     SYSTEM_ROLE_DEFINITIONS,
     is_managed_service_user,
 )
-from pydantic import ValidationError
 
 
 def test_system_role_catalog_is_complete_and_least_privileged() -> None:
@@ -35,15 +38,17 @@ def test_system_role_catalog_is_complete_and_least_privileged() -> None:
     assert by_name["member"] == set()
 
 
-def test_role_assignment_schema_supports_channel_scope() -> None:
-    connection_id = uuid4()
-    payload = RoleAssignmentCreate(
-        user_id=uuid4(),
-        role_id=uuid4(),
-        domain_type="channel",
-        domain_id=connection_id,
-    )
-    assert payload.domain_id == connection_id
+def test_role_assignment_schema_supports_production_scopes() -> None:
+    for domain_type in ("organization", "org", "workspace", "project", "channel"):
+        domain_id = uuid4()
+        payload = RoleAssignmentCreate(
+            user_id=uuid4(),
+            role_id=uuid4(),
+            domain_type=domain_type,
+            domain_id=domain_id,
+        )
+        assert payload.domain_type == domain_type
+        assert payload.domain_id == domain_id
 
 
 def test_role_assignment_schema_rejects_invalid_scope_pairs() -> None:
@@ -61,6 +66,32 @@ def test_role_assignment_schema_rejects_invalid_scope_pairs() -> None:
             domain_type="project",
             domain_id=None,
         )
+
+
+def test_custom_role_schema_accepts_delegated_management_permissions() -> None:
+    role = RoleCreate(
+        name="workspace_operator",
+        permissions=[
+            "rbac:read",
+            "rbac:assign",
+            "team:manage",
+            "user:read",
+            "channel:write",
+        ],
+    )
+
+    assert role.permissions == [
+        "rbac:read",
+        "rbac:assign",
+        "team:manage",
+        "user:read",
+        "channel:write",
+    ]
+
+
+def test_custom_role_schema_rejects_unknown_management_actions() -> None:
+    with pytest.raises(ValidationError):
+        RoleCreate(name="invalid", permissions=["rbac:superpower"])
 
 
 def test_domain_context_maps_channel_and_organization_aliases() -> None:
@@ -83,6 +114,13 @@ def test_domain_context_maps_channel_and_organization_aliases() -> None:
     assert _domain_context("global", None) == ("*", {})
     assert _summary_domain_context("global", None) == ("*", {})
     assert _audit_domain_context("global", None) == ("*", {})
+
+
+def test_summary_and_audit_contexts_fail_closed_without_scoped_id() -> None:
+    with pytest.raises(HTTPException):
+        _summary_domain_context("channel", None)
+    with pytest.raises(HTTPException):
+        _audit_domain_context("organization", None)
 
 
 def test_managed_channel_service_users_never_receive_default_roles() -> None:
