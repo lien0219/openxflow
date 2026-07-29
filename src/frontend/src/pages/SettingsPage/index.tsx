@@ -8,6 +8,7 @@ import {
   ENABLE_LANGFLOW_STORE,
   ENABLE_PROFILE_ICONS,
 } from "@/customization/feature-flags";
+import { useRbacAccess } from "@/hooks/use-rbac-access";
 import useAuthStore from "@/stores/authStore";
 import { useStoreStore } from "@/stores/storeStore";
 import ForwardedIconComponent from "../../components/common/genericIconComponent";
@@ -16,8 +17,8 @@ import PageLayout from "../../components/common/pageLayout";
 export default function SettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const autoLogin = useAuthStore((state) => state.autoLogin);
-  const isAdmin = useAuthStore((state) => state.isAdmin);
   const hasStore = useStoreStore((state) => state.hasStore);
+  const { canReadRbac } = useRbacAccess();
 
   const showGeneralSettings = ENABLE_PROFILE_ICONS || hasStore || !autoLogin;
 
@@ -123,7 +124,7 @@ export default function SettingsPage(): JSX.Element {
     },
   );
 
-  if (isAdmin && !autoLogin) {
+  if (canReadRbac && !autoLogin) {
     sidebarNavItems.push({
       title: t("settings.nav.permissions"),
       href: "/settings/permissions",
