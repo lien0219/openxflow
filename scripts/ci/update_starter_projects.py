@@ -1,7 +1,7 @@
 """Script to update Langflow starter projects with the latest component versions."""
 
-from pathlib import Path
 import runpy
+from pathlib import Path
 
 _HARDENING = Path(__file__).resolve().parents[2] / ".github" / "scripts" / "channel_final_hardening.py"
 if _HARDENING.exists():

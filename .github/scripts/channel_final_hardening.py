@@ -766,7 +766,7 @@ def downgrade() -> None:
             op.drop_index(name, table_name=table_name)
 '''
 
-FLOW_SELECTION_QUERY = '''import type { UseQueryResult } from "@tanstack/react-query";
+FLOW_SELECTION_QUERY = """import type { UseQueryResult } from "@tanstack/react-query";
 import type { useQueryFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
@@ -857,9 +857,9 @@ export const useGetChannelFlowSelections: useQueryFunctionType<
     },
   ) as UseQueryResult<ChannelActiveWorkflowSelectionPage, Error>;
 };
-'''
+"""
 
-FLOW_SELECTION_PANEL = '''import { useEffect, useState } from "react";
+FLOW_SELECTION_PANEL = """import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Loading from "@/components/ui/loading";
@@ -1155,9 +1155,9 @@ export default function FlowSelectionsPanel({
     </section>
   );
 }
-'''
+"""
 
-HARDENING_TEST = '''from __future__ import annotations
+HARDENING_TEST = """from __future__ import annotations
 
 from types import SimpleNamespace
 
@@ -1193,7 +1193,7 @@ def test_group_system_command_can_require_explicit_bot_target() -> None:
 
 def test_telegram_bot_suffix_counts_as_explicit_target() -> None:
     assert ChannelDispatchService._command_targets_bot(_group_event(text="/help@openxflow_bot"))
-'''
+"""
 
 
 def apply() -> None:
@@ -1238,7 +1238,7 @@ def apply() -> None:
         "src/backend/base/langflow/channels/services/dispatch.py",
         "        if self._should_ignore_group_event(event, command=command, response_mode=response_mode):\n",
         "        require_system_command_mention = bool(\n"
-        "            self.connection.settings_data.get(\"system_command_require_mention\", True)\n"
+        '            self.connection.settings_data.get("system_command_require_mention", True)\n'
         "        )\n"
         "        if self._should_ignore_group_event(\n"
         "            event,\n"
@@ -1251,10 +1251,10 @@ def apply() -> None:
     )
     replace_once(
         "src/backend/base/langflow/channels/services/dispatch.py",
-        "        if event.conversation.conversation_type != \"private\" and command.require_mention and not event.message.mentions:\n"
+        '        if event.conversation.conversation_type != "private" and command.require_mention and not event.message.mentions:\n'
         "            return None\n",
         "        if (\n"
-        "            event.conversation.conversation_type != \"private\"\n"
+        '            event.conversation.conversation_type != "private"\n'
         "            and command.require_mention\n"
         "            and not self._command_targets_bot(event)\n"
         "        ):\n"
@@ -1271,7 +1271,7 @@ def apply() -> None:
         "            await self.session.commit()\n",
     )
 
-    old_current = '''            if resolution.command is not None and resolution.selection is not None:
+    old_current = """            if resolution.command is not None and resolution.selection is not None:
                 expires = (
                     "永久有效"
                     if resolution.selection.expires_at is None
@@ -1293,8 +1293,8 @@ def apply() -> None:
             title="当前工作流",
             text=f"当前使用会话或连接默认工作流：{str(default_flow_id)[:8]}…",
         )
-'''
-    new_current = '''            if resolution.command is not None and resolution.selection is not None:
+"""
+    new_current = """            if resolution.command is not None and resolution.selection is not None:
                 flow = await self.session.get(Flow, resolution.command.flow_id)
                 if resolution.selection.expires_at is None:
                     expires = "永久有效"
@@ -1340,10 +1340,10 @@ def apply() -> None:
             title="当前工作流",
             text=f"名称：{flow_name}\\n来源：{source}\\n执行身份：按当前访问策略动态解析",
         )
-'''
+"""
     replace_once("src/backend/base/langflow/channels/services/dispatch.py", old_current, new_current)
 
-    old_actions = '''        remaining = max(0, 6 - len(action_items))
+    old_actions = """        remaining = max(0, 6 - len(action_items))
         action_items.extend(
             ChannelAction(
                 action_id=f"command:{item.normalized_command}",
@@ -1352,8 +1352,8 @@ def apply() -> None:
             )
             for item in custom_commands[:remaining]
         )
-'''
-    new_actions = '''        remaining = max(0, 6 - len(action_items))
+"""
+    new_actions = """        remaining = max(0, 6 - len(action_items))
         selectable_commands = [
             item for item in custom_commands if item.allow_persistent_selection
         ]
@@ -1376,10 +1376,10 @@ def apply() -> None:
             )
             for item in custom_commands[:remaining]
         )
-'''
+"""
     replace_once("src/backend/base/langflow/channels/services/dispatch.py", old_actions, new_actions)
 
-    old_policy = '''    @staticmethod
+    old_policy = """    @staticmethod
     def _should_ignore_group_event(
         event: ChannelEvent,
         *,
@@ -1395,8 +1395,8 @@ def apply() -> None:
             command=command,
             response_mode=effective_mode,
         )
-'''
-    new_policy = '''    @staticmethod
+"""
+    new_policy = """    @staticmethod
     def _command_targets_bot(event: ChannelEvent) -> bool:
         if event.message.mentions:
             return True
@@ -1428,7 +1428,7 @@ def apply() -> None:
             command=command,
             response_mode=effective_mode,
         )
-'''
+"""
     replace_once("src/backend/base/langflow/channels/services/dispatch.py", old_policy, new_policy)
 
     replace_once(
@@ -1445,19 +1445,15 @@ def apply() -> None:
     )
     replace_once(
         "src/backend/base/langflow/api/v1/channel_management.py",
-        "        workflow_command_id=workflow_command_id,\n"
-        "    )\n\n\n@router.delete(\n",
-        "        workflow_command_id=workflow_command_id,\n"
-        "        query=query,\n"
-        "    )\n\n\n@router.delete(\n",
+        "        workflow_command_id=workflow_command_id,\n    )\n\n\n@router.delete(\n",
+        "        workflow_command_id=workflow_command_id,\n        query=query,\n    )\n\n\n@router.delete(\n",
     )
     replace_once(
         "src/backend/base/langflow/api/v1/channel_management.py",
-        "        selection_id=selection_id,\n"
-        "    ):\n",
+        "        selection_id=selection_id,\n    ):\n",
         "        selection_id=selection_id,\n"
         "        actor_user_id=current_user.id,\n"
-        "        action=\"admin_revoke\",\n"
+        '        action="admin_revoke",\n'
         "    ):\n",
     )
     replace_once(
@@ -1467,7 +1463,7 @@ def apply() -> None:
         "        db,\n"
         "        connection_id=connection_id,\n"
         "        actor_user_id=current_user.id,\n"
-        "        action=\"admin_cleanup_expired\",\n"
+        '        action="admin_cleanup_expired",\n'
         "    )\n",
     )
 
@@ -1486,7 +1482,7 @@ def apply() -> None:
         "            )\n\n"
         "            flow_selection_maintenance_task = asyncio.create_task(\n"
         "                run_flow_selection_maintenance(),\n"
-        "                name=\"channel-flow-selection-maintenance\",\n"
+        '                name="channel-flow-selection-maintenance",\n'
         "            )\n\n"
         "            total_time =",
     )
@@ -1532,9 +1528,9 @@ def apply() -> None:
         "        {capabilities?.supports_file_upload && (\n",
         "        {capabilities?.supports_group_chat && capabilities.supports_mentions && (\n"
         "          <SettingSwitch\n"
-        "            title={copy(\"群聊系统指令必须 @机器人\")}\n"
+        '            title={copy("群聊系统指令必须 @机器人")}\n'
         "            description={copy(\n"
-        "              \"避免群内多个机器人同时响应 /help、/commands 等系统指令；Telegram 的 /command@bot_name 视为已明确指定。\",\n"
+        '              "避免群内多个机器人同时响应 /help、/commands 等系统指令；Telegram 的 /command@bot_name 视为已明确指定。",\n'
         "            )}\n"
         "            checked={form.systemCommandRequireMention}\n"
         "            onCheckedChange={(checked) =>\n"
@@ -1583,15 +1579,47 @@ def apply() -> None:
     docs = read(docs_path)
     marker = "## 持久工作流选择"
     if marker not in docs:
-        docs += '''\n\n## 持久工作流选择\n\n- 管理员可开启群聊系统指令必须 `@机器人`，Telegram 的 `/command@bot_name` 视为明确指定。\n- 活动选择接口直接返回成员、会话、指令与工作流展示信息，避免前端额外拼接请求。\n- 过期选择由后台任务按批次自动清理，也可由管理员立即清理。\n- 用户选择、恢复默认、自动失效、管理员撤销和批量清理都会写入渠道配置审计。\n- 活动选择按连接、成员、工作流和过期时间建立组合索引。\n'''
+        docs += """\n\n## 持久工作流选择\n\n- 管理员可开启群聊系统指令必须 `@机器人`，Telegram 的 `/command@bot_name` 视为明确指定。\n- 活动选择接口直接返回成员、会话、指令与工作流展示信息，避免前端额外拼接请求。\n- 过期选择由后台任务按批次自动清理，也可由管理员立即清理。\n- 用户选择、恢复默认、自动失效、管理员撤销和批量清理都会写入渠道配置审计。\n- 活动选择按连接、成员、工作流和过期时间建立组合索引。\n"""
         write(docs_path, docs)
 
 
 def validate_and_commit() -> None:
-    run("uvx", "ruff", "format", "src/backend/base/langflow/channels", "src/backend/base/langflow/services/database/models/channel", "src/backend/tests/unit/channels")
-    run("uvx", "ruff", "check", "--fix", "--config", "src/backend/base/langflow/channels/ruff.toml", "src/backend/base/langflow/channels")
-    run("uvx", "ruff", "check", "--fix", "--config", "src/backend/tests/unit/channels/ruff.toml", "src/backend/tests/unit/channels")
-    run("python", "-m", "compileall", "-q", "src/backend/base/langflow/channels", "src/backend/base/langflow/api/v1/channel_management.py", "src/backend/base/langflow/services/database/models/channel", "src/backend/tests/unit/channels")
+    run(
+        "uvx",
+        "ruff",
+        "format",
+        "src/backend/base/langflow/channels",
+        "src/backend/base/langflow/services/database/models/channel",
+        "src/backend/tests/unit/channels",
+    )
+    run(
+        "uvx",
+        "ruff",
+        "check",
+        "--fix",
+        "--config",
+        "src/backend/base/langflow/channels/ruff.toml",
+        "src/backend/base/langflow/channels",
+    )
+    run(
+        "uvx",
+        "ruff",
+        "check",
+        "--fix",
+        "--config",
+        "src/backend/tests/unit/channels/ruff.toml",
+        "src/backend/tests/unit/channels",
+    )
+    run(
+        "python",
+        "-m",
+        "compileall",
+        "-q",
+        "src/backend/base/langflow/channels",
+        "src/backend/base/langflow/api/v1/channel_management.py",
+        "src/backend/base/langflow/services/database/models/channel",
+        "src/backend/tests/unit/channels",
+    )
     run(
         "uv",
         "run",
@@ -1609,7 +1637,18 @@ def validate_and_commit() -> None:
         "src/backend/tests/unit/channels/test_system_commands.py",
         "src/backend/tests/unit/channels/test_channel_migrations_sqlite.py",
     )
-    run("npm", "exec", "--prefix", "src/frontend", "biome", "check", "--", "src/controllers/API/queries/channels/use-get-channel-flow-selections.ts", "src/pages/SettingsPage/pages/ChannelsPage/components/FlowSelectionsPanel.tsx", "src/pages/SettingsPage/pages/ChannelsPage/components/DefaultRoutingTab.tsx")
+    run(
+        "npm",
+        "exec",
+        "--prefix",
+        "src/frontend",
+        "biome",
+        "check",
+        "--",
+        "src/controllers/API/queries/channels/use-get-channel-flow-selections.ts",
+        "src/pages/SettingsPage/pages/ChannelsPage/components/FlowSelectionsPanel.tsx",
+        "src/pages/SettingsPage/pages/ChannelsPage/components/DefaultRoutingTab.tsx",
+    )
     run("npm", "exec", "--prefix", "src/frontend", "tsc", "--", "-p", "tsconfig.channels.json", "--noEmit")
 
     run("git", "checkout", "origin/feature/channel-gateway", "--", "scripts/ci/update_starter_projects.py")
