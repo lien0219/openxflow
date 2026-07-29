@@ -124,7 +124,7 @@ export default function SettingsPage(): JSX.Element {
     },
   );
 
-  if (canReadRbac && !autoLogin) {
+  if (canReadRbac) {
     sidebarNavItems.push({
       title: t("settings.nav.permissions"),
       href: "/settings/permissions",
