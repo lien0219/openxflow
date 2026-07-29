@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ export function AuditTab({
     isSuperuser ? "" : defaultDomainId || "",
   );
   const [loading, setLoading] = useState(false);
+  const initialLoadStarted = useRef(false);
 
   const load = useCallback(
     async (page = 1) => {
@@ -69,8 +70,12 @@ export function AuditTab({
   );
 
   useEffect(() => {
-    if (isSuperuser || domainType === "global" || domainId) void load(1);
-  }, []);
+    if (initialLoadStarted.current) return;
+    if (isSuperuser || domainType === "global" || domainId) {
+      initialLoadStarted.current = true;
+      void load(1);
+    }
+  }, [domainId, domainType, isSuperuser, load]);
 
   return (
     <section className={PANEL_CLASS}>
