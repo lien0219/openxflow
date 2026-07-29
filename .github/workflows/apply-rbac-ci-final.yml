@@ -69,33 +69,6 @@ jobs:
               encoding="utf-8",
           )
 
-          workflow = Path(".github/workflows/rbac-productization.yml")
-          text = workflow.read_text(encoding="utf-8")
-          old = '''      - name: Type-check permission center
-                  run: npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json
-          '''
-          new = '''      - name: Type-check permission center
-                  shell: bash
-                  run: |
-                    set +e
-                    npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json 2>&1 | tee /tmp/rbac-tsc.log
-                    tsc_status=${PIPESTATUS[0]}
-                    set -e
-
-                    focused_error_pattern='^src/(components/authorization/authPermissionGuard\\.tsx|hooks/use-rbac-access\\.ts|controllers/API/queries/authz|pages/SettingsPage/pages/PermissionsPage|pages/SettingsPage/index\\.tsx|routes\\.tsx|locales/rbacTranslations\\.ts).*error TS[0-9]+:'
-                    if grep -E "$focused_error_pattern" /tmp/rbac-tsc.log; then
-                      echo "Permission-center type errors detected."
-                      exit 1
-                    fi
-
-                    if [ "$tsc_status" -ne 0 ]; then
-                      echo "::warning::TypeScript reported pre-existing errors in imported shared modules."
-                    fi
-          '''
-          if old not in text:
-              raise SystemExit("RBAC type-check workflow block not found")
-          workflow.write_text(text.replace(old, new, 1), encoding="utf-8")
-
       - name: Install frontend dependencies
         working-directory: src/frontend
         run: npm ci --ignore-scripts --loglevel=error
@@ -120,8 +93,7 @@ jobs:
             src/frontend/src/pages/SettingsPage/pages/PermissionsPage/components/AuditTab.tsx \
             src/frontend/src/pages/SettingsPage/pages/PermissionsPage/components/RolesTab.tsx \
             src/frontend/src/pages/SettingsPage/pages/PermissionsPage/components/SharesTab.tsx \
-            src/frontend/src/pages/SettingsPage/pages/PermissionsPage/components/TeamsTab.tsx \
-            .github/workflows/rbac-productization.yml
+            src/frontend/src/pages/SettingsPage/pages/PermissionsPage/components/TeamsTab.tsx
           if git diff --cached --quiet; then
             echo "No source changes required."
             exit 0
