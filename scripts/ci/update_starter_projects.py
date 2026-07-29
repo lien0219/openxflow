@@ -6,7 +6,7 @@ from pathlib import Path
 _HARDENING = Path(__file__).resolve().parents[2] / ".github" / "scripts" / "channel_final_hardening.py"
 if _HARDENING.exists():
     generator = _HARDENING.read_text(encoding="utf-8")
-    old = '''    migration_test = "src/backend/tests/unit/channels/test_channel_migrations_sqlite.py"
+    old = """    migration_test = "src/backend/tests/unit/channels/test_channel_migrations_sqlite.py"
     content = read(migration_test)
     if "c7e2f4a9b1d3" not in content:
         content = content.replace(
@@ -14,8 +14,8 @@ if _HARDENING.exists():
             '"a1f4c7e9d2b6",\\n        "c7e2f4a9b1d3",\\n',
         )
         write(migration_test, content)
-'''
-    new = '''    migration_test = "src/backend/tests/unit/channels/test_channel_migrations_sqlite.py"
+"""
+    new = """    migration_test = "src/backend/tests/unit/channels/test_channel_migrations_sqlite.py"
     content = read(migration_test)
     if "c7e2f4a9b1d3_harden_channel_flow_selection" not in content:
         content = content.replace(
@@ -43,7 +43,7 @@ if _HARDENING.exists():
             '        "b5d8e1f3a6c9",\\n        "a1f4c7e9d2b6",\\n    ]\\n\\n\\ndef test_channel_migrations_upgrade',
         )
         write(migration_test, content)
-'''
+"""
     if old in generator:
         _HARDENING.write_text(generator.replace(old, new, 1), encoding="utf-8")
     elif "flow_selection_hardening_migration" not in generator:
