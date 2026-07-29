@@ -7,6 +7,7 @@ import es from "./locales/es.json";
 import fr from "./locales/fr.json";
 import ja from "./locales/ja.json";
 import pt from "./locales/pt.json";
+import { rbacTranslations } from "./locales/rbacTranslations";
 import zhHans from "./locales/zh-Hans.json";
 
 const SUPPORTED_LANGUAGES = [
@@ -59,14 +60,54 @@ const _consoleInfo = console.info.bind(console);
 console.info = () => {};
 i18n.use(initReactI18next).init({
   resources: {
-    de: { translation: { ...de, ...(channelTranslations.de ?? {}) } },
-    en: { translation: { ...en, ...channelTranslations.en } },
-    es: { translation: { ...es, ...(channelTranslations.es ?? {}) } },
-    fr: { translation: { ...fr, ...(channelTranslations.fr ?? {}) } },
-    ja: { translation: { ...ja, ...(channelTranslations.ja ?? {}) } },
-    pt: { translation: { ...pt, ...(channelTranslations.pt ?? {}) } },
+    de: {
+      translation: {
+        ...de,
+        ...(channelTranslations.de ?? {}),
+        ...(rbacTranslations.de ?? rbacTranslations.en),
+      },
+    },
+    en: {
+      translation: {
+        ...en,
+        ...channelTranslations.en,
+        ...rbacTranslations.en,
+      },
+    },
+    es: {
+      translation: {
+        ...es,
+        ...(channelTranslations.es ?? {}),
+        ...(rbacTranslations.es ?? rbacTranslations.en),
+      },
+    },
+    fr: {
+      translation: {
+        ...fr,
+        ...(channelTranslations.fr ?? {}),
+        ...(rbacTranslations.fr ?? rbacTranslations.en),
+      },
+    },
+    ja: {
+      translation: {
+        ...ja,
+        ...(channelTranslations.ja ?? {}),
+        ...(rbacTranslations.ja ?? rbacTranslations.en),
+      },
+    },
+    pt: {
+      translation: {
+        ...pt,
+        ...(channelTranslations.pt ?? {}),
+        ...(rbacTranslations.pt ?? rbacTranslations.en),
+      },
+    },
     "zh-Hans": {
-      translation: { ...zhHans, ...(channelTranslations["zh-Hans"] ?? {}) },
+      translation: {
+        ...zhHans,
+        ...(channelTranslations["zh-Hans"] ?? {}),
+        ...(rbacTranslations["zh-Hans"] ?? rbacTranslations.en),
+      },
     },
   },
   lng: detectedLang,
@@ -87,6 +128,7 @@ export async function loadLanguage(lang: string): Promise<void> {
     i18n.addResourceBundle(lang, "translation", {
       ...messages.default,
       ...(channelTranslations[lang] ?? {}),
+      ...(rbacTranslations[lang] ?? rbacTranslations.en),
     });
   } catch {
     // Unknown locale — no bundle file exists. i18next's fallbackLng: "en" takes over.
