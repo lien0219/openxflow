@@ -6,12 +6,14 @@ on:
       - automation/channel-flow-hardening
     paths:
       - ".github/scripts/apply_channel_flow_hardening.py"
+      - ".github/scripts/fix_channel_flow_hardening_generator.py"
       - ".github/workflows/apply-channel-flow-hardening.yml"
   pull_request:
     branches:
       - main
     paths:
       - ".github/scripts/apply_channel_flow_hardening.py"
+      - ".github/scripts/fix_channel_flow_hardening_generator.py"
       - ".github/workflows/apply-channel-flow-hardening.yml"
   workflow_dispatch:
 
@@ -52,6 +54,9 @@ jobs:
 
       - name: Sync backend test environment
         run: uv sync --quiet --frozen --project src/backend/base --group dev
+
+      - name: Fix generator compatibility
+        run: python .github/scripts/fix_channel_flow_hardening_generator.py
 
       - name: Apply production hardening
         run: python .github/scripts/apply_channel_flow_hardening.py
@@ -172,6 +177,7 @@ jobs:
       - name: Remove one-time automation files
         run: |
           rm -f .github/scripts/apply_channel_flow_hardening.py
+          rm -f .github/scripts/fix_channel_flow_hardening_generator.py
           rm -f .github/workflows/apply-channel-flow-hardening.yml
 
       - name: Commit validated result
