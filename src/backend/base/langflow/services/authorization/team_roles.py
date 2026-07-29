@@ -267,7 +267,8 @@ async def create_team_role_grant(
     if duplicate is not None:
         grant = _parse_team_role(duplicate)
         if grant is None:
-            raise RuntimeError("Existing team role rule is malformed")
+            message = "Existing team role rule is malformed"
+            raise RuntimeError(message)
         return grant
 
     rule = CasbinRule(
@@ -282,7 +283,8 @@ async def create_team_role_grant(
     await session.flush()
     grant = _parse_team_role(rule)
     if grant is None:
-        raise RuntimeError("Unable to persist team role rule")
+        message = "Unable to persist team role rule"
+        raise RuntimeError(message)
 
     members = (await session.exec(select(AuthzTeamMember).where(AuthzTeamMember.team_id == team_id))).all()
     for member in members:
@@ -302,17 +304,15 @@ async def sync_team_member_grants(
     user_id: UUID,
     assigned_by: UUID | None,
 ) -> list[UUID]:
-    assignment_ids: list[UUID] = []
-    for grant in await list_team_role_grants(session, team_id):
-        assignment_ids.append(
-            await _sync_grant_for_user(
-                session,
-                grant=grant,
-                user_id=user_id,
-                assigned_by=assigned_by,
-            )
+    return [
+        await _sync_grant_for_user(
+            session,
+            grant=grant,
+            user_id=user_id,
+            assigned_by=assigned_by,
         )
-    return assignment_ids
+        for grant in await list_team_role_grants(session, team_id)
+    ]
 
 
 async def remove_team_member_grants(
