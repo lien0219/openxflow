@@ -8,13 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
-# Recognized domain categories for ``authz_role_assignment.domain_type``.
-# ``global``  — assignment is unscoped, ``domain_id`` MUST be null.
-# ``org`` / ``workspace`` / ``project`` — scoped, ``domain_id`` MUST be set.
-# Keeping this as a ``Literal`` rejects free-form strings at the API
-# boundary instead of letting a typo (``"organization"``) silently
-# create a row that no enforcer will ever match.
-DomainType = Literal["global", "org", "workspace", "project"]
+# ``global`` is unscoped. Every other domain is tied to one concrete UUID.
+DomainType = Literal["global", "organization", "org", "workspace", "project", "channel"]
 
 
 class RoleAssignmentCreate(BaseModel):
@@ -25,14 +20,13 @@ class RoleAssignmentCreate(BaseModel):
     domain_type: DomainType = Field(
         default="global",
         description=(
-            "Domain scope of the assignment. ``global`` is unscoped (no "
-            "``domain_id``); ``org``/``workspace``/``project`` require a "
-            "matching ``domain_id``."
+            "Domain scope of the assignment. ``global`` is unscoped; organization, org, "
+            "workspace, project and channel assignments require a matching ``domain_id``."
         ),
     )
     domain_id: UUID | None = Field(
         default=None,
-        description="Required when ``domain_type`` is org/workspace/project; must be null for ``global``.",
+        description="Required for every non-global assignment; must be null for global assignments.",
     )
 
     @model_validator(mode="after")
@@ -40,8 +34,6 @@ class RoleAssignmentCreate(BaseModel):
         if self.domain_type == "global" and self.domain_id is not None:
             msg = "domain_id must be null when domain_type='global'"
             raise ValueError(msg)
-        # org / workspace / project all require an id — without one the
-        # assignment cannot match any concrete domain in the enforcer.
         if self.domain_type != "global" and self.domain_id is None:
             msg = f"domain_id is required when domain_type={self.domain_type!r}"
             raise ValueError(msg)
