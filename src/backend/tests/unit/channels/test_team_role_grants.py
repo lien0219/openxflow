@@ -3,10 +3,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel import SQLModel, select
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from langflow.services.authorization.team_roles import (
     create_team_role_grant,
     delete_team_role_grant,
@@ -19,6 +15,9 @@ from langflow.services.database.models.auth import (
     CasbinRule,
 )
 from langflow.services.database.models.user.model import User  # noqa: F401 - registers FK table
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel import SQLModel, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 async def _session() -> tuple[AsyncSession, object]:
@@ -59,9 +58,7 @@ async def test_team_role_materializes_and_removes_managed_assignment() -> None:
         await session.commit()
 
         assignments = (
-            await session.exec(
-                select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user_id)
-            )
+            await session.exec(select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user_id))
         ).all()
         assert len(assignments) == 1
         assert assignments[0].role_id == role.id
@@ -70,9 +67,7 @@ async def test_team_role_materializes_and_removes_managed_assignment() -> None:
         await delete_team_role_grant(session, team_id=first_team.id, rule_id=grant.id)
         await session.commit()
         assert (
-            await session.exec(
-                select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user_id)
-            )
+            await session.exec(select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user_id))
         ).first() is None
     finally:
         await session.close()
@@ -104,9 +99,7 @@ async def test_two_teams_reference_count_the_same_materialized_assignment() -> N
         await session.commit()
 
         assignments = (
-            await session.exec(
-                select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user_id)
-            )
+            await session.exec(select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user_id))
         ).all()
         assert len(assignments) == 1
 
@@ -152,9 +145,7 @@ async def test_team_role_never_deletes_an_existing_manual_assignment() -> None:
 
         assert await session.get(AuthzRoleAssignment, manual_assignment.id) is not None
         orphan_policy_rows = (
-            await session.exec(
-                select(CasbinRule).where(CasbinRule.v0 == str(manual_assignment.id))
-            )
+            await session.exec(select(CasbinRule).where(CasbinRule.v0 == str(manual_assignment.id)))
         ).all()
         assert orphan_policy_rows == []
     finally:
