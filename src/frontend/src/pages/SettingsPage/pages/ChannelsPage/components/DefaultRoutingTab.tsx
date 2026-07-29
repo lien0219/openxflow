@@ -154,7 +154,9 @@ export default function DefaultRoutingTab({
         />
         <SettingSwitch
           title={copy("允许用户切换工作流")}
-          description={copy("用户可按成员、会话和线程持久选择管理员允许的业务工作流。")}
+          description={copy(
+            "用户可按成员、会话和线程持久选择管理员允许的业务工作流。",
+          )}
           checked={form.userFlowSelectionEnabled}
           onCheckedChange={(checked) =>
             setForm((current) => ({
