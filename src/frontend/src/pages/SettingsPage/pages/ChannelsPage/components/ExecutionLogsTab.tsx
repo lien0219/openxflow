@@ -17,6 +17,7 @@ interface ExecutionLogsTabProps {
 const TRIGGER_LABELS: Record<ChannelExecutionTrigger, string> = {
   default: "默认工作流",
   command: "自定义指令",
+  selected: "当前工作流",
   admin_flow: "管理员调试",
   file: "文件处理",
 };
@@ -56,7 +57,8 @@ export default function ExecutionLogsTab({
   );
   const [identityType, setIdentityType] = useState<
     ChannelExecutionIdentityType | ""
-  >("");
+  >(""
+  );
 
   useEffect(() => {
     setPage(1);
