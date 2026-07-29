@@ -22,19 +22,19 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
         original_migration_tests()
         path = Path("src/backend/tests/unit/channels/test_channel_migrations_sqlite.py")
         content = path.read_text(encoding="utf-8")
-        old = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
+        old = """        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
             "connection_id",
             "external_event_id",
             "delivery_kind",
         )
-'''
-        new = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
+"""
+        new = """        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
             "connection_id",
             "external_event_id",
             "delivery_kind",
             "delivery_key",
         )
-'''
+"""
         if content.count(old) != 1:
             raise RuntimeError("Unable to update outbound delivery migration assertion")
         path.write_text(content.replace(old, new, 1), encoding="utf-8")
