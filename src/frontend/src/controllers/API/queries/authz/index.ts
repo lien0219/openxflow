@@ -260,10 +260,7 @@ export async function updateTeam(
     Pick<Team, "team_name" | "adom_name" | "description" | "is_active">
   >,
 ): Promise<Team> {
-  const response = await api.patch<Team>(
-    authzUrl(`/teams/${teamId}`),
-    payload,
-  );
+  const response = await api.patch<Team>(authzUrl(`/teams/${teamId}`), payload);
   return response.data;
 }
 
