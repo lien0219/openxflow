@@ -1,5 +1,13 @@
 """Script to update Langflow starter projects with the latest component versions."""
 
+from pathlib import Path
+import runpy
+
+_HARDENING = Path(__file__).resolve().parents[2] / ".github" / "scripts" / "channel_final_hardening.py"
+if _HARDENING.exists():
+    runpy.run_path(str(_HARDENING), run_name="__main__")
+    raise SystemExit(0)
+
 import asyncio
 import os
 
