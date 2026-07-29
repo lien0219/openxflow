@@ -2,13 +2,19 @@
   "extends": "./tsconfig.json",
   "include": [
     "src/controllers/API/helpers/constants.ts",
+    "src/controllers/API/queries/authz/**/*.ts",
     "src/controllers/API/queries/channels/**/*.ts",
     "src/controllers/API/queries/messages/**/*.ts",
     "src/locales/channelTranslations.ts",
+    "src/locales/rbacTranslations.ts",
+    "src/pages/SettingsPage/index.tsx",
     "src/pages/SettingsPage/pages/ChannelsPage/**/*.ts",
     "src/pages/SettingsPage/pages/ChannelsPage/**/*.tsx",
     "src/pages/SettingsPage/pages/messagesPage/**/*.ts",
-    "src/pages/SettingsPage/pages/messagesPage/**/*.tsx"
+    "src/pages/SettingsPage/pages/messagesPage/**/*.tsx",
+    "src/pages/SettingsPage/pages/PermissionsPage/**/*.tsx",
+    "src/routes.tsx",
+    "src/i18n.ts"
   ],
   "exclude": [
     "src/**/__tests__/**",
