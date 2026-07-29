@@ -41,21 +41,23 @@ export const useGetChannelFlowSelections: useQueryFunctionType<
 > = (params, options) => {
   const { query } = UseRequestProcessor();
 
-  const getSelections = async (): Promise<ChannelActiveWorkflowSelectionPage> => {
-    const response = await api.get<ChannelActiveWorkflowSelectionPage>(
-      `${getURL("CHANNELS")}/${params.connectionId}/flow-selections`,
-      {
-        params: {
-          page: params.page ?? 1,
-          page_size: params.pageSize ?? 20,
-          conversation_binding_id: params.conversationBindingId || undefined,
-          channel_identity_id: params.channelIdentityId || undefined,
-          workflow_command_id: params.workflowCommandId || undefined,
+  const getSelections =
+    async (): Promise<ChannelActiveWorkflowSelectionPage> => {
+      const response = await api.get<ChannelActiveWorkflowSelectionPage>(
+        `${getURL("CHANNELS")}/${params.connectionId}/flow-selections`,
+        {
+          params: {
+            page: params.page ?? 1,
+            page_size: params.pageSize ?? 20,
+            conversation_binding_id:
+              params.conversationBindingId || undefined,
+            channel_identity_id: params.channelIdentityId || undefined,
+            workflow_command_id: params.workflowCommandId || undefined,
+          },
         },
-      },
-    );
-    return response.data;
-  };
+      );
+      return response.data;
+    };
 
   return query(
     [
