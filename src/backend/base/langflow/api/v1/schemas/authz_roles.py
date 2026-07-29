@@ -16,23 +16,26 @@ from langflow.services.authorization.actions import (
     FlowAction,
     KnowledgeBaseAction,
     ProjectAction,
+    RbacAction,
     ShareAction,
+    TeamAction,
+    UserAction,
     VariableAction,
 )
 
 _RESOURCE_ACTIONS: dict[str, frozenset[str]] = {
-    "flow": frozenset({a.value for a in FlowAction}) | {"*"},
-    "deployment": frozenset({a.value for a in DeploymentAction}) | {"*"},
-    "project": frozenset({a.value for a in ProjectAction}) | {"*"},
-    "knowledge_base": frozenset({a.value for a in KnowledgeBaseAction}) | {"*"},
-    "variable": frozenset({a.value for a in VariableAction}) | {"*"},
-    "file": frozenset({a.value for a in FileAction}) | {"*"},
-    "share": frozenset({a.value for a in ShareAction}) | {"*"},
-    "channel": frozenset({a.value for a in ChannelAction}) | {"*"},
-    "audit": frozenset({a.value for a in AuditAction}) | {"*"},
-    "rbac": frozenset({"read", "manage", "assign", "*"}),
-    "team": frozenset({"read", "create", "write", "delete", "manage", "*"}),
-    "user": frozenset({"read", "create", "write", "delete", "manage", "*"}),
+    "flow": frozenset({action.value for action in FlowAction}) | {"*"},
+    "deployment": frozenset({action.value for action in DeploymentAction}) | {"*"},
+    "project": frozenset({action.value for action in ProjectAction}) | {"*"},
+    "knowledge_base": frozenset({action.value for action in KnowledgeBaseAction}) | {"*"},
+    "variable": frozenset({action.value for action in VariableAction}) | {"*"},
+    "file": frozenset({action.value for action in FileAction}) | {"*"},
+    "share": frozenset({action.value for action in ShareAction}) | {"*"},
+    "channel": frozenset({action.value for action in ChannelAction}) | {"*"},
+    "audit": frozenset({action.value for action in AuditAction}) | {"*"},
+    "rbac": frozenset({action.value for action in RbacAction}) | {"*"},
+    "team": frozenset({action.value for action in TeamAction}) | {"*"},
+    "user": frozenset({action.value for action in UserAction}) | {"*"},
 }
 
 _PERMISSION_SLUG_RE = re.compile(r"^[a-z_]+:[a-z_*]+$")

@@ -89,3 +89,31 @@ class AuditAction(str, Enum):
 
     READ = "read"
     EXPORT = "export"
+
+
+class RbacAction(str, Enum):
+    """Actions authorized on role definitions and scoped assignments."""
+
+    READ = "read"
+    MANAGE = "manage"
+    ASSIGN = "assign"
+
+
+class TeamAction(str, Enum):
+    """Actions authorized on teams, memberships and team role grants."""
+
+    READ = "read"
+    CREATE = "create"
+    WRITE = "write"
+    DELETE = "delete"
+    MANAGE = "manage"
+
+
+class UserAction(str, Enum):
+    """Actions authorized on the user directory and account administration."""
+
+    READ = "read"
+    CREATE = "create"
+    WRITE = "write"
+    DELETE = "delete"
+    MANAGE = "manage"

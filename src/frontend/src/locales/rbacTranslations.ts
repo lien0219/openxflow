@@ -53,7 +53,7 @@ const en: RbacTranslationMap = {
   "rbac.roles.create": "Create custom role",
   "rbac.roles.edit": "Edit custom role",
   "rbac.roles.permissionsHelp":
-    "One permission per line or comma separated, for example flow:read or channel:*.",
+    "One permission per line or comma separated. Examples: flow:read, channel:*, rbac:assign, team:manage, user:read.",
   "rbac.teams.name": "Team name",
   "rbac.teams.slug": "Administrative domain slug",
   "rbac.teams.description": "Description",
@@ -131,7 +131,7 @@ const zhHans: RbacTranslationMap = {
   "rbac.roles.create": "创建自定义角色",
   "rbac.roles.edit": "编辑自定义角色",
   "rbac.roles.permissionsHelp":
-    "每行一个权限或使用逗号分隔，例如 flow:read、channel:*。",
+    "每行一个权限或使用逗号分隔，例如 flow:read、channel:*、rbac:assign、team:manage、user:read。",
   "rbac.teams.name": "团队名称",
   "rbac.teams.slug": "管理域标识",
   "rbac.teams.description": "团队说明",
