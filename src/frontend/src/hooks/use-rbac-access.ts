@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getIdentitySummary } from "@/controllers/API/queries/authz";
 import useAuthStore from "@/stores/authStore";
 
@@ -36,20 +36,35 @@ export function useRbacAccess() {
     };
   }, [autoLogin, isAuthenticated]);
 
-  return useMemo(() => {
-    const permissionSet = new Set(permissions);
-    const canReadRbac =
-      isAdmin || permissionSet.has("rbac:read") || permissionSet.has("rbac:*");
-    const canManageRbac =
-      isAdmin || permissionSet.has("rbac:manage") || permissionSet.has("rbac:*");
-    const canAssignRbac =
-      isAdmin || permissionSet.has("rbac:assign") || permissionSet.has("rbac:*");
-    return {
+  const permissionSet = useMemo(() => new Set(permissions), [permissions]);
+  const hasPermission = useCallback(
+    (permission: string) => {
+      if (isAdmin) return true;
+      const normalized = permission.trim().toLowerCase();
+      const [resource] = normalized.split(":", 1);
+      return (
+        permissionSet.has(normalized) ||
+        permissionSet.has(`${resource}:*`) ||
+        permissionSet.has("*:*")
+      );
+    },
+    [isAdmin, permissionSet],
+  );
+
+  return useMemo(
+    () => ({
       permissions,
+      isAdmin,
       isLoading,
-      canReadRbac,
-      canManageRbac,
-      canAssignRbac,
-    };
-  }, [isAdmin, isLoading, permissions]);
+      hasPermission,
+      canReadRbac: hasPermission("rbac:read"),
+      canManageRbac: hasPermission("rbac:manage"),
+      canAssignRbac: hasPermission("rbac:assign"),
+      canReadAudit: hasPermission("audit:read"),
+      canManageTeams: hasPermission("team:manage"),
+      canReadShares: hasPermission("share:read"),
+      canCreateShares: hasPermission("share:create"),
+    }),
+    [hasPermission, isAdmin, isLoading, permissions],
+  );
 }
