@@ -10,7 +10,7 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
     source = generator_path.read_text(encoding="utf-8")
     source = source.replace(
         "    replace_once(path, old_handle, new_handle)\n",
-        """    dispatch_source = read(path)
+        '''    dispatch_source = read(path)
     dispatch_handle_start = dispatch_source.index("    async def handle(")
     dispatch_block_start = dispatch_source.index(
         "        try:\\n            principal = await resolve_execution_principal(",
@@ -26,7 +26,28 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
         + new_handle.rstrip()
         + dispatch_source[dispatch_block_end:],
     )
-""",
+''',
+        1,
+    )
+    source = source.replace(
+        '''    replace_once(
+        path,
+        "        conversation_type: str,\\n    ) -> ChannelMessage:\\n",
+        "        conversation_type: str,\\n        event: ChannelEvent,\\n        identity,\\n    ) -> ChannelMessage:\\n",
+    )
+''',
+        '''    dispatch_source = read(path)
+    commands_start = dispatch_source.index("    async def _commands_message(")
+    commands_end = dispatch_source.index("\\n\\n    async def _unknown_command_message(", commands_start)
+    signature = "        conversation_type: str,\\n    ) -> ChannelMessage:\\n"
+    signature_start = dispatch_source.index(signature, commands_start, commands_end)
+    write(
+        path,
+        dispatch_source[:signature_start]
+        + "        conversation_type: str,\\n        event: ChannelEvent,\\n        identity,\\n    ) -> ChannelMessage:\\n"
+        + dispatch_source[signature_start + len(signature):],
+    )
+''',
         1,
     )
     scope: dict[str, object] = {}
@@ -38,19 +59,19 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
         original_migration_tests()
         path = Path("src/backend/tests/unit/channels/test_channel_migrations_sqlite.py")
         content = path.read_text(encoding="utf-8")
-        old = """        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
+        old = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
             "connection_id",
             "external_event_id",
             "delivery_kind",
         )
-"""
-        new = """        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
+'''
+        new = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
             "connection_id",
             "external_event_id",
             "delivery_kind",
             "delivery_key",
         )
-"""
+'''
         if content.count(old) != 1:
             raise RuntimeError("Unable to update outbound delivery migration assertion")
         path.write_text(content.replace(old, new, 1), encoding="utf-8")
@@ -96,7 +117,7 @@ async def main():
 
     starter_projects = await load_starter_projects()
     for project_path, project in starter_projects:
-        _, _, _, _, project_data, _, _, _ = get_project_data(project)
+        _, _, _, _, project_data, _, _, _, _ = get_project_data(project)
         do_update_starter_projects = os.environ.get("LANGFLOW_UPDATE_STARTER_PROJECTS", "true").lower() == "true"
         if do_update_starter_projects:
             updated_project_data = update_projects_components_with_latest_component_versions(
