@@ -57,8 +57,7 @@ export default function ExecutionLogsTab({
   );
   const [identityType, setIdentityType] = useState<
     ChannelExecutionIdentityType | ""
-  >(""
-  );
+  >("");
 
   useEffect(() => {
     setPage(1);
