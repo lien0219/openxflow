@@ -165,19 +165,18 @@ export function RolesTab({
       {canManage && (
         <section className={`${PANEL_CLASS} h-fit`}>
           <h2 className="font-semibold">
-            {editingRoleId
-              ? t("rbac.roles.edit")
-              : t("rbac.roles.create")}
+            {editingRoleId ? t("rbac.roles.edit") : t("rbac.roles.create")}
           </h2>
           <div className="mt-3 space-y-3">
             <div className={FIELD_CLASS}>
               <label className="text-sm">{t("rbac.roles.name")}</label>
-              <Input value={name} onChange={(event) => setName(event.target.value)} />
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
             </div>
             <div className={FIELD_CLASS}>
-              <label className="text-sm">
-                {t("rbac.roles.description")}
-              </label>
+              <label className="text-sm">{t("rbac.roles.description")}</label>
               <Input
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
@@ -201,9 +200,7 @@ export function RolesTab({
               </select>
             </div>
             <div className={FIELD_CLASS}>
-              <label className="text-sm">
-                {t("rbac.roles.permissions")}
-              </label>
+              <label className="text-sm">{t("rbac.roles.permissions")}</label>
               <textarea
                 className="min-h-48 rounded-md border border-input bg-background p-3 font-mono text-xs outline-none focus:ring-1 focus:ring-ring"
                 value={permissions}

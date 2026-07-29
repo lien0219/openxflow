@@ -30,8 +30,7 @@ export function SharesTab({
   const [resourceId, setResourceId] = useState("");
   const [scope, setScope] = useState<ResourceShare["scope"]>("user");
   const [targetId, setTargetId] = useState("");
-  const [level, setLevel] =
-    useState<ResourceShare["permission_level"]>("read");
+  const [level, setLevel] = useState<ResourceShare["permission_level"]>("read");
 
   const reload = useCallback(async () => {
     setShares(await getShares());
@@ -89,9 +88,7 @@ export function SharesTab({
           <h2 className="font-semibold">{t("rbac.shares.create")}</h2>
           <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className={FIELD_CLASS}>
-              <label className="text-sm">
-                {t("rbac.shares.resourceType")}
-              </label>
+              <label className="text-sm">{t("rbac.shares.resourceType")}</label>
               <select
                 className={SELECT_CLASS}
                 value={resourceType}

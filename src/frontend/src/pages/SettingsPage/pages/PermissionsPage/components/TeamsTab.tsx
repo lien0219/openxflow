@@ -267,7 +267,9 @@ export function TeamsTab({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="font-semibold">{selectedTeam.team_name}</h2>
-                <p className="text-xs text-muted-foreground">{selectedTeam.id}</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedTeam.id}
+                </p>
               </div>
               <div className="flex gap-2">
                 <Button
@@ -427,7 +429,8 @@ export function TeamsTab({
                 >
                   <div>
                     <div className="font-medium">
-                      {usersById.get(member.user_id)?.username || member.user_id}
+                      {usersById.get(member.user_id)?.username ||
+                        member.user_id}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {member.source}
