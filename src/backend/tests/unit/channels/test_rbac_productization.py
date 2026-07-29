@@ -4,13 +4,16 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
+
+from langflow.api.v1.authz_audit import _audit_domain_context
+from langflow.api.v1.authz_me import _summary_domain_context
 from langflow.api.v1.authz_role_assignments import _domain_context
 from langflow.api.v1.schemas.authz_role_assignments import RoleAssignmentCreate
 from langflow.services.authorization.bootstrap import (
     SYSTEM_ROLE_DEFINITIONS,
     is_managed_service_user,
 )
-from pydantic import ValidationError
 
 
 def test_system_role_catalog_is_complete_and_least_privileged() -> None:
@@ -63,15 +66,24 @@ def test_role_assignment_schema_rejects_invalid_scope_pairs() -> None:
 
 def test_domain_context_maps_channel_and_organization_aliases() -> None:
     domain_id = uuid4()
-    assert _domain_context("channel", domain_id) == (
+    expected_channel = (
         f"channel:{domain_id}",
         {"connection_id": domain_id},
     )
-    assert _domain_context("organization", domain_id) == (
+    expected_organization = (
         f"organization:{domain_id}",
         {"organization_id": domain_id},
     )
+
+    assert _domain_context("channel", domain_id) == expected_channel
+    assert _summary_domain_context("channel", domain_id) == expected_channel
+    assert _audit_domain_context("channel", domain_id) == expected_channel
+    assert _domain_context("organization", domain_id) == expected_organization
+    assert _summary_domain_context("organization", domain_id) == expected_organization
+    assert _audit_domain_context("organization", domain_id) == expected_organization
     assert _domain_context("global", None) == ("*", {})
+    assert _summary_domain_context("global", None) == ("*", {})
+    assert _audit_domain_context("global", None) == ("*", {})
 
 
 def test_managed_channel_service_users_never_receive_default_roles() -> None:
