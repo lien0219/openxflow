@@ -14,6 +14,7 @@ on:
       - "src/backend/base/langflow/api/v1/channel*.py"
       - "src/backend/base/langflow/api/v1/message_pages.py"
       - "src/backend/base/langflow/api/v1/authz_*.py"
+      - "src/backend/base/langflow/api/v1/users.py"
       - "src/backend/base/langflow/api/v1/schemas/authz_*.py"
       - "src/backend/base/langflow/services/authorization/**"
       - "src/backend/base/langflow/services/database/models/auth/**"
@@ -90,15 +91,17 @@ jobs:
           --output-format concise
           src/backend/tests/unit/channels
 
-      - name: Ruff RBAC and message pagination
+      - name: Ruff RBAC, users and message pagination
         run: >-
           uvx --quiet ruff check
           --config pyproject.toml
           --extend-ignore EM101,TRY003
           --output-format concise
           src/backend/base/langflow/api/v1/message_pages.py
+          src/backend/base/langflow/api/v1/authz_audit.py
           src/backend/base/langflow/api/v1/authz_me.py
           src/backend/base/langflow/api/v1/authz_role_assignments.py
+          src/backend/base/langflow/api/v1/users.py
           src/backend/base/langflow/api/v1/schemas/authz_roles.py
           src/backend/base/langflow/api/v1/schemas/authz_role_assignments.py
           src/backend/base/langflow/services/authorization
@@ -123,8 +126,10 @@ jobs:
           python -m compileall -q
           src/backend/base/langflow/channels
           src/backend/base/langflow/api/v1/message_pages.py
+          src/backend/base/langflow/api/v1/authz_audit.py
           src/backend/base/langflow/api/v1/authz_me.py
           src/backend/base/langflow/api/v1/authz_role_assignments.py
+          src/backend/base/langflow/api/v1/users.py
           src/backend/base/langflow/api/v1/schemas/authz_roles.py
           src/backend/base/langflow/api/v1/schemas/authz_role_assignments.py
           src/backend/base/langflow/services/authorization
