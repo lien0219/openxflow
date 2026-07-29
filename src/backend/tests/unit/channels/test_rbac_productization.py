@@ -4,14 +4,13 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
-
 from langflow.api.v1.authz_role_assignments import _domain_context
 from langflow.api.v1.schemas.authz_role_assignments import RoleAssignmentCreate
 from langflow.services.authorization.bootstrap import (
     SYSTEM_ROLE_DEFINITIONS,
     is_managed_service_user,
 )
+from pydantic import ValidationError
 
 
 def test_system_role_catalog_is_complete_and_least_privileged() -> None:
