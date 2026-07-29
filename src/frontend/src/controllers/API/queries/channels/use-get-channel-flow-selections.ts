@@ -16,6 +16,16 @@ export interface ChannelActiveWorkflowSelection {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
+  identity_display_name: string | null;
+  external_user_id: string | null;
+  conversation_display_name: string | null;
+  external_conversation_id: string | null;
+  conversation_type: string | null;
+  command: string | null;
+  flow_id: string | null;
+  flow_name: string | null;
+  flow_endpoint_name: string | null;
+  execution_identity_type: "service" | "bound_user" | null;
 }
 
 export interface ChannelActiveWorkflowSelectionPage {
@@ -30,6 +40,7 @@ export interface ChannelActiveWorkflowSelectionQuery {
   connectionId: string;
   page?: number;
   pageSize?: number;
+  query?: string;
   conversationBindingId?: string;
   channelIdentityId?: string;
   workflowCommandId?: string;
@@ -49,6 +60,7 @@ export const useGetChannelFlowSelections: useQueryFunctionType<
           params: {
             page: params.page ?? 1,
             page_size: params.pageSize ?? 20,
+            query: params.query || undefined,
             conversation_binding_id: params.conversationBindingId || undefined,
             channel_identity_id: params.channelIdentityId || undefined,
             workflow_command_id: params.workflowCommandId || undefined,
@@ -64,6 +76,7 @@ export const useGetChannelFlowSelections: useQueryFunctionType<
       params.connectionId,
       params.page ?? 1,
       params.pageSize ?? 20,
+      params.query ?? "",
       params.conversationBindingId ?? "",
       params.channelIdentityId ?? "",
       params.workflowCommandId ?? "",

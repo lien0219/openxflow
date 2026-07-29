@@ -179,6 +179,7 @@ def get_lifespan(*, fix_migration=False, version=None):
         sync_flows_from_fs_task = None
         mcp_init_task = None
         models_dev_refresh_task = None
+        flow_selection_maintenance_task = None
         # Bind ``temp_dirs`` before the ``try`` so the shutdown cleanup in the
         # ``finally`` block (which iterates it) never raises ``UnboundLocalError``
         # when startup fails before bundle loading assigns it below. Otherwise an
@@ -427,6 +428,15 @@ def get_lifespan(*, fix_migration=False, version=None):
             if not queue_service.is_started():
                 queue_service.start()
 
+            from langflow.channels.services.flow_selection_maintenance import (
+                run_flow_selection_maintenance,
+            )
+
+            flow_selection_maintenance_task = asyncio.create_task(
+                run_flow_selection_maintenance(),
+                name="channel-flow-selection-maintenance",
+            )
+
             total_time = asyncio.get_event_loop().time() - start_time
             await logger.adebug(f"Total initialization time: {total_time:.2f}s")
 
@@ -589,6 +599,9 @@ def get_lifespan(*, fix_migration=False, version=None):
                     if models_dev_refresh_task and not models_dev_refresh_task.done():
                         models_dev_refresh_task.cancel()
                         tasks_to_cancel.append(models_dev_refresh_task)
+                    if flow_selection_maintenance_task and not flow_selection_maintenance_task.done():
+                        flow_selection_maintenance_task.cancel()
+                        tasks_to_cancel.append(flow_selection_maintenance_task)
                     if tasks_to_cancel:
                         # Wait for all tasks to complete, capturing exceptions
                         results = await asyncio.gather(*tasks_to_cancel, return_exceptions=True)

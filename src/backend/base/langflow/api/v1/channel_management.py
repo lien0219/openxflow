@@ -257,6 +257,7 @@ async def read_channel_flow_selections(
     conversation_binding_id: Annotated[UUID | None, Query()] = None,
     channel_identity_id: Annotated[UUID | None, Query()] = None,
     workflow_command_id: Annotated[UUID | None, Query()] = None,
+    query: Annotated[str | None, Query(max_length=255)] = None,
 ) -> ChannelActiveWorkflowSelectionPage:
     await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.AUDIT)
     return await list_active_workflow_selections(
@@ -267,6 +268,7 @@ async def read_channel_flow_selections(
         conversation_binding_id=conversation_binding_id,
         channel_identity_id=channel_identity_id,
         workflow_command_id=workflow_command_id,
+        query=query,
     )
 
 
@@ -285,6 +287,8 @@ async def remove_channel_flow_selection(
         db,
         connection_id=connection_id,
         selection_id=selection_id,
+        actor_user_id=current_user.id,
+        action="admin_revoke",
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active workflow selection not found")
     await db.commit()
@@ -298,6 +302,11 @@ async def cleanup_channel_flow_selections(
     current_user: CurrentActiveUser,
 ) -> dict[str, int]:
     await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.WRITE)
-    removed = await cleanup_expired_workflow_selections(db, connection_id=connection_id)
+    removed = await cleanup_expired_workflow_selections(
+        db,
+        connection_id=connection_id,
+        actor_user_id=current_user.id,
+        action="admin_cleanup_expired",
+    )
     await db.commit()
     return {"removed": removed}

@@ -9,6 +9,7 @@ from langflow.channels.services.flow_selection import (
     resolve_active_workflow_selection,
     set_active_workflow_selection,
 )
+from langflow.services.database.models.channel.audit_model import ChannelConfigurationAudit
 from langflow.services.database.models.channel.command_model import (
     ChannelCommandScope,
     ChannelWorkflowCommand,
@@ -33,6 +34,7 @@ async def selection_session():
         ChannelIdentity.__table__,
         ChannelWorkflowCommand.__table__,
         ChannelActiveWorkflowSelection.__table__,
+        ChannelConfigurationAudit.__table__,
     ]
     async with engine.begin() as connection:
         await connection.run_sync(lambda sync_connection: SQLModel.metadata.create_all(sync_connection, tables=tables))

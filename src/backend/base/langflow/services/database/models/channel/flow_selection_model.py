@@ -31,6 +31,18 @@ class ChannelActiveWorkflowSelection(SQLModel, table=True):  # type: ignore[call
         ),
         sa.Index("ix_channel_active_flow_selection_connection_updated", "connection_id", "updated_at"),
         sa.Index("ix_channel_active_flow_selection_expires", "expires_at"),
+        sa.Index("ix_channel_active_flow_selection_connection_expires", "connection_id", "expires_at"),
+        sa.Index(
+            "ix_channel_active_flow_selection_identity_updated",
+            "connection_id",
+            "channel_identity_id",
+            "updated_at",
+        ),
+        sa.Index(
+            "ix_channel_active_flow_selection_command_updated",
+            "workflow_command_id",
+            "updated_at",
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -95,6 +107,16 @@ class ChannelActiveWorkflowSelectionRead(SQLModel):
     expires_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+    identity_display_name: str | None = None
+    external_user_id: str | None = None
+    conversation_display_name: str | None = None
+    external_conversation_id: str | None = None
+    conversation_type: str | None = None
+    command: str | None = None
+    flow_id: UUID | None = None
+    flow_name: str | None = None
+    flow_endpoint_name: str | None = None
+    execution_identity_type: str | None = None
 
 
 class ChannelActiveWorkflowSelectionPage(SQLModel):

@@ -27,6 +27,7 @@ interface RoutingFormState {
   personalCommandsEnabled: boolean;
   userFlowSelectionEnabled: boolean;
   flowSelectionTtlHours: string;
+  systemCommandRequireMention: boolean;
   defaultResponseMode: ChannelResponseMode;
   defaultAllowFileUpload: boolean;
 }
@@ -63,6 +64,10 @@ export default function DefaultRoutingTab({
             8760,
             Math.max(0, Number(form.flowSelectionTtlHours) || 0),
           ),
+          settings_data: {
+            ...connection.settings_data,
+            system_command_require_mention: form.systemCommandRequireMention,
+          },
           default_response_mode: form.defaultResponseMode,
           default_allow_file_upload: form.defaultAllowFileUpload,
         },
@@ -176,6 +181,22 @@ export default function DefaultRoutingTab({
             }))
           }
         />
+        {capabilities?.supports_group_chat &&
+          capabilities.supports_mentions && (
+            <SettingSwitch
+              title={copy("群聊系统指令必须 @机器人")}
+              description={copy(
+                "避免群内多个机器人同时响应 /help、/commands 等系统指令；Telegram 的 /command@bot_name 视为已明确指定。",
+              )}
+              checked={form.systemCommandRequireMention}
+              onCheckedChange={(checked) =>
+                setForm((current) => ({
+                  ...current,
+                  systemCommandRequireMention: checked,
+                }))
+              }
+            />
+          )}
         {capabilities?.supports_file_upload && (
           <SettingSwitch
             title={copy("默认允许文件上传")}
@@ -258,6 +279,8 @@ function formFromConnection(connection: ChannelConnection): RoutingFormState {
     personalCommandsEnabled: connection.personal_commands_enabled,
     userFlowSelectionEnabled: connection.user_flow_selection_enabled,
     flowSelectionTtlHours: String(connection.flow_selection_ttl_hours),
+    systemCommandRequireMention:
+      connection.settings_data.system_command_require_mention !== false,
     defaultResponseMode: connection.default_response_mode,
     defaultAllowFileUpload: connection.default_allow_file_upload,
   };

@@ -25,6 +25,9 @@ from langflow.alembic.versions import (
     c4a9e2d7f1b0_add_channel_gateway_schema as gateway_schema_migration,
 )
 from langflow.alembic.versions import (
+    c7e2f4a9b1d3_harden_channel_flow_selection as flow_selection_hardening_migration,
+)
+from langflow.alembic.versions import (
     d1e4f9a8b6c3_ensure_channel_conversation_status_index as status_index_repair_migration,
 )
 from langflow.alembic.versions import (
@@ -57,6 +60,7 @@ _MIGRATIONS = (
     identity_user_fk_migration,
     outbound_delivery_key_migration,
     active_flow_selection_migration,
+    flow_selection_hardening_migration,
 )
 
 
@@ -96,6 +100,7 @@ def test_channel_migration_revision_chain() -> None:
         "a4c7d0f3e5b9",
         "b5d8e1f3a6c9",
         "a1f4c7e9d2b6",
+        "c7e2f4a9b1d3",
     ]
     assert [migration.down_revision for migration in _MIGRATIONS] == [
         "e1705947c729",
@@ -111,6 +116,7 @@ def test_channel_migration_revision_chain() -> None:
         "f3a6c9e2b4d7",
         "a4c7d0f3e5b9",
         "b5d8e1f3a6c9",
+        "a1f4c7e9d2b6",
     ]
 
 

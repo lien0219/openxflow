@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import math
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+import sqlalchemy as sa
 from sqlalchemy import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.channels.services.commands import resolve_workflow_command
+from langflow.channels.services.configuration_audit import (
+    channel_resource_snapshot,
+    record_channel_configuration_audit,
+)
 from langflow.services.database.models.channel.command_model import ChannelWorkflowCommand
 from langflow.services.database.models.channel.flow_selection_model import (
     ChannelActiveWorkflowSelection,
@@ -23,6 +29,7 @@ from langflow.services.database.models.channel.model import (
     ChannelConversationBinding,
     ChannelIdentity,
 )
+from langflow.services.database.models.flow.model import Flow
 
 
 class FlowSelectionDisabledError(PermissionError):
@@ -126,6 +133,7 @@ async def set_active_workflow_selection(
         channel_identity_id=identity.id,
         conversation_scope_id=conversation_scope_id,
     )
+    before = channel_resource_snapshot(selection)
     if selection is None:
         selection = ChannelActiveWorkflowSelection(
             connection_id=connection.id,
@@ -146,6 +154,22 @@ async def set_active_workflow_selection(
     session.add(selection)
     await session.flush()
     await session.refresh(selection)
+    await record_channel_configuration_audit(
+        session,
+        connection_id=connection.id,
+        actor_user_id=user_id,
+        action="select",
+        resource_type="flow_selection",
+        resource_id=selection.id,
+        before=before,
+        after={
+            **channel_resource_snapshot(selection),
+            "channel_identity_id": identity.id,
+            "command": command.command,
+            "flow_id": command.flow_id,
+            "operator_type": "user",
+        },
+    )
     return selection, command
 
 
@@ -156,6 +180,8 @@ async def clear_active_workflow_selection(
     conversation_binding_id: UUID,
     channel_identity_id: UUID,
     conversation_scope_id: str,
+    actor_user_id: UUID | None = None,
+    action: str = "clear",
 ) -> bool:
     selection = await get_active_workflow_selection(
         session,
@@ -166,8 +192,19 @@ async def clear_active_workflow_selection(
     )
     if selection is None:
         return False
+    before = channel_resource_snapshot(selection)
     await session.delete(selection)
     await session.flush()
+    await record_channel_configuration_audit(
+        session,
+        connection_id=connection_id,
+        actor_user_id=actor_user_id,
+        action=action,
+        resource_type="flow_selection",
+        resource_id=selection.id,
+        before=before,
+        after={"operator_type": "user" if actor_user_id is not None else "system", "removed": True},
+    )
     return True
 
 
@@ -215,8 +252,19 @@ async def resolve_active_workflow_selection(
             invalid_reason = "permission_or_scope_changed"
 
     if invalid_reason is not None:
+        before = channel_resource_snapshot(selection)
         await session.delete(selection)
         await session.flush()
+        await record_channel_configuration_audit(
+            session,
+            connection_id=connection.id,
+            actor_user_id=None,
+            action=invalid_reason,
+            resource_type="flow_selection",
+            resource_id=selection.id,
+            before=before,
+            after={"operator_type": "system", "removed": True},
+        )
         return ActiveWorkflowResolution(invalid_reason=invalid_reason)
 
     if touch:
@@ -225,6 +273,41 @@ async def resolve_active_workflow_selection(
         session.add(selection)
         await session.flush()
     return ActiveWorkflowResolution(selection=selection, command=command)
+
+
+def _selection_join_statement():
+    return (
+        select(
+            ChannelActiveWorkflowSelection,
+            ChannelIdentity,
+            ChannelConversationBinding,
+            ChannelWorkflowCommand,
+            Flow,
+        )
+        .join(ChannelIdentity, ChannelIdentity.id == ChannelActiveWorkflowSelection.channel_identity_id)
+        .join(
+            ChannelConversationBinding,
+            ChannelConversationBinding.id == ChannelActiveWorkflowSelection.conversation_binding_id,
+        )
+        .join(ChannelWorkflowCommand, ChannelWorkflowCommand.id == ChannelActiveWorkflowSelection.workflow_command_id)
+        .join(Flow, Flow.id == ChannelWorkflowCommand.flow_id)
+    )
+
+
+def _selection_search_filter(query: str | None):
+    normalized = (query or "").strip()
+    if not normalized:
+        return None
+    pattern = f"%{normalized}%"
+    return sa.or_(
+        ChannelIdentity.display_name.ilike(pattern),
+        ChannelIdentity.external_user_id.ilike(pattern),
+        ChannelConversationBinding.display_name.ilike(pattern),
+        ChannelConversationBinding.external_conversation_id.ilike(pattern),
+        ChannelWorkflowCommand.command.ilike(pattern),
+        Flow.name.ilike(pattern),
+        Flow.endpoint_name.ilike(pattern),
+    )
 
 
 async def list_active_workflow_selections(
@@ -236,6 +319,7 @@ async def list_active_workflow_selections(
     conversation_binding_id: UUID | None = None,
     channel_identity_id: UUID | None = None,
     workflow_command_id: UUID | None = None,
+    query: str | None = None,
 ) -> ChannelActiveWorkflowSelectionPage:
     normalized_page = max(1, page)
     normalized_page_size = min(100, max(1, page_size))
@@ -246,21 +330,39 @@ async def list_active_workflow_selections(
         filters.append(ChannelActiveWorkflowSelection.channel_identity_id == channel_identity_id)
     if workflow_command_id is not None:
         filters.append(ChannelActiveWorkflowSelection.workflow_command_id == workflow_command_id)
+    search_filter = _selection_search_filter(query)
+    if search_filter is not None:
+        filters.append(search_filter)
 
-    total = int(
-        (await session.exec(select(func.count()).select_from(ChannelActiveWorkflowSelection).where(*filters))).one()
-    )
+    joined = _selection_join_statement().where(*filters)
+    count_statement = select(func.count()).select_from(joined.subquery())
+    total = int((await session.exec(count_statement)).one())
     rows = (
         await session.exec(
-            select(ChannelActiveWorkflowSelection)
-            .where(*filters)
-            .order_by(ChannelActiveWorkflowSelection.updated_at.desc(), ChannelActiveWorkflowSelection.id)
+            joined.order_by(ChannelActiveWorkflowSelection.updated_at.desc(), ChannelActiveWorkflowSelection.id)
             .offset((normalized_page - 1) * normalized_page_size)
             .limit(normalized_page_size)
         )
     ).all()
+    items = []
+    for selection, identity, binding, command, flow in rows:
+        items.append(
+            ChannelActiveWorkflowSelectionRead(
+                **selection.model_dump(),
+                identity_display_name=identity.display_name,
+                external_user_id=identity.external_user_id,
+                conversation_display_name=binding.display_name,
+                external_conversation_id=binding.external_conversation_id,
+                conversation_type=binding.conversation_type,
+                command=command.command,
+                flow_id=command.flow_id,
+                flow_name=flow.name,
+                flow_endpoint_name=flow.endpoint_name,
+                execution_identity_type="bound_user" if command.owner_user_id is not None else "service",
+            )
+        )
     return ChannelActiveWorkflowSelectionPage(
-        items=[ChannelActiveWorkflowSelectionRead.model_validate(row, from_attributes=True) for row in rows],
+        items=items,
         page=normalized_page,
         page_size=normalized_page_size,
         total=total,
@@ -273,32 +375,98 @@ async def delete_active_workflow_selection(
     *,
     connection_id: UUID,
     selection_id: UUID,
+    actor_user_id: UUID | None = None,
+    action: str = "admin_revoke",
 ) -> bool:
     selection = await session.get(ChannelActiveWorkflowSelection, selection_id)
     if selection is None or selection.connection_id != connection_id:
         return False
+    before = channel_resource_snapshot(selection)
     await session.delete(selection)
     await session.flush()
+    await record_channel_configuration_audit(
+        session,
+        connection_id=connection_id,
+        actor_user_id=actor_user_id,
+        action=action,
+        resource_type="flow_selection",
+        resource_id=selection.id,
+        before=before,
+        after={"operator_type": "admin" if actor_user_id is not None else "system", "removed": True},
+    )
     return True
+
+
+async def cleanup_expired_workflow_selections_batch(
+    session: AsyncSession,
+    *,
+    connection_id: UUID | None = None,
+    batch_size: int = 500,
+    actor_user_id: UUID | None = None,
+    action: str = "expire",
+) -> int:
+    normalized_batch_size = min(1000, max(1, batch_size))
+    filters = [
+        ChannelActiveWorkflowSelection.expires_at.is_not(None),
+        ChannelActiveWorkflowSelection.expires_at <= _utc_now(),
+    ]
+    if connection_id is not None:
+        filters.append(ChannelActiveWorkflowSelection.connection_id == connection_id)
+    statement = (
+        select(ChannelActiveWorkflowSelection)
+        .where(*filters)
+        .order_by(ChannelActiveWorkflowSelection.expires_at, ChannelActiveWorkflowSelection.id)
+        .limit(normalized_batch_size)
+    )
+    bind = session.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        statement = statement.with_for_update(skip_locked=True)
+    rows = (await session.exec(statement)).all()
+    if not rows:
+        return 0
+
+    grouped: dict[UUID, list[ChannelActiveWorkflowSelection]] = defaultdict(list)
+    for row in rows:
+        grouped[row.connection_id].append(row)
+        await session.delete(row)
+    await session.flush()
+    for current_connection_id, connection_rows in grouped.items():
+        await record_channel_configuration_audit(
+            session,
+            connection_id=current_connection_id,
+            actor_user_id=actor_user_id,
+            action=action,
+            resource_type="flow_selection_cleanup",
+            resource_id=None,
+            before={
+                "selection_ids": [str(row.id) for row in connection_rows],
+                "removed_count": len(connection_rows),
+            },
+            after={
+                "operator_type": "admin" if actor_user_id is not None else "system",
+                "removed_count": len(connection_rows),
+            },
+        )
+    return len(rows)
 
 
 async def cleanup_expired_workflow_selections(
     session: AsyncSession,
     *,
     connection_id: UUID,
+    actor_user_id: UUID | None = None,
+    action: str = "cleanup_expired",
+    batch_size: int = 500,
 ) -> int:
-    now = _utc_now()
-    rows = (
-        await session.exec(
-            select(ChannelActiveWorkflowSelection).where(
-                ChannelActiveWorkflowSelection.connection_id == connection_id,
-                ChannelActiveWorkflowSelection.expires_at.is_not(None),
-                ChannelActiveWorkflowSelection.expires_at <= now,
-            )
+    removed = 0
+    while True:
+        batch_removed = await cleanup_expired_workflow_selections_batch(
+            session,
+            connection_id=connection_id,
+            batch_size=batch_size,
+            actor_user_id=actor_user_id,
+            action=action,
         )
-    ).all()
-    for row in rows:
-        await session.delete(row)
-    if rows:
-        await session.flush()
-    return len(rows)
+        removed += batch_removed
+        if batch_removed < batch_size:
+            return removed

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -85,6 +85,7 @@ from langflow.services.database.models.channel.model import (
     ChannelConversationStatus,
     ChannelUnconfiguredBehavior,
 )
+from langflow.services.database.models.flow.model import Flow
 from langflow.services.database.models.knowledge_base.model import KnowledgeBaseRecord
 from langflow.services.database.models.user.model import User
 
@@ -128,7 +129,15 @@ class ChannelDispatchService:
         }:
             return None
         response_mode = binding.response_mode if binding is not None else self.connection.default_response_mode
-        if self._should_ignore_group_event(event, command=command, response_mode=response_mode):
+        require_system_command_mention = bool(self.connection.settings_data.get("system_command_require_mention", True))
+        if self._should_ignore_group_event(
+            event,
+            command=command,
+            response_mode=response_mode,
+            binding=binding,
+            require_command_mention=system_command is not None and require_system_command_mention,
+            command_targeted=self._command_targets_bot(event),
+        ):
             return None
 
         if system_command is not None:
@@ -411,6 +420,7 @@ class ChannelDispatchService:
                 conversation_binding_id=binding.id,
                 channel_identity_id=identity.id,
                 conversation_scope_id=conversation_scope_id(event),
+                actor_user_id=bound_user.id if bound_user is not None else None,
             )
             await self.session.commit()
             default_flow_id = self._resolve_default_flow_id(binding)
@@ -480,26 +490,50 @@ class ChannelDispatchService:
                 touch=False,
             )
             if resolution.command is not None and resolution.selection is not None:
-                expires = (
-                    "永久有效"
-                    if resolution.selection.expires_at is None
-                    else resolution.selection.expires_at.isoformat()
+                flow = await self.session.get(Flow, resolution.command.flow_id)
+                if resolution.selection.expires_at is None:
+                    expires = "永久有效"
+                else:
+                    remaining = max(
+                        timedelta(0),
+                        resolution.selection.expires_at - datetime.now(timezone.utc),
+                    )
+                    hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+                    minutes = remainder // 60
+                    expires = f"剩余 {hours} 小时 {minutes} 分钟"
+                execution_identity = "绑定用户" if resolution.command.owner_user_id is not None else "渠道共享服务身份"
+                conversation_name = (
+                    event.conversation.title or (binding.display_name if binding else None) or "当前会话"
                 )
+                flow_name = flow.name if flow is not None else str(resolution.command.flow_id)[:8] + "…"
+                endpoint = f"\nEndpoint：{flow.endpoint_name}" if flow is not None and flow.endpoint_name else ""
                 return ChannelMessage(
+                    message_type=ChannelMessageType.CARD,
                     title="当前工作流",
                     text=(
+                        f"名称：{flow_name}\n"
                         f"业务指令：{resolution.command.command}\n"
-                        f"工作流 ID：{str(resolution.command.flow_id)[:8]}…\n"
-                        "来源：个人会话选择\n"
-                        f"有效期至：{expires}"
+                        f"执行身份：{execution_identity}\n"
+                        f"作用范围：当前成员 + {conversation_name}\n"
+                        f"有效期：{expires}{endpoint}"
                     ),
+                    actions=[
+                        ChannelAction(
+                            action_id="system:use-flow-default",
+                            label="恢复默认",
+                            value="/use-flow default",
+                        )
+                    ],
                 )
         default_flow_id = self._resolve_default_flow_id(binding)
         if default_flow_id is None:
             return ChannelMessage(title="当前工作流", text="当前没有个人选择，也没有可用默认工作流。")
+        default_flow = await self.session.get(Flow, default_flow_id)
+        flow_name = default_flow.name if default_flow is not None else str(default_flow_id)[:8] + "…"
+        source = "会话覆盖" if binding is not None and binding.default_flow_id == default_flow_id else "连接默认"
         return ChannelMessage(
             title="当前工作流",
-            text=f"当前使用会话或连接默认工作流：{str(default_flow_id)[:8]}…",
+            text=f"名称：{flow_name}\n来源：{source}\n执行身份：按当前访问策略动态解析",
         )
 
     async def _execute_custom_command(
@@ -527,7 +561,11 @@ class ChannelDispatchService:
         )
         if command is None:
             return None
-        if event.conversation.conversation_type != "private" and command.require_mention and not event.message.mentions:
+        if (
+            event.conversation.conversation_type != "private"
+            and command.require_mention
+            and not self._command_targets_bot(event)
+        ):
             return None
         if event.message.attachments and not command.allow_attachments:
             return ChannelMessage(text=f"指令 {command.command} 不允许上传附件。")
@@ -637,6 +675,18 @@ class ChannelDispatchService:
             for item in system_commands
             if item.command in {"/commands", "/current-flow", "/whoami", "/files", "/knowledge", "/status"}
         ][:4]
+        remaining = max(0, 6 - len(action_items))
+        selectable_commands = [item for item in custom_commands if item.allow_persistent_selection]
+        if self.connection.user_flow_selection_enabled:
+            action_items.extend(
+                ChannelAction(
+                    action_id=f"use-flow:{item.normalized_command}",
+                    label=f"切换 {item.command}",
+                    value=f"/use-flow {item.command}",
+                    style="primary" if item.id == current_command_id else "default",
+                )
+                for item in selectable_commands[:remaining]
+            )
         remaining = max(0, 6 - len(action_items))
         action_items.extend(
             ChannelAction(
@@ -1195,16 +1245,32 @@ class ChannelDispatchService:
         return command, argument.strip()
 
     @staticmethod
+    def _command_targets_bot(event: ChannelEvent) -> bool:
+        if event.message.mentions:
+            return True
+        token = (event.message.text or "").strip().partition(" ")[0]
+        return token.startswith("/") and "@" in token
+
+    @staticmethod
     def _should_ignore_group_event(
         event: ChannelEvent,
         *,
         command: str | None = None,
         response_mode: str | None = None,
         binding: ChannelConversationBinding | None = None,
+        require_command_mention: bool = False,
+        command_targeted: bool = False,
     ) -> bool:
         effective_mode = response_mode
         if effective_mode is None and binding is not None:
             effective_mode = binding.response_mode
+        if (
+            event.conversation.conversation_type != "private"
+            and command is not None
+            and require_command_mention
+            and not command_targeted
+        ):
+            return True
         return not should_process_channel_event(
             event,
             command=command,
