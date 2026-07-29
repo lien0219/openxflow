@@ -68,6 +68,15 @@ export type TeamMember = {
   created_at: string;
 };
 
+export type TeamRoleAssignment = {
+  id: number;
+  team_id: string;
+  role_id: string;
+  domain_type: string;
+  domain_id?: string | null;
+  assigned_by?: string | null;
+};
+
 export type ResourceShare = {
   id: string;
   resource_type: string;
@@ -286,6 +295,37 @@ export async function removeTeamMember(
   userId: string,
 ): Promise<void> {
   await api.delete(authzUrl(`/teams/${teamId}/members/${userId}`));
+}
+
+export async function getTeamRoles(
+  teamId: string,
+): Promise<TeamRoleAssignment[]> {
+  const response = await api.get<TeamRoleAssignment[]>(
+    authzUrl(`/teams/${teamId}/roles`),
+  );
+  return response.data;
+}
+
+export async function addTeamRole(
+  teamId: string,
+  payload: {
+    role_id: string;
+    domain_type: string;
+    domain_id?: string | null;
+  },
+): Promise<TeamRoleAssignment> {
+  const response = await api.post<TeamRoleAssignment>(
+    authzUrl(`/teams/${teamId}/roles`),
+    payload,
+  );
+  return response.data;
+}
+
+export async function removeTeamRole(
+  teamId: string,
+  ruleId: number,
+): Promise<void> {
+  await api.delete(authzUrl(`/teams/${teamId}/roles/${ruleId}`));
 }
 
 export async function getShares(): Promise<ResourceShare[]> {
