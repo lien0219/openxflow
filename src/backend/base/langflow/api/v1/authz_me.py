@@ -35,6 +35,33 @@ ResourceTypeLiteral = Literal[
 _DEFAULT_ACTIONS: tuple[str, ...] = ("read", "write", "execute", "delete", "create")
 _MAX_RESOURCE_IDS = 500
 _MAX_ACTIONS = 10
+_ALLOWED_SUMMARY_DOMAINS = {"global", "organization", "org", "workspace", "project", "channel"}
+
+
+def _summary_domain_context(domain_type: str, domain_id: UUID | None) -> tuple[str, dict[str, UUID]]:
+    normalized = domain_type.strip().lower()
+    if normalized not in _ALLOWED_SUMMARY_DOMAINS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown domain type")
+    if normalized == "global":
+        if domain_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="global summaries must not include domain_id",
+            )
+        return "*", {}
+    if domain_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{normalized} summaries require domain_id",
+        )
+    context_keys = {
+        "organization": "organization_id",
+        "org": "organization_id",
+        "workspace": "workspace_id",
+        "project": "project_id",
+        "channel": "connection_id",
+    }
+    return f"{normalized}:{domain_id}", {context_keys[normalized]: domain_id}
 
 
 class EffectivePermissionsRequest(BaseModel):
@@ -147,35 +174,61 @@ async def get_rbac_identity_summary(
     current_user: CurrentActiveUser,
     session: DbSession,
     user_id: UUID | None = Query(default=None),
+    domain_type: str | None = Query(default=None),
+    domain_id: UUID | None = Query(default=None),
 ) -> RbacIdentitySummaryResponse:
     await ensure_authorization_bootstrap(session)
     target_user_id = user_id or current_user.id
-    if target_user_id != current_user.id and not current_user.is_superuser:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    cross_user_scoped = target_user_id != current_user.id and not current_user.is_superuser
+
+    normalized_domain_type: str | None = None
+    if cross_user_scoped:
+        if domain_type is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="A scoped domain is required to inspect another user's permissions.",
+            )
+        normalized_domain_type = domain_type.strip().lower()
+        domain, context = _summary_domain_context(normalized_domain_type, domain_id)
+        authz = get_authorization_service()
+        if not await authz.is_enabled() or not await authz.enforce(
+            user_id=current_user.id,
+            domain=domain,
+            obj="rbac:*",
+            act="read",
+            context=context,
+        ):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     target_user = await session.get(User, target_user_id)
     if target_user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    assignment_stmt = select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == target_user_id)
+    if cross_user_scoped and normalized_domain_type is not None:
+        assignment_stmt = assignment_stmt.where(AuthzRoleAssignment.domain_type == normalized_domain_type)
+        if normalized_domain_type == "global":
+            assignment_stmt = assignment_stmt.where(AuthzRoleAssignment.domain_id.is_(None))
+        else:
+            assignment_stmt = assignment_stmt.where(AuthzRoleAssignment.domain_id == domain_id)
     assignments = (
-        await session.exec(
-            select(AuthzRoleAssignment)
-            .where(AuthzRoleAssignment.user_id == target_user_id)
-            .order_by(AuthzRoleAssignment.assigned_at.desc(), AuthzRoleAssignment.id)
-        )
+        await session.exec(assignment_stmt.order_by(AuthzRoleAssignment.assigned_at.desc(), AuthzRoleAssignment.id))
     ).all()
+
     role_ids = {assignment.role_id for assignment in assignments}
     roles = (await session.exec(select(AuthzRole).where(AuthzRole.id.in_(role_ids)))).all() if role_ids else []
     roles_by_id = {role.id: role for role in roles}
 
-    memberships = (
-        await session.exec(
-            select(AuthzTeamMember, AuthzTeam)
-            .join(AuthzTeam, AuthzTeam.id == AuthzTeamMember.team_id)
-            .where(AuthzTeamMember.user_id == target_user_id, AuthzTeam.is_active.is_(True))
-            .order_by(AuthzTeam.team_name, AuthzTeam.id)
-        )
-    ).all()
+    memberships = []
+    if not cross_user_scoped:
+        memberships = (
+            await session.exec(
+                select(AuthzTeamMember, AuthzTeam)
+                .join(AuthzTeam, AuthzTeam.id == AuthzTeamMember.team_id)
+                .where(AuthzTeamMember.user_id == target_user_id, AuthzTeam.is_active.is_(True))
+                .order_by(AuthzTeam.team_name, AuthzTeam.id)
+            )
+        ).all()
 
     effective_permissions = await resolve_role_permissions(session, role_ids)
     permission_catalog = sorted(
