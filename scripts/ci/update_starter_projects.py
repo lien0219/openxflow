@@ -9,8 +9,24 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
     generator_path = Path(".github/scripts/channel_active_flow_codegen.py")
     source = generator_path.read_text(encoding="utf-8")
     source = source.replace(
-        "replace_once(path, old_handle, new_handle)",
-        "replace_once(path, old_handle.rstrip(), new_handle.rstrip())",
+        "    replace_once(path, old_handle, new_handle)\n",
+        '''    dispatch_source = read(path)
+    dispatch_handle_start = dispatch_source.index("    async def handle(")
+    dispatch_block_start = dispatch_source.index(
+        "        try:\\n            principal = await resolve_execution_principal(",
+        dispatch_handle_start,
+    )
+    dispatch_block_end = dispatch_source.index(
+        "\\n\\n    async def _execute_system_command(",
+        dispatch_block_start,
+    )
+    write(
+        path,
+        dispatch_source[:dispatch_block_start]
+        + new_handle.rstrip()
+        + dispatch_source[dispatch_block_end:],
+    )
+''',
         1,
     )
     scope: dict[str, object] = {}
@@ -22,19 +38,19 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
         original_migration_tests()
         path = Path("src/backend/tests/unit/channels/test_channel_migrations_sqlite.py")
         content = path.read_text(encoding="utf-8")
-        old = """        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
+        old = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
             "connection_id",
             "external_event_id",
             "delivery_kind",
         )
-"""
-        new = """        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
+'''
+        new = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
             "connection_id",
             "external_event_id",
             "delivery_kind",
             "delivery_key",
         )
-"""
+'''
         if content.count(old) != 1:
             raise RuntimeError("Unable to update outbound delivery migration assertion")
         path.write_text(content.replace(old, new, 1), encoding="utf-8")
@@ -80,7 +96,7 @@ async def main():
 
     starter_projects = await load_starter_projects()
     for project_path, project in starter_projects:
-        _, _, _, _, project_data, _, _, _, _ = get_project_data(project)
+        _, _, _, _, project_data, _, _, _ = get_project_data(project)
         do_update_starter_projects = os.environ.get("LANGFLOW_UPDATE_STARTER_PROJECTS", "true").lower() == "true"
         if do_update_starter_projects:
             updated_project_data = update_projects_components_with_latest_component_versions(
