@@ -2,11 +2,57 @@
 
 import asyncio
 import os
+import subprocess
 from pathlib import Path
 
 if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selection":
+    generator_path = Path(".github/scripts/channel_active_flow_codegen.py")
+    source = generator_path.read_text(encoding="utf-8")
+    source = source.replace(
+        "replace_once(path, old_handle, new_handle)",
+        "replace_once(path, old_handle.rstrip(), new_handle.rstrip())",
+        1,
+    )
     scope: dict[str, object] = {}
-    exec(Path(".github/scripts/channel_active_flow_codegen.py").read_text(encoding="utf-8"), scope)
+    exec(source, scope)
+
+    original_migration_tests = scope["apply_migration_tests"]
+
+    def patched_migration_tests() -> None:
+        original_migration_tests()
+        path = Path("src/backend/tests/unit/channels/test_channel_migrations_sqlite.py")
+        content = path.read_text(encoding="utf-8")
+        old = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
+            "connection_id",
+            "external_event_id",
+            "delivery_kind",
+        )
+'''
+        new = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
+            "connection_id",
+            "external_event_id",
+            "delivery_kind",
+            "delivery_key",
+        )
+'''
+        if content.count(old) != 1:
+            raise RuntimeError("Unable to update outbound delivery migration assertion")
+        path.write_text(content.replace(old, new, 1), encoding="utf-8")
+
+    def patched_cleanup_bootstrap() -> None:
+        baseline = subprocess.check_output(
+            [
+                "git",
+                "show",
+                "d2c24bd2d610785e8a94385872f61c5f41a28780:scripts/ci/update_starter_projects.py",
+            ],
+            text=True,
+        )
+        Path("scripts/ci/update_starter_projects.py").write_text(baseline, encoding="utf-8")
+        generator_path.unlink()
+
+    scope["apply_migration_tests"] = patched_migration_tests
+    scope["cleanup_bootstrap"] = patched_cleanup_bootstrap
     scope["run"]()
     raise SystemExit(0)
 
