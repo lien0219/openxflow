@@ -103,6 +103,9 @@ class TeamAction(str, Enum):
     """Actions authorized on teams, memberships and team role grants."""
 
     READ = "read"
+    CREATE = "create"
+    WRITE = "write"
+    DELETE = "delete"
     MANAGE = "manage"
 
 
@@ -110,4 +113,7 @@ class UserAction(str, Enum):
     """Actions authorized on the user directory and account administration."""
 
     READ = "read"
+    CREATE = "create"
+    WRITE = "write"
+    DELETE = "delete"
     MANAGE = "manage"
