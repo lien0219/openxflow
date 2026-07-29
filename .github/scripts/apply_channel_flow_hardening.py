@@ -28,10 +28,10 @@ def replace_once(path: str, old: str, new: str) -> None:
 # ---------------------------------------------------------------------------
 replace_once(
     "src/backend/base/langflow/services/database/models/channel/model.py",
-    "    flow_selection_ttl_hours: int = Field(default=24, ge=0, le=8760)\n    default_response_mode: str = Field(default=\"mention_only\", max_length=32)",
+    '    flow_selection_ttl_hours: int = Field(default=24, ge=0, le=8760)\n    default_response_mode: str = Field(default="mention_only", max_length=32)',
     "    flow_selection_ttl_hours: int = Field(default=24, ge=0, le=8760)\n"
     "    system_commands_require_mention: bool = Field(default=True)\n"
-    "    default_response_mode: str = Field(default=\"mention_only\", max_length=32)",
+    '    default_response_mode: str = Field(default="mention_only", max_length=32)',
 )
 replace_once(
     "src/backend/base/langflow/services/database/models/channel/model.py",
@@ -1018,20 +1018,20 @@ replace_once(
 )
 replace_once(
     "src/backend/base/langflow/api/v1/channel_management.py",
-    "        workflow_command_id=workflow_command_id,\n    )\n\n\n@router.delete(\n    \"/{connection_id}/flow-selections/{selection_id}\"",
+    '        workflow_command_id=workflow_command_id,\n    )\n\n\n@router.delete(\n    "/{connection_id}/flow-selections/{selection_id}"',
     "        workflow_command_id=workflow_command_id,\n"
     "        query=query,\n"
     "        expires_before=expires_before,\n"
     "        permanent_only=permanent_only,\n"
-    "    )\n\n\n@router.delete(\n    \"/{connection_id}/flow-selections/{selection_id}\"",
+    '    )\n\n\n@router.delete(\n    "/{connection_id}/flow-selections/{selection_id}"',
 )
 replace_once(
     "src/backend/base/langflow/api/v1/channel_management.py",
-    "    await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.WRITE)\n    if not await delete_active_workflow_selection(\n        db,\n        connection_id=connection_id,\n        selection_id=selection_id,\n    ):\n        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"Active workflow selection not found\")\n    await db.commit()",
+    '    await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.WRITE)\n    if not await delete_active_workflow_selection(\n        db,\n        connection_id=connection_id,\n        selection_id=selection_id,\n    ):\n        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active workflow selection not found")\n    await db.commit()',
     "    await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.WRITE)\n"
     "    selection = await db.get(ChannelActiveWorkflowSelection, selection_id)\n"
     "    if selection is None or selection.connection_id != connection_id:\n"
-    "        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"Active workflow selection not found\")\n"
+    '        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active workflow selection not found")\n'
     "    before = channel_resource_snapshot(selection)\n"
     "    await delete_active_workflow_selection(\n"
     "        db,\n"
@@ -1042,17 +1042,17 @@ replace_once(
     "        db,\n"
     "        connection_id=connection_id,\n"
     "        actor_user_id=current_user.id,\n"
-    "        action=\"revoke\",\n"
-    "        resource_type=\"flow_selection\",\n"
+    '        action="revoke",\n'
+    '        resource_type="flow_selection",\n'
     "        resource_id=selection_id,\n"
     "        before=before,\n"
-    "        after={\"reason\": \"administrator_revoked\"},\n"
+    '        after={"reason": "administrator_revoked"},\n'
     "    )\n"
     "    await db.commit()",
 )
 replace_once(
     "src/backend/base/langflow/api/v1/channel_management.py",
-    "async def cleanup_channel_flow_selections(\n    connection_id: UUID,\n    db: DbSession,\n    current_user: CurrentActiveUser,\n) -> dict[str, int]:\n    await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.WRITE)\n    removed = await cleanup_expired_workflow_selections(db, connection_id=connection_id)\n    await db.commit()\n    return {\"removed\": removed}",
+    'async def cleanup_channel_flow_selections(\n    connection_id: UUID,\n    db: DbSession,\n    current_user: CurrentActiveUser,\n) -> dict[str, int]:\n    await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.WRITE)\n    removed = await cleanup_expired_workflow_selections(db, connection_id=connection_id)\n    await db.commit()\n    return {"removed": removed}',
     "async def cleanup_channel_flow_selections(\n"
     "    connection_id: UUID,\n"
     "    db: DbSession,\n"
@@ -1069,13 +1069,13 @@ replace_once(
     "        db,\n"
     "        connection_id=connection_id,\n"
     "        actor_user_id=current_user.id,\n"
-    "        action=\"cleanup\",\n"
-    "        resource_type=\"flow_selection\",\n"
+    '        action="cleanup",\n'
+    '        resource_type="flow_selection",\n'
     "        resource_id=None,\n"
-    "        after={\"removed\": removed, \"batch_size\": batch_size},\n"
+    '        after={"removed": removed, "batch_size": batch_size},\n'
     "    )\n"
     "    await db.commit()\n"
-    "    return {\"removed\": removed, \"batch_size\": batch_size}",
+    '    return {"removed": removed, "batch_size": batch_size}',
 )
 
 # Runtime metrics endpoint
@@ -1150,9 +1150,7 @@ replace_once(
 replace_once(
     "src/backend/base/langflow/channels/services/dispatch.py",
     "    clear_active_workflow_selection,\n    resolve_active_workflow_selection,",
-    "    clear_active_workflow_selection,\n"
-    "    get_active_workflow_selection,\n"
-    "    resolve_active_workflow_selection,",
+    "    clear_active_workflow_selection,\n    get_active_workflow_selection,\n    resolve_active_workflow_selection,",
 )
 replace_once(
     "src/backend/base/langflow/channels/services/dispatch.py",
@@ -1181,9 +1179,9 @@ replace_once(
 )
 replace_once(
     "src/backend/base/langflow/channels/services/dispatch.py",
-    "        if event.conversation.conversation_type != \"private\" and command.require_mention and not event.message.mentions:\n            return None",
+    '        if event.conversation.conversation_type != "private" and command.require_mention and not event.message.mentions:\n            return None',
     "        if (\n"
-    "            event.conversation.conversation_type != \"private\"\n"
+    '            event.conversation.conversation_type != "private"\n'
     "            and command.require_mention\n"
     "            and not event.message.mentions\n"
     "            and not self._command_has_explicit_target(event.message.text)\n"
@@ -1192,8 +1190,8 @@ replace_once(
 )
 replace_once(
     "src/backend/base/langflow/channels/services/dispatch.py",
-    "        if requested.lower() in {\"default\", \"/default\", \"默认\"}:\n            cleared = await clear_active_workflow_selection(",
-    "        if requested.lower() in {\"default\", \"/default\", \"默认\"}:\n"
+    '        if requested.lower() in {"default", "/default", "默认"}:\n            cleared = await clear_active_workflow_selection(',
+    '        if requested.lower() in {"default", "/default", "默认"}:\n'
     "            scope_id = conversation_scope_id(event)\n"
     "            previous_selection = await get_active_workflow_selection(\n"
     "                self.session,\n"
@@ -1214,47 +1212,47 @@ replace_once(
     "                    self.session,\n"
     "                    connection_id=self.connection.id,\n"
     "                    actor_user_id=bound_user.id if bound_user is not None else None,\n"
-    "                    action=\"clear\",\n"
-    "                    resource_type=\"flow_selection\",\n"
+    '                    action="clear",\n'
+    '                    resource_type="flow_selection",\n'
     "                    resource_id=previous_selection.id,\n"
     "                    before=previous_selection,\n"
-    "                    after={\"reason\": \"user_restored_default\", \"channel_identity_id\": identity.id},\n"
+    '                    after={"reason": "user_restored_default", "channel_identity_id": identity.id},\n'
     "                )\n"
     "            await self.session.commit()\n"
     "            default_flow_id = self._resolve_default_flow_id(binding)",
 )
 replace_once(
     "src/backend/base/langflow/channels/services/dispatch.py",
-    "        await self.session.commit()\n        expires = (\n            \"永久有效\" if selection.expires_at is None else f\"有效期 {self.connection.flow_selection_ttl_hours} 小时\"\n        )",
+    '        await self.session.commit()\n        expires = (\n            "永久有效" if selection.expires_at is None else f"有效期 {self.connection.flow_selection_ttl_hours} 小时"\n        )',
     "        await record_channel_configuration_audit(\n"
     "            self.session,\n"
     "            connection_id=self.connection.id,\n"
     "            actor_user_id=bound_user.id if bound_user is not None else None,\n"
-    "            action=\"select\",\n"
-    "            resource_type=\"flow_selection\",\n"
+    '            action="select",\n'
+    '            resource_type="flow_selection",\n'
     "            resource_id=selection.id,\n"
     "            after={\n"
-    "                \"selection\": selection,\n"
-    "                \"command\": command.command,\n"
-    "                \"flow_id\": command.flow_id,\n"
-    "                \"channel_identity_id\": identity.id,\n"
+    '                "selection": selection,\n'
+    '                "command": command.command,\n'
+    '                "flow_id": command.flow_id,\n'
+    '                "channel_identity_id": identity.id,\n'
     "            },\n"
     "        )\n"
     "        await self.session.commit()\n"
     "        flow = await self.session.get(Flow, command.flow_id)\n"
-    "        flow_label = flow.name if flow is not None else f\"{str(command.flow_id)[:8]}…\"\n"
+    '        flow_label = flow.name if flow is not None else f"{str(command.flow_id)[:8]}…"\n'
     "        expires = (\n"
-    "            \"永久有效\" if selection.expires_at is None else f\"有效期 {self.connection.flow_selection_ttl_hours} 小时\"\n"
+    '            "永久有效" if selection.expires_at is None else f"有效期 {self.connection.flow_selection_ttl_hours} 小时"\n'
     "        )",
 )
 replace_once(
     "src/backend/base/langflow/channels/services/dispatch.py",
-    "                f\"当前工作流：{command.command}\\n\"",
-    "                f\"当前工作流：{flow_label}（{command.command}）\\n\"",
+    '                f"当前工作流：{command.command}\\n"',
+    '                f"当前工作流：{flow_label}（{command.command}）\\n"',
 )
 
-old_current_flow = '''        if binding is not None:\n            resolution = await resolve_active_workflow_selection(\n                self.session,\n                connection=self.connection,\n                binding=binding,\n                identity=identity,\n                conversation_scope_id=conversation_scope_id(event),\n                user_id=personal_user_id,\n                touch=False,\n            )\n            if resolution.command is not None and resolution.selection is not None:\n                expires = (\n                    \"永久有效\"\n                    if resolution.selection.expires_at is None\n                    else resolution.selection.expires_at.isoformat()\n                )\n                return ChannelMessage(\n                    title=\"当前工作流\",\n                    text=(\n                        f\"业务指令：{resolution.command.command}\\n\"\n                        f\"工作流 ID：{str(resolution.command.flow_id)[:8]}…\\n\"\n                        \"来源：个人会话选择\\n\"\n                        f\"有效期至：{expires}\"\n                    ),\n                )\n        default_flow_id = self._resolve_default_flow_id(binding)\n        if default_flow_id is None:\n            return ChannelMessage(title=\"当前工作流\", text=\"当前没有个人选择，也没有可用默认工作流。\")\n        return ChannelMessage(\n            title=\"当前工作流\",\n            text=f\"当前使用会话或连接默认工作流：{str(default_flow_id)[:8]}…\",\n        )'''
-new_current_flow = '''        if binding is not None:\n            resolution = await resolve_active_workflow_selection(\n                self.session,\n                connection=self.connection,\n                binding=binding,\n                identity=identity,\n                conversation_scope_id=conversation_scope_id(event),\n                user_id=personal_user_id,\n                touch=False,\n            )\n            if resolution.command is not None and resolution.selection is not None:\n                flow = await self.session.get(Flow, resolution.command.flow_id)\n                flow_name = flow.name if flow is not None else f\"{str(resolution.command.flow_id)[:8]}…\"\n                endpoint = f\"\\nEndpoint：{flow.endpoint_name}\" if flow is not None and flow.endpoint_name else \"\"\n                if resolution.selection.expires_at is None:\n                    expires = \"永久有效\"\n                else:\n                    remaining = max(0, int((resolution.selection.expires_at - datetime.now(timezone.utc)).total_seconds()))\n                    if remaining < 3600:\n                        expires = f\"约 {max(1, remaining // 60)} 分钟后到期\"\n                    else:\n                        expires = f\"约 {remaining // 3600} 小时后到期\"\n                execution_identity = (\n                    \"绑定 OpenXFlow 账号\"\n                    if resolution.command.owner_user_id is not None\n                    else \"渠道共享服务身份\"\n                )\n                scope = \"当前私聊\" if event.conversation.conversation_type == \"private\" else \"当前成员 + 当前群聊\"\n                if conversation_scope_id(event):\n                    scope += \" + 当前线程/主题\"\n                return ChannelMessage(\n                    title=\"当前工作流\",\n                    text=(\n                        f\"工作流：{flow_name}\\n\"\n                        f\"业务指令：{resolution.command.command}{endpoint}\\n\"\n                        f\"执行身份：{execution_identity}\\n\"\n                        f\"作用范围：{scope}\\n\"\n                        f\"有效期：{expires}\"\n                    ),\n                )\n        default_flow_id = self._resolve_default_flow_id(binding)\n        if default_flow_id is None:\n            return ChannelMessage(title=\"当前工作流\", text=\"当前没有个人选择，也没有可用默认工作流。\")\n        flow = await self.session.get(Flow, default_flow_id)\n        flow_name = flow.name if flow is not None else f\"{str(default_flow_id)[:8]}…\"\n        source = (\n            \"当前会话覆盖\"\n            if binding is not None\n            and binding.route_mode == ChannelConversationRouteMode.OVERRIDE.value\n            and binding.default_flow_id is not None\n            else \"渠道连接默认\"\n        )\n        endpoint = f\"\\nEndpoint：{flow.endpoint_name}\" if flow is not None and flow.endpoint_name else \"\"\n        return ChannelMessage(\n            title=\"当前工作流\",\n            text=f\"工作流：{flow_name}{endpoint}\\n来源：{source}\",\n        )'''
+old_current_flow = """        if binding is not None:\n            resolution = await resolve_active_workflow_selection(\n                self.session,\n                connection=self.connection,\n                binding=binding,\n                identity=identity,\n                conversation_scope_id=conversation_scope_id(event),\n                user_id=personal_user_id,\n                touch=False,\n            )\n            if resolution.command is not None and resolution.selection is not None:\n                expires = (\n                    \"永久有效\"\n                    if resolution.selection.expires_at is None\n                    else resolution.selection.expires_at.isoformat()\n                )\n                return ChannelMessage(\n                    title=\"当前工作流\",\n                    text=(\n                        f\"业务指令：{resolution.command.command}\\n\"\n                        f\"工作流 ID：{str(resolution.command.flow_id)[:8]}…\\n\"\n                        \"来源：个人会话选择\\n\"\n                        f\"有效期至：{expires}\"\n                    ),\n                )\n        default_flow_id = self._resolve_default_flow_id(binding)\n        if default_flow_id is None:\n            return ChannelMessage(title=\"当前工作流\", text=\"当前没有个人选择，也没有可用默认工作流。\")\n        return ChannelMessage(\n            title=\"当前工作流\",\n            text=f\"当前使用会话或连接默认工作流：{str(default_flow_id)[:8]}…\",\n        )"""
+new_current_flow = """        if binding is not None:\n            resolution = await resolve_active_workflow_selection(\n                self.session,\n                connection=self.connection,\n                binding=binding,\n                identity=identity,\n                conversation_scope_id=conversation_scope_id(event),\n                user_id=personal_user_id,\n                touch=False,\n            )\n            if resolution.command is not None and resolution.selection is not None:\n                flow = await self.session.get(Flow, resolution.command.flow_id)\n                flow_name = flow.name if flow is not None else f\"{str(resolution.command.flow_id)[:8]}…\"\n                endpoint = f\"\\nEndpoint：{flow.endpoint_name}\" if flow is not None and flow.endpoint_name else \"\"\n                if resolution.selection.expires_at is None:\n                    expires = \"永久有效\"\n                else:\n                    remaining = max(0, int((resolution.selection.expires_at - datetime.now(timezone.utc)).total_seconds()))\n                    if remaining < 3600:\n                        expires = f\"约 {max(1, remaining // 60)} 分钟后到期\"\n                    else:\n                        expires = f\"约 {remaining // 3600} 小时后到期\"\n                execution_identity = (\n                    \"绑定 OpenXFlow 账号\"\n                    if resolution.command.owner_user_id is not None\n                    else \"渠道共享服务身份\"\n                )\n                scope = \"当前私聊\" if event.conversation.conversation_type == \"private\" else \"当前成员 + 当前群聊\"\n                if conversation_scope_id(event):\n                    scope += \" + 当前线程/主题\"\n                return ChannelMessage(\n                    title=\"当前工作流\",\n                    text=(\n                        f\"工作流：{flow_name}\\n\"\n                        f\"业务指令：{resolution.command.command}{endpoint}\\n\"\n                        f\"执行身份：{execution_identity}\\n\"\n                        f\"作用范围：{scope}\\n\"\n                        f\"有效期：{expires}\"\n                    ),\n                )\n        default_flow_id = self._resolve_default_flow_id(binding)\n        if default_flow_id is None:\n            return ChannelMessage(title=\"当前工作流\", text=\"当前没有个人选择，也没有可用默认工作流。\")\n        flow = await self.session.get(Flow, default_flow_id)\n        flow_name = flow.name if flow is not None else f\"{str(default_flow_id)[:8]}…\"\n        source = (\n            \"当前会话覆盖\"\n            if binding is not None\n            and binding.route_mode == ChannelConversationRouteMode.OVERRIDE.value\n            and binding.default_flow_id is not None\n            else \"渠道连接默认\"\n        )\n        endpoint = f\"\\nEndpoint：{flow.endpoint_name}\" if flow is not None and flow.endpoint_name else \"\"\n        return ChannelMessage(\n            title=\"当前工作流\",\n            text=f\"工作流：{flow_name}{endpoint}\\n来源：{source}\",\n        )"""
 replace_once("src/backend/base/langflow/channels/services/dispatch.py", old_current_flow, new_current_flow)
 
 replace_once(
@@ -1287,11 +1285,11 @@ replace_once(
     "    @staticmethod\n    def _parse_command(text: str | None) -> tuple[str | None, str]:",
     "    @staticmethod\n"
     "    def _command_has_explicit_target(text: str | None) -> bool:\n"
-    "        normalized = (text or \"\").strip()\n"
-    "        if not normalized.startswith(\"/\"):\n"
+    '        normalized = (text or "").strip()\n'
+    '        if not normalized.startswith("/"):\n'
     "            return False\n"
-    "        token = normalized.partition(\" \")[0]\n"
-    "        return \"@\" in token and bool(token.split(\"@\", 1)[1])\n\n"
+    '        token = normalized.partition(" ")[0]\n'
+    '        return "@" in token and bool(token.split("@", 1)[1])\n\n'
     "    @staticmethod\n"
     "    def _parse_command(text: str | None) -> tuple[str | None, str]:",
 )
@@ -1319,7 +1317,7 @@ for old, new in (
 
 write(
     "src/frontend/src/controllers/API/queries/channels/use-get-channel-flow-selections.ts",
-    r'''import type { UseQueryResult } from "@tanstack/react-query";
+    r"""import type { UseQueryResult } from "@tanstack/react-query";
 import type { useQueryFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
@@ -1415,12 +1413,12 @@ export const useGetChannelFlowSelections: useQueryFunctionType<
     },
   ) as UseQueryResult<ChannelActiveWorkflowSelectionPage, Error>;
 };
-''',
+""",
 )
 
 write(
     "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/FlowSelectionsPanel.tsx",
-    r'''import { useEffect, useMemo, useState } from "react";
+    r"""import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Loading from "@/components/ui/loading";
@@ -1748,7 +1746,7 @@ export default function FlowSelectionsPanel({
     </section>
   );
 }
-''',
+""",
 )
 
 # Default routing form adds the group system-command mention policy.
@@ -1770,11 +1768,11 @@ replace_once(
 )
 replace_once(
     "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/DefaultRoutingTab.tsx",
-    "      {capabilities?.supports_group_chat && capabilities.supports_mentions && (\n        <label className=\"flex flex-col gap-2 text-sm font-medium\">",
+    '      {capabilities?.supports_group_chat && capabilities.supports_mentions && (\n        <label className="flex flex-col gap-2 text-sm font-medium">',
     "      {capabilities?.supports_group_chat && capabilities.supports_mentions && (\n"
     "        <SettingSwitch\n"
-    "          title={copy(\"群聊系统指令必须 @机器人\")}\n"
-    "          description={copy(\"在仅 @机器人模式下，/help、/commands、/use-flow 等系统指令也必须明确 @机器人。\")}\n"
+    '          title={copy("群聊系统指令必须 @机器人")}\n'
+    '          description={copy("在仅 @机器人模式下，/help、/commands、/use-flow 等系统指令也必须明确 @机器人。")}\n'
     "          checked={form.systemCommandsRequireMention}\n"
     "          onCheckedChange={(checked) =>\n"
     "            setForm((current) => ({\n"
@@ -1785,7 +1783,7 @@ replace_once(
     "        />\n"
     "      )}\n\n"
     "      {capabilities?.supports_group_chat && capabilities.supports_mentions && (\n"
-    "        <label className=\"flex flex-col gap-2 text-sm font-medium\">",
+    '        <label className="flex flex-col gap-2 text-sm font-medium">',
 )
 replace_once(
     "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/DefaultRoutingTab.tsx",
@@ -1801,7 +1799,7 @@ replace_once(
 # ---------------------------------------------------------------------------
 write(
     "src/backend/tests/unit/channels/test_channel_flow_hardening.py",
-    r'''from __future__ import annotations
+    r"""from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -2018,7 +2016,7 @@ async def test_expired_selection_cleanup_is_bounded(hardening_session: AsyncSess
     assert removed == 2
     assert await count_active_workflow_selections(hardening_session) == 1
     assert flow_selection_metrics_snapshot().cleaned_total == 2
-''',
+""",
 )
 
 # Migration chain and assertions.
@@ -2039,38 +2037,38 @@ replace_once(
 )
 replace_once(
     "src/backend/tests/unit/channels/test_channel_migrations_sqlite.py",
-    "        \"a1f4c7e9d2b6\",\n    ]",
-    "        \"a1f4c7e9d2b6\",\n        \"b2c5f8a1d4e7\",\n    ]",
+    '        "a1f4c7e9d2b6",\n    ]',
+    '        "a1f4c7e9d2b6",\n        "b2c5f8a1d4e7",\n    ]',
 )
 replace_once(
     "src/backend/tests/unit/channels/test_channel_migrations_sqlite.py",
-    "        \"b5d8e1f3a6c9\",\n    ]",
-    "        \"b5d8e1f3a6c9\",\n        \"a1f4c7e9d2b6\",\n    ]",
+    '        "b5d8e1f3a6c9",\n    ]',
+    '        "b5d8e1f3a6c9",\n        "a1f4c7e9d2b6",\n    ]',
 )
 replace_once(
     "src/backend/tests/unit/channels/test_channel_migrations_sqlite.py",
-    "        assert {\"user_flow_selection_enabled\", \"flow_selection_ttl_hours\"} <= connection_columns",
+    '        assert {"user_flow_selection_enabled", "flow_selection_ttl_hours"} <= connection_columns',
     "        assert {\n"
-    "            \"user_flow_selection_enabled\",\n"
-    "            \"flow_selection_ttl_hours\",\n"
-    "            \"system_commands_require_mention\",\n"
+    '            "user_flow_selection_enabled",\n'
+    '            "flow_selection_ttl_hours",\n'
+    '            "system_commands_require_mention",\n'
     "        } <= connection_columns",
 )
 replace_once(
     "src/backend/tests/unit/channels/test_channel_migrations_sqlite.py",
-    "        assert context_indexes[\"ix_channel_context_conversation_session_created\"] == (\n            \"conversation_binding_id\",\n            \"session_id\",\n            \"created_at\",\n        )",
-    "        assert context_indexes[\"ix_channel_context_conversation_session_created\"] == (\n"
-    "            \"conversation_binding_id\",\n"
-    "            \"session_id\",\n"
-    "            \"created_at\",\n"
+    '        assert context_indexes["ix_channel_context_conversation_session_created"] == (\n            "conversation_binding_id",\n            "session_id",\n            "created_at",\n        )',
+    '        assert context_indexes["ix_channel_context_conversation_session_created"] == (\n'
+    '            "conversation_binding_id",\n'
+    '            "session_id",\n'
+    '            "created_at",\n'
     "        )\n"
     "        selection_indexes = {\n"
-    "            index[\"name\"]: tuple(index[\"column_names\"])\n"
-    "            for index in sa.inspect(connection).get_indexes(\"channel_active_workflow_selection\")\n"
+    '            index["name"]: tuple(index["column_names"])\n'
+    '            for index in sa.inspect(connection).get_indexes("channel_active_workflow_selection")\n'
     "        }\n"
-    "        assert selection_indexes[\"ix_channel_active_flow_selection_connection_expires\"] == (\n"
-    "            \"connection_id\",\n"
-    "            \"expires_at\",\n"
+    '        assert selection_indexes["ix_channel_active_flow_selection_connection_expires"] == (\n'
+    '            "connection_id",\n'
+    '            "expires_at",\n'
     "        )",
 )
 
@@ -2091,13 +2089,13 @@ replace_once(
 )
 replace_once(
     "src/backend/tests/unit/channels/test_channel_runtime.py",
-    "    assert b\"openxflow_channel_outbound_delivery_retained_failed\" in response.body",
-    "    assert b\"openxflow_channel_outbound_delivery_retained_failed\" in response.body\n"
-    "    assert b\"openxflow_channel_flow_selection_selected\" in response.body\n"
-    "    assert b\"openxflow_channel_flow_selection_cleared\" in response.body\n"
-    "    assert b\"openxflow_channel_flow_selection_fallback\" in response.body\n"
-    "    assert b\"openxflow_channel_flow_selection_cleaned\" in response.body\n"
-    "    assert b\"openxflow_channel_flow_selection_active\" in response.body",
+    '    assert b"openxflow_channel_outbound_delivery_retained_failed" in response.body',
+    '    assert b"openxflow_channel_outbound_delivery_retained_failed" in response.body\n'
+    '    assert b"openxflow_channel_flow_selection_selected" in response.body\n'
+    '    assert b"openxflow_channel_flow_selection_cleared" in response.body\n'
+    '    assert b"openxflow_channel_flow_selection_fallback" in response.body\n'
+    '    assert b"openxflow_channel_flow_selection_cleaned" in response.body\n'
+    '    assert b"openxflow_channel_flow_selection_active" in response.body',
 )
 
 # Keep focused channel CI permanently covering the feature.
