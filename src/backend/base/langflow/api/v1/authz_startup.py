@@ -1,18 +1,22 @@
-"""Application startup hook for idempotent RBAC catalog reconciliation."""
+"""Application lifespan hook for idempotent RBAC catalog reconciliation."""
 
-from fastapi import APIRouter
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import APIRouter, FastAPI
 
 from langflow.services.authorization.bootstrap import ensure_authorization_bootstrap
 from langflow.services.deps import session_scope
 
-router = APIRouter()
 
-
-@router.on_event("startup")
-async def bootstrap_authorization_catalog() -> None:
-    """Create system roles and reconcile legacy users before serving requests."""
+@asynccontextmanager
+async def authorization_lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Reconcile roles after the main lifespan initializes migrations/services."""
     async with session_scope() as session:
         await ensure_authorization_bootstrap(session)
+    yield
 
 
-__all__ = ["bootstrap_authorization_catalog", "router"]
+router = APIRouter(lifespan=authorization_lifespan)
+
+__all__ = ["authorization_lifespan", "router"]
