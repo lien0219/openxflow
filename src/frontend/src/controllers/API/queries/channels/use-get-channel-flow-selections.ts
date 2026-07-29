@@ -49,8 +49,7 @@ export const useGetChannelFlowSelections: useQueryFunctionType<
           params: {
             page: params.page ?? 1,
             page_size: params.pageSize ?? 20,
-            conversation_binding_id:
-              params.conversationBindingId || undefined,
+            conversation_binding_id: params.conversationBindingId || undefined,
             channel_identity_id: params.channelIdentityId || undefined,
             workflow_command_id: params.workflowCommandId || undefined,
           },
