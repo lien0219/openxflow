@@ -156,6 +156,14 @@ async def ensure_builtin_roles(session: AsyncSession) -> dict[str, AuthzRole]:
                 continue
 
             if not role.is_system:
+                # Names in the built-in catalog are reserved. A legacy bootstrap
+                # row has no creator and may be safely upgraded; a user-created
+                # collision must fail closed rather than silently gaining system
+                # role semantics.
+                if role.created_by is not None:
+                    raise RuntimeError(
+                        f"Custom role {role.name!r} conflicts with a reserved system role name"
+                    )
                 role.is_system = True
                 changed = True
             if role.description != definition.description:
@@ -188,56 +196,114 @@ async def ensure_user_default_role(
     user: User,
     *,
     roles: dict[str, AuthzRole] | None = None,
+    commit: bool = True,
 ) -> AuthzRoleAssignment | None:
-    """Ensure a human user has a safe default global role assignment."""
+    """Reconcile safe bootstrap assignments for one human user.
+
+    Bootstrap-created assignments use ``assigned_by=None``. This lets a later
+    superuser demotion remove only the automatic platform-admin grant while
+    preserving explicit administrator assignments created by another operator.
+    """
     if not user.is_active or is_managed_service_user(user):
         return None
 
     roles = roles or await ensure_builtin_roles(session)
-    desired_role = roles["platform_admin" if user.is_superuser else "member"]
-
+    platform_role = roles["platform_admin"]
+    member_role = roles["member"]
     existing_assignments = (
         await session.exec(select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user.id))
     ).all()
-    if user.is_superuser:
-        for assignment in existing_assignments:
-            if assignment.role_id == desired_role.id and assignment.domain_type == "global":
-                return assignment
-    elif existing_assignments:
-        return None
 
-    assignment = AuthzRoleAssignment(
-        user_id=user.id,
-        role_id=desired_role.id,
-        domain_type="global",
-        domain_id=None,
-        assigned_by=None,
+    automatic_platform = next(
+        (
+            assignment
+            for assignment in existing_assignments
+            if assignment.role_id == platform_role.id
+            and assignment.domain_type == "global"
+            and assignment.domain_id is None
+            and assignment.assigned_by is None
+        ),
+        None,
     )
-    session.add(assignment)
-    try:
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        assignment = (
-            await session.exec(
-                select(AuthzRoleAssignment).where(
-                    AuthzRoleAssignment.user_id == user.id,
-                    AuthzRoleAssignment.role_id == desired_role.id,
-                    AuthzRoleAssignment.domain_type == "global",
-                )
+    automatic_member = next(
+        (
+            assignment
+            for assignment in existing_assignments
+            if assignment.role_id == member_role.id
+            and assignment.domain_type == "global"
+            and assignment.domain_id is None
+            and assignment.assigned_by is None
+        ),
+        None,
+    )
+
+    changed = False
+    result: AuthzRoleAssignment | None
+    if user.is_superuser:
+        result = automatic_platform
+        if result is None:
+            result = AuthzRoleAssignment(
+                user_id=user.id,
+                role_id=platform_role.id,
+                domain_type="global",
+                domain_id=None,
+                assigned_by=None,
             )
-        ).first()
+            session.add(result)
+            changed = True
+        if automatic_member is not None:
+            await session.delete(automatic_member)
+            changed = True
     else:
-        await session.refresh(assignment)
-    return assignment
+        if automatic_platform is not None:
+            await session.delete(automatic_platform)
+            changed = True
+        result = automatic_member
+        if result is None:
+            result = AuthzRoleAssignment(
+                user_id=user.id,
+                role_id=member_role.id,
+                domain_type="global",
+                domain_id=None,
+                assigned_by=None,
+            )
+            session.add(result)
+            changed = True
+
+    if changed and commit:
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            desired_role_id = platform_role.id if user.is_superuser else member_role.id
+            result = (
+                await session.exec(
+                    select(AuthzRoleAssignment).where(
+                        AuthzRoleAssignment.user_id == user.id,
+                        AuthzRoleAssignment.role_id == desired_role_id,
+                        AuthzRoleAssignment.domain_type == "global",
+                        AuthzRoleAssignment.domain_id.is_(None),
+                    )
+                )
+            ).first()
+        else:
+            if result is not None:
+                await session.refresh(result)
+    return result
 
 
 async def ensure_authorization_bootstrap(session: AsyncSession) -> dict[str, AuthzRole]:
-    """Reconcile the catalog and default assignments for all active human users."""
+    """Reconcile the catalog and default assignments in one bounded transaction."""
     roles = await ensure_builtin_roles(session)
     users = (await session.exec(select(User).where(User.is_active.is_(True)))).all()
     for user in users:
-        await ensure_user_default_role(session, user, roles=roles)
+        await ensure_user_default_role(session, user, roles=roles, commit=False)
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Concurrent workers can race on a previously missing default grant.
+        # Roll back and let the next idempotent call observe the winning rows.
+        await session.rollback()
     logger.debug("RBAC bootstrap reconciled %d system roles and %d active users", len(roles), len(users))
     return roles
 
