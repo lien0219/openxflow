@@ -250,9 +250,7 @@ async def resolve_role_permissions(session: AsyncSession, role_ids: set[UUID]) -
     by_id = {role.id: role for role in roles}
 
     pending = {
-        role.parent_role_id
-        for role in roles
-        if role.parent_role_id is not None and role.parent_role_id not in by_id
+        role.parent_role_id for role in roles if role.parent_role_id is not None and role.parent_role_id not in by_id
     }
     while pending and len(by_id) < 1024:
         parents = (await session.exec(select(AuthzRole).where(AuthzRole.id.in_(pending)))).all()
