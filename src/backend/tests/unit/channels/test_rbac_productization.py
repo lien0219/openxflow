@@ -5,6 +5,8 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
+
 from langflow.api.v1.authz_audit import _audit_domain_context
 from langflow.api.v1.authz_me import _summary_domain_context
 from langflow.api.v1.authz_role_assignments import _domain_context
@@ -14,7 +16,6 @@ from langflow.services.authorization.bootstrap import (
     SYSTEM_ROLE_DEFINITIONS,
     is_managed_service_user,
 )
-from pydantic import ValidationError
 
 
 def test_system_role_catalog_is_complete_and_least_privileged() -> None:
