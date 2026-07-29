@@ -100,6 +100,7 @@ jobs:
           src/backend/base/langflow/api/v1/authz_me.py
           src/backend/base/langflow/api/v1/authz_role_assignments.py
           src/backend/base/langflow/api/v1/schemas/authz_roles.py
+          src/backend/base/langflow/api/v1/schemas/authz_role_assignments.py
           src/backend/base/langflow/services/authorization
 
       - name: Ruff SQLite runtime integration
@@ -125,6 +126,7 @@ jobs:
           src/backend/base/langflow/api/v1/authz_me.py
           src/backend/base/langflow/api/v1/authz_role_assignments.py
           src/backend/base/langflow/api/v1/schemas/authz_roles.py
+          src/backend/base/langflow/api/v1/schemas/authz_role_assignments.py
           src/backend/base/langflow/services/authorization
           src/backend/base/langflow/services/database/models/user/crud.py
           src/backend/tests/unit/channels
@@ -145,6 +147,7 @@ jobs:
             src/backend/tests/unit/channels/test_channel_model_provider_delegation.py \
             src/backend/tests/unit/channels/test_channel_authorization.py \
             src/backend/tests/unit/channels/test_builtin_rbac.py \
+            src/backend/tests/unit/channels/test_rbac_productization.py \
             src/backend/tests/unit/channels/test_message_pages.py \
             src/backend/tests/unit/channels/test_channel_file_security.py \
             src/backend/tests/unit/channels/test_channel_media_file_security.py \
