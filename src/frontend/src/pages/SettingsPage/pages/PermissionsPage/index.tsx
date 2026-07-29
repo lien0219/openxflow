@@ -201,7 +201,11 @@ export default function PermissionsPage() {
           />
         )}
         {activeTab === "teams" && isAdmin && (
-          <TeamsTab onSuccess={notifySuccess} onError={notifyError} />
+          <TeamsTab
+            roles={roles}
+            onSuccess={notifySuccess}
+            onError={notifyError}
+          />
         )}
         {activeTab === "shares" && (
           <SharesTab
