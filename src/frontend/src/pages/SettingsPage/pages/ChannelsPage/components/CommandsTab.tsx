@@ -16,6 +16,7 @@ import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import useAlertStore from "@/stores/alertStore";
 import useChannelCopy from "../use-channel-copy";
 import CommandDialog from "./CommandDialog";
+import FlowSelectionsPanel from "./FlowSelectionsPanel";
 
 interface CommandsTabProps {
   connectionId: string;
@@ -288,6 +289,8 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
           </Button>
         </div>
       </div>
+
+      <FlowSelectionsPanel connectionId={connectionId} />
 
       <CommandDialog
         open={dialogOpen}
