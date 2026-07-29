@@ -18,7 +18,14 @@ import { SharesTab } from "./components/SharesTab";
 import { TeamsTab } from "./components/TeamsTab";
 import { UserPermissionsTab } from "./components/UserPermissionsTab";
 
-const ALL_TABS = ["overview", "users", "roles", "teams", "shares", "audit"] as const;
+const ALL_TABS = [
+  "overview",
+  "users",
+  "roles",
+  "teams",
+  "shares",
+  "audit",
+] as const;
 type Tab = (typeof ALL_TABS)[number];
 
 type ApiError = {
