@@ -284,9 +284,7 @@ async def create_team_role_grant(
     if grant is None:
         raise RuntimeError("Unable to persist team role rule")
 
-    members = (
-        await session.exec(select(AuthzTeamMember).where(AuthzTeamMember.team_id == team_id))
-    ).all()
+    members = (await session.exec(select(AuthzTeamMember).where(AuthzTeamMember.team_id == team_id))).all()
     for member in members:
         await _sync_grant_for_user(
             session,
@@ -377,9 +375,7 @@ async def delete_team_role_grant(
 async def delete_all_team_role_grants(session: AsyncSession, team_id: UUID) -> set[UUID]:
     affected: set[UUID] = set()
     for grant in await list_team_role_grants(session, team_id):
-        affected.update(
-            await delete_team_role_grant(session, team_id=team_id, rule_id=grant.id)
-        )
+        affected.update(await delete_team_role_grant(session, team_id=team_id, rule_id=grant.id))
     return affected
 
 
