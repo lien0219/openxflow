@@ -26,7 +26,9 @@ export const useDeleteChannelFlowSelection: ChannelMutationHook<
     },
     ...options,
     onSettled: async (...args) => {
-      await queryClient.invalidateQueries({ queryKey: FLOW_SELECTIONS_QUERY_KEY });
+      await queryClient.invalidateQueries({
+        queryKey: FLOW_SELECTIONS_QUERY_KEY,
+      });
       await userOnSettled?.(...args);
     },
   });
@@ -39,11 +41,7 @@ export const useCleanupChannelFlowSelections: ChannelMutationHook<
   const queryClient = useQueryClient();
   const userOnSettled = options?.onSettled;
 
-  return useMutation<
-    { removed: number },
-    unknown,
-    { connectionId: string }
-  >({
+  return useMutation<{ removed: number }, unknown, { connectionId: string }>({
     mutationKey: ["useCleanupChannelFlowSelections"],
     mutationFn: async ({ connectionId }) => {
       const response = await api.post<{ removed: number }>(
@@ -53,7 +51,9 @@ export const useCleanupChannelFlowSelections: ChannelMutationHook<
     },
     ...options,
     onSettled: async (...args) => {
-      await queryClient.invalidateQueries({ queryKey: FLOW_SELECTIONS_QUERY_KEY });
+      await queryClient.invalidateQueries({
+        queryKey: FLOW_SELECTIONS_QUERY_KEY,
+      });
       await userOnSettled?.(...args);
     },
   });
