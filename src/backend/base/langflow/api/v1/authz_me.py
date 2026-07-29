@@ -1,15 +1,23 @@
-"""Per-user effective-permissions endpoint used by frontend permission gates."""
+"""Effective-permission, status and identity summary endpoints for RBAC clients."""
 
 from __future__ import annotations
 
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
+from sqlmodel import select
 
-from langflow.api.utils import CurrentActiveUser
-from langflow.services.deps import get_authorization_service
+from langflow.api.utils import CurrentActiveUser, DbSession
+from langflow.services.authorization.bootstrap import (
+    SYSTEM_ROLE_DEFINITIONS,
+    ensure_authorization_bootstrap,
+    resolve_role_permissions,
+)
+from langflow.services.database.models.auth import AuthzRole, AuthzRoleAssignment, AuthzTeam, AuthzTeamMember
+from langflow.services.database.models.user.model import User
+from langflow.services.deps import get_authorization_service, get_settings_service
 
 router = APIRouter(prefix="/authz/me", tags=["Authorization"])
 
@@ -33,10 +41,7 @@ class EffectivePermissionsRequest(BaseModel):
     """Body for :func:`get_effective_permissions`."""
 
     resource_type: ResourceTypeLiteral
-    resource_ids: list[UUID] = Field(
-        ...,
-        description="Resource IDs to evaluate. Capped at 500 per request.",
-    )
+    resource_ids: list[UUID] = Field(..., description="Resource IDs to evaluate. Capped at 500 per request.")
     actions: list[str] | None = Field(
         default=None,
         description=f"Actions to check. Normalized and capped at {_MAX_ACTIONS}.",
@@ -70,6 +75,146 @@ class EffectivePermissionsResponse(BaseModel):
 
     resource_type: ResourceTypeLiteral
     permissions: dict[UUID, list[str]]
+
+
+class RbacStatusResponse(BaseModel):
+    authz_enabled: bool
+    audit_enabled: bool
+    superuser_bypass: bool
+    auto_login: bool
+    is_superuser: bool
+    production_ready: bool
+    warnings: list[str]
+
+
+class AssignmentSummary(BaseModel):
+    id: UUID
+    role_id: UUID
+    role_name: str
+    domain_type: str
+    domain_id: UUID | None
+    assigned_at: str
+    assigned_by: UUID | None
+
+
+class TeamSummary(BaseModel):
+    id: UUID
+    team_name: str
+    adom_name: str
+    source: str
+
+
+class RbacIdentitySummaryResponse(BaseModel):
+    user_id: UUID
+    username: str
+    is_active: bool
+    is_superuser: bool
+    assignments: list[AssignmentSummary]
+    teams: list[TeamSummary]
+    effective_permissions: list[str]
+    permission_catalog: list[str]
+
+
+@router.get("/status", response_model=RbacStatusResponse)
+async def get_rbac_status(
+    current_user: CurrentActiveUser,
+    session: DbSession,
+) -> RbacStatusResponse:
+    await ensure_authorization_bootstrap(session)
+    auth_settings = get_settings_service().auth_settings
+    warnings: list[str] = []
+    if auth_settings.AUTO_LOGIN:
+        warnings.append("AUTO_LOGIN is enabled; disable it before using multi-user RBAC in production.")
+    if not auth_settings.AUTHZ_ENABLED:
+        warnings.append("RBAC enforcement is disabled; role decisions are not currently blocking requests.")
+    if not auth_settings.AUTHZ_AUDIT_ENABLED:
+        warnings.append("Authorization audit logging is disabled.")
+    return RbacStatusResponse(
+        authz_enabled=bool(auth_settings.AUTHZ_ENABLED),
+        audit_enabled=bool(auth_settings.AUTHZ_AUDIT_ENABLED),
+        superuser_bypass=bool(auth_settings.AUTHZ_SUPERUSER_BYPASS),
+        auto_login=bool(auth_settings.AUTO_LOGIN),
+        is_superuser=bool(current_user.is_superuser),
+        production_ready=bool(
+            not auth_settings.AUTO_LOGIN
+            and auth_settings.AUTHZ_ENABLED
+            and auth_settings.AUTHZ_AUDIT_ENABLED
+        ),
+        warnings=warnings,
+    )
+
+
+@router.get("/summary", response_model=RbacIdentitySummaryResponse)
+async def get_rbac_identity_summary(
+    current_user: CurrentActiveUser,
+    session: DbSession,
+    user_id: UUID | None = Query(default=None),
+) -> RbacIdentitySummaryResponse:
+    await ensure_authorization_bootstrap(session)
+    target_user_id = user_id or current_user.id
+    if target_user_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+    target_user = await session.get(User, target_user_id)
+    if target_user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    assignments = (
+        await session.exec(
+            select(AuthzRoleAssignment)
+            .where(AuthzRoleAssignment.user_id == target_user_id)
+            .order_by(AuthzRoleAssignment.assigned_at.desc(), AuthzRoleAssignment.id)
+        )
+    ).all()
+    role_ids = {assignment.role_id for assignment in assignments}
+    roles = (await session.exec(select(AuthzRole).where(AuthzRole.id.in_(role_ids)))).all() if role_ids else []
+    roles_by_id = {role.id: role for role in roles}
+
+    memberships = (
+        await session.exec(
+            select(AuthzTeamMember, AuthzTeam)
+            .join(AuthzTeam, AuthzTeam.id == AuthzTeamMember.team_id)
+            .where(AuthzTeamMember.user_id == target_user_id, AuthzTeam.is_active.is_(True))
+            .order_by(AuthzTeam.team_name, AuthzTeam.id)
+        )
+    ).all()
+
+    effective_permissions = await resolve_role_permissions(session, role_ids)
+    permission_catalog = sorted(
+        {permission for definition in SYSTEM_ROLE_DEFINITIONS for permission in definition.permissions}
+        | effective_permissions
+    )
+    return RbacIdentitySummaryResponse(
+        user_id=target_user.id,
+        username=target_user.username,
+        is_active=target_user.is_active,
+        is_superuser=target_user.is_superuser,
+        assignments=[
+            AssignmentSummary(
+                id=assignment.id,
+                role_id=assignment.role_id,
+                role_name=roles_by_id.get(assignment.role_id).name
+                if roles_by_id.get(assignment.role_id)
+                else "unknown",
+                domain_type=assignment.domain_type,
+                domain_id=assignment.domain_id,
+                assigned_at=assignment.assigned_at.isoformat(),
+                assigned_by=assignment.assigned_by,
+            )
+            for assignment in assignments
+        ],
+        teams=[
+            TeamSummary(
+                id=team.id,
+                team_name=team.team_name,
+                adom_name=team.adom_name,
+                source=membership.source,
+            )
+            for membership, team in memberships
+        ],
+        effective_permissions=sorted(effective_permissions),
+        permission_catalog=permission_catalog,
+    )
 
 
 @router.post("/permissions", response_model=EffectivePermissionsResponse)
