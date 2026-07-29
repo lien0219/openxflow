@@ -77,9 +77,11 @@ class TeamRoleAssignmentCreate(BaseModel):
     @model_validator(mode="after")
     def _validate_scope(self) -> TeamRoleAssignmentCreate:
         if self.domain_type == "global" and self.domain_id is not None:
-            raise ValueError("domain_id must be null when domain_type='global'")
+            message = "domain_id must be null when domain_type='global'"
+            raise ValueError(message)
         if self.domain_type != "global" and self.domain_id is None:
-            raise ValueError(f"domain_id is required when domain_type={self.domain_type!r}")
+            message = f"domain_id is required when domain_type={self.domain_type!r}"
+            raise ValueError(message)
         return self
 
 

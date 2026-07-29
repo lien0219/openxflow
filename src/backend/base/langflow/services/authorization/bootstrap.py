@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 from lfx.log.logger import logger
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.services.database.models.auth import AuthzRole, AuthzRoleAssignment
 from langflow.services.database.models.user.model import User
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +130,7 @@ SYSTEM_ROLE_DEFINITIONS: tuple[SystemRoleDefinition, ...] = (
 _SYSTEM_ROLE_BY_NAME = {role.name: role for role in SYSTEM_ROLE_DEFINITIONS}
 _BOOTSTRAP_LOCK = asyncio.Lock()
 _MAX_INHERITANCE_DEPTH = 32
+_MAX_ROLE_GRAPH_SIZE = 1024
 
 
 def is_managed_service_user(user: User) -> bool:
@@ -161,7 +166,8 @@ async def ensure_builtin_roles(session: AsyncSession) -> dict[str, AuthzRole]:
                 # collision must fail closed rather than silently gaining system
                 # role semantics.
                 if role.created_by is not None:
-                    raise RuntimeError(f"Custom role {role.name!r} conflicts with a reserved system role name")
+                    message = f"Custom role {role.name!r} conflicts with a reserved system role name"
+                    raise RuntimeError(message)
                 role.is_system = True
                 changed = True
             if role.description != definition.description:
@@ -185,7 +191,8 @@ async def ensure_builtin_roles(session: AsyncSession) -> dict[str, AuthzRole]:
 
         missing = set(_SYSTEM_ROLE_BY_NAME) - set(by_name)
         if missing:
-            raise RuntimeError(f"RBAC system role bootstrap incomplete: {sorted(missing)}")
+            message = f"RBAC system role bootstrap incomplete: {sorted(missing)}"
+            raise RuntimeError(message)
         return {name: by_name[name] for name in _SYSTEM_ROLE_BY_NAME}
 
 
@@ -316,7 +323,7 @@ async def resolve_role_permissions(session: AsyncSession, role_ids: set[UUID]) -
     pending = {
         role.parent_role_id for role in roles if role.parent_role_id is not None and role.parent_role_id not in by_id
     }
-    while pending and len(by_id) < 1024:
+    while pending and len(by_id) < _MAX_ROLE_GRAPH_SIZE:
         parents = (await session.exec(select(AuthzRole).where(AuthzRole.id.in_(pending)))).all()
         if not parents:
             break

@@ -6,8 +6,8 @@ import {
   createShare,
   deleteShare,
   getShares,
-  updateShare,
   type ResourceShare,
+  updateShare,
 } from "@/controllers/API/queries/authz";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";

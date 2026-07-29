@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import {
   createRole,
   deleteRole,
-  updateRole,
   type RbacRole,
+  updateRole,
 } from "@/controllers/API/queries/authz";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";

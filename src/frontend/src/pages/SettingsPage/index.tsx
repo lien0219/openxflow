@@ -14,7 +14,7 @@ import { useStoreStore } from "@/stores/storeStore";
 import ForwardedIconComponent from "../../components/common/genericIconComponent";
 import PageLayout from "../../components/common/pageLayout";
 
-export default function SettingsPage(): JSX.Element {
+export default function SettingsPage() {
   const { t } = useTranslation();
   const autoLogin = useAuthStore((state) => state.autoLogin);
   const hasStore = useStoreStore((state) => state.hasStore);
