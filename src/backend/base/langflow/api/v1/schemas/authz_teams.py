@@ -1,4 +1,4 @@
-"""Pydantic schemas for /api/v1/authz/teams and team members."""
+"""Pydantic schemas for /api/v1/authz/teams, members and bulk role grants."""
 
 from __future__ import annotations
 
@@ -6,7 +6,9 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+TeamRoleDomainType = Literal["global", "organization", "org", "workspace", "project", "channel"]
 
 
 class TeamCreate(BaseModel):
@@ -63,3 +65,30 @@ class TeamMemberRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class TeamRoleAssignmentCreate(BaseModel):
+    """Persisted team role that materializes safe user assignments for members."""
+
+    role_id: UUID
+    domain_type: TeamRoleDomainType = "global"
+    domain_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def _validate_scope(self) -> TeamRoleAssignmentCreate:
+        if self.domain_type == "global" and self.domain_id is not None:
+            raise ValueError("domain_id must be null when domain_type='global'")
+        if self.domain_type != "global" and self.domain_id is None:
+            raise ValueError(f"domain_id is required when domain_type={self.domain_type!r}")
+        return self
+
+
+class TeamRoleAssignmentRead(BaseModel):
+    """Serialized team role rule stored in the shared Casbin policy table."""
+
+    id: int
+    team_id: UUID
+    role_id: UUID
+    domain_type: str
+    domain_id: UUID | None
+    assigned_by: UUID | None
