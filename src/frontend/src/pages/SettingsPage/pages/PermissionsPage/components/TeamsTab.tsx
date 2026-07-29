@@ -1,19 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   addTeamMember,
+  addTeamRole,
   createTeam,
   deleteTeam,
   getTeamMembers,
+  getTeamRoles,
   getTeams,
   getUsers,
   removeTeamMember,
+  removeTeamRole,
   updateTeam,
+  type RbacRole,
   type RbacUser,
   type Team,
   type TeamMember,
+  type TeamRoleAssignment,
 } from "@/controllers/API/queries/authz";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
@@ -22,9 +27,11 @@ const SELECT_CLASS =
   "h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring";
 
 export function TeamsTab({
+  roles,
   onSuccess,
   onError,
 }: {
+  roles: RbacRole[];
   onSuccess: () => void;
   onError: (error: unknown) => void;
 }) {
@@ -33,12 +40,18 @@ export function TeamsTab({
   const [users, setUsers] = useState<RbacUser[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [teamRoles, setTeamRoles] = useState<TeamRoleAssignment[]>([]);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
   const [memberUserId, setMemberUserId] = useState("");
+  const [teamRoleId, setTeamRoleId] = useState(
+    roles.find((role) => role.name === "viewer")?.id || roles[0]?.id || "",
+  );
+  const [teamRoleDomainType, setTeamRoleDomainType] = useState("global");
+  const [teamRoleDomainId, setTeamRoleDomainId] = useState("");
 
-  const reloadTeams = async () => {
+  const reloadTeams = useCallback(async () => {
     const nextTeams = await getTeams();
     setTeams(nextTeams);
     setSelectedTeamId((current) =>
@@ -46,7 +59,16 @@ export function TeamsTab({
         ? current
         : nextTeams[0]?.id || "",
     );
-  };
+  }, []);
+
+  const reloadSelectedTeam = useCallback(async (teamId: string) => {
+    const [nextMembers, nextRoles] = await Promise.all([
+      getTeamMembers(teamId),
+      getTeamRoles(teamId),
+    ]);
+    setMembers(nextMembers);
+    setTeamRoles(nextRoles);
+  }, []);
 
   useEffect(() => {
     Promise.all([getTeams(), getUsers(0, 200)])
@@ -61,14 +83,27 @@ export function TeamsTab({
   useEffect(() => {
     if (!selectedTeamId) {
       setMembers([]);
+      setTeamRoles([]);
       return;
     }
-    getTeamMembers(selectedTeamId).then(setMembers).catch(onError);
-  }, [onError, selectedTeamId]);
+    reloadSelectedTeam(selectedTeamId).catch(onError);
+  }, [onError, reloadSelectedTeam, selectedTeamId]);
+
+  useEffect(() => {
+    if (!teamRoleId && roles.length > 0) {
+      setTeamRoleId(
+        roles.find((role) => role.name === "viewer")?.id || roles[0].id,
+      );
+    }
+  }, [roles, teamRoleId]);
 
   const usersById = useMemo(
     () => new Map(users.map((user) => [user.id, user])),
     [users],
+  );
+  const rolesById = useMemo(
+    () => new Map(roles.map((role) => [role.id, role])),
+    [roles],
   );
   const selectedTeam = teams.find((team) => team.id === selectedTeamId);
 
@@ -103,7 +138,12 @@ export function TeamsTab({
   };
 
   const removeTeam = async () => {
-    if (!selectedTeam || !window.confirm(`${t("rbac.delete")} ${selectedTeam.team_name}?`)) return;
+    if (
+      !selectedTeam ||
+      !window.confirm(`${t("rbac.delete")} ${selectedTeam.team_name}?`)
+    ) {
+      return;
+    }
     try {
       await deleteTeam(selectedTeam.id);
       await reloadTeams();
@@ -117,7 +157,7 @@ export function TeamsTab({
     if (!selectedTeamId || !memberUserId) return;
     try {
       await addTeamMember(selectedTeamId, memberUserId);
-      setMembers(await getTeamMembers(selectedTeamId));
+      await reloadSelectedTeam(selectedTeamId);
       setMemberUserId("");
       onSuccess();
     } catch (error) {
@@ -128,7 +168,33 @@ export function TeamsTab({
   const removeMember = async (userId: string) => {
     try {
       await removeTeamMember(selectedTeamId, userId);
-      setMembers(await getTeamMembers(selectedTeamId));
+      await reloadSelectedTeam(selectedTeamId);
+      onSuccess();
+    } catch (error) {
+      onError(error);
+    }
+  };
+
+  const addPersistentTeamRole = async () => {
+    if (!selectedTeamId || !teamRoleId) return;
+    try {
+      await addTeamRole(selectedTeamId, {
+        role_id: teamRoleId,
+        domain_type: teamRoleDomainType,
+        domain_id:
+          teamRoleDomainType === "global" ? null : teamRoleDomainId.trim(),
+      });
+      await reloadSelectedTeam(selectedTeamId);
+      onSuccess();
+    } catch (error) {
+      onError(error);
+    }
+  };
+
+  const removePersistentTeamRole = async (ruleId: number) => {
+    try {
+      await removeTeamRole(selectedTeamId, ruleId);
+      await reloadSelectedTeam(selectedTeamId);
       onSuccess();
     } catch (error) {
       onError(error);
@@ -142,11 +208,17 @@ export function TeamsTab({
         <div className="mt-3 space-y-3">
           <div className={FIELD_CLASS}>
             <label className="text-sm">{t("rbac.teams.name")}</label>
-            <Input value={name} onChange={(event) => setName(event.target.value)} />
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
           </div>
           <div className={FIELD_CLASS}>
             <label className="text-sm">{t("rbac.teams.slug")}</label>
-            <Input value={slug} onChange={(event) => setSlug(event.target.value)} />
+            <Input
+              value={slug}
+              onChange={(event) => setSlug(event.target.value)}
+            />
           </div>
           <div className={FIELD_CLASS}>
             <label className="text-sm">{t("rbac.teams.description")}</label>
@@ -195,13 +267,17 @@ export function TeamsTab({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="font-semibold">{selectedTeam.team_name}</h2>
-                <p className="text-xs text-muted-foreground">
-                  {selectedTeam.id}
-                </p>
+                <p className="text-xs text-muted-foreground">{selectedTeam.id}</p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => void toggle()} ignoreTitleCase>
-                  {selectedTeam.is_active ? t("rbac.disabled") : t("rbac.enabled")}
+                <Button
+                  variant="outline"
+                  onClick={() => void toggle()}
+                  ignoreTitleCase
+                >
+                  {selectedTeam.is_active
+                    ? t("rbac.disabled")
+                    : t("rbac.enabled")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -213,7 +289,109 @@ export function TeamsTab({
               </div>
             </div>
 
-            <div className="mt-4 flex gap-2">
+            <div className="mt-5 rounded-md border p-3">
+              <h3 className="font-medium">{t("rbac.teams.roles")}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("rbac.teams.rolesHelp")}
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className={FIELD_CLASS}>
+                  <label className="text-sm">{t("rbac.roles.name")}</label>
+                  <select
+                    className={SELECT_CLASS}
+                    value={teamRoleId}
+                    onChange={(event) => setTeamRoleId(event.target.value)}
+                  >
+                    {roles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className={FIELD_CLASS}>
+                  <label className="text-sm">{t("rbac.users.domain")}</label>
+                  <select
+                    className={SELECT_CLASS}
+                    value={teamRoleDomainType}
+                    onChange={(event) => {
+                      setTeamRoleDomainType(event.target.value);
+                      if (event.target.value === "global") {
+                        setTeamRoleDomainId("");
+                      }
+                    }}
+                  >
+                    {[
+                      "global",
+                      "organization",
+                      "workspace",
+                      "project",
+                      "channel",
+                    ].map((domain) => (
+                      <option key={domain} value={domain}>
+                        {domain}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className={`${FIELD_CLASS} xl:col-span-2`}>
+                  <label className="text-sm">{t("rbac.users.domainId")}</label>
+                  <Input
+                    disabled={teamRoleDomainType === "global"}
+                    value={teamRoleDomainId}
+                    onChange={(event) =>
+                      setTeamRoleDomainId(event.target.value.trim())
+                    }
+                    placeholder={t("rbac.users.domainIdHelp")}
+                  />
+                </div>
+              </div>
+              <Button
+                className="mt-3"
+                onClick={() => void addPersistentTeamRole()}
+                disabled={
+                  !teamRoleId ||
+                  (teamRoleDomainType !== "global" && !teamRoleDomainId)
+                }
+                ignoreTitleCase
+              >
+                {t("rbac.teams.addRole")}
+              </Button>
+
+              <div className="mt-3 space-y-2">
+                {teamRoles.map((grant) => (
+                  <div
+                    key={grant.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-muted/40 p-3"
+                  >
+                    <div>
+                      <div className="font-medium">
+                        {rolesById.get(grant.role_id)?.name || grant.role_id}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {grant.domain_type}
+                        {grant.domain_id ? ` · ${grant.domain_id}` : ""}
+                      </div>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => void removePersistentTeamRole(grant.id)}
+                      ignoreTitleCase
+                    >
+                      {t("rbac.remove")}
+                    </Button>
+                  </div>
+                ))}
+                {teamRoles.length === 0 && (
+                  <div className="py-4 text-center text-sm text-muted-foreground">
+                    {t("rbac.empty")}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-5 flex gap-2">
               <select
                 className={`${SELECT_CLASS} flex-1`}
                 value={memberUserId}
