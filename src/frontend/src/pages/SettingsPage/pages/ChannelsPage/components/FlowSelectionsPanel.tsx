@@ -87,7 +87,10 @@ export default function FlowSelectionsPanel({
   const identityById = useMemo(
     () =>
       new Map(
-        (identityResult?.items ?? []).map((identity) => [identity.id, identity]),
+        (identityResult?.items ?? []).map((identity) => [
+          identity.id,
+          identity,
+        ]),
       ),
     [identityResult?.items],
   );
@@ -169,7 +172,12 @@ export default function FlowSelectionsPanel({
       ) : isError ? (
         <div className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
           <span>{copy("活动工作流选择加载失败")}</span>
-          <Button type="button" size="sm" variant="outline" onClick={() => refetch()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => refetch()}
+          >
             {copy("重新加载")}
           </Button>
         </div>
@@ -193,7 +201,9 @@ export default function FlowSelectionsPanel({
             </thead>
             <tbody>
               {(selectionResult?.items ?? []).map((selection) => {
-                const identity = identityById.get(selection.channel_identity_id);
+                const identity = identityById.get(
+                  selection.channel_identity_id,
+                );
                 const conversation = conversationById.get(
                   selection.conversation_binding_id,
                 );
