@@ -12,8 +12,8 @@ function StatusBadge({ enabled }: { enabled: boolean }) {
     <span
       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
         enabled
-          ? "bg-green-500/10 text-green-700 dark:text-green-300"
-          : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+          ? "bg-primary/10 text-primary"
+          : "bg-muted text-muted-foreground"
       }`}
     >
       {enabled ? t("rbac.enabled") : t("rbac.disabled")}
@@ -57,7 +57,7 @@ export function OverviewTab({
           ))}
         </div>
         {status.warnings.length > 0 && (
-          <div className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+          <div className="mt-4 rounded-md border border-border bg-muted/50 p-3 text-sm">
             {status.warnings.map((warning) => (
               <p key={warning}>• {warning}</p>
             ))}
