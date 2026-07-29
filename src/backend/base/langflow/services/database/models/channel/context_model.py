@@ -37,6 +37,12 @@ class ChannelConversationContextEntry(SQLModel, table=True):  # type: ignore[cal
             "connection_id",
             "created_at",
         ),
+        sa.Index(
+            "ix_channel_context_conversation_session_created",
+            "conversation_binding_id",
+            "session_id",
+            "created_at",
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

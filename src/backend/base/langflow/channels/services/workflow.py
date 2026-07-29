@@ -42,7 +42,12 @@ async def apply_global_variable_defaults(graph_data: dict[str, Any], user_id: UU
     return await apply_defaults(graph_data, user_id)
 
 
-def build_channel_session_id(event: ChannelEvent, context_mode: str = ChannelContextMode.ISOLATED.value) -> str:
+def build_channel_session_id(
+    event: ChannelEvent,
+    context_mode: str = ChannelContextMode.ISOLATED.value,
+    *,
+    flow_key: UUID | str | None = None,
+) -> str:
     parts = [
         event.channel.value,
         str(event.connection_id),
@@ -51,6 +56,8 @@ def build_channel_session_id(event: ChannelEvent, context_mode: str = ChannelCon
     ]
     if context_mode != ChannelContextMode.SHARED.value or event.conversation.conversation_type == "private":
         parts.append(event.user.external_user_id)
+    if flow_key is not None:
+        parts.append(str(flow_key))
     raw = ":".join(parts)
     return f"channel-{hashlib.sha256(raw.encode()).hexdigest()[:32]}"
 

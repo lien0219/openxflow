@@ -34,6 +34,7 @@ class ChannelWorkflowCommandBase(SQLModel):
     prompt_template: str | None = Field(default=None, max_length=8000)
     input_required: bool = Field(default=False)
     allow_attachments: bool = Field(default=True)
+    allow_persistent_selection: bool = Field(default=False)
     require_mention: bool = Field(default=False)
     enabled: bool = Field(default=True)
     settings_data: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JsonVariant, nullable=False))
@@ -120,6 +121,7 @@ class ChannelWorkflowCommandUpdate(SQLModel):
     prompt_template: str | None = Field(default=None, max_length=8000)
     input_required: bool | None = None
     allow_attachments: bool | None = None
+    allow_persistent_selection: bool | None = None
     require_mention: bool | None = None
     enabled: bool | None = None
     settings_data: dict[str, Any] | None = None

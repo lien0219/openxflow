@@ -126,7 +126,7 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
           <h3 className="font-semibold">{copy("自定义指令中心")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {copy(
-              "普通消息使用默认工作流；“/指令 内容”仅本次路由到指定工作流。",
+              "普通消息使用默认或当前工作流；显式“/指令 内容”只影响本次，/use-flow 可持续切换。",
             )}
           </p>
         </div>
@@ -212,6 +212,9 @@ export default function CommandsTab({ connectionId }: CommandsTabProps) {
                     {command.enabled ? copy("已启用") : copy("已停用")}
                     {command.input_required ? ` · ${copy("必须输入")}` : ""}
                     {command.require_mention ? ` · ${copy("群聊需@")}` : ""}
+                    {command.allow_persistent_selection
+                      ? ` · ${copy("可持续切换")}`
+                      : ""}
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">
                     {command.last_used_at

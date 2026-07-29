@@ -40,6 +40,7 @@ from langflow.channels.services.commands import (
     resolve_workflow_command,
 )
 from langflow.channels.services.context import prepare_channel_input, record_channel_response
+from langflow.channels.services.conversation_scope import conversation_scope_id
 from langflow.channels.services.execution_logs import (
     finalize_channel_execution,
     safe_record_channel_delivery_outcome,
@@ -48,6 +49,15 @@ from langflow.channels.services.execution_logs import (
 from langflow.channels.services.files import (
     ChannelFileService,
     resolve_owned_knowledge_base,
+)
+from langflow.channels.services.flow_selection import (
+    ActiveWorkflowResolution,
+    FlowSelectionCommandUnavailableError,
+    FlowSelectionDisabledError,
+    FlowSelectionNotAllowedError,
+    clear_active_workflow_selection,
+    resolve_active_workflow_selection,
+    set_active_workflow_selection,
 )
 from langflow.channels.services.message_records import safe_record_outbound_message
 from langflow.channels.services.outbound_delivery import send_outbound_processing_once
@@ -153,19 +163,18 @@ class ChannelDispatchService:
                 conversation_type=event.conversation.conversation_type,
             )
 
-        try:
-            principal = await resolve_execution_principal(
-                self.session,
-                self.connection,
-                binding,
-                identity,
-            )
-        except ChannelBindingRequiredError:
-            return await self._binding_required_message(event)
-        except ChannelServiceIdentityUnavailableError:
-            return ChannelMessage(text="当前渠道共享执行身份尚未配置或已停用，请联系管理员。")
-
         if event.message.attachments:
+            try:
+                principal = await resolve_execution_principal(
+                    self.session,
+                    self.connection,
+                    binding,
+                    identity,
+                )
+            except ChannelBindingRequiredError:
+                return await self._binding_required_message(event)
+            except ChannelServiceIdentityUnavailableError:
+                return ChannelMessage(text="当前渠道共享执行身份尚未配置或已停用，请联系管理员。")
             binding = binding or await self._ensure_conversation_binding(event)
             if not binding.allow_file_upload:
                 return ChannelMessage(text="当前会话已关闭文件上传，请在 OpenXFlow 渠道中心重新启用。")
@@ -187,10 +196,67 @@ class ChannelDispatchService:
         text = (event.message.text or "").strip()
         if not text:
             return None
+
+        selection_resolution = ActiveWorkflowResolution()
+        if binding is not None:
+            selection_resolution = await resolve_active_workflow_selection(
+                self.session,
+                connection=self.connection,
+                binding=binding,
+                identity=identity,
+                conversation_scope_id=conversation_scope_id(event),
+                user_id=personal_user_id,
+            )
+        if selection_resolution.command is not None and selection_resolution.selection is not None:
+            selected_command = selection_resolution.command
+            try:
+                principal = await resolve_execution_principal(
+                    self.session,
+                    self.connection,
+                    binding,
+                    identity,
+                    requires_personal=selected_command.owner_user_id is not None,
+                )
+            except ChannelBindingRequiredError:
+                return await self._binding_required_message(event)
+            except ChannelServiceIdentityUnavailableError:
+                return ChannelMessage(text="当前渠道共享执行身份尚未配置或已停用，请联系管理员。")
+            selected_input = render_command_input(
+                selected_command,
+                input_value=text,
+                sender_name=event.user.display_name,
+                conversation_name=event.conversation.title or (binding.display_name if binding else None),
+                conversation_type=event.conversation.conversation_type,
+            )
+            return await self._execute_workflow(
+                event,
+                principal,
+                str(selected_command.flow_id),
+                selected_input or None,
+                binding=binding,
+                trigger_type=ChannelExecutionTrigger.SELECTED.value,
+                command_name=selected_command.normalized_command,
+                flow_id=selected_command.flow_id,
+                workflow_command_id=selected_command.id,
+                active_selection_id=selection_resolution.selection.id,
+                selection_scope="identity_conversation",
+            )
+
+        try:
+            principal = await resolve_execution_principal(
+                self.session,
+                self.connection,
+                binding,
+                identity,
+            )
+        except ChannelBindingRequiredError:
+            return await self._binding_required_message(event)
+        except ChannelServiceIdentityUnavailableError:
+            return ChannelMessage(text="当前渠道共享执行身份尚未配置或已停用，请联系管理员。")
         flow_id = self._resolve_default_flow_id(binding)
         if flow_id is None:
             return await self._pending_route_message(binding)
-        return await self._execute_workflow(
+        response = await self._execute_workflow(
             event,
             principal,
             str(flow_id),
@@ -199,6 +265,9 @@ class ChannelDispatchService:
             trigger_type=ChannelExecutionTrigger.DEFAULT.value,
             flow_id=flow_id,
         )
+        if selection_resolution.invalid_reason and response is not None:
+            return self._with_selection_fallback_notice(response)
+        return response
 
     async def _execute_system_command(
         self,
@@ -248,6 +317,8 @@ class ChannelDispatchService:
                 is_admin=is_admin,
                 access_policy=access_policy,
                 conversation_type=event.conversation.conversation_type,
+                event=event,
+                identity=identity,
             )
         if command == "/whoami":
             return self._whoami_message(
@@ -271,6 +342,22 @@ class ChannelDispatchService:
             if command == "/files":
                 return await self._recent_files_message(event, principal.user)
             return await self._knowledge_message(binding)
+        if command == "/use-flow":
+            return await self._use_flow_message(
+                event=event,
+                identity=identity,
+                bound_user=bound_user,
+                binding=binding,
+                argument=argument,
+                personal_user_id=personal_user_id,
+            )
+        if command == "/current-flow":
+            return await self._current_flow_message(
+                event=event,
+                identity=identity,
+                binding=binding,
+                personal_user_id=personal_user_id,
+            )
         if command == "/flow":
             if bound_user is None:
                 return ChannelMessage(text="指令 /flow 仅限渠道管理员使用。")
@@ -298,6 +385,122 @@ class ChannelDispatchService:
         if command == "/status":
             return self._status_message(binding, access_policy=access_policy)
         return None
+
+    async def _use_flow_message(
+        self,
+        *,
+        event: ChannelEvent,
+        identity,
+        bound_user: User | None,
+        binding: ChannelConversationBinding | None,
+        argument: str,
+        personal_user_id: UUID | None,
+    ) -> ChannelMessage:
+        if not self.connection.user_flow_selection_enabled:
+            return ChannelMessage(text="当前渠道未开启用户工作流切换，请联系管理员在默认路由中启用。")
+        binding = binding or await self._ensure_conversation_binding(event)
+        requested = argument.strip().split(maxsplit=1)[0] if argument.strip() else ""
+        if not requested:
+            return ChannelMessage(
+                text="用法：/use-flow <业务指令>\n恢复默认：/use-flow default\n发送 /commands 查看可用业务指令。"
+            )
+        if requested.lower() in {"default", "/default", "默认"}:
+            cleared = await clear_active_workflow_selection(
+                self.session,
+                connection_id=self.connection.id,
+                conversation_binding_id=binding.id,
+                channel_identity_id=identity.id,
+                conversation_scope_id=conversation_scope_id(event),
+            )
+            await self.session.commit()
+            default_flow_id = self._resolve_default_flow_id(binding)
+            text = "已恢复当前会话的默认工作流。" if cleared else "当前已经在使用默认工作流。"
+            if default_flow_id is None:
+                text += " 当前会话尚未配置默认工作流。"
+            return ChannelMessage(title="工作流已恢复", text=text)
+
+        try:
+            selection, command = await set_active_workflow_selection(
+                self.session,
+                connection=self.connection,
+                binding=binding,
+                identity=identity,
+                conversation_scope_id=conversation_scope_id(event),
+                user_id=personal_user_id,
+                command_name=requested,
+            )
+        except FlowSelectionDisabledError:
+            return ChannelMessage(text="当前渠道未开启用户工作流切换。")
+        except FlowSelectionCommandUnavailableError:
+            return ChannelMessage(text=f"当前会话没有可切换的业务指令 {requested}。发送 /commands 查看可用指令。")
+        except FlowSelectionNotAllowedError:
+            return ChannelMessage(text=f"指令 {requested} 仅支持单次执行，管理员未允许将其设为当前工作流。")
+        await self.session.commit()
+        expires = (
+            "永久有效" if selection.expires_at is None else f"有效期 {self.connection.flow_selection_ttl_hours} 小时"
+        )
+        account = f"绑定账号：{bound_user.username}\n" if bound_user is not None else ""
+        return ChannelMessage(
+            message_type=ChannelMessageType.CARD,
+            title="工作流已切换",
+            text=(
+                f"当前工作流：{command.command}\n"
+                f"{account}"
+                f"范围：当前用户 + 当前会话/线程\n"
+                f"{expires}\n\n"
+                "后续普通消息将持续使用该工作流。发送 /use-flow default 恢复默认。"
+            ),
+            actions=[
+                ChannelAction(
+                    action_id="system:current-flow",
+                    label="/current-flow",
+                    value="/current-flow",
+                    style="primary",
+                ),
+                ChannelAction(action_id="system:use-flow-default", label="恢复默认", value="/use-flow default"),
+            ],
+        )
+
+    async def _current_flow_message(
+        self,
+        *,
+        event: ChannelEvent,
+        identity,
+        binding: ChannelConversationBinding | None,
+        personal_user_id: UUID | None,
+    ) -> ChannelMessage:
+        if binding is not None:
+            resolution = await resolve_active_workflow_selection(
+                self.session,
+                connection=self.connection,
+                binding=binding,
+                identity=identity,
+                conversation_scope_id=conversation_scope_id(event),
+                user_id=personal_user_id,
+                touch=False,
+            )
+            if resolution.command is not None and resolution.selection is not None:
+                expires = (
+                    "永久有效"
+                    if resolution.selection.expires_at is None
+                    else resolution.selection.expires_at.isoformat()
+                )
+                return ChannelMessage(
+                    title="当前工作流",
+                    text=(
+                        f"业务指令：{resolution.command.command}\n"
+                        f"工作流 ID：{str(resolution.command.flow_id)[:8]}…\n"
+                        "来源：个人会话选择\n"
+                        f"有效期至：{expires}"
+                    ),
+                )
+        default_flow_id = self._resolve_default_flow_id(binding)
+        if default_flow_id is None:
+            return ChannelMessage(title="当前工作流", text="当前没有个人选择，也没有可用默认工作流。")
+        return ChannelMessage(
+            title="当前工作流",
+            text=f"当前使用会话或连接默认工作流：{str(default_flow_id)[:8]}…",
+        )
 
     async def _execute_custom_command(
         self,
@@ -362,6 +565,7 @@ class ChannelDispatchService:
             trigger_type=ChannelExecutionTrigger.COMMAND.value,
             command_name=command.normalized_command,
             flow_id=command.flow_id,
+            workflow_command_id=command.id,
         )
 
     async def _commands_message(
@@ -373,6 +577,8 @@ class ChannelDispatchService:
         is_admin: bool,
         access_policy: str,
         conversation_type: str,
+        event: ChannelEvent,
+        identity,
     ) -> ChannelMessage:
         system_commands = visible_system_commands(
             is_bound=bound_user is not None,
@@ -389,13 +595,33 @@ class ChannelDispatchService:
                 user_id=user_id,
             )
 
+        current_command_id: UUID | None = None
+        if binding is not None and self.connection.user_flow_selection_enabled:
+            current_resolution = await resolve_active_workflow_selection(
+                self.session,
+                connection=self.connection,
+                binding=binding,
+                identity=identity,
+                conversation_scope_id=conversation_scope_id(event),
+                user_id=user_id,
+                touch=False,
+            )
+            if current_resolution.command is not None:
+                current_command_id = current_resolution.command.id
+
         sections = ["系统指令"]
         sections.extend(f"{item.command} — {item.description}" for item in system_commands)
         if custom_commands:
             sections.append("\n业务指令")
             for item in custom_commands[:50]:
                 description = f" — {item.description}" if item.description else ""
-                sections.append(f"{item.command}{description}")
+                flags: list[str] = []
+                if item.allow_persistent_selection:
+                    flags.append("可切换")
+                if item.id == current_command_id:
+                    flags.append("当前")
+                suffix = f" [{', '.join(flags)}]" if flags else ""
+                sections.append(f"{item.command}{description}{suffix}")
         elif binding is None:
             sections.append("\n业务指令\n当前会话尚未完成自动发现。")
         else:
@@ -409,7 +635,7 @@ class ChannelDispatchService:
                 style="primary" if item.command == "/commands" else "default",
             )
             for item in system_commands
-            if item.command in {"/commands", "/whoami", "/files", "/knowledge", "/status"}
+            if item.command in {"/commands", "/current-flow", "/whoami", "/files", "/knowledge", "/status"}
         ][:4]
         remaining = max(0, 6 - len(action_items))
         action_items.extend(
@@ -505,6 +731,15 @@ class ChannelDispatchService:
             ],
         )
 
+    @staticmethod
+    def _with_selection_fallback_notice(response: ChannelMessage) -> ChannelMessage:
+        notice = "你之前选择的工作流已失效，当前已恢复默认工作流。"
+        if response.markdown:
+            response.markdown = f"{notice}\n\n{response.markdown}"
+        else:
+            response.text = f"{notice}\n\n{response.text or ''}"
+        return response
+
     def _resolve_default_flow_id(self, binding: ChannelConversationBinding | None) -> UUID | None:
         if binding is not None:
             if binding.route_mode == ChannelConversationRouteMode.DISABLED.value:
@@ -544,6 +779,9 @@ class ChannelDispatchService:
         trigger_type: str,
         command_name: str | None = None,
         flow_id: UUID | None = None,
+        workflow_command_id: UUID | None = None,
+        active_selection_id: UUID | None = None,
+        selection_scope: str | None = None,
     ) -> ChannelMessage | None:
         if isinstance(principal, ChannelExecutionPrincipal):
             execution_user = principal.user
@@ -552,7 +790,11 @@ class ChannelDispatchService:
             execution_user = principal
             execution_identity_type = "bound_user"
         context_mode = effective_context_mode(self.connection, binding)
-        session_id = build_channel_session_id(event, context_mode)
+        session_id = build_channel_session_id(
+            event,
+            context_mode,
+            flow_key=flow_id or flow_identifier,
+        )
         prepared_input = input_value
         if self.session is not None:
             prepared_input = await prepare_channel_input(
@@ -582,6 +824,9 @@ class ChannelDispatchService:
                     external_event_id=event.event_id,
                     trigger_type=trigger_type,
                     command_name=command_name,
+                    workflow_command_id=workflow_command_id,
+                    active_selection_id=active_selection_id,
+                    selection_scope=selection_scope,
                     queue_wait_ms=queue_wait_ms,
                 )
             except Exception:  # noqa: BLE001
@@ -604,6 +849,10 @@ class ChannelDispatchService:
             )
             if command_name:
                 channel_context["command_name"] = command_name
+            if workflow_command_id is not None:
+                channel_context["workflow_command_id"] = str(workflow_command_id)
+            if active_selection_id is not None:
+                channel_context["active_selection_id"] = str(active_selection_id)
             executor_kwargs: dict[str, Any] = {
                 "event": event,
                 "user": execution_user,

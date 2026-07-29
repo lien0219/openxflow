@@ -40,6 +40,7 @@ interface CommandFormState {
   promptTemplate: string;
   inputRequired: boolean;
   allowAttachments: boolean;
+  allowPersistentSelection: boolean;
   requireMention: boolean;
   enabled: boolean;
 }
@@ -54,6 +55,7 @@ const DEFAULT_FORM: CommandFormState = {
   promptTemplate: "",
   inputRequired: false,
   allowAttachments: true,
+  allowPersistentSelection: false,
   requireMention: false,
   enabled: true,
 };
@@ -106,6 +108,7 @@ export default function CommandDialog({
       promptTemplate: command.prompt_template ?? "",
       inputRequired: command.input_required,
       allowAttachments: command.allow_attachments,
+      allowPersistentSelection: command.allow_persistent_selection,
       requireMention: command.require_mention,
       enabled: command.enabled,
     });
@@ -140,6 +143,7 @@ export default function CommandDialog({
       prompt_template: form.promptTemplate.trim() || null,
       input_required: form.inputRequired,
       allow_attachments: form.allowAttachments,
+      allow_persistent_selection: form.allowPersistentSelection,
       require_mention: form.requireMention,
       enabled: form.enabled,
       settings_data: {},
@@ -304,6 +308,14 @@ export default function CommandDialog({
               checked={form.allowAttachments}
               onCheckedChange={(checked) =>
                 setField("allowAttachments", checked)
+              }
+            />
+            <CommandSwitch
+              title={copy("允许设为当前工作流")}
+              description={copy("用户可通过 /use-flow 持续切换到此工作流。")}
+              checked={form.allowPersistentSelection}
+              onCheckedChange={(checked) =>
+                setField("allowPersistentSelection", checked)
               }
             />
             <CommandSwitch

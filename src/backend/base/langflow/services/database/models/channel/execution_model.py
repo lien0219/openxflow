@@ -33,6 +33,7 @@ class ChannelExecutionIdentityType(str, Enum):
 class ChannelExecutionTrigger(str, Enum):
     DEFAULT = "default"
     COMMAND = "command"
+    SELECTED = "selected"
     ADMIN_FLOW = "admin_flow"
     FILE = "file"
 
@@ -92,6 +93,25 @@ class ChannelExecutionLog(SQLModel, table=True):  # type: ignore[call-arg]
     external_event_id: str = Field(max_length=255)
     trigger_type: str = Field(default=ChannelExecutionTrigger.DEFAULT.value, max_length=32)
     command_name: str | None = Field(default=None, max_length=33)
+    workflow_command_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            sa.Uuid(),
+            ForeignKey("channel_workflow_command.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+    active_selection_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            sa.Uuid(),
+            ForeignKey("channel_active_workflow_selection.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+    selection_scope: str | None = Field(default=None, max_length=32)
     status: str = Field(default=ChannelExecutionStatus.RUNNING.value, max_length=32, index=True)
     queue_wait_ms: int | None = None
     duration_ms: int | None = None
@@ -119,6 +139,9 @@ class ChannelExecutionLogRead(SQLModel):
     external_event_id: str
     trigger_type: str
     command_name: str | None = None
+    workflow_command_id: UUID | None = None
+    active_selection_id: UUID | None = None
+    selection_scope: str | None = None
     status: str
     queue_wait_ms: int | None = None
     duration_ms: int | None = None

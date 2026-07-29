@@ -43,6 +43,7 @@ export type ChannelExecutionIdentityType = "service" | "bound_user";
 export type ChannelExecutionTrigger =
   | "default"
   | "command"
+  | "selected"
   | "admin_flow"
   | "file";
 export type ChannelMessageDirection = "inbound" | "outbound";
@@ -80,6 +81,8 @@ export interface ChannelConnection {
   unconfigured_behavior: ChannelUnconfiguredBehavior;
   pending_notice_enabled: boolean;
   personal_commands_enabled: boolean;
+  user_flow_selection_enabled: boolean;
+  flow_selection_ttl_hours: number;
   default_response_mode: ChannelResponseMode;
   default_allow_file_upload: boolean;
   access_policy: ChannelAccessPolicy;
@@ -113,6 +116,8 @@ export interface ChannelConnectionCreate {
   unconfigured_behavior?: ChannelUnconfiguredBehavior;
   pending_notice_enabled?: boolean;
   personal_commands_enabled?: boolean;
+  user_flow_selection_enabled?: boolean;
+  flow_selection_ttl_hours?: number;
   default_response_mode?: ChannelResponseMode;
   default_allow_file_upload?: boolean;
   access_policy?: ChannelAccessPolicy;
@@ -140,6 +145,8 @@ export interface ChannelConnectionUpdate {
   unconfigured_behavior?: ChannelUnconfiguredBehavior;
   pending_notice_enabled?: boolean;
   personal_commands_enabled?: boolean;
+  user_flow_selection_enabled?: boolean;
+  flow_selection_ttl_hours?: number;
   default_response_mode?: ChannelResponseMode;
   default_allow_file_upload?: boolean;
   access_policy?: ChannelAccessPolicy;
@@ -289,6 +296,7 @@ export interface ChannelWorkflowCommand {
   prompt_template: string | null;
   input_required: boolean;
   allow_attachments: boolean;
+  allow_persistent_selection: boolean;
   require_mention: boolean;
   enabled: boolean;
   settings_data: Record<string, unknown>;
@@ -315,6 +323,7 @@ export interface ChannelWorkflowCommandCreate {
   prompt_template?: string | null;
   input_required: boolean;
   allow_attachments: boolean;
+  allow_persistent_selection: boolean;
   require_mention: boolean;
   enabled: boolean;
   settings_data: Record<string, unknown>;
@@ -328,6 +337,7 @@ export interface ChannelWorkflowCommandUpdate {
   prompt_template?: string | null;
   input_required?: boolean;
   allow_attachments?: boolean;
+  allow_persistent_selection?: boolean;
   require_mention?: boolean;
   enabled?: boolean;
   settings_data?: Record<string, unknown>;
@@ -354,6 +364,9 @@ export interface ChannelExecutionLog {
   external_event_id: string;
   trigger_type: ChannelExecutionTrigger;
   command_name: string | null;
+  workflow_command_id: string | null;
+  active_selection_id: string | null;
+  selection_scope: string | null;
   status: ChannelExecutionStatus;
   queue_wait_ms: number | null;
   duration_ms: number | null;

@@ -43,6 +43,7 @@ async def _recent_entries(
     session: AsyncSession,
     binding: ChannelConversationBinding,
     *,
+    session_id: str,
     limit: int,
 ) -> list[ChannelConversationContextEntry]:
     if limit <= 0:
@@ -51,7 +52,10 @@ async def _recent_entries(
         (
             await session.exec(
                 select(ChannelConversationContextEntry)
-                .where(ChannelConversationContextEntry.conversation_binding_id == binding.id)
+                .where(
+                    ChannelConversationContextEntry.conversation_binding_id == binding.id,
+                    ChannelConversationContextEntry.session_id == session_id,
+                )
                 .order_by(ChannelConversationContextEntry.created_at.desc(), ChannelConversationContextEntry.id.desc())
                 .limit(limit)
             )
@@ -119,7 +123,12 @@ async def prepare_channel_input(
         return input_value
 
     await _cleanup_expired_context(session, connection, binding)
-    entries = await _recent_entries(session, binding, limit=connection.shared_context_window)
+    entries = await _recent_entries(
+        session,
+        binding,
+        session_id=session_id,
+        limit=connection.shared_context_window,
+    )
     current_text = (input_value or "").strip()
     if current_text:
         await _insert_entry(

@@ -19,11 +19,22 @@ def test_system_command_aliases_resolve_to_one_canonical_command() -> None:
     assert resolve_system_command("/我的账号").command == "/whoami"
     assert resolve_system_command("/知识库").command == "/knowledge"
     assert resolve_system_command("/状态").command == "/status"
+    assert resolve_system_command("/切换工作流").command == "/use-flow"
+    assert resolve_system_command("/当前工作流").command == "/current-flow"
     assert resolve_system_command("/run") is None
 
 
 def test_reserved_names_include_canonical_commands_and_localized_aliases() -> None:
-    assert {"/help", "/帮助", "/flow", "/工作流", "/status", "/状态"} <= RESERVED_COMMAND_NAMES
+    assert {
+        "/help",
+        "/帮助",
+        "/flow",
+        "/工作流",
+        "/status",
+        "/状态",
+        "/use-flow",
+        "/current-flow",
+    } <= RESERVED_COMMAND_NAMES
     assert "/run" not in RESERVED_COMMAND_NAMES
 
 
@@ -36,7 +47,14 @@ def test_visible_commands_respect_group_context_and_permissions() -> None:
     )
     public_names = {item.command for item in public_group}
     assert "/bind" not in public_names
-    assert {"/commands", "/whoami", "/files", "/knowledge"} <= public_names
+    assert {
+        "/commands",
+        "/whoami",
+        "/files",
+        "/knowledge",
+        "/use-flow",
+        "/current-flow",
+    } <= public_names
     assert {"/flow", "/use-kb", "/status"}.isdisjoint(public_names)
 
     admin_private = visible_system_commands(

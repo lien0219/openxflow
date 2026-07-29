@@ -24,6 +24,11 @@ from langflow.channels.services.configuration_audit import (
 )
 from langflow.channels.services.conversation_validation import validate_channel_routing_resources
 from langflow.channels.services.execution_logs import list_channel_executions
+from langflow.channels.services.flow_selection import (
+    cleanup_expired_workflow_selections,
+    delete_active_workflow_selection,
+    list_active_workflow_selections,
+)
 from langflow.services.authorization import ChannelAction
 from langflow.services.database.models.channel.command_model import (
     ChannelWorkflowCommandCreate,
@@ -32,6 +37,9 @@ from langflow.services.database.models.channel.command_model import (
     ChannelWorkflowCommandUpdate,
 )
 from langflow.services.database.models.channel.execution_model import ChannelExecutionLogPage
+from langflow.services.database.models.channel.flow_selection_model import (
+    ChannelActiveWorkflowSelectionPage,
+)
 from langflow.services.database.models.channel.model import ChannelConnection
 
 router = APIRouter(prefix="/channels", tags=["Channel Management"])
@@ -234,3 +242,62 @@ async def read_channel_executions(
         created_from=created_from,
         created_to=created_to,
     )
+
+
+@router.get(
+    "/{connection_id}/flow-selections",
+    response_model=ChannelActiveWorkflowSelectionPage,
+)
+async def read_channel_flow_selections(
+    connection_id: UUID,
+    db: DbSession,
+    current_user: CurrentActiveUser,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    conversation_binding_id: Annotated[UUID | None, Query()] = None,
+    channel_identity_id: Annotated[UUID | None, Query()] = None,
+    workflow_command_id: Annotated[UUID | None, Query()] = None,
+) -> ChannelActiveWorkflowSelectionPage:
+    await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.AUDIT)
+    return await list_active_workflow_selections(
+        db,
+        connection_id,
+        page=page,
+        page_size=page_size,
+        conversation_binding_id=conversation_binding_id,
+        channel_identity_id=channel_identity_id,
+        workflow_command_id=workflow_command_id,
+    )
+
+
+@router.delete(
+    "/{connection_id}/flow-selections/{selection_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_channel_flow_selection(
+    connection_id: UUID,
+    selection_id: UUID,
+    db: DbSession,
+    current_user: CurrentActiveUser,
+) -> Response:
+    await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.WRITE)
+    if not await delete_active_workflow_selection(
+        db,
+        connection_id=connection_id,
+        selection_id=selection_id,
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active workflow selection not found")
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{connection_id}/flow-selections/cleanup")
+async def cleanup_channel_flow_selections(
+    connection_id: UUID,
+    db: DbSession,
+    current_user: CurrentActiveUser,
+) -> dict[str, int]:
+    await _administrable_connection_or_404(db, current_user, connection_id, ChannelAction.WRITE)
+    removed = await cleanup_expired_workflow_selections(db, connection_id=connection_id)
+    await db.commit()
+    return {"removed": removed}

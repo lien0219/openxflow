@@ -52,6 +52,9 @@ async def start_channel_execution(
     external_event_id: str,
     trigger_type: str,
     command_name: str | None = None,
+    workflow_command_id: UUID | None = None,
+    active_selection_id: UUID | None = None,
+    selection_scope: str | None = None,
     queue_wait_ms: int | None = None,
 ) -> ChannelExecutionLog:
     now = _utc_now()
@@ -66,6 +69,9 @@ async def start_channel_execution(
         external_event_id=external_event_id,
         trigger_type=trigger_type,
         command_name=command_name,
+        workflow_command_id=workflow_command_id,
+        active_selection_id=active_selection_id,
+        selection_scope=selection_scope,
         status=ChannelExecutionStatus.RUNNING.value,
         queue_wait_ms=queue_wait_ms,
         started_at=now,

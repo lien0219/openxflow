@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   type ChannelConnection,
@@ -24,6 +25,8 @@ interface RoutingFormState {
   unconfiguredBehavior: ChannelUnconfiguredBehavior;
   pendingNoticeEnabled: boolean;
   personalCommandsEnabled: boolean;
+  userFlowSelectionEnabled: boolean;
+  flowSelectionTtlHours: string;
   defaultResponseMode: ChannelResponseMode;
   defaultAllowFileUpload: boolean;
 }
@@ -55,6 +58,11 @@ export default function DefaultRoutingTab({
           unconfigured_behavior: form.unconfiguredBehavior,
           pending_notice_enabled: form.pendingNoticeEnabled,
           personal_commands_enabled: form.personalCommandsEnabled,
+          user_flow_selection_enabled: form.userFlowSelectionEnabled,
+          flow_selection_ttl_hours: Math.min(
+            8760,
+            Math.max(0, Number(form.flowSelectionTtlHours) || 0),
+          ),
           default_response_mode: form.defaultResponseMode,
           default_allow_file_upload: form.defaultAllowFileUpload,
         },
@@ -145,6 +153,17 @@ export default function DefaultRoutingTab({
           }
         />
         <SettingSwitch
+          title={copy("允许用户切换工作流")}
+          description={copy("用户可按成员、会话和线程持久选择管理员允许的业务工作流。")}
+          checked={form.userFlowSelectionEnabled}
+          onCheckedChange={(checked) =>
+            setForm((current) => ({
+              ...current,
+              userFlowSelectionEnabled: checked,
+            }))
+          }
+        />
+        <SettingSwitch
           title={copy("允许个人指令")}
           description={copy("绑定用户可创建仅对自己生效的工作流指令。")}
           checked={form.personalCommandsEnabled}
@@ -169,6 +188,27 @@ export default function DefaultRoutingTab({
           />
         )}
       </div>
+
+      {form.userFlowSelectionEnabled && (
+        <label className="flex flex-col gap-2 text-sm font-medium">
+          {copy("工作流选择有效期（小时）")}
+          <Input
+            type="number"
+            min={0}
+            max={8760}
+            value={form.flowSelectionTtlHours}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                flowSelectionTtlHours: event.target.value,
+              }))
+            }
+          />
+          <span className="text-xs font-normal text-muted-foreground">
+            {copy("设置为 0 表示永久有效，直到用户恢复默认或管理员撤销。")}
+          </span>
+        </label>
+      )}
 
       {capabilities?.supports_group_chat && capabilities.supports_mentions && (
         <label className="flex flex-col gap-2 text-sm font-medium">
@@ -214,6 +254,8 @@ function formFromConnection(connection: ChannelConnection): RoutingFormState {
     unconfiguredBehavior: connection.unconfigured_behavior,
     pendingNoticeEnabled: connection.pending_notice_enabled,
     personalCommandsEnabled: connection.personal_commands_enabled,
+    userFlowSelectionEnabled: connection.user_flow_selection_enabled,
+    flowSelectionTtlHours: String(connection.flow_selection_ttl_hours),
     defaultResponseMode: connection.default_response_mode,
     defaultAllowFileUpload: connection.default_allow_file_upload,
   };

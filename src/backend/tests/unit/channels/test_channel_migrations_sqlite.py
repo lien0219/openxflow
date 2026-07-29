@@ -4,10 +4,16 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from langflow.alembic.versions import (
+    a1f4c7e9d2b6_add_channel_active_workflow_selection as active_flow_selection_migration,
+)
+from langflow.alembic.versions import (
     a4c7d0f3e5b9_fix_channel_identity_user_fk as identity_user_fk_migration,
 )
 from langflow.alembic.versions import (
     a8e1c6d4f5b7_add_channel_outbound_delivery as outbound_delivery_migration,
+)
+from langflow.alembic.versions import (
+    b5d8e1f3a6c9_key_channel_outbound_delivery_parts as outbound_delivery_key_migration,
 )
 from langflow.alembic.versions import (
     b9f2d7e6c4a1_add_channel_routing_and_discovery as routing_migration,
@@ -49,6 +55,8 @@ _MIGRATIONS = (
     production_controls_migration,
     observability_migration,
     identity_user_fk_migration,
+    outbound_delivery_key_migration,
+    active_flow_selection_migration,
 )
 
 
@@ -86,6 +94,8 @@ def test_channel_migration_revision_chain() -> None:
         "e2f5a8c1d7b9",
         "f3a6c9e2b4d7",
         "a4c7d0f3e5b9",
+        "b5d8e1f3a6c9",
+        "a1f4c7e9d2b6",
     ]
     assert [migration.down_revision for migration in _MIGRATIONS] == [
         "e1705947c729",
@@ -99,6 +109,8 @@ def test_channel_migration_revision_chain() -> None:
         "d1e4f9a8b6c3",
         "e2f5a8c1d7b9",
         "f3a6c9e2b4d7",
+        "a4c7d0f3e5b9",
+        "b5d8e1f3a6c9",
     ]
 
 
@@ -126,6 +138,7 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
             "channel_conversation_context_entry",
             "channel_message_record",
             "channel_configuration_audit",
+            "channel_active_workflow_selection",
         }
         inspector = sa.inspect(connection)
         assert expected_tables.issubset(set(inspector.get_table_names()))
@@ -143,10 +156,11 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
             constraint["name"]: tuple(constraint["column_names"])
             for constraint in sa.inspect(connection).get_unique_constraints("channel_outbound_delivery")
         }
-        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
+        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
             "connection_id",
             "external_event_id",
             "delivery_kind",
+            "delivery_key",
         )
 
         outbound_indexes = {
@@ -169,6 +183,20 @@ def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None
         assert _foreign_key_ondelete(identity_user_foreign_keys[0]) == "SET NULL"
         identity_columns = {column["name"]: column for column in sa.inspect(connection).get_columns("channel_identity")}
         assert identity_columns["openxflow_user_id"]["nullable"] is True
+
+        connection_columns = {column["name"] for column in sa.inspect(connection).get_columns("channel_connection")}
+        assert {"user_flow_selection_enabled", "flow_selection_ttl_hours"} <= connection_columns
+        command_columns = {column["name"] for column in sa.inspect(connection).get_columns("channel_workflow_command")}
+        assert "allow_persistent_selection" in command_columns
+        context_indexes = {
+            index["name"]: tuple(index["column_names"])
+            for index in sa.inspect(connection).get_indexes("channel_conversation_context_entry")
+        }
+        assert context_indexes["ix_channel_context_conversation_session_created"] == (
+            "conversation_binding_id",
+            "session_id",
+            "created_at",
+        )
 
         for migration in reversed(_MIGRATIONS):
             migration.downgrade()

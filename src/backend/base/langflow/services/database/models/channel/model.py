@@ -101,6 +101,8 @@ class ChannelConnectionBase(SQLModel):
     unconfigured_behavior: str = Field(default=ChannelUnconfiguredBehavior.NOTIFY_PENDING.value, max_length=32)
     pending_notice_enabled: bool = Field(default=True)
     personal_commands_enabled: bool = Field(default=True)
+    user_flow_selection_enabled: bool = Field(default=False)
+    flow_selection_ttl_hours: int = Field(default=24, ge=0, le=8760)
     default_response_mode: str = Field(default="mention_only", max_length=32)
     default_allow_file_upload: bool = Field(default=True)
     access_policy: str = Field(default=ChannelAccessPolicy.HYBRID.value, max_length=32)
@@ -203,6 +205,8 @@ class ChannelConnectionUpdate(SQLModel):
     unconfigured_behavior: str | None = Field(default=None, max_length=32)
     pending_notice_enabled: bool | None = None
     personal_commands_enabled: bool | None = None
+    user_flow_selection_enabled: bool | None = None
+    flow_selection_ttl_hours: int | None = Field(default=None, ge=0, le=8760)
     default_response_mode: str | None = Field(default=None, max_length=32)
     default_allow_file_upload: bool | None = None
     access_policy: str | None = Field(default=None, max_length=32)

@@ -12,6 +12,7 @@ from .auth import (
     SSOUserProfile,
 )
 from .channel import (
+    ChannelActiveWorkflowSelection,
     ChannelConfigurationAudit,
     ChannelConnection,
     ChannelConversationBinding,
@@ -57,6 +58,7 @@ __all__ = [
     "AuthzTeam",
     "AuthzTeamMember",
     "CasbinRule",
+    "ChannelActiveWorkflowSelection",
     "ChannelConfigurationAudit",
     "ChannelConnection",
     "ChannelConversationBinding",

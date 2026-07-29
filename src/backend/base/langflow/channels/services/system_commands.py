@@ -57,6 +57,18 @@ SYSTEM_COMMANDS: tuple[SystemCommandDefinition, ...] = (
         permission="bound_or_shared",
     ),
     SystemCommandDefinition(
+        command="/use-flow",
+        aliases=("/切换工作流",),
+        description="切换当前会话持续使用的工作流",
+        permission="bound_or_shared",
+    ),
+    SystemCommandDefinition(
+        command="/current-flow",
+        aliases=("/当前工作流",),
+        description="查看当前会话正在使用的工作流",
+        permission="bound_or_shared",
+    ),
+    SystemCommandDefinition(
         command="/flow",
         aliases=("/工作流",),
         description="临时运行指定工作流",
