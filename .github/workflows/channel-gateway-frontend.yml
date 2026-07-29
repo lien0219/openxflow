@@ -10,6 +10,8 @@ on:
       - "src/frontend/package.json"
       - "src/frontend/package-lock.json"
       - "src/frontend/tsconfig.channels.json"
+      - "src/frontend/src/components/authorization/authPermissionGuard.tsx"
+      - "src/frontend/src/hooks/use-rbac-access.ts"
       - "src/frontend/src/controllers/API/queries/authz/**"
       - "src/frontend/src/controllers/API/queries/channels/**"
       - "src/frontend/src/controllers/API/queries/messages/**"
@@ -58,6 +60,8 @@ jobs:
         run: |
           set +e
           npx --no-install biome check \
+            src/components/authorization/authPermissionGuard.tsx \
+            src/hooks/use-rbac-access.ts \
             src/controllers/API/queries/authz \
             src/controllers/API/queries/channels \
             src/controllers/API/queries/messages/index.ts \
@@ -143,7 +147,7 @@ jobs:
           tsc_status=${PIPESTATUS[0]}
           set -e
 
-          focused_error_pattern='^src/(controllers/API/queries/(authz|channels|messages)|controllers/API/services/request-processor\.ts|pages/SettingsPage/pages/(ChannelsPage|messagesPage|PermissionsPage)|pages/SettingsPage/index\.tsx|routes\.tsx|i18n\.ts|locales/rbacTranslations\.ts).*error TS[0-9]+:'
+          focused_error_pattern='^src/(components/authorization/authPermissionGuard\.tsx|hooks/use-rbac-access\.ts|controllers/API/queries/(authz|channels|messages)|controllers/API/services/request-processor\.ts|pages/SettingsPage/pages/(ChannelsPage|messagesPage|PermissionsPage)|pages/SettingsPage/index\.tsx|routes\.tsx|i18n\.ts|locales/rbacTranslations\.ts).*error TS[0-9]+:'
           if grep -E "$focused_error_pattern" /tmp/channel-tsc.log; then
             echo "Channel, message or RBAC type errors detected."
             exit 1
