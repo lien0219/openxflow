@@ -124,16 +124,16 @@ def upgrade() -> None:
             if "selection_scope" not in execution_columns:
                 batch_op.add_column(sa.Column("selection_scope", sa.String(length=32), nullable=True))
         execution_indexes = _indexes("channel_execution_log", conn)
-        if "ix_channel_execution_workflow_command_id" not in execution_indexes:
+        if "ix_channel_execution_log_workflow_command_id" not in execution_indexes:
             op.create_index(
-                "ix_channel_execution_workflow_command_id",
+                "ix_channel_execution_log_workflow_command_id",
                 "channel_execution_log",
                 ["workflow_command_id"],
                 unique=False,
             )
-        if "ix_channel_execution_active_selection_id" not in execution_indexes:
+        if "ix_channel_execution_log_active_selection_id" not in execution_indexes:
             op.create_index(
-                "ix_channel_execution_active_selection_id",
+                "ix_channel_execution_log_active_selection_id",
                 "channel_execution_log",
                 ["active_selection_id"],
                 unique=False,
@@ -162,7 +162,10 @@ def downgrade() -> None:
 
     execution_columns = _columns("channel_execution_log", conn)
     if execution_columns:
-        for index_name in ("ix_channel_execution_active_selection_id", "ix_channel_execution_workflow_command_id"):
+        for index_name in (
+            "ix_channel_execution_log_active_selection_id",
+            "ix_channel_execution_log_workflow_command_id",
+        ):
             if index_name in _indexes("channel_execution_log", conn):
                 op.drop_index(index_name, table_name="channel_execution_log")
         with op.batch_alter_table("channel_execution_log", recreate=_recreate_mode(conn)) as batch_op:
