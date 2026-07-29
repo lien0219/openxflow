@@ -118,6 +118,11 @@ export type IdentitySummary = {
   permission_catalog: string[];
 };
 
+export type IdentitySummaryScope = {
+  domain_type: string;
+  domain_id?: string | null;
+};
+
 export async function getRbacStatus(): Promise<RbacStatus> {
   const response = await api.get<RbacStatus>(authzUrl("/me/status"));
   return response.data;
@@ -125,9 +130,14 @@ export async function getRbacStatus(): Promise<RbacStatus> {
 
 export async function getIdentitySummary(
   userId?: string,
+  scope?: IdentitySummaryScope,
 ): Promise<IdentitySummary> {
   const response = await api.get<IdentitySummary>(authzUrl("/me/summary"), {
-    params: userId ? { user_id: userId } : undefined,
+    params: {
+      user_id: userId || undefined,
+      domain_type: scope?.domain_type,
+      domain_id: scope?.domain_id || undefined,
+    },
   });
   return response.data;
 }
@@ -182,10 +192,19 @@ export async function deleteRole(roleId: string): Promise<void> {
 
 export async function getRoleAssignments(
   userId: string,
+  scope?: IdentitySummaryScope,
 ): Promise<RoleAssignment[]> {
   const response = await api.get<RoleAssignment[]>(
     authzUrl("/role-assignments"),
-    { params: { user_id: userId, limit: 200, offset: 0 } },
+    {
+      params: {
+        user_id: userId,
+        domain_type: scope?.domain_type,
+        domain_id: scope?.domain_id || undefined,
+        limit: 200,
+        offset: 0,
+      },
+    },
   );
   return response.data;
 }
@@ -228,9 +247,14 @@ export async function createTeam(payload: {
 
 export async function updateTeam(
   teamId: string,
-  payload: Partial<Pick<Team, "team_name" | "adom_name" | "description" | "is_active">>,
+  payload: Partial<
+    Pick<Team, "team_name" | "adom_name" | "description" | "is_active">
+  >,
 ): Promise<Team> {
-  const response = await api.patch<Team>(authzUrl(`/teams/${teamId}`), payload);
+  const response = await api.patch<Team>(
+    authzUrl(`/teams/${teamId}`),
+    payload,
+  );
   return response.data;
 }
 
@@ -307,6 +331,8 @@ export async function getAuditPage(params: {
   result?: string;
   since?: string;
   until?: string;
+  domain_type?: string;
+  domain_id?: string;
 }): Promise<AuditPage> {
   const response = await api.get<AuditPage>(authzUrl("/audit"), { params });
   return response.data;
