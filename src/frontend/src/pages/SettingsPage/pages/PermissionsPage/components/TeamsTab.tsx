@@ -11,14 +11,14 @@ import {
   getTeamRoles,
   getTeams,
   getUsers,
-  removeTeamMember,
-  removeTeamRole,
-  updateTeam,
   type RbacRole,
   type RbacUser,
+  removeTeamMember,
+  removeTeamRole,
   type Team,
   type TeamMember,
   type TeamRoleAssignment,
+  updateTeam,
 } from "@/controllers/API/queries/authz";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";

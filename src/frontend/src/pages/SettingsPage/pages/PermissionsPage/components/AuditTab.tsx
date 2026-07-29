@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getAuditPage, type AuditPage } from "@/controllers/API/queries/authz";
+import { type AuditPage, getAuditPage } from "@/controllers/API/queries/authz";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const SELECT_CLASS =

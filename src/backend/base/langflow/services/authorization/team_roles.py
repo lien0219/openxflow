@@ -9,11 +9,14 @@ reference-counted cleanup when multiple teams grant the same role/scope.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
+
+if TYPE_CHECKING:
+    from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.services.database.models.auth import (
     AuthzRoleAssignment,
