@@ -1,6 +1,6 @@
 name: Channel Gateway Frontend
 
-# Keep this workflow scoped to Channel Center and message-management changes.
+# Focused validation for Channel Center, message pagination and RBAC management UI.
 on:
   pull_request:
     branches:
@@ -10,14 +10,17 @@ on:
       - "src/frontend/package.json"
       - "src/frontend/package-lock.json"
       - "src/frontend/tsconfig.channels.json"
+      - "src/frontend/src/controllers/API/queries/authz/**"
       - "src/frontend/src/controllers/API/queries/channels/**"
       - "src/frontend/src/controllers/API/queries/messages/**"
       - "src/frontend/src/controllers/API/services/request-processor.ts"
       - "src/frontend/src/controllers/API/helpers/constants.ts"
       - "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/**"
       - "src/frontend/src/pages/SettingsPage/pages/messagesPage/**"
+      - "src/frontend/src/pages/SettingsPage/pages/PermissionsPage/**"
       - "src/frontend/src/i18n.ts"
       - "src/frontend/src/locales/channelTranslations.ts"
+      - "src/frontend/src/locales/rbacTranslations.ts"
       - "src/frontend/src/pages/SettingsPage/index.tsx"
       - "src/frontend/src/routes.tsx"
   workflow_dispatch:
@@ -50,11 +53,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --ignore-scripts --loglevel=error
 
-      - name: Check Channel Center and message pagination formatting
+      - name: Check Channel Center, messages and RBAC formatting
         shell: bash
         run: |
           set +e
           npx --no-install biome check \
+            src/controllers/API/queries/authz \
             src/controllers/API/queries/channels \
             src/controllers/API/queries/messages/index.ts \
             src/controllers/API/queries/messages/use-delete-messages.ts \
@@ -62,17 +66,19 @@ jobs:
             src/controllers/API/services/request-processor.ts \
             src/pages/SettingsPage/pages/ChannelsPage \
             src/pages/SettingsPage/pages/messagesPage \
+            src/pages/SettingsPage/pages/PermissionsPage \
             src/controllers/API/helpers/constants.ts \
             src/pages/SettingsPage/index.tsx \
             src/routes.tsx \
             src/i18n.ts \
             src/locales/channelTranslations.ts \
+            src/locales/rbacTranslations.ts \
             tsconfig.channels.json 2>&1 | tee /tmp/channel-biome.log
           biome_status=${PIPESTATUS[0]}
           set -e
           exit "$biome_status"
 
-      - name: Upload Channel Center Biome diagnostics
+      - name: Upload focused Biome diagnostics
         if: always()
         uses: actions/upload-artifact@v6
         with:
@@ -101,12 +107,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --ignore-scripts --loglevel=error
 
-      - name: Run Channel Center unit tests
+      - name: Run Channel Center and RBAC unit tests
         run: >-
           npm test --
           --runInBand
           src/pages/SettingsPage/pages/ChannelsPage/__tests__/utils.test.ts
           src/pages/SettingsPage/pages/ChannelsPage/__tests__/i18n.test.ts
+          src/pages/SettingsPage/pages/PermissionsPage/__tests__/i18n.test.ts
 
   type-check:
     runs-on: ubuntu-latest
@@ -128,7 +135,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --ignore-scripts --loglevel=error
 
-      - name: Type-check Channel Center and message pagination
+      - name: Type-check Channel Center, messages and RBAC
         shell: bash
         run: |
           set +e
@@ -136,9 +143,9 @@ jobs:
           tsc_status=${PIPESTATUS[0]}
           set -e
 
-          channel_error_pattern='^src/(controllers/API/queries/(channels|messages)|controllers/API/services/request-processor\.ts|pages/SettingsPage/pages/(ChannelsPage|messagesPage)).*error TS[0-9]+:'
-          if grep -E "$channel_error_pattern" /tmp/channel-tsc.log; then
-            echo "Channel or message pagination type errors detected."
+          focused_error_pattern='^src/(controllers/API/queries/(authz|channels|messages)|controllers/API/services/request-processor\.ts|pages/SettingsPage/pages/(ChannelsPage|messagesPage|PermissionsPage)|pages/SettingsPage/index\.tsx|routes\.tsx|i18n\.ts|locales/rbacTranslations\.ts).*error TS[0-9]+:'
+          if grep -E "$focused_error_pattern" /tmp/channel-tsc.log; then
+            echo "Channel, message or RBAC type errors detected."
             exit 1
           fi
 
@@ -146,7 +153,7 @@ jobs:
             echo "::warning::TypeScript reported pre-existing errors in imported shared modules."
           fi
 
-      - name: Upload Channel Center TypeScript diagnostics
+      - name: Upload focused TypeScript diagnostics
         if: always()
         uses: actions/upload-artifact@v6
         with:
