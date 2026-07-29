@@ -58,6 +58,10 @@ const en: RbacTranslationMap = {
   "rbac.teams.slug": "Administrative domain slug",
   "rbac.teams.description": "Description",
   "rbac.teams.members": "Team members",
+  "rbac.teams.roles": "Team roles",
+  "rbac.teams.rolesHelp":
+    "Members automatically inherit these roles in the selected scope. Existing manual grants are preserved when a team role is removed.",
+  "rbac.teams.addRole": "Add team role",
   "rbac.teams.create": "Create team",
   "rbac.shares.resourceType": "Resource type",
   "rbac.shares.resourceId": "Resource ID",
@@ -132,6 +136,10 @@ const zhHans: RbacTranslationMap = {
   "rbac.teams.slug": "管理域标识",
   "rbac.teams.description": "团队说明",
   "rbac.teams.members": "团队成员",
+  "rbac.teams.roles": "团队角色",
+  "rbac.teams.rolesHelp":
+    "团队成员会在所选作用域内自动继承这些角色；移除团队角色时会保留原有的手工授权。",
+  "rbac.teams.addRole": "添加团队角色",
   "rbac.teams.create": "创建团队",
   "rbac.shares.resourceType": "资源类型",
   "rbac.shares.resourceId": "资源 ID",
