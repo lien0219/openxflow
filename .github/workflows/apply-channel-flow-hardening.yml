@@ -7,6 +7,12 @@ on:
     paths:
       - ".github/scripts/apply_channel_flow_hardening.py"
       - ".github/workflows/apply-channel-flow-hardening.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/scripts/apply_channel_flow_hardening.py"
+      - ".github/workflows/apply-channel-flow-hardening.yml"
   workflow_dispatch:
 
 permissions:
