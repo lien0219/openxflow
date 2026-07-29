@@ -2,6 +2,13 @@
 
 import asyncio
 import os
+from pathlib import Path
+
+if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selection":
+    scope: dict[str, object] = {}
+    exec(Path(".github/scripts/channel_active_flow_codegen.py").read_text(encoding="utf-8"), scope)
+    scope["run"]()
+    raise SystemExit(0)
 
 import langflow.main  # noqa: F401
 from langflow.initial_setup.setup import (
