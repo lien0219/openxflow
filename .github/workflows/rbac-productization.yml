@@ -1,0 +1,132 @@
+name: RBAC Productization
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/rbac-productization.yml"
+      - "src/backend/base/langflow/api/router.py"
+      - "src/backend/base/langflow/api/v1/__init__.py"
+      - "src/backend/base/langflow/api/v1/authz_*.py"
+      - "src/backend/base/langflow/api/v1/users.py"
+      - "src/backend/base/langflow/api/v1/schemas/authz_*.py"
+      - "src/backend/base/langflow/services/authorization/**"
+      - "src/backend/base/langflow/services/database/models/auth/**"
+      - "src/backend/tests/unit/channels/test_*rbac*.py"
+      - "src/backend/tests/unit/channels/test_team_role_grants.py"
+      - "src/frontend/src/components/authorization/authPermissionGuard.tsx"
+      - "src/frontend/src/controllers/API/queries/authz/**"
+      - "src/frontend/src/hooks/use-rbac-access.ts"
+      - "src/frontend/src/locales/rbacTranslations.ts"
+      - "src/frontend/src/pages/SettingsPage/index.tsx"
+      - "src/frontend/src/pages/SettingsPage/pages/PermissionsPage/**"
+      - "src/frontend/src/routes.tsx"
+      - "src/frontend/tsconfig.channels.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rbac-productization-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: src/backend/base
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            pyproject.toml
+            src/backend/base/pyproject.toml
+      - name: Install backend test environment
+        run: uv sync --quiet --frozen --project src/backend/base --group dev
+      - name: Ruff RBAC implementation and tests
+        run: >-
+          uvx --quiet ruff check
+          --config pyproject.toml
+          --extend-ignore EM101,TRY003
+          --output-format concise
+          src/backend/base/langflow/api/router.py
+          src/backend/base/langflow/api/v1/__init__.py
+          src/backend/base/langflow/api/v1/authz_audit.py
+          src/backend/base/langflow/api/v1/authz_me.py
+          src/backend/base/langflow/api/v1/authz_role_assignments.py
+          src/backend/base/langflow/api/v1/authz_roles.py
+          src/backend/base/langflow/api/v1/authz_shares.py
+          src/backend/base/langflow/api/v1/authz_startup.py
+          src/backend/base/langflow/api/v1/authz_teams.py
+          src/backend/base/langflow/api/v1/users.py
+          src/backend/base/langflow/api/v1/schemas/authz_role_assignments.py
+          src/backend/base/langflow/api/v1/schemas/authz_roles.py
+          src/backend/base/langflow/api/v1/schemas/authz_shares.py
+          src/backend/base/langflow/api/v1/schemas/authz_teams.py
+          src/backend/base/langflow/services/authorization
+          src/backend/tests/unit/channels/test_builtin_rbac.py
+          src/backend/tests/unit/channels/test_rbac_productization.py
+          src/backend/tests/unit/channels/test_rbac_startup.py
+          src/backend/tests/unit/channels/test_team_role_grants.py
+      - name: Compile RBAC modules
+        run: >-
+          python -m compileall -q
+          src/backend/base/langflow/api/router.py
+          src/backend/base/langflow/api/v1
+          src/backend/base/langflow/services/authorization
+          src/backend/tests/unit/channels/test_builtin_rbac.py
+          src/backend/tests/unit/channels/test_rbac_productization.py
+          src/backend/tests/unit/channels/test_rbac_startup.py
+          src/backend/tests/unit/channels/test_team_role_grants.py
+      - name: Run RBAC integration tests
+        run: >-
+          uv run --frozen --project src/backend/base --group dev
+          pytest -q -x --tb=short
+          --confcutdir=src/backend/tests/unit/channels
+          src/backend/tests/unit/channels/test_builtin_rbac.py
+          src/backend/tests/unit/channels/test_rbac_productization.py
+          src/backend/tests/unit/channels/test_rbac_startup.py
+          src/backend/tests/unit/channels/test_team_role_grants.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --ignore-scripts --loglevel=error
+      - name: Check permission-center formatting
+        run: >-
+          npx --no-install biome check
+          src/components/authorization/authPermissionGuard.tsx
+          src/controllers/API/queries/authz
+          src/hooks/use-rbac-access.ts
+          src/locales/rbacTranslations.ts
+          src/pages/SettingsPage/index.tsx
+          src/pages/SettingsPage/pages/PermissionsPage
+          src/routes.tsx
+          tsconfig.channels.json
+      - name: Type-check permission center
+        run: npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json
+      - name: Run permission-center tests
+        run: >-
+          npm test --
+          --runInBand
+          src/pages/SettingsPage/pages/PermissionsPage/__tests__/i18n.test.ts
