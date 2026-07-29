@@ -27,4 +27,4 @@ async def test_authorization_lifespan_reconciles_catalog_before_serving(monkeypa
     async with authz_startup.authorization_lifespan(None):
         events.append("serving")
 
-    assert events == ["session-open", "bootstrap", "serving", "session-close"]
+    assert events == ["session-open", "bootstrap", "session-close", "serving"]
