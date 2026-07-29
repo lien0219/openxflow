@@ -136,9 +136,7 @@ async def get_rbac_status(
         auto_login=bool(auth_settings.AUTO_LOGIN),
         is_superuser=bool(current_user.is_superuser),
         production_ready=bool(
-            not auth_settings.AUTO_LOGIN
-            and auth_settings.AUTHZ_ENABLED
-            and auth_settings.AUTHZ_AUDIT_ENABLED
+            not auth_settings.AUTO_LOGIN and auth_settings.AUTHZ_ENABLED and auth_settings.AUTHZ_AUDIT_ENABLED
         ),
         warnings=warnings,
     )
