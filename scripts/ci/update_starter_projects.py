@@ -10,7 +10,7 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
     source = generator_path.read_text(encoding="utf-8")
     source = source.replace(
         "    replace_once(path, old_handle, new_handle)\n",
-        """    dispatch_source = read(path)
+        '''    dispatch_source = read(path)
     dispatch_handle_start = dispatch_source.index("    async def handle(")
     dispatch_block_start = dispatch_source.index(
         "        try:\\n            principal = await resolve_execution_principal(",
@@ -26,17 +26,17 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
         + new_handle.rstrip()
         + dispatch_source[dispatch_block_end:],
     )
-""",
+''',
         1,
     )
     source = source.replace(
-        """    replace_once(
+        '''    replace_once(
         path,
         "        conversation_type: str,\\n    ) -> ChannelMessage:\\n",
         "        conversation_type: str,\\n        event: ChannelEvent,\\n        identity,\\n    ) -> ChannelMessage:\\n",
     )
-""",
-        """    dispatch_source = read(path)
+''',
+        '''    dispatch_source = read(path)
     commands_start = dispatch_source.index("    async def _commands_message(")
     commands_end = dispatch_source.index("\\n\\n    async def _unknown_command_message(", commands_start)
     signature = "        conversation_type: str,\\n    ) -> ChannelMessage:\\n"
@@ -47,18 +47,18 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
         + "        conversation_type: str,\\n        event: ChannelEvent,\\n        identity,\\n    ) -> ChannelMessage:\\n"
         + dispatch_source[signature_start + len(signature):],
     )
-""",
+''',
         1,
     )
     source = source.replace(
-        """    replace_once(
+        '''    replace_once(
         path,
         '            if item.command in {"/commands", "/whoami", "/files", "/knowledge", "/status"}\\n',
         "            if item.command\\n"
         '            in {"/commands", "/current-flow", "/whoami", "/files", "/knowledge", "/status"}\\n',
     )
-""",
-        """    dispatch_source = read(path)
+''',
+        '''    dispatch_source = read(path)
     commands_start = dispatch_source.index("    async def _commands_message(")
     commands_end = dispatch_source.index("\\n\\n    async def _unknown_command_message(", commands_start)
     action_filter = '            if item.command in {"/commands", "/whoami", "/files", "/knowledge", "/status"}\\n'
@@ -70,7 +70,70 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
         + '            in {"/commands", "/current-flow", "/whoami", "/files", "/knowledge", "/status"}\\n'
         + dispatch_source[action_filter_start + len(action_filter):],
     )
-""",
+''',
+        1,
+    )
+    source = source.replace(
+        '''    replace_once(
+        path,
+        "  personal_commands_enabled?: boolean;\\n  default_response_mode?: ChannelResponseMode;\\n",
+        "  personal_commands_enabled?: boolean;\\n"
+        "  user_flow_selection_enabled?: boolean;\\n"
+        "  flow_selection_ttl_hours?: number;\\n"
+        "  default_response_mode?: ChannelResponseMode;\\n",
+    )
+    replace_once(
+        path,
+        "  personal_commands_enabled?: boolean;\\n  default_response_mode?: ChannelResponseMode;\\n",
+        "  personal_commands_enabled?: boolean;\\n"
+        "  user_flow_selection_enabled?: boolean;\\n"
+        "  flow_selection_ttl_hours?: number;\\n"
+        "  default_response_mode?: ChannelResponseMode;\\n",
+    )
+''',
+        '''    frontend_types = read(path)
+    optional_policy_fields = "  personal_commands_enabled?: boolean;\\n  default_response_mode?: ChannelResponseMode;\\n"
+    optional_policy_replacement = (
+        "  personal_commands_enabled?: boolean;\\n"
+        "  user_flow_selection_enabled?: boolean;\\n"
+        "  flow_selection_ttl_hours?: number;\\n"
+        "  default_response_mode?: ChannelResponseMode;\\n"
+    )
+    if frontend_types.count(optional_policy_fields) != 2:
+        raise RuntimeError("Expected connection create/update policy fields twice")
+    write(path, frontend_types.replace(optional_policy_fields, optional_policy_replacement))
+''',
+        1,
+    )
+    source = source.replace(
+        '''    replace_once(
+        path,
+        "  allow_attachments: boolean;\\n  require_mention: boolean;\\n",
+        "  allow_attachments: boolean;\\n  allow_persistent_selection: boolean;\\n  require_mention: boolean;\\n",
+    )
+    replace_once(
+        path,
+        "  allow_attachments: boolean;\\n  require_mention: boolean;\\n  enabled: boolean;\\n  settings_data: Record<string, unknown>;\\n}\\n\\nexport interface ChannelWorkflowCommandUpdate",
+        "  allow_attachments: boolean;\\n"
+        "  allow_persistent_selection: boolean;\\n"
+        "  require_mention: boolean;\\n"
+        "  enabled: boolean;\\n"
+        "  settings_data: Record<string, unknown>;\\n"
+        "}\\n\\n"
+        "export interface ChannelWorkflowCommandUpdate",
+    )
+''',
+        '''    frontend_types = read(path)
+    command_attachment_fields = "  allow_attachments: boolean;\\n  require_mention: boolean;\\n"
+    command_attachment_replacement = (
+        "  allow_attachments: boolean;\\n"
+        "  allow_persistent_selection: boolean;\\n"
+        "  require_mention: boolean;\\n"
+    )
+    if frontend_types.count(command_attachment_fields) != 2:
+        raise RuntimeError("Expected workflow command attachment fields twice")
+    write(path, frontend_types.replace(command_attachment_fields, command_attachment_replacement))
+''',
         1,
     )
     scope: dict[str, object] = {}
@@ -82,19 +145,19 @@ if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selectio
         original_migration_tests()
         path = Path("src/backend/tests/unit/channels/test_channel_migrations_sqlite.py")
         content = path.read_text(encoding="utf-8")
-        old = """        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
+        old = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind"] == (
             "connection_id",
             "external_event_id",
             "delivery_kind",
         )
-"""
-        new = """        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
+'''
+        new = '''        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
             "connection_id",
             "external_event_id",
             "delivery_kind",
             "delivery_key",
         )
-"""
+'''
         if content.count(old) != 1:
             raise RuntimeError("Unable to update outbound delivery migration assertion")
         path.write_text(content.replace(old, new, 1), encoding="utf-8")
