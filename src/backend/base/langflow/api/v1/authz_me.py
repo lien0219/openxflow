@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -173,9 +173,9 @@ async def get_rbac_status(
 async def get_rbac_identity_summary(
     current_user: CurrentActiveUser,
     session: DbSession,
-    user_id: UUID | None = Query(default=None),
-    domain_type: str | None = Query(default=None),
-    domain_id: UUID | None = Query(default=None),
+    user_id: Annotated[UUID | None, Query()] = None,
+    domain_type: Annotated[str | None, Query()] = None,
+    domain_id: Annotated[UUID | None, Query()] = None,
 ) -> RbacIdentitySummaryResponse:
     await ensure_authorization_bootstrap(session)
     target_user_id = user_id or current_user.id
