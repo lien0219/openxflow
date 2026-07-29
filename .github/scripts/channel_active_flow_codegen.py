@@ -653,7 +653,7 @@ def downgrade() -> None:
 '''
 
 
-FLOW_SELECTION_TEST = '''from __future__ import annotations
+FLOW_SELECTION_TEST = """from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -838,7 +838,7 @@ async def test_expired_or_disabled_selection_is_removed(selection_session) -> No
         channel_identity_id=identity.id,
         conversation_scope_id="",
     )
-'''
+"""
 
 
 def apply_backend_models() -> None:
@@ -861,11 +861,11 @@ def apply_backend_models() -> None:
 
     replace_once(
         "src/backend/base/langflow/services/database/models/channel/model.py",
-        "    personal_commands_enabled: bool = Field(default=True)\n    default_response_mode: str = Field(default=\"mention_only\", max_length=32)\n",
+        '    personal_commands_enabled: bool = Field(default=True)\n    default_response_mode: str = Field(default="mention_only", max_length=32)\n',
         "    personal_commands_enabled: bool = Field(default=True)\n"
         "    user_flow_selection_enabled: bool = Field(default=False)\n"
         "    flow_selection_ttl_hours: int = Field(default=24, ge=0, le=8760)\n"
-        "    default_response_mode: str = Field(default=\"mention_only\", max_length=32)\n",
+        '    default_response_mode: str = Field(default="mention_only", max_length=32)\n',
     )
     replace_once(
         "src/backend/base/langflow/services/database/models/channel/model.py",
@@ -893,15 +893,15 @@ def apply_backend_models() -> None:
 
     replace_once(
         "src/backend/base/langflow/services/database/models/channel/context_model.py",
-        "        sa.Index(\n            \"ix_channel_context_connection_created\",\n            \"connection_id\",\n            \"created_at\",\n        ),\n",
-        "        sa.Index(\n            \"ix_channel_context_connection_created\",\n            \"connection_id\",\n            \"created_at\",\n        ),\n"
-        "        sa.Index(\n            \"ix_channel_context_conversation_session_created\",\n            \"conversation_binding_id\",\n            \"session_id\",\n            \"created_at\",\n        ),\n",
+        '        sa.Index(\n            "ix_channel_context_connection_created",\n            "connection_id",\n            "created_at",\n        ),\n',
+        '        sa.Index(\n            "ix_channel_context_connection_created",\n            "connection_id",\n            "created_at",\n        ),\n'
+        '        sa.Index(\n            "ix_channel_context_conversation_session_created",\n            "conversation_binding_id",\n            "session_id",\n            "created_at",\n        ),\n',
     )
 
     replace_once(
         "src/backend/base/langflow/services/database/models/channel/execution_model.py",
-        "    COMMAND = \"command\"\n    ADMIN_FLOW = \"admin_flow\"\n",
-        "    COMMAND = \"command\"\n    SELECTED = \"selected\"\n    ADMIN_FLOW = \"admin_flow\"\n",
+        '    COMMAND = "command"\n    ADMIN_FLOW = "admin_flow"\n',
+        '    COMMAND = "command"\n    SELECTED = "selected"\n    ADMIN_FLOW = "admin_flow"\n',
     )
     replace_once(
         "src/backend/base/langflow/services/database/models/channel/execution_model.py",
@@ -911,7 +911,7 @@ def apply_backend_models() -> None:
         "        default=None,\n"
         "        sa_column=Column(\n"
         "            sa.Uuid(),\n"
-        "            ForeignKey(\"channel_workflow_command.id\", ondelete=\"SET NULL\"),\n"
+        '            ForeignKey("channel_workflow_command.id", ondelete="SET NULL"),\n'
         "            nullable=True,\n"
         "            index=True,\n"
         "        ),\n"
@@ -920,7 +920,7 @@ def apply_backend_models() -> None:
         "        default=None,\n"
         "        sa_column=Column(\n"
         "            sa.Uuid(),\n"
-        "            ForeignKey(\"channel_active_workflow_selection.id\", ondelete=\"SET NULL\"),\n"
+        '            ForeignKey("channel_active_workflow_selection.id", ondelete="SET NULL"),\n'
         "            nullable=True,\n"
         "            index=True,\n"
         "        ),\n"
@@ -969,12 +969,12 @@ def apply_backend_models() -> None:
     )
     replace_once(
         "src/backend/base/langflow/channels/services/workflow.py",
-        "    if context_mode != ChannelContextMode.SHARED.value or event.conversation.conversation_type == \"private\":\n        parts.append(event.user.external_user_id)\n    raw = \":\".join(parts)\n",
-        "    if context_mode != ChannelContextMode.SHARED.value or event.conversation.conversation_type == \"private\":\n"
+        '    if context_mode != ChannelContextMode.SHARED.value or event.conversation.conversation_type == "private":\n        parts.append(event.user.external_user_id)\n    raw = ":".join(parts)\n',
+        '    if context_mode != ChannelContextMode.SHARED.value or event.conversation.conversation_type == "private":\n'
         "        parts.append(event.user.external_user_id)\n"
         "    if flow_key is not None:\n"
         "        parts.append(str(flow_key))\n"
-        "    raw = \":\".join(parts)\n",
+        '    raw = ":".join(parts)\n',
     )
 
     replace_once(
@@ -1016,11 +1016,11 @@ def apply_model_exports() -> None:
     )
     replace_once(
         "src/backend/base/langflow/services/database/models/channel/__init__.py",
-        "    \"ChannelAccessPolicy\",\n",
-        "    \"ChannelAccessPolicy\",\n"
-        "    \"ChannelActiveWorkflowSelection\",\n"
-        "    \"ChannelActiveWorkflowSelectionPage\",\n"
-        "    \"ChannelActiveWorkflowSelectionRead\",\n",
+        '    "ChannelAccessPolicy",\n',
+        '    "ChannelAccessPolicy",\n'
+        '    "ChannelActiveWorkflowSelection",\n'
+        '    "ChannelActiveWorkflowSelectionPage",\n'
+        '    "ChannelActiveWorkflowSelectionRead",\n',
     )
     replace_once(
         "src/backend/base/langflow/services/database/models/__init__.py",
@@ -1029,28 +1029,28 @@ def apply_model_exports() -> None:
     )
     replace_once(
         "src/backend/base/langflow/services/database/models/__init__.py",
-        "    \"ChannelConfigurationAudit\",\n",
-        "    \"ChannelActiveWorkflowSelection\",\n    \"ChannelConfigurationAudit\",\n",
+        '    "ChannelConfigurationAudit",\n',
+        '    "ChannelActiveWorkflowSelection",\n    "ChannelConfigurationAudit",\n',
     )
 
 
 def apply_system_commands() -> None:
     replace_once(
         "src/backend/base/langflow/channels/services/system_commands.py",
-        "    SystemCommandDefinition(\n        command=\"/flow\",\n",
+        '    SystemCommandDefinition(\n        command="/flow",\n',
         "    SystemCommandDefinition(\n"
-        "        command=\"/use-flow\",\n"
-        "        aliases=(\"/切换工作流\",),\n"
-        "        description=\"切换当前会话持续使用的工作流\",\n"
-        "        permission=\"bound_or_shared\",\n"
+        '        command="/use-flow",\n'
+        '        aliases=("/切换工作流",),\n'
+        '        description="切换当前会话持续使用的工作流",\n'
+        '        permission="bound_or_shared",\n'
         "    ),\n"
         "    SystemCommandDefinition(\n"
-        "        command=\"/current-flow\",\n"
-        "        aliases=(\"/当前工作流\",),\n"
-        "        description=\"查看当前会话正在使用的工作流\",\n"
-        "        permission=\"bound_or_shared\",\n"
+        '        command="/current-flow",\n'
+        '        aliases=("/当前工作流",),\n'
+        '        description="查看当前会话正在使用的工作流",\n'
+        '        permission="bound_or_shared",\n'
         "    ),\n"
-        "    SystemCommandDefinition(\n        command=\"/flow\",\n",
+        '    SystemCommandDefinition(\n        command="/flow",\n',
     )
 
 
@@ -1072,7 +1072,7 @@ def apply_dispatch() -> None:
         ")\n",
     )
 
-    old_handle = '''        try:
+    old_handle = """        try:
             principal = await resolve_execution_principal(
                 self.session,
                 self.connection,
@@ -1118,8 +1118,8 @@ def apply_dispatch() -> None:
             trigger_type=ChannelExecutionTrigger.DEFAULT.value,
             flow_id=flow_id,
         )
-'''
-    new_handle = '''        if event.message.attachments:
+"""
+    new_handle = """        if event.message.attachments:
             try:
                 principal = await resolve_execution_principal(
                     self.session,
@@ -1224,23 +1224,23 @@ def apply_dispatch() -> None:
         if selection_resolution.invalid_reason and response is not None:
             return self._with_selection_fallback_notice(response)
         return response
-'''
+"""
     replace_once(path, old_handle, new_handle)
 
     replace_once(
         path,
-        "                conversation_type=event.conversation.conversation_type,\n            )\n        if command == \"/whoami\":\n",
+        '                conversation_type=event.conversation.conversation_type,\n            )\n        if command == "/whoami":\n',
         "                conversation_type=event.conversation.conversation_type,\n"
         "                event=event,\n"
         "                identity=identity,\n"
         "            )\n"
-        "        if command == \"/whoami\":\n",
+        '        if command == "/whoami":\n',
     )
 
     replace_once(
         path,
-        "        if command == \"/flow\":\n",
-        "        if command == \"/use-flow\":\n"
+        '        if command == "/flow":\n',
+        '        if command == "/use-flow":\n'
         "            return await self._use_flow_message(\n"
         "                event=event,\n"
         "                identity=identity,\n"
@@ -1249,17 +1249,17 @@ def apply_dispatch() -> None:
         "                argument=argument,\n"
         "                personal_user_id=personal_user_id,\n"
         "            )\n"
-        "        if command == \"/current-flow\":\n"
+        '        if command == "/current-flow":\n'
         "            return await self._current_flow_message(\n"
         "                event=event,\n"
         "                identity=identity,\n"
         "                binding=binding,\n"
         "                personal_user_id=personal_user_id,\n"
         "            )\n"
-        "        if command == \"/flow\":\n",
+        '        if command == "/flow":\n',
     )
 
-    methods = '''    async def _use_flow_message(
+    methods = """    async def _use_flow_message(
         self,
         *,
         event: ChannelEvent,
@@ -1373,7 +1373,7 @@ def apply_dispatch() -> None:
             text=f"当前使用会话或连接默认工作流：{str(default_flow_id)[:8]}…",
         )
 
-'''
+"""
     replace_once(path, "    async def _execute_custom_command(\n", methods + "    async def _execute_custom_command(\n")
 
     replace_once(
@@ -1387,14 +1387,11 @@ def apply_dispatch() -> None:
     replace_once(
         path,
         "        conversation_type: str,\n    ) -> ChannelMessage:\n",
-        "        conversation_type: str,\n"
-        "        event: ChannelEvent,\n"
-        "        identity,\n"
-        "    ) -> ChannelMessage:\n",
+        "        conversation_type: str,\n        event: ChannelEvent,\n        identity,\n    ) -> ChannelMessage:\n",
     )
     replace_once(
         path,
-        "        sections = [\"系统指令\"]\n",
+        '        sections = ["系统指令"]\n',
         "        current_command_id: UUID | None = None\n"
         "        if binding is not None and self.connection.user_flow_selection_enabled:\n"
         "            current_resolution = await resolve_active_workflow_selection(\n"
@@ -1408,25 +1405,25 @@ def apply_dispatch() -> None:
         "            )\n"
         "            if current_resolution.command is not None:\n"
         "                current_command_id = current_resolution.command.id\n\n"
-        "        sections = [\"系统指令\"]\n",
+        '        sections = ["系统指令"]\n',
     )
     replace_once(
         path,
-        "                description = f\" — {item.description}\" if item.description else \"\"\n                sections.append(f\"{item.command}{description}\")\n",
-        "                description = f\" — {item.description}\" if item.description else \"\"\n"
+        '                description = f" — {item.description}" if item.description else ""\n                sections.append(f"{item.command}{description}")\n',
+        '                description = f" — {item.description}" if item.description else ""\n'
         "                flags: list[str] = []\n"
         "                if item.allow_persistent_selection:\n"
-        "                    flags.append(\"可切换\")\n"
+        '                    flags.append("可切换")\n'
         "                if item.id == current_command_id:\n"
-        "                    flags.append(\"当前\")\n"
-        "                suffix = f\" [{', '.join(flags)}]\" if flags else \"\"\n"
-        "                sections.append(f\"{item.command}{description}{suffix}\")\n",
+        '                    flags.append("当前")\n'
+        '                suffix = f" [{\', \'.join(flags)}]" if flags else ""\n'
+        '                sections.append(f"{item.command}{description}{suffix}")\n',
     )
     replace_once(
         path,
-        "            if item.command in {\"/commands\", \"/whoami\", \"/files\", \"/knowledge\", \"/status\"}\n",
+        '            if item.command in {"/commands", "/whoami", "/files", "/knowledge", "/status"}\n',
         "            if item.command\n"
-        "            in {\"/commands\", \"/current-flow\", \"/whoami\", \"/files\", \"/knowledge\", \"/status\"}\n",
+        '            in {"/commands", "/current-flow", "/whoami", "/files", "/knowledge", "/status"}\n',
     )
 
     replace_once(
@@ -1434,9 +1431,9 @@ def apply_dispatch() -> None:
         "    def _resolve_default_flow_id(self, binding: ChannelConversationBinding | None) -> UUID | None:\n",
         "    @staticmethod\n"
         "    def _with_selection_fallback_notice(response: ChannelMessage) -> ChannelMessage:\n"
-        "        notice = \"你之前选择的工作流已失效，当前已恢复默认工作流。\"\n"
+        '        notice = "你之前选择的工作流已失效，当前已恢复默认工作流。"\n'
         "        if response.markdown:\n"
-        "            response.markdown = f\"{notice}\\n\\n{response.markdown}\"\n"
+        '            response.markdown = f"{notice}\\n\\n{response.markdown}"\n'
         "        else:\n"
         "            response.text = f\"{notice}\\n\\n{response.text or ''}\"\n"
         "        return response\n\n"
@@ -1473,13 +1470,13 @@ def apply_dispatch() -> None:
     )
     replace_once(
         path,
-        "            if command_name:\n                channel_context[\"command_name\"] = command_name\n",
+        '            if command_name:\n                channel_context["command_name"] = command_name\n',
         "            if command_name:\n"
-        "                channel_context[\"command_name\"] = command_name\n"
+        '                channel_context["command_name"] = command_name\n'
         "            if workflow_command_id is not None:\n"
-        "                channel_context[\"workflow_command_id\"] = str(workflow_command_id)\n"
+        '                channel_context["workflow_command_id"] = str(workflow_command_id)\n'
         "            if active_selection_id is not None:\n"
-        "                channel_context[\"active_selection_id\"] = str(active_selection_id)\n",
+        '                channel_context["active_selection_id"] = str(active_selection_id)\n',
     )
 
 
@@ -1506,7 +1503,7 @@ def apply_management_api() -> None:
     append_once(
         path,
         "async def read_channel_flow_selections(",
-        '''@router.get(
+        """@router.get(
     "/{connection_id}/flow-selections",
     response_model=ChannelActiveWorkflowSelectionPage,
 )
@@ -1563,7 +1560,7 @@ async def cleanup_channel_flow_selections(
     removed = await cleanup_expired_workflow_selections(db, connection_id=connection_id)
     await db.commit()
     return {"removed": removed}
-''',
+""",
     )
 
 
@@ -1571,8 +1568,8 @@ def apply_frontend() -> None:
     path = "src/frontend/src/controllers/API/queries/channels/types.ts"
     replace_once(
         path,
-        "  | \"command\"\n  | \"admin_flow\"\n",
-        "  | \"command\"\n  | \"selected\"\n  | \"admin_flow\"\n",
+        '  | "command"\n  | "admin_flow"\n',
+        '  | "command"\n  | "selected"\n  | "admin_flow"\n',
     )
     replace_once(
         path,
@@ -1601,9 +1598,7 @@ def apply_frontend() -> None:
     replace_once(
         path,
         "  allow_attachments: boolean;\n  require_mention: boolean;\n",
-        "  allow_attachments: boolean;\n"
-        "  allow_persistent_selection: boolean;\n"
-        "  require_mention: boolean;\n",
+        "  allow_attachments: boolean;\n  allow_persistent_selection: boolean;\n  require_mention: boolean;\n",
     )
     replace_once(
         path,
@@ -1619,9 +1614,7 @@ def apply_frontend() -> None:
     replace_once(
         path,
         "  allow_attachments?: boolean;\n  require_mention?: boolean;\n",
-        "  allow_attachments?: boolean;\n"
-        "  allow_persistent_selection?: boolean;\n"
-        "  require_mention?: boolean;\n",
+        "  allow_attachments?: boolean;\n  allow_persistent_selection?: boolean;\n  require_mention?: boolean;\n",
     )
     replace_once(
         path,
@@ -1660,36 +1653,40 @@ def apply_frontend() -> None:
     )
     replace_once(
         path,
-        "            <CommandSwitch\n              title={copy(\"群聊必须 @机器人\")}\n",
+        '            <CommandSwitch\n              title={copy("群聊必须 @机器人")}\n',
         "            <CommandSwitch\n"
-        "              title={copy(\"允许设为当前工作流\")}\n"
-        "              description={copy(\"用户可通过 /use-flow 持续切换到此工作流。\")}\n"
+        '              title={copy("允许设为当前工作流")}\n'
+        '              description={copy("用户可通过 /use-flow 持续切换到此工作流。")}\n'
         "              checked={form.allowPersistentSelection}\n"
         "              onCheckedChange={(checked) =>\n"
-        "                setField(\"allowPersistentSelection\", checked)\n"
+        '                setField("allowPersistentSelection", checked)\n'
         "              }\n"
         "            />\n"
         "            <CommandSwitch\n"
-        "              title={copy(\"群聊必须 @机器人\")}\n",
+        '              title={copy("群聊必须 @机器人")}\n',
     )
 
     path = "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/CommandsTab.tsx"
     replace_once(
         path,
-        "              \"普通消息使用默认工作流；“/指令 内容”仅本次路由到指定工作流。\",\n",
-        "              \"普通消息使用默认或当前工作流；显式“/指令 内容”只影响本次，/use-flow 可持续切换。\",\n",
+        '              "普通消息使用默认工作流；“/指令 内容”仅本次路由到指定工作流。",\n',
+        '              "普通消息使用默认或当前工作流；显式“/指令 内容”只影响本次，/use-flow 可持续切换。",\n',
     )
     replace_once(
         path,
-        "                    {command.require_mention ? ` · ${copy(\"群聊需@\")}` : \"\"}\n",
-        "                    {command.require_mention ? ` · ${copy(\"群聊需@\")}` : \"\"}\n"
+        '                    {command.require_mention ? ` · ${copy("群聊需@")}` : ""}\n',
+        '                    {command.require_mention ? ` · ${copy("群聊需@")}` : ""}\n'
         "                    {command.allow_persistent_selection\n"
-        "                      ? ` · ${copy(\"可持续切换\")}`\n"
-        "                      : \"\"}\n",
+        '                      ? ` · ${copy("可持续切换")}`\n'
+        '                      : ""}\n',
     )
 
     path = "src/frontend/src/pages/SettingsPage/pages/ChannelsPage/components/DefaultRoutingTab.tsx"
-    replace_once(path, "import { Button } from \"@/components/ui/button\";\n", "import { Button } from \"@/components/ui/button\";\nimport { Input } from \"@/components/ui/input\";\n")
+    replace_once(
+        path,
+        'import { Button } from "@/components/ui/button";\n',
+        'import { Button } from "@/components/ui/button";\nimport { Input } from "@/components/ui/input";\n',
+    )
     replace_once(
         path,
         "  personalCommandsEnabled: boolean;\n  defaultResponseMode: ChannelResponseMode;\n",
@@ -1711,10 +1708,10 @@ def apply_frontend() -> None:
     )
     replace_once(
         path,
-        "        <SettingSwitch\n          title={copy(\"允许个人指令\")}\n",
+        '        <SettingSwitch\n          title={copy("允许个人指令")}\n',
         "        <SettingSwitch\n"
-        "          title={copy(\"允许用户切换工作流\")}\n"
-        "          description={copy(\"用户可按成员、会话和线程持久选择管理员允许的业务工作流。\")}\n"
+        '          title={copy("允许用户切换工作流")}\n'
+        '          description={copy("用户可按成员、会话和线程持久选择管理员允许的业务工作流。")}\n'
         "          checked={form.userFlowSelectionEnabled}\n"
         "          onCheckedChange={(checked) =>\n"
         "            setForm((current) => ({\n"
@@ -1724,17 +1721,17 @@ def apply_frontend() -> None:
         "          }\n"
         "        />\n"
         "        <SettingSwitch\n"
-        "          title={copy(\"允许个人指令\")}\n",
+        '          title={copy("允许个人指令")}\n',
     )
     replace_once(
         path,
         "      </div>\n\n      {capabilities?.supports_group_chat && capabilities.supports_mentions && (\n",
         "      </div>\n\n"
         "      {form.userFlowSelectionEnabled && (\n"
-        "        <label className=\"flex flex-col gap-2 text-sm font-medium\">\n"
-        "          {copy(\"工作流选择有效期（小时）\")}\n"
+        '        <label className="flex flex-col gap-2 text-sm font-medium">\n'
+        '          {copy("工作流选择有效期（小时）")}\n'
         "          <Input\n"
-        "            type=\"number\"\n"
+        '            type="number"\n'
         "            min={0}\n"
         "            max={8760}\n"
         "            value={form.flowSelectionTtlHours}\n"
@@ -1745,8 +1742,8 @@ def apply_frontend() -> None:
         "              }))\n"
         "            }\n"
         "          />\n"
-        "          <span className=\"text-xs font-normal text-muted-foreground\">\n"
-        "            {copy(\"设置为 0 表示永久有效，直到用户恢复默认或管理员撤销。\")}\n"
+        '          <span className="text-xs font-normal text-muted-foreground">\n'
+        '            {copy("设置为 0 表示永久有效，直到用户恢复默认或管理员撤销。")}\n'
         "          </span>\n"
         "        </label>\n"
         "      )}\n\n"
@@ -1787,83 +1784,75 @@ def apply_migration_tests() -> None:
     )
     replace_once(
         path,
-        "        \"a4c7d0f3e5b9\",\n    ]\n",
-        "        \"a4c7d0f3e5b9\",\n"
-        "        \"b5d8e1f3a6c9\",\n"
-        "        \"a1f4c7e9d2b6\",\n"
-        "    ]\n",
+        '        "a4c7d0f3e5b9",\n    ]\n',
+        '        "a4c7d0f3e5b9",\n        "b5d8e1f3a6c9",\n        "a1f4c7e9d2b6",\n    ]\n',
     )
     replace_once(
         path,
-        "        \"f3a6c9e2b4d7\",\n    ]\n",
-        "        \"f3a6c9e2b4d7\",\n"
-        "        \"a4c7d0f3e5b9\",\n"
-        "        \"b5d8e1f3a6c9\",\n"
-        "    ]\n",
+        '        "f3a6c9e2b4d7",\n    ]\n',
+        '        "f3a6c9e2b4d7",\n        "a4c7d0f3e5b9",\n        "b5d8e1f3a6c9",\n    ]\n',
     )
     replace_once(
         path,
-        "            \"channel_configuration_audit\",\n        }\n",
-        "            \"channel_configuration_audit\",\n"
-        "            \"channel_active_workflow_selection\",\n"
-        "        }\n",
+        '            "channel_configuration_audit",\n        }\n',
+        '            "channel_configuration_audit",\n            "channel_active_workflow_selection",\n        }\n',
     )
     replace_once(
         path,
-        "        identity_columns = {column[\"name\"]: column for column in sa.inspect(connection).get_columns(\"channel_identity\")}\n        assert identity_columns[\"openxflow_user_id\"][\"nullable\"] is True\n",
-        "        identity_columns = {column[\"name\"]: column for column in sa.inspect(connection).get_columns(\"channel_identity\")}\n"
-        "        assert identity_columns[\"openxflow_user_id\"][\"nullable\"] is True\n\n"
+        '        identity_columns = {column["name"]: column for column in sa.inspect(connection).get_columns("channel_identity")}\n        assert identity_columns["openxflow_user_id"]["nullable"] is True\n',
+        '        identity_columns = {column["name"]: column for column in sa.inspect(connection).get_columns("channel_identity")}\n'
+        '        assert identity_columns["openxflow_user_id"]["nullable"] is True\n\n'
         "        connection_columns = {\n"
-        "            column[\"name\"] for column in sa.inspect(connection).get_columns(\"channel_connection\")\n"
+        '            column["name"] for column in sa.inspect(connection).get_columns("channel_connection")\n'
         "        }\n"
-        "        assert {\"user_flow_selection_enabled\", \"flow_selection_ttl_hours\"} <= connection_columns\n"
+        '        assert {"user_flow_selection_enabled", "flow_selection_ttl_hours"} <= connection_columns\n'
         "        command_columns = {\n"
-        "            column[\"name\"] for column in sa.inspect(connection).get_columns(\"channel_workflow_command\")\n"
+        '            column["name"] for column in sa.inspect(connection).get_columns("channel_workflow_command")\n'
         "        }\n"
-        "        assert \"allow_persistent_selection\" in command_columns\n"
+        '        assert "allow_persistent_selection" in command_columns\n'
         "        context_indexes = {\n"
-        "            index[\"name\"]: tuple(index[\"column_names\"])\n"
-        "            for index in sa.inspect(connection).get_indexes(\"channel_conversation_context_entry\")\n"
+        '            index["name"]: tuple(index["column_names"])\n'
+        '            for index in sa.inspect(connection).get_indexes("channel_conversation_context_entry")\n'
         "        }\n"
-        "        assert context_indexes[\"ix_channel_context_conversation_session_created\"] == (\n"
-        "            \"conversation_binding_id\",\n"
-        "            \"session_id\",\n"
-        "            \"created_at\",\n"
+        '        assert context_indexes["ix_channel_context_conversation_session_created"] == (\n'
+        '            "conversation_binding_id",\n'
+        '            "session_id",\n'
+        '            "created_at",\n'
         "        )\n",
     )
 
     path = "src/backend/tests/unit/channels/test_system_commands.py"
     replace_once(
         path,
-        "    assert resolve_system_command(\"/状态\").command == \"/status\"\n",
-        "    assert resolve_system_command(\"/状态\").command == \"/status\"\n"
-        "    assert resolve_system_command(\"/切换工作流\").command == \"/use-flow\"\n"
-        "    assert resolve_system_command(\"/当前工作流\").command == \"/current-flow\"\n",
+        '    assert resolve_system_command("/状态").command == "/status"\n',
+        '    assert resolve_system_command("/状态").command == "/status"\n'
+        '    assert resolve_system_command("/切换工作流").command == "/use-flow"\n'
+        '    assert resolve_system_command("/当前工作流").command == "/current-flow"\n',
     )
     replace_once(
         path,
-        "    assert {\"/help\", \"/帮助\", \"/flow\", \"/工作流\", \"/status\", \"/状态\"} <= RESERVED_COMMAND_NAMES\n",
+        '    assert {"/help", "/帮助", "/flow", "/工作流", "/status", "/状态"} <= RESERVED_COMMAND_NAMES\n',
         "    assert {\n"
-        "        \"/help\",\n"
-        "        \"/帮助\",\n"
-        "        \"/flow\",\n"
-        "        \"/工作流\",\n"
-        "        \"/status\",\n"
-        "        \"/状态\",\n"
-        "        \"/use-flow\",\n"
-        "        \"/current-flow\",\n"
+        '        "/help",\n'
+        '        "/帮助",\n'
+        '        "/flow",\n'
+        '        "/工作流",\n'
+        '        "/status",\n'
+        '        "/状态",\n'
+        '        "/use-flow",\n'
+        '        "/current-flow",\n'
         "    } <= RESERVED_COMMAND_NAMES\n",
     )
     replace_once(
         path,
-        "    assert {\"/commands\", \"/whoami\", \"/files\", \"/knowledge\"} <= public_names\n",
+        '    assert {"/commands", "/whoami", "/files", "/knowledge"} <= public_names\n',
         "    assert {\n"
-        "        \"/commands\",\n"
-        "        \"/whoami\",\n"
-        "        \"/files\",\n"
-        "        \"/knowledge\",\n"
-        "        \"/use-flow\",\n"
-        "        \"/current-flow\",\n"
+        '        "/commands",\n'
+        '        "/whoami",\n'
+        '        "/files",\n'
+        '        "/knowledge",\n'
+        '        "/use-flow",\n'
+        '        "/current-flow",\n'
         "    } <= public_names\n",
     )
 
@@ -1872,14 +1861,14 @@ def cleanup_bootstrap() -> None:
     updater = "scripts/ci/update_starter_projects.py"
     content = read(updater)
     content = content.replace("from pathlib import Path\n", "")
-    block = '''
+    block = """
 if os.environ.get("GITHUB_HEAD_REF") == "automation/channel-active-flow-selection":
     scope: dict[str, object] = {}
     exec(Path(".github/scripts/channel_active_flow_codegen.py").read_text(encoding="utf-8"), scope)
     scope["run"]()
     raise SystemExit(0)
 
-'''
+"""
     if block not in content:
         raise RuntimeError("Bootstrap block missing from update_starter_projects.py")
     write(updater, content.replace(block, "", 1))
@@ -1919,7 +1908,9 @@ def run() -> None:
     joined = " ".join(python_paths)
     run_command(f"uvx --quiet ruff check --fix --config pyproject.toml --extend-ignore EM101,TRY003 {joined}")
     run_command(f"uvx --quiet ruff format --config pyproject.toml {joined}")
-    run_command("python -m compileall -q src/backend/base/langflow/channels src/backend/base/langflow/services/database/models/channel src/backend/base/langflow/api/v1/channel_management.py")
+    run_command(
+        "python -m compileall -q src/backend/base/langflow/channels src/backend/base/langflow/services/database/models/channel src/backend/base/langflow/api/v1/channel_management.py"
+    )
     run_command(
         "uv run --frozen --project src/backend/base --group dev pytest -q --tb=short "
         "--confcutdir=src/backend/tests/unit/channels "
