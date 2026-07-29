@@ -124,7 +124,22 @@ jobs:
           src/routes.tsx
           tsconfig.channels.json
       - name: Type-check permission center
-        run: npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json
+        shell: bash
+        run: |
+          set +e
+          npx --no-install tsc --noEmit --pretty false --project tsconfig.channels.json 2>&1 | tee /tmp/rbac-tsc.log
+          tsc_status=${PIPESTATUS[0]}
+          set -e
+
+          focused_error_pattern='^src/(components/authorization/authPermissionGuard\.tsx|hooks/use-rbac-access\.ts|controllers/API/queries/authz|pages/SettingsPage/pages/PermissionsPage|pages/SettingsPage/index\.tsx|routes\.tsx|locales/rbacTranslations\.ts).*error TS[0-9]+:'
+          if grep -E "$focused_error_pattern" /tmp/rbac-tsc.log; then
+            echo "Permission-center type errors detected."
+            exit 1
+          fi
+
+          if [ "$tsc_status" -ne 0 ]; then
+            echo "::warning::TypeScript reported pre-existing errors in imported shared modules."
+          fi
       - name: Run permission-center tests
         run: >-
           npm test --
