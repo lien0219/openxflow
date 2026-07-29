@@ -30,7 +30,8 @@ const en: RbacTranslationMap = {
   "rbac.empty": "No records found.",
   "rbac.error": "Permission operation failed",
   "rbac.success": "Permission settings updated",
-  "rbac.accessDenied": "You do not have permission to view the permission center.",
+  "rbac.accessDenied":
+    "You do not have permission to view the permission center.",
   "rbac.users.search": "Search users",
   "rbac.users.select": "Select a user",
   "rbac.users.targetId": "Target user ID",
