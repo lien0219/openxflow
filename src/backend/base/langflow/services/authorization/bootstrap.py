@@ -161,9 +161,7 @@ async def ensure_builtin_roles(session: AsyncSession) -> dict[str, AuthzRole]:
                 # collision must fail closed rather than silently gaining system
                 # role semantics.
                 if role.created_by is not None:
-                    raise RuntimeError(
-                        f"Custom role {role.name!r} conflicts with a reserved system role name"
-                    )
+                    raise RuntimeError(f"Custom role {role.name!r} conflicts with a reserved system role name")
                 role.is_system = True
                 changed = True
             if role.description != definition.description:
