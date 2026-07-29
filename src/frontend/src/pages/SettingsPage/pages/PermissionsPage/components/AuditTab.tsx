@@ -2,10 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  getAuditPage,
-  type AuditPage,
-} from "@/controllers/API/queries/authz";
+import { getAuditPage, type AuditPage } from "@/controllers/API/queries/authz";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const SELECT_CLASS =
@@ -90,13 +87,17 @@ export function AuditTab({
                 if (event.target.value === "global") setDomainId("");
               }}
             >
-              {["global", "organization", "workspace", "project", "channel"].map(
-                (domain) => (
-                  <option key={domain} value={domain}>
-                    {domain}
-                  </option>
-                ),
-              )}
+              {[
+                "global",
+                "organization",
+                "workspace",
+                "project",
+                "channel",
+              ].map((domain) => (
+                <option key={domain} value={domain}>
+                  {domain}
+                </option>
+              ))}
             </select>
             <Input
               className="max-w-80"
@@ -170,7 +171,7 @@ export function AuditTab({
                     className={`rounded px-2 py-1 text-xs ${
                       entry.result === "deny"
                         ? "bg-destructive/10 text-destructive"
-                        : "bg-green-500/10 text-green-700 dark:text-green-300"
+                        : "bg-primary/10 text-primary"
                     }`}
                   >
                     {entry.result}
