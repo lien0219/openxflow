@@ -1,14 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import Loading from "@/components/ui/loading";
 import {
   type ChannelActiveWorkflowSelection,
   useCleanupChannelFlowSelections,
   useDeleteChannelFlowSelection,
-  useGetChannelCommands,
-  useGetChannelConversations,
   useGetChannelFlowSelections,
-  useGetChannelIdentitiesPage,
 } from "@/controllers/API/queries/channels";
 import DeleteConfirmationModal from "@/modals/deleteConfirmationModal";
 import useAlertStore from "@/stores/alertStore";
@@ -31,11 +29,13 @@ export default function FlowSelectionsPanel({
   const setErrorData = useAlertStore((state) => state.setErrorData);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] =
     useState<ChannelActiveWorkflowSelection | null>(null);
 
   useEffect(() => {
     setPage(1);
+    setSearch("");
     setDeleteTarget(null);
   }, [connectionId]);
 
@@ -46,53 +46,8 @@ export default function FlowSelectionsPanel({
     isError,
     refetch,
   } = useGetChannelFlowSelections(
-    { connectionId, page, pageSize },
+    { connectionId, page, pageSize, query: search.trim() },
     { enabled: Boolean(connectionId), retry: 1 },
-  );
-  const { data: commandResult } = useGetChannelCommands(
-    { connectionId, page: 1, pageSize: 100 },
-    { enabled: Boolean(connectionId) },
-  );
-  const { data: conversationResult } = useGetChannelConversations(
-    {
-      connectionId,
-      page: 1,
-      pageSize: 100,
-      sort: "-last_message_at",
-    },
-    { enabled: Boolean(connectionId) },
-  );
-  const { data: identityResult } = useGetChannelIdentitiesPage(
-    { connectionId, page: 1, pageSize: 100 },
-    { enabled: Boolean(connectionId) },
-  );
-
-  const commandById = useMemo(
-    () =>
-      new Map(
-        (commandResult?.items ?? []).map((command) => [command.id, command]),
-      ),
-    [commandResult?.items],
-  );
-  const conversationById = useMemo(
-    () =>
-      new Map(
-        (conversationResult?.items ?? []).map((conversation) => [
-          conversation.id,
-          conversation,
-        ]),
-      ),
-    [conversationResult?.items],
-  );
-  const identityById = useMemo(
-    () =>
-      new Map(
-        (identityResult?.items ?? []).map((identity) => [
-          identity.id,
-          identity,
-        ]),
-      ),
-    [identityResult?.items],
   );
 
   const deleteSelection = useDeleteChannelFlowSelection();
@@ -165,6 +120,15 @@ export default function FlowSelectionsPanel({
         </div>
       </div>
 
+      <Input
+        value={search}
+        placeholder={copy("搜索成员、会话、指令或工作流")}
+        onChange={(event) => {
+          setSearch(event.target.value);
+          setPage(1);
+        }}
+      />
+
       {isLoading ? (
         <div className="flex min-h-32 items-center justify-center">
           <Loading />
@@ -183,16 +147,17 @@ export default function FlowSelectionsPanel({
         </div>
       ) : (selectionResult?.items.length ?? 0) === 0 ? (
         <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {copy("当前没有用户设置持续工作流。")}
+          {copy("当前没有匹配的活动工作流选择。")}
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
+          <table className="w-full min-w-[1080px] text-left text-sm">
             <thead className="border-b text-xs text-muted-foreground">
               <tr>
                 <th className="px-3 py-2">{copy("成员")}</th>
                 <th className="px-3 py-2">{copy("会话 / 线程")}</th>
                 <th className="px-3 py-2">{copy("当前工作流")}</th>
+                <th className="px-3 py-2">{copy("执行身份")}</th>
                 <th className="px-3 py-2">{copy("选择时间")}</th>
                 <th className="px-3 py-2">{copy("最近使用")}</th>
                 <th className="px-3 py-2">{copy("有效期至")}</th>
@@ -200,75 +165,76 @@ export default function FlowSelectionsPanel({
               </tr>
             </thead>
             <tbody>
-              {(selectionResult?.items ?? []).map((selection) => {
-                const identity = identityById.get(
-                  selection.channel_identity_id,
-                );
-                const conversation = conversationById.get(
-                  selection.conversation_binding_id,
-                );
-                const command = commandById.get(selection.workflow_command_id);
-                return (
-                  <tr key={selection.id} className="border-b last:border-0">
-                    <td className="px-3 py-3">
-                      <div className="font-medium">
-                        {identity?.display_name ||
-                          identity?.external_user_id ||
-                          selection.channel_identity_id.slice(0, 8)}
-                      </div>
-                      <div className="mt-1 font-mono text-xs text-muted-foreground">
-                        {identity?.external_user_id ||
-                          selection.channel_identity_id.slice(0, 8)}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div>
-                        {conversation?.display_name ||
-                          conversation?.external_conversation_id ||
-                          selection.conversation_binding_id.slice(0, 8)}
-                      </div>
-                      <div className="mt-1 font-mono text-xs text-muted-foreground">
-                        {selection.conversation_scope_id
-                          ? copy("线程：{{value}}", {
-                              value: selection.conversation_scope_id,
-                            })
-                          : copy("主会话")}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="font-medium">
-                        {command?.command || copy("指令已删除")}
-                      </div>
-                      <div className="mt-1 font-mono text-xs text-muted-foreground">
-                        {command?.flow_id.slice(0, 8) ||
-                          selection.workflow_command_id.slice(0, 8)}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
-                      {formatDate(selection.selected_at)}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
-                      {formatDate(selection.last_used_at)}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
-                      {selection.expires_at
-                        ? formatDate(selection.expires_at)
-                        : copy("永久")}
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive"
-                        onClick={() => setDeleteTarget(selection)}
-                      >
-                        {copy("撤销")}
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {(selectionResult?.items ?? []).map((selection) => (
+                <tr key={selection.id} className="border-b last:border-0">
+                  <td className="px-3 py-3">
+                    <div className="font-medium">
+                      {selection.identity_display_name ||
+                        selection.external_user_id ||
+                        selection.channel_identity_id.slice(0, 8)}
+                    </div>
+                    <div className="mt-1 font-mono text-xs text-muted-foreground">
+                      {selection.external_user_id ||
+                        selection.channel_identity_id.slice(0, 8)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div>
+                      {selection.conversation_display_name ||
+                        selection.external_conversation_id ||
+                        selection.conversation_binding_id.slice(0, 8)}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {selection.conversation_type || copy("未知会话")}
+                      {selection.conversation_scope_id
+                        ? ` · ${copy("线程：{{value}}", {
+                            value: selection.conversation_scope_id,
+                          })}`
+                        : ""}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="font-medium">
+                      {selection.flow_name ||
+                        selection.command ||
+                        copy("工作流已删除")}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {selection.command || "-"}
+                      {selection.flow_endpoint_name
+                        ? ` · ${selection.flow_endpoint_name}`
+                        : ""}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-xs text-muted-foreground">
+                    {selection.execution_identity_type === "bound_user"
+                      ? copy("绑定用户")
+                      : copy("渠道共享身份")}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                    {formatDate(selection.selected_at)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                    {formatDate(selection.last_used_at)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                    {selection.expires_at
+                      ? formatDate(selection.expires_at)
+                      : copy("永久")}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() => setDeleteTarget(selection)}
+                    >
+                      {copy("撤销")}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

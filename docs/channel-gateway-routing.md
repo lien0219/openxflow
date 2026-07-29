@@ -187,3 +187,12 @@ a1f4c7e9d2b6
 ```
 
 It follows `b5d8e1f3a6c9`, adds the active-selection table, connection and command policy fields, execution audit references, and the workflow-scoped context index. Apply all pending migrations and restart the backend before beginning provider-level manual acceptance.
+
+
+## 持久工作流选择
+
+- 管理员可开启群聊系统指令必须 `@机器人`，Telegram 的 `/command@bot_name` 视为明确指定。
+- 活动选择接口直接返回成员、会话、指令与工作流展示信息，避免前端额外拼接请求。
+- 过期选择由后台任务按批次自动清理，也可由管理员立即清理。
+- 用户选择、恢复默认、自动失效、管理员撤销和批量清理都会写入渠道配置审计。
+- 活动选择按连接、成员、工作流和过期时间建立组合索引。
