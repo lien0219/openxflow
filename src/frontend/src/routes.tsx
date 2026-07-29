@@ -8,6 +8,7 @@ import {
 import { ProtectedAdminRoute } from "./components/authorization/authAdminGuard";
 import { ProtectedRoute } from "./components/authorization/authGuard";
 import { ProtectedLoginRoute } from "./components/authorization/authLoginGuard";
+import { ProtectedPermissionRoute } from "./components/authorization/authPermissionGuard";
 import { AuthSettingsGuard } from "./components/authorization/authSettingsGuard";
 import { PlaygroundAuthGate } from "./components/authorization/playgroundAuthGate";
 import ContextWrapper from "./contexts";
@@ -176,9 +177,9 @@ const router = createBrowserRouter(
                   <Route
                     path="permissions"
                     element={
-                      <ProtectedAdminRoute>
+                      <ProtectedPermissionRoute>
                         <PermissionsPage />
-                      </ProtectedAdminRoute>
+                      </ProtectedPermissionRoute>
                     }
                   />
                   {CustomRoutesStore()}
