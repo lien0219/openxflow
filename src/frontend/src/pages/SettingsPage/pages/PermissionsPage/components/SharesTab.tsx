@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,11 +33,13 @@ export function SharesTab({
   const [level, setLevel] =
     useState<ResourceShare["permission_level"]>("read");
 
-  const reload = async () => setShares(await getShares());
+  const reload = useCallback(async () => {
+    setShares(await getShares());
+  }, []);
 
   useEffect(() => {
     reload().catch(onError);
-  }, [onError]);
+  }, [onError, reload]);
 
   const create = async () => {
     try {
