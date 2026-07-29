@@ -30,6 +30,9 @@ _RESOURCE_ACTIONS: dict[str, frozenset[str]] = {
     "share": frozenset({a.value for a in ShareAction}) | {"*"},
     "channel": frozenset({a.value for a in ChannelAction}) | {"*"},
     "audit": frozenset({a.value for a in AuditAction}) | {"*"},
+    "rbac": frozenset({"read", "manage", "assign", "*"}),
+    "team": frozenset({"read", "create", "write", "delete", "manage", "*"}),
+    "user": frozenset({"read", "create", "write", "delete", "manage", "*"}),
 }
 
 _PERMISSION_SLUG_RE = re.compile(r"^[a-z_]+:[a-z_*]+$")
@@ -66,7 +69,8 @@ class RoleCreate(BaseModel):
         default_factory=list,
         description=(
             "Canonical ``<resource>:<action>`` permissions. Supported resources are "
-            "flow, deployment, project, knowledge_base, variable, file, share, channel and audit."
+            "flow, deployment, project, knowledge_base, variable, file, share, channel, "
+            "audit, rbac, team and user."
         ),
     )
     parent_role_id: UUID | None = Field(default=None)
