@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -10,6 +10,29 @@ from sqlalchemy import Column, DateTime, ForeignKey, UniqueConstraint, func
 from sqlmodel import Field, SQLModel
 
 from langflow.services.database.models.channel.model import utc_now
+
+
+class UTCDateTime(sa.TypeDecorator):
+    """Persist UTC timestamps while restoring timezone information on SQLite reads."""
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect) -> datetime | None:  # type: ignore[no-untyped-def]
+        if value is None:
+            return None
+        normalized = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+        if dialect.name == "sqlite":
+            return normalized.replace(tzinfo=None)
+        return normalized
+
+    def process_result_value(self, value: datetime | None, dialect) -> datetime | None:  # type: ignore[no-untyped-def]
+        del dialect
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
 
 class ChannelActiveWorkflowSelection(SQLModel, table=True):  # type: ignore[call-arg]
@@ -81,17 +104,17 @@ class ChannelActiveWorkflowSelection(SQLModel, table=True):  # type: ignore[call
     )
     selected_at: datetime = Field(
         default_factory=utc_now,
-        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
+        sa_column=Column(UTCDateTime(timezone=True), nullable=False, server_default=func.now()),
     )
-    last_used_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-    expires_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    last_used_at: datetime | None = Field(default=None, sa_column=Column(UTCDateTime(timezone=True), nullable=True))
+    expires_at: datetime | None = Field(default=None, sa_column=Column(UTCDateTime(timezone=True), nullable=True))
     created_at: datetime = Field(
         default_factory=utc_now,
-        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
+        sa_column=Column(UTCDateTime(timezone=True), nullable=False, server_default=func.now()),
     )
     updated_at: datetime = Field(
         default_factory=utc_now,
-        sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now()),
+        sa_column=Column(UTCDateTime(timezone=True), nullable=False, server_default=func.now()),
     )
 
 
