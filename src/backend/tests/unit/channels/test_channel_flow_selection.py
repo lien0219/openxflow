@@ -185,3 +185,24 @@ async def test_expired_or_disabled_selection_is_removed(selection_session) -> No
         channel_identity_id=identity.id,
         conversation_scope_id="",
     )
+
+
+@pytest.mark.asyncio
+async def test_sqlite_round_trip_preserves_utc_selection_timestamps(selection_session) -> None:
+    connection, binding, identity, _ = await _seed(selection_session)
+    selection, _ = await set_active_workflow_selection(
+        selection_session,
+        connection=connection,
+        binding=binding,
+        identity=identity,
+        conversation_scope_id="",
+        user_id=None,
+        command_name="/summary",
+    )
+
+    await selection_session.commit()
+    await selection_session.refresh(selection)
+
+    assert selection.expires_at is not None
+    assert selection.expires_at.tzinfo is not None
+    assert selection.expires_at - datetime.now(timezone.utc) > timedelta(0)
