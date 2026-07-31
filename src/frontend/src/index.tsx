@@ -4,6 +4,7 @@ import { detectedLang, loadLanguage } from "./i18n";
 import reportWebVitals from "./reportWebVitals";
 
 import "./style/classes.css";
+import "./style/channel-management.css";
 // @ts-ignore
 import "./style/index.css";
 import "./style/themes.css";
