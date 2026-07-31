@@ -3,6 +3,7 @@ import type {
   IdentitySummary,
   RbacStatus,
 } from "@/controllers/API/queries/authz";
+import { translateRbacWarning } from "../rbac-i18n";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 
@@ -59,7 +60,7 @@ export function OverviewTab({
         {status.warnings.length > 0 && (
           <div className="mt-4 rounded-md border border-border bg-muted/50 p-3 text-sm">
             {status.warnings.map((warning) => (
-              <p key={warning}>• {warning}</p>
+              <p key={warning}>• {translateRbacWarning(t, warning)}</p>
             ))}
           </div>
         )}
