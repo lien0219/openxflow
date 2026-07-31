@@ -20,6 +20,10 @@ import {
   type TeamRoleAssignment,
   updateTeam,
 } from "@/controllers/API/queries/authz";
+import {
+  translateRbacRoleName,
+  translateRbacValue,
+} from "../rbac-i18n";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const FIELD_CLASS = "flex min-w-0 flex-col gap-1.5";
@@ -140,7 +144,9 @@ export function TeamsTab({
   const removeTeam = async () => {
     if (
       !selectedTeam ||
-      !window.confirm(`${t("rbac.delete")} ${selectedTeam.team_name}?`)
+      !window.confirm(
+        t("rbac.confirmDelete", { name: selectedTeam.team_name }),
+      )
     ) {
       return;
     }
@@ -306,7 +312,7 @@ export function TeamsTab({
                   >
                     {roles.map((role) => (
                       <option key={role.id} value={role.id}>
-                        {role.name}
+                        {translateRbacRoleName(t, role.name, role.is_system)}
                       </option>
                     ))}
                   </select>
@@ -331,7 +337,7 @@ export function TeamsTab({
                       "channel",
                     ].map((domain) => (
                       <option key={domain} value={domain}>
-                        {domain}
+                        {translateRbacValue(t, "domain", domain)}
                       </option>
                     ))}
                   </select>
@@ -361,30 +367,45 @@ export function TeamsTab({
               </Button>
 
               <div className="mt-3 space-y-2">
-                {teamRoles.map((grant) => (
-                  <div
-                    key={grant.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-muted/40 p-3"
-                  >
-                    <div>
-                      <div className="font-medium">
-                        {rolesById.get(grant.role_id)?.name || grant.role_id}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {grant.domain_type}
-                        {grant.domain_id ? ` · ${grant.domain_id}` : ""}
-                      </div>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => void removePersistentTeamRole(grant.id)}
-                      ignoreTitleCase
+                {teamRoles.map((grant) => {
+                  const role = rolesById.get(grant.role_id);
+                  return (
+                    <div
+                      key={grant.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-muted/40 p-3"
                     >
-                      {t("rbac.remove")}
-                    </Button>
-                  </div>
-                ))}
+                      <div>
+                        <div className="font-medium">
+                          {role
+                            ? translateRbacRoleName(
+                                t,
+                                role.name,
+                                role.is_system,
+                              )
+                            : grant.role_id}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {translateRbacValue(
+                            t,
+                            "domain",
+                            grant.domain_type,
+                          )}
+                          {grant.domain_id ? ` · ${grant.domain_id}` : ""}
+                        </div>
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() =>
+                          void removePersistentTeamRole(grant.id)
+                        }
+                        ignoreTitleCase
+                      >
+                        {t("rbac.remove")}
+                      </Button>
+                    </div>
+                  );
+                })}
                 {teamRoles.length === 0 && (
                   <div className="py-4 text-center text-sm text-muted-foreground">
                     {t("rbac.empty")}
@@ -433,7 +454,11 @@ export function TeamsTab({
                         member.user_id}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {member.source}
+                      {translateRbacValue(
+                        t,
+                        "memberSource",
+                        member.source,
+                      )}
                     </div>
                   </div>
                   <Button
