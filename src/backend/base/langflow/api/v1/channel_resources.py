@@ -137,10 +137,7 @@ async def read_channel_flow_options(
         )
 
     total_statement = (
-        select(func.count())
-        .select_from(Flow)
-        .outerjoin(Folder, Folder.id == Flow.folder_id)
-        .where(*filters)
+        select(func.count()).select_from(Flow).outerjoin(Folder, Folder.id == Flow.folder_id).where(*filters)
     )
     total = int((await db.exec(total_statement)).one())
     statement = (
