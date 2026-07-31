@@ -1,3 +1,5 @@
+"""Regression coverage for Feishu card actions preserving their source conversation."""
+
 import json
 from uuid import uuid4
 
