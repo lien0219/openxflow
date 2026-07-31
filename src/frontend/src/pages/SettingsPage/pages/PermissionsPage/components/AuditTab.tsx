@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { type AuditPage, getAuditPage } from "@/controllers/API/queries/authz";
+import { translateRbacValue } from "../rbac-i18n";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const SELECT_CLASS =
@@ -74,6 +75,15 @@ export function AuditTab({
     }
   }, [domainId, domainType, isSuperuser, load]);
 
+  const domains = [
+    "global",
+    "organization",
+    "workspace",
+    "project",
+    "channel",
+  ];
+  const auditResults = ["allow", "deny", "owner_override"];
+
   return (
     <section className={PANEL_CLASS}>
       <div className="flex flex-wrap gap-2">
@@ -87,15 +97,9 @@ export function AuditTab({
                 if (event.target.value === "global") setDomainId("");
               }}
             >
-              {[
-                "global",
-                "organization",
-                "workspace",
-                "project",
-                "channel",
-              ].map((domain) => (
+              {domains.map((domain) => (
                 <option key={domain} value={domain}>
-                  {domain}
+                  {translateRbacValue(t, "domain", domain)}
                 </option>
               ))}
             </select>
@@ -126,9 +130,11 @@ export function AuditTab({
           onChange={(event) => setResult(event.target.value)}
         >
           <option value="">{t("rbac.audit.result")}</option>
-          <option value="allow">allow</option>
-          <option value="deny">deny</option>
-          <option value="owner_override">owner_override</option>
+          {auditResults.map((item) => (
+            <option key={item} value={item}>
+              {translateRbacValue(t, "auditResult", item)}
+            </option>
+          ))}
         </select>
         <Button
           variant="outline"
@@ -163,7 +169,13 @@ export function AuditTab({
                 </td>
                 <td className="p-2">{entry.action}</td>
                 <td className="p-2 font-mono text-xs">
-                  {entry.resource_type || "—"}
+                  {entry.resource_type
+                    ? translateRbacValue(
+                        t,
+                        "resourceType",
+                        entry.resource_type,
+                      )
+                    : "—"}
                   {entry.resource_id ? `:${entry.resource_id}` : ""}
                 </td>
                 <td className="p-2">
@@ -174,7 +186,7 @@ export function AuditTab({
                         : "bg-primary/10 text-primary"
                     }`}
                   >
-                    {entry.result}
+                    {translateRbacValue(t, "auditResult", entry.result)}
                   </span>
                 </td>
               </tr>
