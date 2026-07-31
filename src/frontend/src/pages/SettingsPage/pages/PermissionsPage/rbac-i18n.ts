@@ -6,8 +6,7 @@ const WARNING_KEYS: Record<string, string> = {
     "rbac.status.warnings.autoLogin",
   "RBAC enforcement is disabled; role decisions are not currently blocking requests.":
     "rbac.status.warnings.enforcement",
-  "Authorization audit logging is disabled.":
-    "rbac.status.warnings.audit",
+  "Authorization audit logging is disabled.": "rbac.status.warnings.audit",
 };
 
 export function translateRbacWarning(t: TFunction, warning: string): string {
