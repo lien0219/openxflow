@@ -196,12 +196,8 @@ export function SharesTab({
             >
               <div>
                 <div className="font-medium">
-                  {translateRbacValue(
-                    t,
-                    "resourceType",
-                    share.resource_type,
-                  )}
-                  ：{share.resource_id}
+                  {translateRbacValue(t, "resourceType", share.resource_type)}：
+                  {share.resource_id}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {translateRbacValue(t, "shareScope", share.scope)}
