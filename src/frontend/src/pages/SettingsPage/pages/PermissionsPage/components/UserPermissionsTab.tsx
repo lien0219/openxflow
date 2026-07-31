@@ -11,6 +11,10 @@ import {
   type RbacRole,
   type RbacUser,
 } from "@/controllers/API/queries/authz";
+import {
+  translateRbacRoleName,
+  translateRbacValue,
+} from "../rbac-i18n";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const FIELD_CLASS = "flex min-w-0 flex-col gap-1.5";
@@ -171,7 +175,11 @@ export function UserPermissionsTab({
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium">{user.username}</span>
                   <span className="text-xs text-muted-foreground">
-                    {user.is_superuser ? "superuser" : "user"}
+                    {translateRbacValue(
+                      t,
+                      "userType",
+                      user.is_superuser ? "superuser" : "user",
+                    )}
                   </span>
                 </div>
                 <div className="truncate text-xs text-muted-foreground">
@@ -197,7 +205,7 @@ export function UserPermissionsTab({
                 >
                   {roles.map((role) => (
                     <option key={role.id} value={role.id}>
-                      {role.name}
+                      {translateRbacRoleName(t, role.name, role.is_system)}
                     </option>
                   ))}
                 </select>
@@ -214,7 +222,7 @@ export function UserPermissionsTab({
                 >
                   {domainOptions.map((domain) => (
                     <option key={domain} value={domain}>
-                      {domain}
+                      {translateRbacValue(t, "domain", domain)}
                     </option>
                   ))}
                 </select>
@@ -260,9 +268,15 @@ export function UserPermissionsTab({
                 className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
               >
                 <div>
-                  <div className="font-medium">{assignment.role_name}</div>
+                  <div className="font-medium">
+                    {translateRbacRoleName(t, assignment.role_name)}
+                  </div>
                   <div className="text-xs text-muted-foreground">
-                    {assignment.domain_type}
+                    {translateRbacValue(
+                      t,
+                      "domain",
+                      assignment.domain_type,
+                    )}
                     {assignment.domain_id ? ` · ${assignment.domain_id}` : ""}
                   </div>
                 </div>
@@ -312,7 +326,8 @@ export function UserPermissionsTab({
                 <div key={team.id} className="rounded-md border p-3 text-sm">
                   <div className="font-medium">{team.team_name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {team.adom_name} · {team.source}
+                    {team.adom_name} ·{" "}
+                    {translateRbacValue(t, "memberSource", team.source)}
                   </div>
                 </div>
               ))}
