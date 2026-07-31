@@ -12,6 +12,7 @@ import {
   type RbacUser,
 } from "@/controllers/API/queries/authz";
 import { translateRbacRoleName, translateRbacValue } from "../rbac-i18n";
+import { PermissionBadge } from "./PermissionBadge";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const FIELD_CLASS = "flex min-w-0 flex-col gap-1.5";
@@ -298,12 +299,7 @@ export function UserPermissionsTab({
             <h2 className="font-semibold">{t("rbac.users.effective")}</h2>
             <div className="mt-3 flex max-h-64 flex-wrap gap-2 overflow-y-auto custom-scroll">
               {summary.effective_permissions.map((permission) => (
-                <code
-                  key={permission}
-                  className="rounded bg-muted px-2 py-1 text-xs"
-                >
-                  {permission}
-                </code>
+                <PermissionBadge key={permission} permission={permission} />
               ))}
               {summary.effective_permissions.length === 0 && (
                 <span className="text-sm text-muted-foreground">
