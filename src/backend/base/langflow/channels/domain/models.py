@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ChannelType(str, Enum):
@@ -77,6 +77,13 @@ class ChannelEvent(BaseModel):
     message: ChannelIncomingMessage
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     raw_payload: dict[str, Any] = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="after")
+    def mark_interactive_action_as_targeted(self) -> ChannelEvent:
+        """Treat card/button actions as explicit interactions with the sending bot."""
+        if self.event_type == ChannelEventType.ACTION and not self.message.mentions:
+            self.message.mentions = ["__openxflow_interactive_action__"]
+        return self
 
 
 class ChannelAction(BaseModel):
