@@ -13,8 +13,10 @@ from sqlalchemy import func
 from sqlmodel import select
 
 from langflow.api.utils import CurrentActiveUser, DbSession
+from langflow.initial_setup.constants import STARTER_FOLDER_NAME
 from langflow.services.authorization import FlowAction, KnowledgeBaseAction
 from langflow.services.database.models.flow.model import Flow
+from langflow.services.database.models.folder.model import Folder
 from langflow.services.database.models.knowledge_base.model import KnowledgeBaseRecord
 from langflow.services.deps import get_authorization_service, get_settings_service
 
@@ -27,10 +29,12 @@ class ChannelFlowOption(BaseModel):
     endpoint_name: str | None = None
     description: str | None = None
     folder_id: UUID | None = None
+    project_name: str | None = None
 
 
 class ChannelFlowOptionPage(BaseModel):
     items: list[ChannelFlowOption]
+    selected_item: ChannelFlowOption | None = None
     page: int
     page_size: int
     total: int
@@ -50,6 +54,17 @@ class ChannelKnowledgeBaseOptionPage(BaseModel):
     page_size: int
     total: int
     total_pages: int
+
+
+def _flow_option(flow: Flow, project_name: str | None) -> ChannelFlowOption:
+    return ChannelFlowOption(
+        id=flow.id,
+        name=flow.name,
+        endpoint_name=flow.endpoint_name,
+        description=flow.description,
+        folder_id=flow.folder_id,
+        project_name=project_name,
+    )
 
 
 async def _visible_resource_filter(
@@ -87,8 +102,18 @@ async def read_channel_flow_options(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     query: Annotated[str | None, Query(max_length=255)] = None,
+    selected_id: Annotated[UUID | None, Query()] = None,
 ) -> ChannelFlowOptionPage:
-    filters: list[Any] = [sa.or_(Flow.is_component.is_(False), Flow.is_component.is_(None))]
+    # The project workspace hides starter templates from normal project lists. Keep
+    # the channel picker aligned with that UI instead of exposing every seeded flow.
+    base_filters: list[Any] = [
+        sa.or_(Flow.is_component.is_(False), Flow.is_component.is_(None)),
+        sa.or_(
+            Flow.folder_id.is_(None),
+            Folder.id.is_(None),
+            Folder.name != STARTER_FOLDER_NAME,
+        ),
+    ]
     visibility = await _visible_resource_filter(
         current_user,
         resource_type="flow",
@@ -97,7 +122,9 @@ async def read_channel_flow_options(
         owner_column=Flow.user_id,
     )
     if visibility is not None:
-        filters.append(visibility)
+        base_filters.append(visibility)
+
+    filters = list(base_filters)
     if query and query.strip():
         pattern = f"%{query.strip()}%"
         filters.append(
@@ -105,30 +132,45 @@ async def read_channel_flow_options(
                 Flow.name.ilike(pattern),
                 Flow.endpoint_name.ilike(pattern),
                 Flow.description.ilike(pattern),
+                Folder.name.ilike(pattern),
             )
         )
 
-    total_statement = select(func.count()).select_from(Flow).where(*filters)
+    total_statement = (
+        select(func.count())
+        .select_from(Flow)
+        .outerjoin(Folder, Folder.id == Flow.folder_id)
+        .where(*filters)
+    )
     total = int((await db.exec(total_statement)).one())
     statement = (
-        select(Flow)
+        select(Flow, Folder.name.label("project_name"))
+        .select_from(Flow)
+        .outerjoin(Folder, Folder.id == Flow.folder_id)
         .where(*filters)
-        .order_by(Flow.updated_at.desc(), Flow.name, Flow.id)
+        .order_by(Flow.updated_at.desc(), Folder.name, Flow.name, Flow.id)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
     rows = (await db.exec(statement)).all()
+
+    selected_item: ChannelFlowOption | None = None
+    if selected_id is not None:
+        selected_statement = (
+            select(Flow, Folder.name.label("project_name"))
+            .select_from(Flow)
+            .outerjoin(Folder, Folder.id == Flow.folder_id)
+            .where(*base_filters, Flow.id == selected_id)
+            .limit(1)
+        )
+        selected_row = (await db.exec(selected_statement)).first()
+        if selected_row is not None:
+            selected_flow, selected_project_name = selected_row
+            selected_item = _flow_option(selected_flow, selected_project_name)
+
     return ChannelFlowOptionPage(
-        items=[
-            ChannelFlowOption(
-                id=row.id,
-                name=row.name,
-                endpoint_name=row.endpoint_name,
-                description=row.description,
-                folder_id=row.folder_id,
-            )
-            for row in rows
-        ],
+        items=[_flow_option(flow, project_name) for flow, project_name in rows],
+        selected_item=selected_item,
         page=page,
         page_size=page_size,
         total=total,
