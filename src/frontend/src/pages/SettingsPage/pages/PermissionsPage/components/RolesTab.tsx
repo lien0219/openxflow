@@ -12,6 +12,7 @@ import {
   translateRbacRoleDescription,
   translateRbacRoleName,
 } from "../rbac-i18n";
+import { PermissionBadge } from "./PermissionBadge";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const FIELD_CLASS = "flex min-w-0 flex-col gap-1.5";
@@ -163,12 +164,7 @@ export function RolesTab({
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {role.permissions.map((permission) => (
-                  <code
-                    key={permission}
-                    className="rounded bg-muted px-2 py-1 text-xs"
-                  >
-                    {permission}
-                  </code>
+                  <PermissionBadge key={permission} permission={permission} />
                 ))}
               </div>
             </div>
