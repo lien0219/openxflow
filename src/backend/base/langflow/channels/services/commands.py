@@ -187,9 +187,7 @@ async def create_workflow_command(
         scope_key=scope_key,
         names={normalized_command, *aliases},
     )
-    command_values = payload.model_dump(
-        exclude={"command", "aliases", "flow_id", "conversation_binding_id"}
-    )
+    command_values = payload.model_dump(exclude={"command", "aliases", "flow_id", "conversation_binding_id"})
     command = ChannelWorkflowCommand(
         connection_id=connection.id,
         conversation_binding_id=payload.conversation_binding_id,

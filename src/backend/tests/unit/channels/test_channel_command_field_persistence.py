@@ -22,9 +22,7 @@ def test_command_create_forwards_all_switch_settings():
         enabled=False,
         settings_data={"mode": "strict"},
     )
-    values = payload.model_dump(
-        exclude={"command", "aliases", "flow_id", "conversation_binding_id"}
-    )
+    values = payload.model_dump(exclude={"command", "aliases", "flow_id", "conversation_binding_id"})
     source = getsource(commands.create_workflow_command)
 
     assert "payload.model_dump" in source
