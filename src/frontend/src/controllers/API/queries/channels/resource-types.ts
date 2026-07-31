@@ -4,10 +4,12 @@ export interface ChannelFlowOption {
   endpoint_name: string | null;
   description: string | null;
   folder_id: string | null;
+  project_name: string | null;
 }
 
 export interface ChannelFlowOptionPage {
   items: ChannelFlowOption[];
+  selected_item: ChannelFlowOption | null;
   page: number;
   page_size: number;
   total: number;
@@ -33,4 +35,5 @@ export interface ChannelResourceQuery {
   page?: number;
   pageSize?: number;
   query?: string;
+  selectedId?: string;
 }
