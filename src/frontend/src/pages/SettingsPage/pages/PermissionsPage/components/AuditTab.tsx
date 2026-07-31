@@ -75,13 +75,7 @@ export function AuditTab({
     }
   }, [domainId, domainType, isSuperuser, load]);
 
-  const domains = [
-    "global",
-    "organization",
-    "workspace",
-    "project",
-    "channel",
-  ];
+  const domains = ["global", "organization", "workspace", "project", "channel"];
   const auditResults = ["allow", "deny", "owner_override"];
 
   return (
@@ -170,11 +164,7 @@ export function AuditTab({
                 <td className="p-2">{entry.action}</td>
                 <td className="p-2 font-mono text-xs">
                   {entry.resource_type
-                    ? translateRbacValue(
-                        t,
-                        "resourceType",
-                        entry.resource_type,
-                      )
+                    ? translateRbacValue(t, "resourceType", entry.resource_type)
                     : "—"}
                   {entry.resource_id ? `:${entry.resource_id}` : ""}
                 </td>
