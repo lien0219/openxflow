@@ -17,6 +17,11 @@ const en: RbacTranslationMap = {
   "rbac.status.audit": "Audit logging",
   "rbac.status.autoLogin": "Automatic login",
   "rbac.status.superuserBypass": "Superuser bypass",
+  "rbac.status.warnings.autoLogin":
+    "Automatic login is enabled. Disable it before using multi-user RBAC in production.",
+  "rbac.status.warnings.enforcement":
+    "RBAC enforcement is disabled, so role decisions are not currently blocking requests.",
+  "rbac.status.warnings.audit": "Authorization audit logging is disabled.",
   "rbac.enabled": "Enabled",
   "rbac.disabled": "Disabled",
   "rbac.refresh": "Refresh",
@@ -30,6 +35,8 @@ const en: RbacTranslationMap = {
   "rbac.empty": "No records found.",
   "rbac.error": "Permission operation failed",
   "rbac.success": "Permission settings updated",
+  "rbac.unknownError": "Unknown error",
+  "rbac.confirmDelete": "Delete {{name}}?",
   "rbac.accessDenied":
     "You do not have permission to view the permission center.",
   "rbac.users.search": "Search users",
@@ -77,6 +84,57 @@ const en: RbacTranslationMap = {
   "rbac.audit.time": "Time",
   "rbac.audit.previous": "Previous",
   "rbac.audit.next": "Next",
+  "rbac.values.userType.superuser": "Superuser",
+  "rbac.values.userType.user": "User",
+  "rbac.values.domain.global": "Global",
+  "rbac.values.domain.organization": "Organization",
+  "rbac.values.domain.org": "Organization",
+  "rbac.values.domain.workspace": "Workspace",
+  "rbac.values.domain.project": "Project",
+  "rbac.values.domain.channel": "Channel",
+  "rbac.values.memberSource.manual": "Manual",
+  "rbac.values.memberSource.team": "Team",
+  "rbac.values.memberSource.default": "Default",
+  "rbac.values.resourceType.flow": "Workflow",
+  "rbac.values.resourceType.project": "Project",
+  "rbac.values.resourceType.knowledge_base": "Knowledge base",
+  "rbac.values.resourceType.variable": "Global variable",
+  "rbac.values.resourceType.file": "File",
+  "rbac.values.resourceType.deployment": "Deployment",
+  "rbac.values.resourceType.component": "Component",
+  "rbac.values.resourceType.channel": "Channel",
+  "rbac.values.shareScope.user": "User",
+  "rbac.values.shareScope.team": "Team",
+  "rbac.values.shareScope.public": "Public",
+  "rbac.values.shareScope.private": "Private",
+  "rbac.values.permissionLevel.read": "Read",
+  "rbac.values.permissionLevel.execute": "Execute",
+  "rbac.values.permissionLevel.write": "Write",
+  "rbac.values.permissionLevel.admin": "Admin",
+  "rbac.values.auditResult.allow": "Allowed",
+  "rbac.values.auditResult.deny": "Denied",
+  "rbac.values.auditResult.owner_override": "Owner override",
+  "rbac.systemRoles.platform_admin.name": "Platform administrator",
+  "rbac.systemRoles.platform_admin.description":
+    "Platform-wide administrator with full resource and RBAC management access.",
+  "rbac.systemRoles.organization_admin.name": "Organization administrator",
+  "rbac.systemRoles.organization_admin.description":
+    "Administrator for an organization or workspace scope.",
+  "rbac.systemRoles.channel_admin.name": "Channel administrator",
+  "rbac.systemRoles.channel_admin.description":
+    "Administrator for one channel connection and its conversations.",
+  "rbac.systemRoles.resource_editor.name": "Resource editor",
+  "rbac.systemRoles.resource_editor.description":
+    "Create and maintain workflows, projects, files and knowledge bases.",
+  "rbac.systemRoles.viewer.name": "Viewer",
+  "rbac.systemRoles.viewer.description":
+    "Read and execute shared resources without editing them.",
+  "rbac.systemRoles.auditor.name": "Auditor",
+  "rbac.systemRoles.auditor.description":
+    "Read-only access to resource metadata, channel activity and audit records.",
+  "rbac.systemRoles.member.name": "Member",
+  "rbac.systemRoles.member.description":
+    "Default authenticated member. Access is granted through ownership or explicit sharing.",
 };
 
 const zhHans: RbacTranslationMap = {
@@ -96,6 +154,11 @@ const zhHans: RbacTranslationMap = {
   "rbac.status.audit": "权限审计",
   "rbac.status.autoLogin": "自动登录",
   "rbac.status.superuserBypass": "超级管理员旁路",
+  "rbac.status.warnings.autoLogin":
+    "当前已启用自动登录；在生产环境使用多用户 RBAC 前请先关闭自动登录。",
+  "rbac.status.warnings.enforcement":
+    "当前未启用 RBAC 强制执行，角色权限判定暂时不会拦截请求。",
+  "rbac.status.warnings.audit": "当前未启用授权审计日志。",
   "rbac.enabled": "已启用",
   "rbac.disabled": "未启用",
   "rbac.refresh": "刷新",
@@ -109,6 +172,8 @@ const zhHans: RbacTranslationMap = {
   "rbac.empty": "暂无数据。",
   "rbac.error": "权限操作失败",
   "rbac.success": "权限设置已更新",
+  "rbac.unknownError": "未知错误",
+  "rbac.confirmDelete": "确定删除“{{name}}”吗？",
   "rbac.accessDenied": "当前账号没有访问权限中心的权限。",
   "rbac.users.search": "搜索用户",
   "rbac.users.select": "选择用户",
@@ -155,6 +220,57 @@ const zhHans: RbacTranslationMap = {
   "rbac.audit.time": "时间",
   "rbac.audit.previous": "上一页",
   "rbac.audit.next": "下一页",
+  "rbac.values.userType.superuser": "超级管理员",
+  "rbac.values.userType.user": "普通用户",
+  "rbac.values.domain.global": "全局",
+  "rbac.values.domain.organization": "组织",
+  "rbac.values.domain.org": "组织",
+  "rbac.values.domain.workspace": "工作区",
+  "rbac.values.domain.project": "项目",
+  "rbac.values.domain.channel": "渠道",
+  "rbac.values.memberSource.manual": "手动添加",
+  "rbac.values.memberSource.team": "团队继承",
+  "rbac.values.memberSource.default": "默认分配",
+  "rbac.values.resourceType.flow": "工作流",
+  "rbac.values.resourceType.project": "项目",
+  "rbac.values.resourceType.knowledge_base": "知识库",
+  "rbac.values.resourceType.variable": "全局变量",
+  "rbac.values.resourceType.file": "文件",
+  "rbac.values.resourceType.deployment": "部署",
+  "rbac.values.resourceType.component": "组件",
+  "rbac.values.resourceType.channel": "渠道",
+  "rbac.values.shareScope.user": "用户",
+  "rbac.values.shareScope.team": "团队",
+  "rbac.values.shareScope.public": "公开",
+  "rbac.values.shareScope.private": "私有",
+  "rbac.values.permissionLevel.read": "读取",
+  "rbac.values.permissionLevel.execute": "执行",
+  "rbac.values.permissionLevel.write": "编辑",
+  "rbac.values.permissionLevel.admin": "管理",
+  "rbac.values.auditResult.allow": "允许",
+  "rbac.values.auditResult.deny": "拒绝",
+  "rbac.values.auditResult.owner_override": "所有者放行",
+  "rbac.systemRoles.platform_admin.name": "平台管理员",
+  "rbac.systemRoles.platform_admin.description":
+    "拥有全平台资源与 RBAC 管理权限的管理员。",
+  "rbac.systemRoles.organization_admin.name": "组织管理员",
+  "rbac.systemRoles.organization_admin.description":
+    "负责组织或工作区作用域的管理。",
+  "rbac.systemRoles.channel_admin.name": "渠道管理员",
+  "rbac.systemRoles.channel_admin.description":
+    "负责一个渠道连接及其会话的管理。",
+  "rbac.systemRoles.resource_editor.name": "资源编辑者",
+  "rbac.systemRoles.resource_editor.description":
+    "可创建和维护工作流、项目、文件及知识库。",
+  "rbac.systemRoles.viewer.name": "查看者",
+  "rbac.systemRoles.viewer.description":
+    "可读取和执行共享资源，但不能修改资源。",
+  "rbac.systemRoles.auditor.name": "审计员",
+  "rbac.systemRoles.auditor.description":
+    "可只读查看资源元数据、渠道活动和审计记录。",
+  "rbac.systemRoles.member.name": "普通成员",
+  "rbac.systemRoles.member.description":
+    "默认认证成员，通过资源所有权或显式共享获得访问权限。",
 };
 
 export const rbacTranslations: Record<string, RbacTranslationMap> = {
