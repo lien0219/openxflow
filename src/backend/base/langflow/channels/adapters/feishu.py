@@ -23,6 +23,7 @@ from langflow.channels.domain.models import (
     ChannelType,
     ChannelUser,
 )
+from langflow.channels.services.conversation_scope import conversation_scope_id
 from langflow.channels.services.loop_lock import LoopLocalAsyncLock
 
 
@@ -34,6 +35,9 @@ class FeishuChannelAdapter(ChannelAdapter):
     channel_type = ChannelType.FEISHU
     _token_cache: ClassVar[dict[str, tuple[str, float]]] = {}
     _token_lock: ClassVar[LoopLocalAsyncLock] = LoopLocalAsyncLock()
+    _ACTION_CHAT_ID_KEY = "__openxflow_chat_id"
+    _ACTION_CONVERSATION_TYPE_KEY = "__openxflow_conversation_type"
+    _ACTION_SCOPE_ID_KEY = "__openxflow_scope_id"
 
     def __init__(
         self,
@@ -200,10 +204,16 @@ class FeishuChannelAdapter(ChannelAdapter):
         operator = event.get("operator") or {}
         context = event.get("context") or {}
         value = action.get("value")
+        embedded_chat_id = ""
+        embedded_conversation_type = ""
+        embedded_scope_id = ""
         if isinstance(value, dict):
             action_id = str(value.get("action_id") or action.get("name") or action.get("tag") or "action")
             action_value = value.get("value") or value.get("command") or action_id
             text = str(action_value)
+            embedded_chat_id = str(value.get(self._ACTION_CHAT_ID_KEY) or "")
+            embedded_conversation_type = str(value.get(self._ACTION_CONVERSATION_TYPE_KEY) or "")
+            embedded_scope_id = str(value.get(self._ACTION_SCOPE_ID_KEY) or "")
         else:
             action_id = str(action.get("name") or action.get("tag") or "action")
             text = str(value or action_id)
@@ -213,7 +223,18 @@ class FeishuChannelAdapter(ChannelAdapter):
             or event.get("open_id")
             or "unknown"
         )
-        chat_id = str(context.get("open_chat_id") or event.get("open_chat_id") or "")
+        callback_chat_id = str(context.get("open_chat_id") or event.get("open_chat_id") or "")
+        chat_id = embedded_chat_id or callback_chat_id
+        conversation_type = (
+            embedded_conversation_type
+            if embedded_conversation_type in {"private", "group"}
+            else ("group" if chat_id else "private")
+        )
+        conversation_metadata: dict[str, Any] = {
+            "callback_open_chat_id": callback_chat_id,
+        }
+        if embedded_scope_id:
+            conversation_metadata["conversation_scope_id"] = embedded_scope_id
         message_id = str(context.get("open_message_id") or event.get("open_message_id") or header.get("event_id"))
         return ChannelEvent(
             event_id=str(header.get("event_id") or body.get("token") or message_id),
@@ -227,7 +248,8 @@ class FeishuChannelAdapter(ChannelAdapter):
             ),
             conversation=ChannelConversation(
                 external_conversation_id=chat_id,
-                conversation_type="group" if chat_id else "private",
+                conversation_type=conversation_type,
+                metadata=conversation_metadata,
             ),
             message=ChannelIncomingMessage(
                 external_message_id=message_id,
@@ -257,18 +279,29 @@ class FeishuChannelAdapter(ChannelAdapter):
         return str((data or {}).get("message_id") or "")
 
     async def send_response(self, event: ChannelEvent, message: ChannelMessage) -> str:
-        if event.message.metadata.get("feishu_event_type") == "card.action.trigger":
-            return await self.send_message(event.conversation.external_conversation_id, message)
         msg_type, content = self._render_message(message)
-        data = await self._request(
-            "POST",
-            f"im/v1/messages/{event.message.external_message_id}/reply",
-            payload={
-                "msg_type": msg_type,
-                "content": json.dumps(content, ensure_ascii=False),
-                "reply_in_thread": False,
-            },
-        )
+        self._attach_action_context(content, event)
+        if event.message.metadata.get("feishu_event_type") == "card.action.trigger":
+            data = await self._request(
+                "POST",
+                "im/v1/messages",
+                params={"receive_id_type": "chat_id"},
+                payload={
+                    "receive_id": event.conversation.external_conversation_id,
+                    "msg_type": msg_type,
+                    "content": json.dumps(content, ensure_ascii=False),
+                },
+            )
+        else:
+            data = await self._request(
+                "POST",
+                f"im/v1/messages/{event.message.external_message_id}/reply",
+                payload={
+                    "msg_type": msg_type,
+                    "content": json.dumps(content, ensure_ascii=False),
+                    "reply_in_thread": False,
+                },
+            )
         return str((data or {}).get("message_id") or "")
 
     async def update_message(self, external_message_id: str, message: ChannelMessage) -> None:
@@ -437,6 +470,30 @@ class FeishuChannelAdapter(ChannelAdapter):
         if message.title:
             text = f"{message.title}\n\n{text}" if text else message.title
         return "text", {"text": text}
+
+    @classmethod
+    def _attach_action_context(cls, content: dict[str, Any], event: ChannelEvent) -> None:
+        chat_id = event.conversation.external_conversation_id.strip()
+        if not chat_id:
+            return
+        context_values = {
+            cls._ACTION_CHAT_ID_KEY: chat_id,
+            cls._ACTION_CONVERSATION_TYPE_KEY: event.conversation.conversation_type,
+        }
+        scope_id = conversation_scope_id(event)
+        if scope_id:
+            context_values[cls._ACTION_SCOPE_ID_KEY] = scope_id
+        for element in content.get("elements") or []:
+            if not isinstance(element, dict) or element.get("tag") != "action":
+                continue
+            for action in element.get("actions") or []:
+                if not isinstance(action, dict):
+                    continue
+                value = action.get("value")
+                if not isinstance(value, dict):
+                    continue
+                for key, context_value in context_values.items():
+                    value.setdefault(key, context_value)
 
     @staticmethod
     def _render_action(action: ChannelAction) -> dict[str, Any]:
