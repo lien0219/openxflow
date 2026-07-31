@@ -81,3 +81,5 @@ jobs:
           git add -A
           git commit -m "fix(channels): preserve all configurable fields"
           git push origin HEAD:feature/channel-gateway
+
+# Temporary trigger marker; this workflow deletes itself after verification.
