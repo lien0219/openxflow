@@ -8,6 +8,10 @@ import {
   type RbacRole,
   updateRole,
 } from "@/controllers/API/queries/authz";
+import {
+  translateRbacRoleDescription,
+  translateRbacRoleName,
+} from "../rbac-i18n";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const FIELD_CLASS = "flex min-w-0 flex-col gap-1.5";
@@ -89,7 +93,15 @@ export function RolesTab({
   };
 
   const remove = async (role: RbacRole) => {
-    if (!window.confirm(`${t("rbac.delete")} ${role.name}?`)) return;
+    if (
+      !window.confirm(
+        t("rbac.confirmDelete", {
+          name: translateRbacRoleName(t, role.name, role.is_system),
+        }),
+      )
+    ) {
+      return;
+    }
     try {
       await deleteRole(role.id);
       await onReload();
@@ -115,7 +127,9 @@ export function RolesTab({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{role.name}</span>
+                    <span className="font-medium">
+                      {translateRbacRoleName(t, role.name, role.is_system)}
+                    </span>
                     <span className="rounded bg-muted px-2 py-0.5 text-xs">
                       {role.is_system
                         ? t("rbac.roles.system")
@@ -123,7 +137,7 @@ export function RolesTab({
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {role.description}
+                    {translateRbacRoleDescription(t, role)}
                   </p>
                 </div>
                 {canManage && !role.is_system && (
@@ -194,7 +208,7 @@ export function RolesTab({
                   .filter((role) => role.id !== editingRoleId)
                   .map((role) => (
                     <option key={role.id} value={role.id}>
-                      {role.name}
+                      {translateRbacRoleName(t, role.name, role.is_system)}
                     </option>
                   ))}
               </select>
