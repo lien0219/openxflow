@@ -44,7 +44,12 @@ export default function ChannelResourceSelect({
   }, [searchInput]);
 
   const flowQuery = useGetChannelFlowOptions(
-    { page, pageSize: 20, query: search },
+    {
+      page,
+      pageSize: 20,
+      query: search,
+      selectedId: value || undefined,
+    },
     { enabled: kind === "flow" && !disabled },
   );
   const knowledgeBaseQuery = useGetChannelKnowledgeBaseOptions(
@@ -60,6 +65,7 @@ export default function ChannelResourceSelect({
     ChannelFlowOption | ChannelKnowledgeBaseOption
   >;
   const selectedInPage = items.some((item) => item.id === value);
+  const selectedFlow = kind === "flow" ? flowQuery.data?.selected_item : null;
 
   return (
     <label className="flex flex-col gap-2 text-sm font-medium">
@@ -80,7 +86,9 @@ export default function ChannelResourceSelect({
         <option value="">{isLoading ? copy("正在加载…") : emptyLabel}</option>
         {value && !selectedInPage && (
           <option value={value}>
-            {copy("当前已选择 · {{id}}", { id: value.slice(0, 8) })}
+            {selectedFlow
+              ? formatResourceOption("flow", selectedFlow, copy)
+              : copy("当前已选择 · {{id}}", { id: value.slice(0, 8) })}
           </option>
         )}
         {items.map((item) => (
@@ -123,9 +131,10 @@ function formatResourceOption(
 ): string {
   if (kind === "flow") {
     const flow = item as ChannelFlowOption;
-    return flow.endpoint_name
-      ? `${flow.name} (${flow.endpoint_name})`
+    const name = flow.project_name
+      ? `${flow.name} · ${flow.project_name}`
       : flow.name;
+    return flow.endpoint_name ? `${name} (${flow.endpoint_name})` : name;
   }
   const knowledgeBase = item as ChannelKnowledgeBaseOption;
   return `${knowledgeBase.name} (${copy("{{count}} 个分块", { count: knowledgeBase.chunks })} · ${knowledgeBase.status})`;
