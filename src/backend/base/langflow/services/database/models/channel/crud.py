@@ -58,42 +58,11 @@ def _utc_now() -> datetime:
 
 
 def _connection_read(connection: ChannelConnection) -> ChannelConnectionRead:
-    return ChannelConnectionRead(
-        id=connection.id,
-        user_id=connection.user_id,
-        name=connection.name,
-        channel_type=connection.channel_type,
-        enabled=connection.enabled,
-        connection_mode=connection.connection_mode,
-        service_user_id=connection.service_user_id,
-        default_flow_id=connection.default_flow_id,
-        default_knowledge_base_id=connection.default_knowledge_base_id,
-        auto_discover_conversations=connection.auto_discover_conversations,
-        unconfigured_behavior=connection.unconfigured_behavior,
-        pending_notice_enabled=connection.pending_notice_enabled,
-        personal_commands_enabled=connection.personal_commands_enabled,
-        user_flow_selection_enabled=connection.user_flow_selection_enabled,
-        flow_selection_ttl_hours=connection.flow_selection_ttl_hours,
-        default_response_mode=connection.default_response_mode,
-        default_allow_file_upload=connection.default_allow_file_upload,
-        access_policy=connection.access_policy,
-        default_context_mode=connection.default_context_mode,
-        max_concurrency=connection.max_concurrency,
-        per_user_concurrency=connection.per_user_concurrency,
-        per_user_queue_limit=connection.per_user_queue_limit,
-        rate_limit_per_minute=connection.rate_limit_per_minute,
-        daily_quota=connection.daily_quota,
-        task_timeout_seconds=connection.task_timeout_seconds,
-        queue_timeout_seconds=connection.queue_timeout_seconds,
-        shared_context_window=connection.shared_context_window,
-        context_retention_days=connection.context_retention_days,
-        settings_data=connection.settings_data,
-        status=connection.status,
-        configured_credential_keys=list_credential_keys(connection.credentials_encrypted),
-        last_connected_at=connection.last_connected_at,
-        last_error=connection.last_error,
-        created_at=connection.created_at,
-        updated_at=connection.updated_at,
+    result = ChannelConnectionRead.model_validate(connection, from_attributes=True)
+    return result.model_copy(
+        update={
+            "configured_credential_keys": list_credential_keys(connection.credentials_encrypted),
+        }
     )
 
 
@@ -145,36 +114,12 @@ async def create_channel_connection(
         payload.connection_mode,
         payload.credentials,
     )
+    connection_values = payload.model_dump(exclude={"credentials", "service_user_id"})
     connection = ChannelConnection(
         user_id=user_id,
-        name=payload.name,
-        channel_type=payload.channel_type,
-        enabled=payload.enabled,
-        connection_mode=payload.connection_mode,
         service_user_id=None,
-        default_flow_id=payload.default_flow_id,
-        default_knowledge_base_id=payload.default_knowledge_base_id,
-        auto_discover_conversations=payload.auto_discover_conversations,
-        unconfigured_behavior=payload.unconfigured_behavior,
-        pending_notice_enabled=payload.pending_notice_enabled,
-        personal_commands_enabled=payload.personal_commands_enabled,
-        user_flow_selection_enabled=payload.user_flow_selection_enabled,
-        flow_selection_ttl_hours=payload.flow_selection_ttl_hours,
-        default_response_mode=payload.default_response_mode,
-        default_allow_file_upload=payload.default_allow_file_upload,
-        access_policy=payload.access_policy,
-        default_context_mode=payload.default_context_mode,
-        max_concurrency=payload.max_concurrency,
-        per_user_concurrency=payload.per_user_concurrency,
-        per_user_queue_limit=payload.per_user_queue_limit,
-        rate_limit_per_minute=payload.rate_limit_per_minute,
-        daily_quota=payload.daily_quota,
-        task_timeout_seconds=payload.task_timeout_seconds,
-        queue_timeout_seconds=payload.queue_timeout_seconds,
-        shared_context_window=payload.shared_context_window,
-        context_retention_days=payload.context_retention_days,
-        settings_data=payload.settings_data,
         credentials_encrypted=encrypt_credentials(payload.credentials),
+        **connection_values,
     )
     session.add(connection)
     await session.flush()

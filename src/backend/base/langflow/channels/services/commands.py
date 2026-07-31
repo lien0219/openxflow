@@ -187,6 +187,9 @@ async def create_workflow_command(
         scope_key=scope_key,
         names={normalized_command, *aliases},
     )
+    command_values = payload.model_dump(
+        exclude={"command", "aliases", "flow_id", "conversation_binding_id"}
+    )
     command = ChannelWorkflowCommand(
         connection_id=connection.id,
         conversation_binding_id=payload.conversation_binding_id,
@@ -196,15 +199,8 @@ async def create_workflow_command(
         command=normalized_command,
         normalized_command=normalized_command,
         aliases=aliases,
-        description=payload.description,
-        scope_type=payload.scope_type,
         scope_key=scope_key,
-        prompt_template=payload.prompt_template,
-        input_required=payload.input_required,
-        allow_attachments=payload.allow_attachments,
-        require_mention=payload.require_mention,
-        enabled=payload.enabled,
-        settings_data=payload.settings_data,
+        **command_values,
     )
     session.add(command)
     await session.flush()
