@@ -11,10 +11,7 @@ import {
   type RbacRole,
   type RbacUser,
 } from "@/controllers/API/queries/authz";
-import {
-  translateRbacRoleName,
-  translateRbacValue,
-} from "../rbac-i18n";
+import { translateRbacRoleName, translateRbacValue } from "../rbac-i18n";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const FIELD_CLASS = "flex min-w-0 flex-col gap-1.5";
@@ -272,11 +269,7 @@ export function UserPermissionsTab({
                     {translateRbacRoleName(t, assignment.role_name)}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {translateRbacValue(
-                      t,
-                      "domain",
-                      assignment.domain_type,
-                    )}
+                    {translateRbacValue(t, "domain", assignment.domain_type)}
                     {assignment.domain_id ? ` · ${assignment.domain_id}` : ""}
                   </div>
                 </div>
