@@ -23,6 +23,27 @@ export function translateRbacValue(
   return t(`rbac.values.${group}.${value}`, { defaultValue: value });
 }
 
+export function translateRbacPermission(
+  t: TFunction,
+  permission: string,
+): string {
+  const separatorIndex = permission.indexOf(":");
+  if (separatorIndex <= 0 || separatorIndex === permission.length - 1) {
+    return permission;
+  }
+
+  const resource = permission.slice(0, separatorIndex);
+  const action = permission.slice(separatorIndex + 1);
+  const resourceLabel = translateRbacValue(t, "resourceType", resource);
+  const actionLabel = translateRbacValue(t, "permissionAction", action);
+
+  return t("rbac.permission.label", {
+    resource: resourceLabel,
+    action: actionLabel,
+    defaultValue: `${resourceLabel}: ${actionLabel}`,
+  });
+}
+
 export function translateRbacRoleName(
   t: TFunction,
   roleName: string,
