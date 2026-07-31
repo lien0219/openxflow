@@ -55,6 +55,8 @@ export function OverviewTab({
   ];
   const productionConfiguration = [
     "LANGFLOW_AUTO_LOGIN=false",
+    "LANGFLOW_SUPERUSER=admin",
+    "LANGFLOW_SUPERUSER_PASSWORD=<set-a-strong-password>",
     "LANGFLOW_AUTHZ_ENABLED=true",
     "LANGFLOW_AUTHZ_AUDIT_ENABLED=true",
     "LANGFLOW_AUTHZ_SUPERUSER_BYPASS=true",
