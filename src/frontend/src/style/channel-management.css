@@ -1,0 +1,54 @@
+/* Channel Center management-table refinements. */
+table.min-w-\[1080px\] {
+  min-width: 76rem;
+}
+
+table.min-w-\[1080px\] thead {
+  background: hsl(var(--muted) / 0.3);
+}
+
+table.min-w-\[1080px\] th {
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+table.min-w-\[1080px\] th:nth-child(1) {
+  min-width: 11rem;
+}
+
+table.min-w-\[1080px\] th:nth-child(2) {
+  min-width: 13rem;
+}
+
+table.min-w-\[1080px\] th:nth-child(3) {
+  min-width: 12rem;
+}
+
+table.min-w-\[1080px\] th:nth-child(4),
+table.min-w-\[1080px\] td:nth-child(4) {
+  min-width: 8.5rem;
+  white-space: nowrap;
+}
+
+table.min-w-\[1080px\] th:nth-child(5),
+table.min-w-\[1080px\] th:nth-child(6),
+table.min-w-\[1080px\] th:nth-child(7) {
+  min-width: 9.75rem;
+}
+
+table.min-w-\[1080px\] th:nth-child(8) {
+  min-width: 5rem;
+}
+
+table.min-w-\[1080px\] tbody tr {
+  transition: background-color 150ms ease;
+}
+
+table.min-w-\[1080px\] tbody tr:hover {
+  background: hsl(var(--muted) / 0.2);
+}
+
+table.min-w-\[1080px\] td:nth-child(4) {
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
