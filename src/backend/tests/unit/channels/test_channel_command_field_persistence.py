@@ -1,3 +1,5 @@
+"""Prevent channel command switches from being dropped during create or update."""
+
 from inspect import getsource
 from uuid import uuid4
 
