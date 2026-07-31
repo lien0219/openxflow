@@ -24,9 +24,7 @@ describe("RBAC permission-center locale initialization", () => {
       ),
     ).toContain("自动登录");
     expect(translateRbacValue(t, "domain", "channel")).toBe("渠道");
-    expect(translateRbacValue(t, "permissionLevel", "execute")).toBe(
-      "执行",
-    );
+    expect(translateRbacValue(t, "permissionLevel", "execute")).toBe("执行");
     expect(translateRbacRoleName(t, "platform_admin")).toBe("平台管理员");
   });
 });
