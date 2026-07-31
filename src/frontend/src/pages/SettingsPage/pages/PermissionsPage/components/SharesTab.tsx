@@ -9,6 +9,7 @@ import {
   type ResourceShare,
   updateShare,
 } from "@/controllers/API/queries/authz";
+import { translateRbacValue } from "../rbac-i18n";
 
 const PANEL_CLASS = "rounded-lg border bg-card p-4";
 const FIELD_CLASS = "flex min-w-0 flex-col gap-1.5";
@@ -81,6 +82,27 @@ export function SharesTab({
     }
   };
 
+  const resourceTypes = [
+    "flow",
+    "project",
+    "knowledge_base",
+    "variable",
+    "file",
+    "deployment",
+  ];
+  const shareScopes: ResourceShare["scope"][] = [
+    "user",
+    "team",
+    "public",
+    "private",
+  ];
+  const permissionLevels: ResourceShare["permission_level"][] = [
+    "read",
+    "execute",
+    "write",
+    "admin",
+  ];
+
   return (
     <div className="space-y-4">
       {canCreate && (
@@ -94,16 +116,9 @@ export function SharesTab({
                 value={resourceType}
                 onChange={(event) => setResourceType(event.target.value)}
               >
-                {[
-                  "flow",
-                  "project",
-                  "knowledge_base",
-                  "variable",
-                  "file",
-                  "deployment",
-                ].map((type) => (
+                {resourceTypes.map((type) => (
                   <option key={type} value={type}>
-                    {type}
+                    {translateRbacValue(t, "resourceType", type)}
                   </option>
                 ))}
               </select>
@@ -124,9 +139,9 @@ export function SharesTab({
                   setScope(event.target.value as ResourceShare["scope"])
                 }
               >
-                {["user", "team", "public", "private"].map((item) => (
+                {shareScopes.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {translateRbacValue(t, "shareScope", item)}
                   </option>
                 ))}
               </select>
@@ -150,9 +165,9 @@ export function SharesTab({
                   )
                 }
               >
-                {["read", "execute", "write", "admin"].map((item) => (
+                {permissionLevels.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {translateRbacValue(t, "permissionLevel", item)}
                   </option>
                 ))}
               </select>
@@ -181,10 +196,15 @@ export function SharesTab({
             >
               <div>
                 <div className="font-medium">
-                  {share.resource_type}:{share.resource_id}
+                  {translateRbacValue(
+                    t,
+                    "resourceType",
+                    share.resource_type,
+                  )}
+                  ：{share.resource_id}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {share.scope}
+                  {translateRbacValue(t, "shareScope", share.scope)}
                   {share.target_id ? ` · ${share.target_id}` : ""}
                 </div>
               </div>
@@ -199,9 +219,9 @@ export function SharesTab({
                     )
                   }
                 >
-                  {["read", "execute", "write", "admin"].map((item) => (
+                  {permissionLevels.map((item) => (
                     <option key={item} value={item}>
-                      {item}
+                      {translateRbacValue(t, "permissionLevel", item)}
                     </option>
                   ))}
                 </select>
