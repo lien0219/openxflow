@@ -23,6 +23,7 @@ export const useGetChannelFlowOptions: useQueryFunctionType<
           page: params.page ?? 1,
           page_size: params.pageSize ?? 20,
           query: params.query || undefined,
+          selected_id: params.selectedId || undefined,
         },
       },
     );
@@ -35,6 +36,7 @@ export const useGetChannelFlowOptions: useQueryFunctionType<
       params.page ?? 1,
       params.pageSize ?? 20,
       params.query ?? "",
+      params.selectedId ?? "",
     ],
     getOptions,
     { refetchOnWindowFocus: false, ...options },
