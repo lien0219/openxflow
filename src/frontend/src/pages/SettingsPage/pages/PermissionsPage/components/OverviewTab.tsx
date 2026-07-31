@@ -96,9 +96,7 @@ export function OverviewTab({
         )}
 
         <div className="mt-4 rounded-md border bg-muted/20 p-4">
-          <h3 className="font-medium">
-            {t("rbac.status.configurationTitle")}
-          </h3>
+          <h3 className="font-medium">{t("rbac.status.configurationTitle")}</h3>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             {t("rbac.status.configurationHelp")}
           </p>
