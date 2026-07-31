@@ -25,7 +25,8 @@ const en: RbacTranslationMap = {
   "rbac.status.configurationTitle": "How to change these settings",
   "rbac.status.configurationHelp":
     "These are startup-level security settings and are read-only in the UI. Change the matching variables in .env, then restart the backend.",
-  "rbac.status.productionExample": "Recommended multi-user production configuration",
+  "rbac.status.productionExample":
+    "Recommended multi-user production configuration",
   "rbac.status.restartRequired":
     "Changes take effect only after the backend is restarted. Keep superuser bypass enabled for break-glass access, or set it to false for strict zero-bypass enforcement.",
   "rbac.status.sqliteAuditNote":
