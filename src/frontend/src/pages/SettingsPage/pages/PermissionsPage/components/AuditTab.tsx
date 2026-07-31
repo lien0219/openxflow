@@ -57,11 +57,7 @@ export function AuditTab({
       const nextDomainType = overrides.domainType ?? domainType;
       const nextDomainId = overrides.domainId ?? domainId;
 
-      if (
-        !isSuperuser &&
-        nextDomainType !== "global" &&
-        !nextDomainId
-      ) {
+      if (!isSuperuser && nextDomainType !== "global" && !nextDomainId) {
         return;
       }
 
