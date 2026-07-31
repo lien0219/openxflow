@@ -33,7 +33,7 @@ type ApiError = {
   message?: string;
 };
 
-function errorMessage(error: unknown): string {
+function errorMessage(error: unknown, fallback: string): string {
   const candidate = error as ApiError;
   const detail = candidate?.response?.data?.detail;
   if (typeof detail === "string") return detail;
@@ -43,7 +43,7 @@ function errorMessage(error: unknown): string {
       .filter(Boolean)
       .join("; ");
   }
-  return candidate?.message || "Unknown error";
+  return candidate?.message || fallback;
 }
 
 export default function PermissionsPage() {
@@ -73,7 +73,7 @@ export default function PermissionsPage() {
     (error: unknown) =>
       setErrorData({
         title: t("rbac.error"),
-        list: [errorMessage(error)],
+        list: [errorMessage(error, t("rbac.unknownError"))],
       }),
     [setErrorData, t],
   );
