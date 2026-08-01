@@ -98,7 +98,7 @@ jobs:
           command: make unit_tests args="-x -vv --splits ${{ matrix.splitCount }} --group ${{ matrix.group }} --reruns 5 --cov --cov-config=src/backend/.coveragerc --cov-report=xml --cov-report=html"
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         if: matrix.python-version == '3.10'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -166,7 +166,7 @@ jobs:
           DO_NOT_TRACK: true # disable telemetry reporting
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         if: matrix.python-version == '3.10'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
