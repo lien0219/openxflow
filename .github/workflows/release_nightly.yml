@@ -132,13 +132,13 @@ jobs:
       # PyPI publishing moved to after cross-platform testing
 
       - name: Upload langflow-sdk Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist-nightly-sdk
           path: src/sdk/dist
 
       - name: Upload LFX Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist-nightly-lfx
           path: src/lfx/dist
@@ -242,7 +242,7 @@ jobs:
       # PyPI publishing moved to after cross-platform testing
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist-nightly-base
           path: src/backend/base/dist
@@ -373,7 +373,7 @@ jobs:
 
       - name: Upload Bundles Artifact
         if: steps.build-bundles.outputs.bundles-found == '1'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist-nightly-bundles
           path: bundles-dist
@@ -381,7 +381,7 @@ jobs:
       # PyPI publishing moved to after cross-platform testing
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist-nightly-main
           path: main-dist

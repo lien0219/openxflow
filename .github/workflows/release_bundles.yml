@@ -80,13 +80,13 @@ jobs:
           ls -la lfx-dist/
       - name: Upload bundles artifact
         if: steps.build.outputs.bundles-found == '1'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist-bundles
           path: bundles-dist
       - name: Upload lfx artifact (smoke-test only; not published)
         if: steps.build.outputs.bundles-found == '1'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist-lfx-smoketest
           path: lfx-dist

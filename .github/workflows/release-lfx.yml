@@ -185,7 +185,7 @@ jobs:
           echo "LFX CLI test completed successfully"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: lfx-dist
           path: src/lfx/dist/

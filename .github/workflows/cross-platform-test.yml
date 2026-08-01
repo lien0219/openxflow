@@ -99,28 +99,28 @@ jobs:
           echo "bundles-found=1" >> $GITHUB_OUTPUT
           ls -la bundles-dist/
       - name: Upload lfx artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: adhoc-dist-lfx
           path: src/lfx/dist
       - name: Upload SDK artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: adhoc-dist-sdk
           path: src/sdk/dist
       - name: Upload base artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: adhoc-dist-base
           path: src/backend/base/dist
       - name: Upload main artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: adhoc-dist-main
           path: dist
       - name: Upload bundles artifact
         if: steps.build-bundles.outputs.bundles-found == '1'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: adhoc-dist-bundles
           path: bundles-dist

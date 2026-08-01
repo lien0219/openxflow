@@ -69,7 +69,7 @@ jobs:
           junitxml-path: src/frontend/test-results/junit.xml
 
       - name: Upload Jest Coverage Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: jest-coverage
