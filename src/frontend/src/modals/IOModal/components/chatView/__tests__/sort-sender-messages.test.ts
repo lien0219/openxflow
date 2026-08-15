@@ -47,7 +47,7 @@ describe("sortSenderMessages", () => {
       const messages = [
         createMockMessage("2025-08-29T08:51:23Z", false, "iso"),
         createMockMessage("2025-08-29 08:51:21 UTC", true, "utc"),
-        createMockMessage("2025-08-29 08:51:22", true, "no-tz"),
+        createMockMessage("2025-08-29 23:51:22", true, "no-tz"),
       ];
 
       const sorted = [...messages].sort(sortSenderMessages);

@@ -6,7 +6,6 @@ import McpComponent from "../index";
 
 const mockRefetchMCPServers = jest.fn();
 const mockMutateTemplate = jest.fn();
-const mockUpdateBuildStatus = jest.fn();
 const mockSetErrorData = jest.fn();
 const mockPostTemplateValue = { mutateAsync: jest.fn() };
 
@@ -50,8 +49,9 @@ jest.mock("@/stores/alertStore", () => ({
 }));
 
 jest.mock("@/stores/flowStore", () => {
+  const updateBuildStatus = jest.fn();
   const mockFlowState = {
-    updateBuildStatus: mockUpdateBuildStatus,
+    updateBuildStatus,
   };
   const useFlowStoreMock = jest.fn(
     (selector?: (state: typeof mockFlowState) => unknown) =>
