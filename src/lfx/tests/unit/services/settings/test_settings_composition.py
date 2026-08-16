@@ -245,15 +245,13 @@ def test_dict_defaults_unchanged():
     assert settings.sqlite_pragmas == {
         "synchronous": "NORMAL",
         "journal_mode": "WAL",
-        "busy_timeout": 30000,
+        "busy_timeout": 5000,
+        "wal_autocheckpoint": 1000,
     }
     assert settings.db_connection_settings == {
-        "pool_size": 20,
-        "max_overflow": 30,
-        "pool_timeout": 30,
         "pool_pre_ping": True,
-        "pool_recycle": 1800,
         "echo": False,
+        "poolclass": "NullPool",
     }
 
 
@@ -267,6 +265,7 @@ def test_multi_worker_forces_direct_event_delivery(monkeypatch):
     """
     monkeypatch.setenv("LANGFLOW_WORKERS", "4")
     monkeypatch.setenv("LANGFLOW_EVENT_DELIVERY", "streaming")
+    monkeypatch.setenv("LANGFLOW_DATABASE_URL", "postgresql://user:password@localhost/openxflow")
     settings = Settings()
     assert settings.workers == 4
     assert settings.event_delivery == "direct"
@@ -278,6 +277,15 @@ def test_single_worker_keeps_explicit_event_delivery(monkeypatch):
     monkeypatch.setenv("LANGFLOW_EVENT_DELIVERY", "polling")
     settings = Settings()
     assert settings.event_delivery == "polling"
+
+
+def test_assignment_validation_uses_composed_workers(monkeypatch):
+    """Assignment validation must not re-read a changed worker environment."""
+    monkeypatch.delenv("LANGFLOW_WORKERS", raising=False)
+    settings = Settings()
+
+    monkeypatch.setenv("LANGFLOW_WORKERS", "4")
+    settings.allow_custom_components = True
 
 
 def test_database_url_sees_config_dir(monkeypatch, tmp_path):
@@ -371,5 +379,7 @@ def test_yaml_round_trip():
 def test_env_var_round_trip(monkeypatch, env_var, env_value, field, expected):
     """A sampling of LANGFLOW_* env vars still populate the right fields."""
     monkeypatch.setenv(env_var, env_value)
+    if env_var == "LANGFLOW_WORKERS" and env_value != "1":
+        monkeypatch.setenv("LANGFLOW_DATABASE_URL", "postgresql://user:password@localhost/openxflow")
     settings = Settings()
     assert getattr(settings, field) == expected

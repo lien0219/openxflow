@@ -169,11 +169,15 @@ class DatabaseSettings(BaseModel):
         database_url = str(os.getenv("LANGFLOW_DATABASE_URL") or self.database_url or "")
         if not database_url.startswith("sqlite"):
             return self
-        raw_workers = os.getenv("LANGFLOW_WORKERS", str(getattr(self, "workers", 1) or 1))
-        try:
-            workers = int(raw_workers)
-        except (TypeError, ValueError):
-            workers = 1
+        configured_workers = getattr(self, "workers", None)
+        if configured_workers is None:
+            raw_workers = os.getenv("LANGFLOW_WORKERS", "1")
+            try:
+                workers = int(raw_workers)
+            except (TypeError, ValueError):
+                workers = 1
+        else:
+            workers = configured_workers
         if workers != 1:
             msg = (
                 "SQLite requires LANGFLOW_WORKERS=1. Multiple OpenXFlow workers cannot safely share "

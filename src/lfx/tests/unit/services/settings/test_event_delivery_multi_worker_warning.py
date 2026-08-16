@@ -21,8 +21,15 @@ if TYPE_CHECKING:
 
 def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Clear all env vars the validator inspects so tests are deterministic."""
-    for name in ("LANGFLOW_WORKERS", "LANGFLOW_JOB_QUEUE_TYPE", "LANGFLOW_EVENT_DELIVERY"):
+    for name in (
+        "LANGFLOW_WORKERS",
+        "LANGFLOW_JOB_QUEUE_TYPE",
+        "LANGFLOW_EVENT_DELIVERY",
+        "LANGFLOW_DATABASE_URL",
+    ):
         monkeypatch.delenv(name, raising=False)
+    # These tests exercise event delivery, not SQLite's single-worker guard.
+    monkeypatch.setenv("LANGFLOW_DATABASE_URL", "postgresql://user:password@localhost/openxflow")
 
 
 def _capture_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:

@@ -50,14 +50,15 @@ async function gettingStartedActionsTestFn(
     0,
   );
 
+  await context.route(`${GITHUB_URL}**`, (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "" }),
+  );
   const pagePromiseGithub = context.waitForEvent("page");
   await page.getByTestId("empty_page_github_button").click();
 
   const newPageGithub = await pagePromiseGithub;
-  await newPageGithub.waitForTimeout(3000);
-  const newUrlGithub = newPageGithub.url();
-
-  await expect(newUrlGithub).toContain(GITHUB_URL);
+  await newPageGithub.waitForLoadState("domcontentloaded");
+  await expect(newPageGithub).toHaveURL(GITHUB_URL);
 
   await newPageGithub.close();
 
@@ -77,8 +78,8 @@ async function gettingStartedActionsTestFn(
     timeout: 100000,
   });
 
-  await expect(page.getByTestId("get_started_progress_percentage")).toHaveCount(
-    0,
+  await expect(page.getByTestId("get_started_progress_percentage")).toHaveText(
+    "50%",
   );
   await expect(page.getByTestId("search-store-input")).toBeVisible();
 
