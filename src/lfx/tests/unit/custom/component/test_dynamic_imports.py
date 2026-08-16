@@ -19,10 +19,9 @@ class TestImportUtils:
     """Test the import_mod utility function."""
 
     def test_import_mod_with_module_name(self):
-        """Test importing specific attribute from a module with missing dependencies."""
-        # Test importing a class that has missing dependencies - should raise ModuleNotFoundError
-        with pytest.raises(ModuleNotFoundError, match="No module named"):
-            import_mod("OpenAIModelComponent", "openai_chat_model", "lfx.components.openai")
+        """Test importing a specific attribute from a module."""
+        component = import_mod("OpenAIModelComponent", "openai_chat_model", "lfx.components.openai")
+        assert component.__name__ == "OpenAIModelComponent"
 
     def test_import_mod_without_module_name(self):
         """Test importing entire module when module_name is None."""
@@ -37,9 +36,8 @@ class TestImportUtils:
             import_mod("NonExistentComponent", "nonexistent_module", "lfx.components.openai")
 
     def test_import_mod_attribute_not_found(self):
-        """Test error handling when module has missing dependencies."""
-        # The openai_chat_model module can't be imported due to missing dependencies
-        with pytest.raises(ModuleNotFoundError, match="No module named"):
+        """Test error handling when an imported module lacks the requested attribute."""
+        with pytest.raises(AttributeError, match="has no attribute 'NonExistentComponent'"):
             import_mod("NonExistentComponent", "openai_chat_model", "lfx.components.openai")
 
 
@@ -94,13 +92,12 @@ class TestComponentDynamicImports:
         assert "OpenAIModelComponent" in openai_components.__all__
         assert "OpenAIEmbeddingsComponent" in openai_components.__all__
 
-        # Access component - this should raise AttributeError due to missing langchain-openai
-        with pytest.raises(AttributeError, match="Could not import 'OpenAIModelComponent'"):
-            _ = openai_components.OpenAIModelComponent
+        component = openai_components.OpenAIModelComponent
+        assert component.__name__ == "OpenAIModelComponent"
+        assert openai_components.__dict__["OpenAIModelComponent"] is component
 
-        # Test that the error is properly cached - second access should also fail
-        with pytest.raises(AttributeError, match="Could not import 'OpenAIModelComponent'"):
-            _ = openai_components.OpenAIModelComponent
+        # The second access should return the cached class.
+        assert openai_components.OpenAIModelComponent is component
 
     def test_category_module_dir(self):
         """Test __dir__ functionality for category modules."""
@@ -292,10 +289,9 @@ class TestSpecialCases:
         """Test that the import structure maintains integrity."""
         from lfx import components
 
-        # Test that we can access nested components through the hierarchy
-        # OpenAI component requires langchain_openai which isn't installed
-        with pytest.raises(AttributeError, match=r"Could not import.*OpenAIModelComponent"):
-            _ = components.openai.OpenAIModelComponent
+        # Test that we can access nested components through the hierarchy.
+        openai_component = components.openai.OpenAIModelComponent
+        assert openai_component.__name__ == "OpenAIModelComponent"
 
         # APIRequestComponent should work now that validators is installed
         api_component = components.data.APIRequestComponent
