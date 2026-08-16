@@ -137,7 +137,7 @@ export default function ConnectionOverviewTab({
             )}
 
             {connection.channel_type === "telegram" && (
-              <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+              <div className="mt-4 rounded-lg border bg-muted/40 p-3">
                 <div className="text-xs font-medium">
                   {copy("Telegram 群聊验收提示")}
                 </div>
