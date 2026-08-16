@@ -135,6 +135,19 @@ export default function ConnectionOverviewTab({
                 </code>
               </div>
             )}
+
+            {connection.channel_type === "telegram" && (
+              <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                <div className="text-xs font-medium">
+                  {copy("Telegram 群聊验收提示")}
+                </div>
+                <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {copy(
+                    "若需要群聊中的“仅被提及时响应”或“响应全部消息”，请在 @BotFather 使用 /setprivacy，将当前机器人 Privacy Mode 设为 Disable；修改后将机器人移出群组并重新加入。群内系统命令建议使用 /command@机器人用户名，例如 /current-flow@openxflow_test_bot；账号绑定请在私聊中发送 /bind。",
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">

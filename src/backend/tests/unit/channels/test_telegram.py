@@ -228,6 +228,36 @@ async def test_telegram_long_action_uses_action_id_as_callback_fallback(monkeypa
     assert captured["payload"]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "approve"
 
 
+async def test_telegram_healthcheck_reports_group_privacy_mode(monkeypatch):
+    adapter = build_adapter()
+
+    async def fake_request(method, *, payload=None):
+        del payload
+        if method == "getMe":
+            return {
+                "id": 10,
+                "username": "openxflow_test_bot",
+                "first_name": "OpenXFlow Test",
+                "can_join_groups": True,
+                "can_read_all_group_messages": False,
+            }
+        if method == "getWebhookInfo":
+            return {
+                "url": "https://example.com/api/v1/channels/webhook",
+                "pending_update_count": 0,
+            }
+        raise AssertionError(f"Unexpected Telegram method: {method}")
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+
+    result = await adapter.healthcheck()
+
+    assert result["can_join_groups"] is True
+    assert result["can_read_all_group_messages"] is False
+    assert result["group_privacy_mode_enabled"] is True
+    assert result["username"] == "openxflow_test_bot"
+
+
 async def test_telegram_invalid_update_is_rejected():
     adapter = build_adapter()
 

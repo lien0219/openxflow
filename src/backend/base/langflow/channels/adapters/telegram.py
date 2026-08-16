@@ -436,6 +436,11 @@ class TelegramChannelAdapter(ChannelAdapter):
         identity = await self._request("getMe")
         webhook = await self._request("getWebhookInfo")
         webhook = webhook if isinstance(webhook, dict) else {}
+        can_join_groups = identity.get("can_join_groups")
+        can_read_all_group_messages = identity.get("can_read_all_group_messages")
+        group_privacy_mode_enabled = (
+            not can_read_all_group_messages if isinstance(can_read_all_group_messages, bool) else None
+        )
         return {
             "ok": True,
             "channel": self.channel_type.value,
@@ -443,6 +448,9 @@ class TelegramChannelAdapter(ChannelAdapter):
             "bot_id": str(identity["id"]),
             "username": identity.get("username"),
             "display_name": identity.get("first_name"),
+            "can_join_groups": can_join_groups,
+            "can_read_all_group_messages": can_read_all_group_messages,
+            "group_privacy_mode_enabled": group_privacy_mode_enabled,
             "webhook_url": webhook.get("url"),
             "pending_update_count": webhook.get("pending_update_count", 0),
             "last_webhook_error": webhook.get("last_error_message"),
