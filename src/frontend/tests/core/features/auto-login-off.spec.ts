@@ -2,7 +2,10 @@ import { expect, test } from "../../fixtures";
 import { adjustScreenView } from "../../utils/adjust-screen-view";
 import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
 import { TEXTS } from "../../utils/constants/texts";
-import { waitForNewProjectButton } from "../../utils/flow/new-project-flow";
+import {
+  openTemplatesModal,
+  waitForNewProjectButton,
+} from "../../utils/flow/new-project-flow";
 import { renameFlow } from "../../utils/rename-flow";
 
 test(
@@ -236,14 +239,35 @@ test(
       timeout: 30000,
     });
 
-    await page.waitForTimeout(2000);
-
-    await awaitBootstrapTest(page, { skipGoto: true });
+    await expect(page.getByTestId("new_project_btn_empty_page")).toBeVisible({
+      timeout: 30000,
+    });
+    await openTemplatesModal(page, {
+      fromEmptyPage: true,
+      modalTimeout: 30000,
+    });
 
     await page.getByTestId("side_nav_options_all-templates").click();
+    const flowCreatePromise = page.waitForResponse(
+      (response) =>
+        /\/api\/v1\/flows\/?(?:\?|$)/.test(response.url()) &&
+        response.request().method() === "POST" &&
+        response.status() === 201,
+    );
     await page
       .getByRole("heading", { name: TEXTS.templateBasicPrompting })
       .click();
+    const createdFlow = (await (await flowCreatePromise).json()) as {
+      id: string;
+      name: string;
+    };
+
+    const canvasControls = page.getByTestId("canvas_controls_dropdown");
+    await expect(page).toHaveURL(
+      new RegExp(`/flow/${createdFlow.id}(?:/folder/[^/?#]+)?$`),
+      { timeout: 30000 },
+    );
+    await expect(canvasControls).toBeVisible({ timeout: 30000 });
 
     await adjustScreenView(page, { numberOfZoomOut: 2 });
 

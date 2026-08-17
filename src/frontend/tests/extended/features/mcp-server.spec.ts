@@ -1,3 +1,5 @@
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { expect, test } from "../../fixtures";
 import { adjustScreenView } from "../../utils/adjust-screen-view";
 import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
@@ -5,6 +7,110 @@ import { TEXTS } from "../../utils/constants/texts";
 import { openBlankFlow } from "../../utils/flow/open-blank-flow";
 import { openAddMcpServerModal } from "../../utils/open-add-mcp-server-modal";
 import { zoomOut } from "../../utils/zoom-out";
+
+const SERVER_EVERYTHING_ENTRYPOINT =
+  "node_modules/@modelcontextprotocol/server-everything/dist/index.js";
+
+async function getFreePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("Unable to allocate a local MCP test server port");
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+  return address.port;
+}
+
+async function startLocalMcpServer(): Promise<{
+  process: ChildProcessWithoutNullStreams;
+  url: string;
+}> {
+  const port = await getFreePort();
+  const serverProcess = spawn(
+    process.execPath,
+    [SERVER_EVERYTHING_ENTRYPOINT, "streamableHttp"],
+    {
+      env: { ...process.env, PORT: String(port) },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+
+  await new Promise<void>((resolve, reject) => {
+    let output = "";
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Local MCP server did not start in time: ${output}`));
+    }, 15000);
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      serverProcess.off("error", onError);
+      serverProcess.off("exit", onExit);
+      serverProcess.stdout.off("data", onOutput);
+      serverProcess.stderr.off("data", onOutput);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      cleanup();
+      reject(
+        new Error(
+          `Local MCP server exited before startup (code=${code}, signal=${signal}): ${output}`,
+        ),
+      );
+    };
+    const onOutput = (chunk: Buffer) => {
+      output += chunk.toString();
+      if (
+        output.includes(`MCP Streamable HTTP Server listening on port ${port}`)
+      ) {
+        cleanup();
+        serverProcess.stdout.resume();
+        serverProcess.stderr.resume();
+        resolve();
+      }
+    };
+
+    serverProcess.once("error", onError);
+    serverProcess.once("exit", onExit);
+    serverProcess.stdout.on("data", onOutput);
+    serverProcess.stderr.on("data", onOutput);
+  });
+
+  return { process: serverProcess, url: `http://127.0.0.1:${port}/mcp` };
+}
+
+async function stopLocalMcpServer(
+  serverProcess: ChildProcessWithoutNullStreams,
+): Promise<void> {
+  if (serverProcess.exitCode !== null || serverProcess.signalCode !== null)
+    return;
+
+  const exited = new Promise<void>((resolve) => {
+    serverProcess.once("exit", () => resolve());
+  });
+  serverProcess.kill();
+
+  const stopped = await Promise.race([
+    exited.then(() => true),
+    new Promise<false>((resolve) => setTimeout(() => resolve(false), 5000)),
+  ]);
+  if (!stopped) {
+    serverProcess.kill("SIGKILL");
+    await exited;
+  }
+}
 
 test(
   "user must be able to change mode of MCP tools without any issues",
@@ -806,7 +912,10 @@ test(
       "python -m mcp_server_fetch",
     );
 
-    await page.getByTestId("stdio-command-input").fill("uvx mcp-server-time");
+    await page.getByTestId("stdio-command-input").fill("node");
+    await page.getByTestId("stdio-args_0").fill(SERVER_EVERYTHING_ENTRYPOINT);
+    await page.getByTestId("input-list-plus-btn_-0").click();
+    await page.getByTestId("stdio-args_1").fill("stdio");
 
     await page.getByTestId("add-mcp-server-button").click();
 
@@ -850,16 +959,10 @@ test(
 
     await page.getByTestId("dropdown_str_tool").click();
 
-    await page.waitForSelector('[data-testid="get_current_time-0-option"]', {
-      state: "visible",
+    await expect(page.getByTestId("echo-0-option")).toBeVisible({
       timeout: 30000,
     });
-
-    const timeOptionCount = await page
-      .getByTestId("get_current_time-0-option")
-      .count();
-
-    expect(timeOptionCount).toBeGreaterThan(0);
+    await expect(page.getByTestId("fetch-0-option")).toHaveCount(0);
 
     await page.getByTestId("user_menu_button").click({ timeout: 10000 });
 
@@ -977,68 +1080,58 @@ test(
   "Streamable HTTP MCP server with server-everything should load tools correctly",
   { tag: ["@release", "@workspace", "@components"] },
   async ({ page }) => {
-    // Start the MCP server with proper health checking
-    const server = "https://mcp.deepwiki.com/mcp";
-    await openBlankFlow(page);
-    await page.getByTestId("sidebar-nav-mcp").click();
-    await page.waitForSelector(
-      '[data-testid="add-component-button-lf-starter_project"]',
-      {
-        timeout: 30000,
-      },
-    );
-    await page.getByTestId("add-component-button-lf-starter_project").click();
+    const localMcpServer = await startLocalMcpServer();
+    try {
+      await openBlankFlow(page);
+      await page.getByTestId("sidebar-nav-mcp").click();
+      await page.waitForSelector(
+        '[data-testid="add-component-button-lf-starter_project"]',
+        {
+          timeout: 30000,
+        },
+      );
+      await page.getByTestId("add-component-button-lf-starter_project").click();
 
-    await adjustScreenView(page, { numberOfZoomOut: 3 });
+      await adjustScreenView(page, { numberOfZoomOut: 3 });
 
-    await openAddMcpServerModal(page);
+      await openAddMcpServerModal(page);
 
-    // Switch to HTTP tab for Streamable HTTP
-    await page.getByTestId("http-tab").click();
+      await page.getByTestId("http-tab").click();
 
-    await page.waitForSelector('[data-testid="http-name-input"]', {
-      state: "visible",
-      timeout: 30000,
-    });
-
-    const randomSuffix = Math.floor(Math.random() * 90000) + 10000;
-    const testName = `test_streamable_http_${randomSuffix}`;
-
-    // Fill in the server details
-    await page.getByTestId("http-name-input").fill(testName);
-
-    // Use the HTTP endpoint URL
-    await page.getByTestId("http-url-input").fill(server);
-
-    await page.getByTestId("add-mcp-server-button").click();
-
-    // Wait for the modal overlay to fully close before interacting
-    await page
-      .locator(".fixed.inset-0.z-50")
-      .waitFor({ state: "hidden", timeout: 10000 })
-      .catch(() => {});
-
-    // Wait for tools to load with proper timeout (external server can be slow in CI)
-    await page.waitForSelector(
-      '[data-testid="dropdown_str_tool"]:not([disabled])',
-      {
-        timeout: 60000,
+      await page.waitForSelector('[data-testid="http-name-input"]', {
         state: "visible",
-      },
-    );
+        timeout: 30000,
+      });
 
-    await page.getByTestId("dropdown_str_tool").click();
+      const randomSuffix = Math.floor(Math.random() * 90000) + 10000;
+      const testName = `test_streamable_http_${randomSuffix}`;
 
-    // Check for tools from server - wait for any option to render
-    const toolOptions = page.locator('[data-testid*="-0-option"]');
-    await expect(toolOptions.first()).toBeVisible({ timeout: 30000 });
+      await page.getByTestId("http-name-input").fill(testName);
+      await page.getByTestId("http-url-input").fill(localMcpServer.url);
 
-    // Verify multiple tools loaded from deepwiki
-    const toolCount = await toolOptions.count();
-    expect(toolCount).toBeGreaterThan(0);
+      await page.getByTestId("add-mcp-server-button").click();
 
-    // Select the first available tool
-    await toolOptions.first().click();
+      await page
+        .locator(".fixed.inset-0.z-50")
+        .waitFor({ state: "hidden", timeout: 10000 })
+        .catch(() => {});
+
+      await page.waitForSelector(
+        '[data-testid="dropdown_str_tool"]:not([disabled])',
+        {
+          timeout: 60000,
+          state: "visible",
+        },
+      );
+
+      await page.getByTestId("dropdown_str_tool").click();
+      await expect(page.getByTestId("echo-0-option")).toBeVisible({
+        timeout: 30000,
+      });
+      await page.getByTestId("echo-0-option").click();
+    } finally {
+      await stopLocalMcpServer(localMcpServer.process);
+    }
   },
 );
 
