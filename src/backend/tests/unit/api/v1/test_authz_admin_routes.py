@@ -808,6 +808,7 @@ async def test_update_team_clears_description_via_explicit_null(stub_authz):
     """PATCH with description=null clears the field via presence check."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
+
     stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, description="old description")
@@ -830,6 +831,7 @@ async def test_update_team_omitted_description_untouched(stub_authz):
     """Omitting description leaves the existing value alone."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
+
     stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, description="keep me")
@@ -853,6 +855,7 @@ async def test_update_team_display_only_change_skips_invalidate_all(stub_authz):
     """Renaming or re-describing a team doesn't touch policy — no cache flush."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
+
     authz = stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, team_name="Eng", adom_name="eng", is_active=True)
@@ -873,6 +876,7 @@ async def test_update_team_adom_change_triggers_invalidate_all(stub_authz):
     """``adom_name`` is the slug a plugin may compile against — invalidate on change."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
+
     authz = stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, adom_name="eng")
@@ -893,6 +897,7 @@ async def test_update_team_is_active_change_triggers_invalidate_all(stub_authz):
     """Deactivating a team must take effect on the next enforce call."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
+
     authz = stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, is_active=True)
@@ -1224,9 +1229,7 @@ async def test_delete_assignment_succeeds_when_invalidate_user_fails(failing_inv
         domain_id=None,
     )
     role = SimpleNamespace(id=assignment.role_id, name="viewer")
-    session = _FakeAsyncSession(
-        {(AuthzRoleAssignment, assignment_id): assignment, (AuthzRole, role.id): role}
-    )
+    session = _FakeAsyncSession({(AuthzRoleAssignment, assignment_id): assignment, (AuthzRole, role.id): role})
     actor = _make_user(is_superuser=True)
 
     await authz_role_assignments.delete_assignment(
@@ -1257,9 +1260,7 @@ async def test_delete_assignment_succeeds_when_both_invalidations_fail(failing_i
         domain_id=None,
     )
     role = SimpleNamespace(id=assignment.role_id, name="viewer")
-    session = _FakeAsyncSession(
-        {(AuthzRoleAssignment, assignment_id): assignment, (AuthzRole, role.id): role}
-    )
+    session = _FakeAsyncSession({(AuthzRoleAssignment, assignment_id): assignment, (AuthzRole, role.id): role})
     actor = _make_user(is_superuser=True)
 
     # Even with both calls failing, the API must return success — there is no
