@@ -10,6 +10,8 @@ from langflow.channels.services.workflow import (
     _collect_delegated_variable_names,
 )
 from langflow.services.database.models.channel.execution_model import ChannelExecutionIdentityType
+from langflow.services.database.models.channel.model import ChannelConnection
+from langflow.services.database.models.flow.model import Flow
 from pydantic import SecretStr
 
 
@@ -110,6 +112,7 @@ async def test_service_identity_executes_with_owner_variables_but_keeps_service_
     flow_id = uuid4()
     owner_user_id = uuid4()
     service_user_id = uuid4()
+    event = _channel_event()
     graph_data = {
         "nodes": [
             {
@@ -141,8 +144,22 @@ async def test_service_identity_executes_with_owner_variables_but_keeps_service_
     prepared_flow.data = graph_data
     flow.model_copy.return_value = prepared_flow
 
+    connection = SimpleNamespace(
+        id=event.connection_id,
+        service_user_id=service_user_id,
+        user_id=owner_user_id,
+    )
+
     session = MagicMock()
-    session.get = AsyncMock(return_value=flow)
+    session.get = AsyncMock(
+        side_effect=lambda model, record_id: (
+            flow
+            if model is Flow and record_id == flow_id
+            else connection
+            if model is ChannelConnection and record_id == event.connection_id
+            else None
+        )
+    )
     session_cm = MagicMock()
     session_cm.__aenter__ = AsyncMock(return_value=session)
     session_cm.__aexit__ = AsyncMock(return_value=None)
@@ -172,13 +189,16 @@ async def test_service_identity_executes_with_owner_variables_but_keeps_service_
         ),
     ):
         result = await ChannelWorkflowExecutor().execute(
-            event=_channel_event(),
+            event=event,
             user=service_user,
             flow_identifier=str(flow_id),
             input_value="你好",
             session_id="channel-session",
             execution_identity_type=ChannelExecutionIdentityType.SERVICE.value,
-            channel_context={"granted_flow_id": str(flow_id)},
+            channel_context={
+                "connection_id": str(event.connection_id),
+                "granted_flow_id": str(flow_id),
+            },
         )
 
     flow.model_copy.assert_called_once_with(update={"data": graph_data})
@@ -198,4 +218,10 @@ async def test_service_identity_executes_with_owner_variables_but_keeps_service_
     assert isinstance(delegated_secret, SecretStr)
     assert delegated_secret.get_secret_value() == "sk-owner-qwen"
     assert context["channel"]["openxflow_user_id"] == str(service_user_id)
+    assert context["channel"]["model_provider_access"] == {
+        "connection_id": str(event.connection_id),
+        "flow_id": str(flow_id),
+        "resource_owner_user_id": str(owner_user_id),
+        "service_user_id": str(service_user_id),
+    }
     assert result.markdown == "飞书渠道凭据委托成功"
