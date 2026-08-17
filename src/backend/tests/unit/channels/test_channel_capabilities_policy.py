@@ -8,8 +8,8 @@ def test_provider_capability_matrix_matches_implemented_transports() -> None:
     wecom = get_provider_capability("wecom")
     assert telegram is not None and telegram.supports_message_update and telegram.supports_threads
     assert dingtalk is not None and dingtalk.supports_streaming_connection
-    assert wecom is not None and wecom.conversation_types == ("private",)
-    assert validate_provider_conversation_type("wecom", "group") is False
+    assert wecom is not None and wecom.conversation_types == ("private", "group")
+    assert validate_provider_conversation_type("wecom", "group") is True
 
 
 def test_legacy_mentions_only_normalizes_without_database_migration() -> None:

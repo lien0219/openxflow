@@ -7,6 +7,7 @@
 """
 
 import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -334,9 +335,10 @@ class TestComponentLoadingFix:
         assert isinstance(BASE_COMPONENTS_PATH, str)
         assert len(BASE_COMPONENTS_PATH) > 0
 
-        # Should be an absolute path containing "langflow" and "components"
-        assert "langflow" in BASE_COMPONENTS_PATH.lower()
-        assert "components" in BASE_COMPONENTS_PATH.lower()
+        # The bundled components now live in the standalone lfx package.
+        base_components_path = Path(BASE_COMPONENTS_PATH)
+        assert base_components_path.is_absolute()
+        assert base_components_path.name == "components"
 
     @pytest.mark.asyncio
     async def test_path_filtering_edge_cases(self, mock_settings_service, mock_langflow_components):
