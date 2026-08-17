@@ -53,7 +53,9 @@ test(
     const testName = `test_server_${randomSuffix}`;
     await page.getByTestId("stdio-name-input").fill(testName);
 
-    await page.getByTestId("stdio-command-input").fill("uvx mcp-server-fetch");
+    await page
+      .getByTestId("stdio-command-input")
+      .fill("python -m mcp_server_fetch");
 
     await page.getByTestId("add-mcp-server-button").click();
 
@@ -151,7 +153,7 @@ test(
     });
 
     expect(await page.getByTestId("stdio-command-input").inputValue()).toBe(
-      "uvx mcp-server-fetch",
+      "python -m mcp_server_fetch",
     );
 
     await page.waitForTimeout(500);
@@ -225,7 +227,9 @@ test(
 
     await page.waitForTimeout(500);
 
-    await page.getByTestId("stdio-command-input").fill("uvx mcp-server-fetch");
+    await page
+      .getByTestId("stdio-command-input")
+      .fill("python -m mcp_server_fetch");
 
     await page.getByTestId("add-mcp-server-button").click();
 
@@ -686,7 +690,9 @@ test(
     const testName = `test_server_${randomSuffix}`;
     await page.getByTestId("stdio-name-input").fill(testName);
 
-    await page.getByTestId("stdio-command-input").fill("uvx mcp-server-fetch");
+    await page
+      .getByTestId("stdio-command-input")
+      .fill("python -m mcp_server_fetch");
 
     await page.getByTestId("add-mcp-server-button").click();
 
@@ -797,7 +803,7 @@ test(
     });
 
     expect(await page.getByTestId("stdio-command-input").inputValue()).toBe(
-      "uvx mcp-server-fetch",
+      "python -m mcp_server_fetch",
     );
 
     await page.getByTestId("stdio-command-input").fill("uvx mcp-server-time");
@@ -912,7 +918,9 @@ test(
 
     await page.getByTestId("stdio-name-input").fill(testName);
 
-    await page.getByTestId("stdio-command-input").fill("uvx mcp-server-fetch");
+    await page
+      .getByTestId("stdio-command-input")
+      .fill("python -m mcp_server_fetch");
 
     await page.getByTestId("add-mcp-server-button").click();
 

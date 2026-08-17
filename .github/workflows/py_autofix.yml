@@ -7,6 +7,12 @@ on:
       - "scripts/build_component_index.py"
     types: [opened, synchronize, reopened, labeled]
 
+# Serialize generators that push to the same PR branch. Bot-triggered follow-up
+# runs use their own group so they cannot replace a pending user-triggered run.
+concurrency:
+  group: pr-generator-writes-${{ github.event.pull_request.number }}-${{ github.actor != 'github-actions[bot]' && 'writer' || github.run_id }}
+  cancel-in-progress: false
+
 env:
   PYTHON_VERSION: "3.13"
 
@@ -61,6 +67,7 @@ jobs:
 
   update-starter-projects:
     name: Update Starter Projects
+    needs: lint
     if: >-
       github.event.action != 'labeled'
       && github.actor != 'github-actions[bot]'
@@ -106,10 +113,18 @@ jobs:
 
   update-component-index:
     name: Update Component Index
+    needs: [lint, update-starter-projects]
     if: >-
-      github.actor != 'github-actions[bot]'
+      always()
+      && github.actor != 'github-actions[bot]'
       && !github.event.pull_request.head.repo.fork
       && (github.event.action != 'labeled' || github.event.label.name == 'fix-index')
+      && (
+        (github.event.action != 'labeled'
+          && needs.lint.result == 'success'
+          && needs.update-starter-projects.result == 'success')
+        || (github.event.action == 'labeled' && github.event.label.name == 'fix-index')
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
