@@ -12,6 +12,12 @@
 import { render } from "@testing-library/react";
 import { FlowBuilderWelcomeMount } from "../flow-builder-welcome-mount";
 
+let mockRouteFlowId: string | undefined;
+jest.mock("react-router-dom", () => ({
+  ...jest.requireActual("react-router-dom"),
+  useParams: () => ({ id: mockRouteFlowId }),
+}));
+
 // Heavy children — render nothing, we only exercise the mount's effects.
 jest.mock("../flow-builder-welcome", () => ({
   __esModule: true,
@@ -82,6 +88,7 @@ describe("FlowBuilderWelcomeMount placeholder cleanup", () => {
     close.mockClear();
     deleteFlow.mockClear();
     welcomeState = { isOpen: true, openedForFlowId: "flow-placeholder" };
+    mockRouteFlowId = "flow-placeholder";
     flowsManagerState = {
       currentFlowId: "flow-placeholder",
       flows: [{ id: "flow-placeholder", data: { nodes: [] } }],
@@ -92,6 +99,7 @@ describe("FlowBuilderWelcomeMount placeholder cleanup", () => {
     // Arrange — welcome opened for the blank placeholder, but the user picked a
     // template that spun up "flow-template" and navigated to it.
     welcomeState = { isOpen: true, openedForFlowId: "flow-placeholder" };
+    mockRouteFlowId = "flow-template";
     flowsManagerState = {
       currentFlowId: "flow-template",
       flows: [
@@ -125,6 +133,7 @@ describe("FlowBuilderWelcomeMount placeholder cleanup", () => {
   it("should_not_delete_the_placeholder_when_it_already_has_nodes", () => {
     // Safety guard: never delete a flow the user actually built on.
     welcomeState = { isOpen: true, openedForFlowId: "flow-placeholder" };
+    mockRouteFlowId = "flow-template";
     flowsManagerState = {
       currentFlowId: "flow-template",
       flows: [
@@ -136,5 +145,24 @@ describe("FlowBuilderWelcomeMount placeholder cleanup", () => {
     render(<FlowBuilderWelcomeMount />);
 
     expect(deleteFlow).not.toHaveBeenCalled();
+  });
+
+  it("should_keep_the_welcome_open_while_the_store_finishes_loading_the_route_flow", () => {
+    // The router reaches the placeholder before flowsManagerStore replaces
+    // the previously-open flow id. The route is authoritative during this
+    // handoff, so the placeholder must not be treated as abandoned.
+    mockRouteFlowId = "flow-placeholder";
+    flowsManagerState = {
+      currentFlowId: "flow-previous",
+      flows: [
+        { id: "flow-placeholder", data: { nodes: [] } },
+        { id: "flow-previous", data: { nodes: [{ id: "existing" }] } },
+      ],
+    };
+
+    render(<FlowBuilderWelcomeMount />);
+
+    expect(deleteFlow).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
   });
 });

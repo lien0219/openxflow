@@ -124,8 +124,8 @@ async def test_preverified_gateway_guards_required_acknowledgement_before_respon
         await sender()
         return True
 
-    async def guard_response(event, message, sender):
-        order.append(("response_guard", event.event_id, message.text))
+    async def guard_response(event, message, sender, *, delivery_key):
+        order.append(("response_guard", event.event_id, message.text, delivery_key))
         return await sender()
 
     async def handler(event):
@@ -145,7 +145,7 @@ async def test_preverified_gateway_guards_required_acknowledgement_before_respon
         ("ack_guard", "event-guarded"),
         ("provider_ack", "event-guarded"),
         ("handler", "event-guarded"),
-        ("response_guard", "event-guarded", "guarded response"),
+        ("response_guard", "event-guarded", "guarded response", "part:1:1"),
     ]
     assert len(adapter.sent_messages) == 1
 

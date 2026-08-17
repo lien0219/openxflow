@@ -42,7 +42,11 @@ EXPECTED_RESULT_LENGTH = 2  # Expected length of the tuple returned by _process_
 # Third-party modules whose package __init__ and a submodule import each other.
 # These must be imported single-threaded before any concurrent import fan-out --
 # see ``_warm_circular_imports`` for the full deadlock explanation.
-MODULES_WITH_INTERNAL_CIRCULAR_IMPORTS = ("toolguard.runtime", "toolguard.runtime.runtime")
+MODULES_WITH_INTERNAL_CIRCULAR_IMPORTS = (
+    "bson",
+    "toolguard.runtime",
+    "toolguard.runtime.runtime",
+)
 
 
 # Create a class to manage component cache instead of using globals
@@ -370,17 +374,11 @@ async def _load_from_index_or_cache(
 def _warm_circular_imports() -> None:
     """Pre-import third-party modules that contain an *internal* circular import.
 
-    ``toolguard.runtime`` (package __init__) and its ``toolguard.runtime.runtime``
-    submodule import each other: the __init__ does ``from .runtime import ...`` while
-    runtime.py does ``from toolguard.runtime import IToolInvoker``. That cycle resolves
-    cleanly when first imported from a single thread, but the lfx policy modules reach
-    it from two different entry points -- ``policies.tool_invoker`` enters at the
-    ``toolguard.runtime`` package while ``policies.guard_sync_utils`` enters at the
-    ``toolguard.runtime.runtime`` submodule. When those two land on separate worker
-    threads at the same time (the ``asyncio.to_thread`` fan-out in
-    ``_load_components_dynamically``), one thread holds the package lock and waits for
-    the submodule lock while the other holds the submodule lock and waits for the
-    package lock, so CPython's import machinery raises ``_DeadlockError``.
+    ``toolguard.runtime`` and ``bson`` both have import graphs that resolve cleanly
+    on one thread but can deadlock when separate component modules enter their package
+    and submodule paths concurrently. When that happens during the ``asyncio.to_thread``
+    fan-out in ``_load_components_dynamically``, CPython's import machinery raises
+    ``_DeadlockError``.
 
     Warming these single-threaded populates ``sys.modules`` so the threaded fan-out
     only ever hits the import cache and can never enter the cycle concurrently. Full

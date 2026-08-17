@@ -16,7 +16,7 @@ _PROJECTS_FILE = _API_V1 / "projects.py"
 
 def _parse_async_funcs(path: Path) -> dict[str, ast.AsyncFunctionDef]:
     """Return the AST of every async function in *path* keyed by function name."""
-    tree = ast.parse(path.read_text())
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     return {node.name: node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef)}
 
 

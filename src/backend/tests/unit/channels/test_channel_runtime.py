@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from langflow.api.v1.channel_runtime import (
     read_channel_prometheus_metrics,
@@ -23,7 +25,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_FAILED_RETENTION_DAYS", "14")
     monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_JOB_CLEANUP_BATCH_SIZE", "250")
     monkeypatch.setenv("LANGFLOW_CHANNEL_OUTBOUND_DELIVERY_RETENTION_DAYS", "45")
-    result = await read_channel_runtime(object())
+    result = await read_channel_runtime(SimpleNamespace(is_superuser=True))
 
     assert result.streams_enabled is False
     assert result.stream_runtime.running_managers >= 0
@@ -89,7 +91,7 @@ async def test_channel_runtime_returns_stream_webhook_and_retry_configuration(mo
 
 @pytest.mark.asyncio
 async def test_channel_prometheus_endpoint_uses_standard_content_type() -> None:
-    response = await read_channel_prometheus_metrics(object())
+    response = await read_channel_prometheus_metrics(SimpleNamespace(is_superuser=True))
 
     assert response.headers["content-type"] == "text/plain; version=0.0.4; charset=utf-8"
     assert b"openxflow_channel_stream_running_managers" in response.body

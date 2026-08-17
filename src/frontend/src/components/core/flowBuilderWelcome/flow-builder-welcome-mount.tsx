@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { type SidebarSection, useSidebar } from "@/components/ui/sidebar";
 import useDeleteFlow from "@/hooks/flows/use-delete-flow";
 import useAssistantManagerStore from "@/stores/assistantManagerStore";
@@ -32,6 +33,7 @@ export function FlowBuilderWelcomeMount() {
   );
   const currentFlowId = useFlowsManagerStore((state) => state.currentFlowId);
   const flows = useFlowsManagerStore((state) => state.flows);
+  const { id: routeFlowId } = useParams<{ id: string }>();
   const { deleteFlow } = useDeleteFlow();
 
   // If the user navigates to a different flow while the welcome is open
@@ -46,11 +48,15 @@ export function FlowBuilderWelcomeMount() {
   // flow (the template they chose) instead of two. Guarded to only remove a
   // still-blank placeholder so we never discard a flow the user built on.
   useEffect(() => {
+    // The route changes before flowsManagerStore finishes loading the new
+    // flow. Prefer it so the store's previous currentFlowId cannot close the
+    // welcome during the initial navigation to its placeholder.
+    const activeFlowId = routeFlowId ?? currentFlowId;
     if (
       isOpen &&
       openedForFlowId &&
-      currentFlowId &&
-      currentFlowId !== openedForFlowId
+      activeFlowId &&
+      activeFlowId !== openedForFlowId
     ) {
       const placeholder = flows?.find((flow) => flow.id === openedForFlowId);
       const isBlankPlaceholder =
@@ -61,7 +67,15 @@ export function FlowBuilderWelcomeMount() {
       }
       close();
     }
-  }, [isOpen, openedForFlowId, currentFlowId, close, flows, deleteFlow]);
+  }, [
+    isOpen,
+    openedForFlowId,
+    routeFlowId,
+    currentFlowId,
+    close,
+    flows,
+    deleteFlow,
+  ]);
   const setAssistantSidebarOpen = useAssistantManagerStore(
     (state) => state.setAssistantSidebarOpen,
   );
