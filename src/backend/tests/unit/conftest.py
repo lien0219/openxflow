@@ -30,5 +30,3 @@ def isolate_kb_storage_time_sleep_patch(request: pytest.FixtureRequest, monkeypa
         from langflow.api.utils import kb_helpers
 
         monkeypatch.setattr(kb_helpers, "time", _IsolatedTime())
-
-    yield
