@@ -9,7 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from langflow.initial_setup.setup import get_or_create_default_folder
 from langflow.services.database.models.channel.model import ChannelConnection
 from langflow.services.database.models.user.model import User
 from langflow.services.deps import get_auth_service
@@ -64,6 +63,10 @@ async def ensure_channel_service_identity(
         raise RuntimeError("Reserved channel service username is already in use")
     if service_user.is_superuser:
         raise RuntimeError("Channel service identity must never be a superuser")
+
+    # Initial setup imports the model registry, which imports channel CRUD and this module.
+    # Resolve the setup helper only after module initialization to avoid that import cycle.
+    from langflow.initial_setup.setup import get_or_create_default_folder
 
     await get_or_create_default_folder(session, service_user.id)
     connection.service_user_id = service_user.id
