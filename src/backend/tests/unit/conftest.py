@@ -17,7 +17,10 @@ class _IsolatedTime:
 
 
 @pytest.fixture(autouse=True)
-def isolate_kb_storage_time_sleep_patch(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch):
+def isolate_kb_storage_time_sleep_patch(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Keep KB storage tests from patching process-global ``time.sleep``.
 
     ``kb_helpers`` imports the stdlib ``time`` module. Patching
