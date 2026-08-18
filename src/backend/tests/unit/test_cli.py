@@ -1,6 +1,4 @@
 import socket
-import threading
-import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -34,40 +32,31 @@ def get_free_port():
         return s.getsockname()[1]
 
 
-def run_flow(runner, port, components_path, default_settings):
-    args = [
-        "run",
-        "--port",
-        str(port),
-        "--components-path",
-        str(components_path),
-        *default_settings,
-    ]
-    result = runner.invoke(app, args)
-    if result.exit_code != 0:
-        msg = f"CLI failed with exit code {result.exit_code}: {result.output}"
-        raise RuntimeError(msg)
-
-
 def test_components_path(runner, default_settings, tmp_path):
     # create a "components" folder
     temp_dir = tmp_path / "components"
     temp_dir.mkdir(exist_ok=True)
 
     port = get_free_port()
+    args = [
+        "run",
+        "--port",
+        str(port),
+        "--components-path",
+        str(temp_dir),
+        *default_settings,
+    ]
+    with (
+        patch("langflow.__main__.use_direct_uvicorn", return_value=True),
+        patch("langflow.__main__.setup_app", return_value=object()),
+        patch("uvicorn.run") as run_server,
+    ):
+        result = runner.invoke(app, args)
 
-    thread = threading.Thread(
-        target=run_flow,
-        args=(runner, port, temp_dir, default_settings),
-        daemon=True,
-    )
-    thread.start()
-
-    # Give the server some time to start
-    time.sleep(5)
-
+    assert result.exit_code == 0, result.output
     settings_service = deps.get_settings_service()
     assert str(temp_dir) in settings_service.settings.components_path
+    run_server.assert_called_once()
 
 
 @pytest.mark.xdist_group(name="serial-superuser-tests")
