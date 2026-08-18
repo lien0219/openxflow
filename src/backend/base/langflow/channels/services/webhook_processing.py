@@ -197,7 +197,7 @@ class WebhookProcessingLimiter:
             if queue_timeout_seconds > 0:
                 try:
                     await asyncio.wait_for(semaphore.acquire(), timeout=queue_timeout_seconds)
-                except TimeoutError as exc:
+                except asyncio.TimeoutError as exc:
                     if record_timings:
                         record_webhook_queue_wait(time.perf_counter() - queue_started_at)
                     raise WebhookQueueTimeoutError("Webhook queue wait timed out") from exc
@@ -304,7 +304,7 @@ async def _process_provider_webhook_with_timeout(
             ),
             timeout=webhook_task_timeout_seconds(),
         )
-    except TimeoutError:
+    except asyncio.TimeoutError:
         await logger.aerror(
             "Background %s channel webhook timed out for connection %s",
             expected_channel_type,
@@ -402,9 +402,11 @@ async def process_provider_webhook(
             if queue_wait_ms > connection.queue_timeout_seconds * 1000:
                 return ChannelMessage(text="当前请求排队时间过长，任务已取消，请稍后重试。")
             try:
-                async with asyncio.timeout(connection.task_timeout_seconds):
-                    response = await dispatcher.handle(event)
-            except TimeoutError:
+                response = await asyncio.wait_for(
+                    dispatcher.handle(event),
+                    timeout=connection.task_timeout_seconds,
+                )
+            except asyncio.TimeoutError:
                 await session.rollback()
                 return ChannelMessage(text="当前任务执行超时，请缩小问题范围后重试。")
             except asyncio.CancelledError:
