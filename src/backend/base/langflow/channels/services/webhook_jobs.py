@@ -490,7 +490,7 @@ class DurableWebhookJobWorker:
             if job is None:
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=config.poll_seconds)
-                except TimeoutError:
+                except asyncio.TimeoutError:
                     pass
                 continue
             try:
@@ -527,7 +527,7 @@ class DurableWebhookJobWorker:
                     self._stop_event.wait(),
                     timeout=config.cleanup_interval_seconds,
                 )
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 pass
 
     async def _claim_one(self) -> ChannelWebhookJob | None:
@@ -577,7 +577,7 @@ class DurableWebhookJobWorker:
                     self._execute(job),
                     timeout=webhook_task_timeout_seconds(),
                 )
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 success = False
                 error = "Channel webhook processing timed out"
                 await logger.aerror("Durable channel webhook job %s timed out", job.id)
