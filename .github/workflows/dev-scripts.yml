@@ -1,0 +1,66 @@
+name: Development Scripts
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/dev-scripts.yml"
+      - "dev.ps1"
+      - "dev.cmd"
+      - "dev.sh"
+      - "README.md"
+      - "README_EN.md"
+      - "DEVELOPMENT.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: development-scripts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bash:
+    name: Bash syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Bash script
+        run: |
+          bash -n dev.sh
+          bash dev.sh help
+
+  powershell:
+    name: PowerShell syntax
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell script
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "dev.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
+          ./dev.ps1 help
+
+      - name: Validate CMD launcher
+        shell: cmd
+        run: dev.cmd help

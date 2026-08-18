@@ -649,4 +649,8 @@ class CustomComponent(BaseComponent):
             attr = f"_frontend_node_{attr_name}"
             if hasattr(self, attr):
                 value = getattr(self, attr)
+        if value is None:
+            attr = f"_{attr_name}"
+            if hasattr(self, attr):
+                value = getattr(self, attr)
         return value

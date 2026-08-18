@@ -794,6 +794,7 @@ class SaveToFileComponent(Component):
             temp_file.write(content)
             temp_file_path = temp_file.name
 
+        media = None
         try:
             # Upload to Google Drive
             # Note: We skip explicit folder verification since it requires broader permissions.
@@ -818,6 +819,8 @@ class SaveToFileComponent(Component):
             file_url = f"https://drive.google.com/file/d/{file_id}/view"
             return Message(text=f"File successfully uploaded to Google Drive: {file_url}")
         finally:
+            if media is not None:
+                media.stream().close()
             # Clean up temp file
             if Path(temp_file_path).exists():
                 Path(temp_file_path).unlink()

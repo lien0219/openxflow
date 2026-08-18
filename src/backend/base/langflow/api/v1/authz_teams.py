@@ -1,9 +1,4 @@
-"""CRUD API for authz_team and authz_team_member rows.
-
-Teams group users for bulk role assignment and share targeting. The
-authorization plugin compiles team memberships into its own representation
-during policy sync.
-"""
+"""Team, membership and persistent team-role administration APIs."""
 
 from __future__ import annotations
 
@@ -22,30 +17,89 @@ from langflow.api.v1.schemas.authz_teams import (
     TeamMemberCreate,
     TeamMemberRead,
     TeamRead,
+    TeamRoleAssignmentCreate,
+    TeamRoleAssignmentRead,
     TeamUpdate,
 )
-from langflow.services.authorization.invalidation import (
-    safe_invalidate_all,
-    safe_invalidate_user,
+from langflow.services.authorization.bootstrap import is_managed_service_user
+from langflow.services.authorization.invalidation import safe_invalidate_all, safe_invalidate_user
+from langflow.services.authorization.team_roles import (
+    TeamRoleGrant,
+    create_team_role_grant,
+    delete_all_team_role_grants,
+    delete_team_role_grant,
+    list_team_role_grants,
+    remove_team_member_grants,
+    sync_team_member_grants,
 )
 from langflow.services.authorization.utils import audit_decision
-from langflow.services.database.models.auth import AuthzTeam, AuthzTeamMember
+from langflow.services.database.models.auth import AuthzRole, AuthzTeam, AuthzTeamMember
 from langflow.services.database.models.user.model import User
 from langflow.services.deps import get_authorization_service
 
 router = APIRouter(prefix="/authz/teams", tags=["Authorization"])
 
-# See ``authz_roles._LIST_MAX_LIMIT`` — same bound, applied to teams + members.
 _LIST_MAX_LIMIT = 200
 _LIST_DEFAULT_LIMIT = 100
 
 
-def _require_superuser(user) -> None:
-    if not getattr(user, "is_superuser", False):
+def _require_superuser(user: User) -> None:
+    if not user.is_active or not user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Superuser required to administer teams.",
         )
+
+
+async def _get_team(
+    session: DbSession,
+    team_id: UUID,
+    *,
+    for_update: bool = False,
+) -> AuthzTeam:
+    statement = select(AuthzTeam).where(AuthzTeam.id == team_id)
+    if for_update:
+        # PostgreSQL serializes all membership/role writes for one team. SQLite
+        # ignores FOR UPDATE but its single-writer transaction still protects
+        # local development from duplicate grant materialization.
+        statement = statement.with_for_update()
+    team = (await session.exec(statement)).first()
+    if team is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    return team
+
+
+async def _require_team_reader(
+    session: DbSession,
+    *,
+    team_id: UUID,
+    current_user: User,
+) -> None:
+    """Hide team rosters and role grants from unrelated authenticated users."""
+    if current_user.is_active and current_user.is_superuser:
+        return
+    membership = (
+        await session.exec(
+            select(AuthzTeamMember.id).where(
+                AuthzTeamMember.team_id == team_id,
+                AuthzTeamMember.user_id == current_user.id,
+            )
+        )
+    ).first()
+    if membership is None:
+        # 404 avoids turning sequential UUID probes into a team-directory oracle.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+
+
+def _team_role_read(grant: TeamRoleGrant) -> TeamRoleAssignmentRead:
+    return TeamRoleAssignmentRead(
+        id=grant.id,
+        team_id=grant.team_id,
+        role_id=grant.role_id,
+        domain_type=grant.domain_type,
+        domain_id=grant.domain_id,
+        assigned_by=grant.assigned_by,
+    )
 
 
 # --- teams ---------------------------------------------------------------- #
@@ -55,25 +109,23 @@ def _require_superuser(user) -> None:
 @router.get("/", response_model=list[TeamRead])
 async def list_teams(
     session: DbSession,
-    current_user: CurrentActiveUser,  # noqa: ARG001 — any authenticated user can list
+    current_user: CurrentActiveUser,  # noqa: ARG001 — authenticated share picker
     search: Annotated[str | None, Query(description="Substring match on team_name or adom_name")] = None,
     is_active: Annotated[bool | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=_LIST_MAX_LIMIT)] = _LIST_DEFAULT_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TeamRead]:
-    """List teams. Open to any authenticated user (for the share dialog's team picker).
-
-    Paginated via ``limit`` / ``offset`` so a single call cannot enumerate every
-    team. Stable order is ``(team_name, id)`` so ``offset`` is deterministic.
-    """
-    stmt = select(AuthzTeam)
+    # Team name/slug metadata is available to authenticated users because the
+    # resource-share dialog needs an audience picker. Rosters and grants remain
+    # protected by ``_require_team_reader`` below.
+    statement = select(AuthzTeam)
     if search:
         like = f"%{search}%"
-        stmt = stmt.where((AuthzTeam.team_name.ilike(like)) | (AuthzTeam.adom_name.ilike(like)))
+        statement = statement.where((AuthzTeam.team_name.ilike(like)) | (AuthzTeam.adom_name.ilike(like)))
     if is_active is not None:
-        stmt = stmt.where(AuthzTeam.is_active == is_active)
-    stmt = stmt.order_by(AuthzTeam.team_name, AuthzTeam.id).offset(offset).limit(limit)
-    rows = (await session.exec(stmt)).all()
+        statement = statement.where(AuthzTeam.is_active == is_active)
+    statement = statement.order_by(AuthzTeam.team_name, AuthzTeam.id).offset(offset).limit(limit)
+    rows = (await session.exec(statement)).all()
     return [TeamRead.model_validate(row) for row in rows]
 
 
@@ -81,11 +133,10 @@ async def list_teams(
 async def read_team(
     team_id: UUID,
     session: DbSession,
-    current_user: CurrentActiveUser,  # noqa: ARG001
+    current_user: CurrentActiveUser,
 ) -> TeamRead:
-    team = await session.get(AuthzTeam, team_id)
-    if team is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    team = await _get_team(session, team_id)
+    await _require_team_reader(session, team_id=team_id, current_user=current_user)
     return TeamRead.model_validate(team)
 
 
@@ -132,14 +183,8 @@ async def update_team(
     session: DbSession,
 ) -> TeamRead:
     _require_superuser(current_user)
-    team = await session.get(AuthzTeam, team_id)
-    if team is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    team = await _get_team(session, team_id, for_update=True)
 
-    # Track whether the change affects fields a plugin may read during
-    # policy sync (the team's domain slug or active state). description-only
-    # / team_name-only edits are display metadata; adom_name and is_active
-    # can influence which rules match.
     policy_relevant_changed = False
     changed_fields: list[str] = []
     if payload.team_name is not None and team.team_name != payload.team_name:
@@ -149,9 +194,6 @@ async def update_team(
         team.adom_name = payload.adom_name
         changed_fields.append("adom_name")
         policy_relevant_changed = True
-    # description is nullable on the DB side, so use a presence check
-    # (model_fields_set) instead of ``is not None`` — an explicit "description":
-    # null in the body clears the field, while omitting it leaves the row alone.
     if "description" in payload.model_fields_set and team.description != payload.description:
         team.description = payload.description
         changed_fields.append("description")
@@ -170,10 +212,6 @@ async def update_team(
             detail="adom_name conflict — another team already uses this slug",
         ) from exc
     await session.refresh(team)
-    # Pure display edits (team_name, description) don't change policy. But
-    # adom_name is the slug a plugin may use to compile rules against, and
-    # is_active gates whether the team's memberships should grant access at
-    # all — invalidate so the next enforce reflects the new state.
     if policy_relevant_changed:
         await safe_invalidate_all(get_authorization_service(), op="team:update")
     await audit_decision(
@@ -194,12 +232,9 @@ async def delete_team(
     session: DbSession,
 ) -> None:
     _require_superuser(current_user)
-    team = await session.get(AuthzTeam, team_id)
-    if team is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    team = await _get_team(session, team_id, for_update=True)
     team_name = team.team_name
-    # Cascade on team_members handles cleanup; share rows targeting this team
-    # are left in place (caller may want to migrate them before deleting).
+    await delete_all_team_role_grants(session, team_id)
     await session.delete(team)
     await session.commit()
     await safe_invalidate_all(get_authorization_service(), op="team:delete")
@@ -213,6 +248,87 @@ async def delete_team(
     logger.info("Deleted team id=%s", team_id)
 
 
+# --- persistent team roles ------------------------------------------------ #
+
+
+@router.get("/{team_id}/roles", response_model=list[TeamRoleAssignmentRead])
+async def list_team_roles(
+    team_id: UUID,
+    current_user: CurrentActiveUser,
+    session: DbSession,
+) -> list[TeamRoleAssignmentRead]:
+    await _get_team(session, team_id)
+    await _require_team_reader(session, team_id=team_id, current_user=current_user)
+    return [_team_role_read(grant) for grant in await list_team_role_grants(session, team_id)]
+
+
+@router.post(
+    "/{team_id}/roles",
+    response_model=TeamRoleAssignmentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_team_role(
+    team_id: UUID,
+    payload: TeamRoleAssignmentCreate,
+    current_user: CurrentActiveUser,
+    session: DbSession,
+) -> TeamRoleAssignmentRead:
+    _require_superuser(current_user)
+    await _get_team(session, team_id, for_update=True)
+    role = await session.get(AuthzRole, payload.role_id)
+    if role is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="role_id not found")
+
+    grant = await create_team_role_grant(
+        session,
+        team_id=team_id,
+        role_id=payload.role_id,
+        domain_type=payload.domain_type,
+        domain_id=payload.domain_id,
+        assigned_by=current_user.id,
+    )
+    await session.commit()
+    await safe_invalidate_all(get_authorization_service(), op="team_role:create")
+    await audit_decision(
+        user_id=current_user.id,
+        action="team_role:create",
+        obj=f"team:{team_id}",
+        result="allow",
+        details={
+            "rule_id": grant.id,
+            "role_id": str(payload.role_id),
+            "role_name": role.name,
+            "domain_type": payload.domain_type,
+            "domain_id": str(payload.domain_id) if payload.domain_id else None,
+        },
+    )
+    return _team_role_read(grant)
+
+
+@router.delete("/{team_id}/roles/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_team_role(
+    team_id: UUID,
+    rule_id: int,
+    current_user: CurrentActiveUser,
+    session: DbSession,
+) -> None:
+    _require_superuser(current_user)
+    await _get_team(session, team_id, for_update=True)
+    existing_ids = {grant.id for grant in await list_team_role_grants(session, team_id)}
+    if rule_id not in existing_ids:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team role not found")
+    await delete_team_role_grant(session, team_id=team_id, rule_id=rule_id)
+    await session.commit()
+    await safe_invalidate_all(get_authorization_service(), op="team_role:delete")
+    await audit_decision(
+        user_id=current_user.id,
+        action="team_role:delete",
+        obj=f"team:{team_id}",
+        result="allow",
+        details={"rule_id": rule_id},
+    )
+
+
 # --- team members --------------------------------------------------------- #
 
 
@@ -220,26 +336,20 @@ async def delete_team(
 async def list_members(
     team_id: UUID,
     session: DbSession,
-    current_user: CurrentActiveUser,  # noqa: ARG001
+    current_user: CurrentActiveUser,
     limit: Annotated[int, Query(ge=1, le=_LIST_MAX_LIMIT)] = _LIST_DEFAULT_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TeamMemberRead]:
-    """List members of a team. Any authenticated user (so the UI can render team rosters).
-
-    Paginated via ``limit`` / ``offset`` so a single call cannot enumerate a
-    large team's full roster. Stable order is ``(created_at, user_id)``.
-    """
-    team = await session.get(AuthzTeam, team_id)
-    if team is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-    stmt = (
+    await _get_team(session, team_id)
+    await _require_team_reader(session, team_id=team_id, current_user=current_user)
+    statement = (
         select(AuthzTeamMember)
         .where(AuthzTeamMember.team_id == team_id)
         .order_by(AuthzTeamMember.created_at, AuthzTeamMember.user_id)
         .offset(offset)
         .limit(limit)
     )
-    rows = (await session.exec(stmt)).all()
+    rows = (await session.exec(statement)).all()
     return [TeamMemberRead.model_validate(row) for row in rows]
 
 
@@ -255,20 +365,26 @@ async def add_member(
     session: DbSession,
 ) -> TeamMemberRead:
     _require_superuser(current_user)
-    team = await session.get(AuthzTeam, team_id)
-    if team is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    team = await _get_team(session, team_id, for_update=True)
     user = await session.get(User, payload.user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user_id not found")
+    if is_managed_service_user(user):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Managed channel service identities cannot join RBAC teams",
+        )
 
-    member = AuthzTeamMember(
-        team_id=team_id,
-        user_id=payload.user_id,
-        source=payload.source,
-    )
+    member = AuthzTeamMember(team_id=team_id, user_id=payload.user_id, source=payload.source)
     session.add(member)
     try:
+        await session.flush()
+        await sync_team_member_grants(
+            session,
+            team_id=team_id,
+            user_id=payload.user_id,
+            assigned_by=current_user.id,
+        )
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -277,11 +393,7 @@ async def add_member(
             detail="User is already a member of this team",
         ) from exc
     await session.refresh(member)
-    await safe_invalidate_user(
-        get_authorization_service(),
-        payload.user_id,
-        op="team_member:create",
-    )
+    await safe_invalidate_user(get_authorization_service(), payload.user_id, op="team_member:create")
     await audit_decision(
         user_id=current_user.id,
         action="team_member:create",
@@ -297,10 +409,7 @@ async def add_member(
     return TeamMemberRead.model_validate(member)
 
 
-@router.delete(
-    "/{team_id}/members/{user_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
+@router.delete("/{team_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(
     team_id: UUID,
     user_id: UUID,
@@ -308,6 +417,7 @@ async def remove_member(
     session: DbSession,
 ) -> None:
     _require_superuser(current_user)
+    await _get_team(session, team_id, for_update=True)
     member = (
         await session.exec(
             select(AuthzTeamMember).where(
@@ -317,17 +427,11 @@ async def remove_member(
         )
     ).first()
     if member is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Membership not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Membership not found")
+    await remove_team_member_grants(session, team_id=team_id, user_id=user_id)
     await session.delete(member)
     await session.commit()
-    await safe_invalidate_user(
-        get_authorization_service(),
-        user_id,
-        op="team_member:delete",
-    )
+    await safe_invalidate_user(get_authorization_service(), user_id, op="team_member:delete")
     await audit_decision(
         user_id=current_user.id,
         action="team_member:delete",

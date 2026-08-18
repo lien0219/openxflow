@@ -208,12 +208,12 @@ flowchart TB
 
 ### Requirements
 
-- Python `>=3.10,<3.15`
+- Python `>=3.10,<3.15` (Python 3.12 is recommended for `feature/channel-gateway` development)
 - Node.js `>=20.19.0` (v22.12 LTS recommended) and npm v10.9+
 - `uv >=0.4`
-- GNU Make for web source development
+- GNU Make for the traditional Makefile workflow; the cross-platform helpers do not require Make
 
-Windows web development should use WSL or the included Dev Container; the Windows desktop application runs directly on Windows.
+Windows web development can run directly in native PowerShell. WSL and the included Dev Container remain supported.
 
 ### Clone the Repository
 
@@ -266,6 +266,47 @@ See the [desktop guide](./DESKTOP.md) for packaging, platform setup, testing, an
 
 ### Development Mode
 
+#### Windows one-command setup and startup
+
+From the repository root:
+
+```powershell
+.\dev.ps1
+```
+
+You can also double-click `dev.cmd`. The default action installs backend and frontend dependencies, then starts:
+
+- Backend: <http://localhost:7860>
+- Frontend: <http://localhost:3000>
+
+Common actions:
+
+```powershell
+.\dev.ps1 install   # Install dependencies only
+.\dev.ps1 start     # Start backend and frontend only
+.\dev.ps1 all       # Install dependencies and start both services
+.\dev.ps1 help      # Show options
+```
+
+#### macOS/Linux one-command setup and startup
+
+```bash
+bash ./dev.sh
+```
+
+Common actions:
+
+```bash
+bash ./dev.sh install   # Install dependencies only
+bash ./dev.sh start     # Start backend and frontend only
+bash ./dev.sh all       # Install dependencies and start both services
+bash ./dev.sh help      # Show options
+```
+
+#### Existing Makefile workflow
+
+All existing Makefile commands remain supported:
+
 ```bash
 make init
 ```
@@ -280,7 +321,7 @@ make backend
 make frontend
 ```
 
-The backend listens on `http://localhost:7860`, and the frontend development server listens on `http://localhost:3000` by default. See the [complete development guide](./DEVELOPMENT.md) for environment setup, testing, and component development.
+See the [complete development guide](./DEVELOPMENT.md) for ports, LAN access, native Windows and WSL switching, environment variables, and troubleshooting.
 
 ### Build and Run a Container
 
@@ -300,6 +341,9 @@ openxflow/
 ├── docker_example/          # Docker Compose example
 ├── docs/                    # Docusaurus documentation
 ├── scripts/                 # Build, test, and maintenance scripts
+├── dev.ps1                  # Windows dependency install and one-command startup
+├── dev.cmd                  # Windows double-click launcher
+├── dev.sh                   # macOS/Linux dependency install and one-command startup
 ├── src/
 │   ├── backend/             # FastAPI APIs and application services
 │   ├── frontend/            # React / TypeScript web application
@@ -319,7 +363,7 @@ openxflow/
 | Document | Description |
 | --- | --- |
 | [DESKTOP.md](./DESKTOP.md) | Windows/macOS installation, startup, testing, and packaging |
-| [DEVELOPMENT.md](./DEVELOPMENT.md) | Local development, Dev Containers, and environment setup |
+| [DEVELOPMENT.md](./DEVELOPMENT.md) | Windows/macOS/Linux local development, one-command helpers, Dev Containers, and environment setup |
 | [CUSTOMIZATION.md](./CUSTOMIZATION.md) | Project maintenance and customization guide |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guide |
 | [SECURITY.md](./SECURITY.md) | Security policy and vulnerability reporting |

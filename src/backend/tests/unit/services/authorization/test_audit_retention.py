@@ -108,8 +108,8 @@ class _RecordingLogger:
 
 
 @pytest.mark.anyio
-async def test_passthrough_warning_emitted_when_authz_enabled(monkeypatch):
-    """LangflowAuthorizationService warns when AUTHZ_ENABLED=True but plugin is missing."""
+async def test_builtin_rbac_does_not_emit_passthrough_warning_when_enabled(monkeypatch):
+    """Built-in RBAC enforces permissions directly, so no pass-through warning is needed."""
     from langflow.services.authorization import service as authz_service_module
 
     recorder = _RecordingLogger()
@@ -124,14 +124,12 @@ async def test_passthrough_warning_emitted_when_authz_enabled(monkeypatch):
     LangflowAuthorizationService(settings)
 
     warning_messages = [msg for level, msg in recorder.calls if level == "warning"]
-    assert any("OSS pass-through" in msg for msg in warning_messages), (
-        f"Expected a WARNING about the OSS pass-through service; got {warning_messages}"
-    )
+    assert warning_messages == []
 
 
 @pytest.mark.anyio
-async def test_passthrough_warning_silent_when_authz_disabled(monkeypatch):
-    """No warning is emitted when AUTHZ_ENABLED=False."""
+async def test_builtin_rbac_does_not_emit_passthrough_warning_when_disabled(monkeypatch):
+    """Built-in RBAC emits no obsolete pass-through warning when enforcement is disabled."""
     from langflow.services.authorization import service as authz_service_module
 
     recorder = _RecordingLogger()

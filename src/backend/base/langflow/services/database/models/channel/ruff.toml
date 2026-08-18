@@ -1,0 +1,6 @@
+extend = "../../../../../../../../pyproject.toml"
+
+# SQLModel resolves these annotations at runtime when constructing table models.
+# Moving them behind TYPE_CHECKING breaks model registration and schema creation.
+[lint]
+extend-ignore = ["TC002", "TC003"]

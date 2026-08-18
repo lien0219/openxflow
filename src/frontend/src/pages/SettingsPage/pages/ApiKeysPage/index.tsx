@@ -20,25 +20,34 @@ export default function ApiKeysPage() {
   const { userData } = useContext(AuthContext);
   const [userId, setUserId] = useState("");
   const [keysList, setKeysList] = useState<IApiKeysDataArray[]>([]);
-  const { refetch } = useGetApiKeysQuery();
+  const { data: apiKeysData, refetch } = useGetApiKeysQuery({
+    enabled: !!userData,
+  });
+
+  function updateApiKeysState(data: {
+    api_keys: IApiKeysDataArray[];
+    user_id: string;
+  }) {
+    const updatedKeysList = data["api_keys"].map((apikey) => ({
+      ...apikey,
+      name: apikey.name && apikey.name !== "" ? apikey.name : "Untitled",
+    }));
+    setKeysList(updatedKeysList);
+    setUserId(data["user_id"]);
+  }
 
   async function getApiKeysQuery() {
     const { data } = await refetch();
     if (data !== undefined) {
-      const updatedKeysList = data["api_keys"].map((apikey) => ({
-        ...apikey,
-        name: apikey.name && apikey.name !== "" ? apikey.name : "Untitled",
-      }));
-      setKeysList(updatedKeysList);
-      setUserId(data["user_id"]);
+      updateApiKeysState(data);
     }
   }
 
   useEffect(() => {
-    if (userData) {
-      getApiKeysQuery();
+    if (apiKeysData !== undefined) {
+      updateApiKeysState(apiKeysData);
     }
-  }, [userData]);
+  }, [apiKeysData]);
 
   function resetFilter() {
     getApiKeysQuery();

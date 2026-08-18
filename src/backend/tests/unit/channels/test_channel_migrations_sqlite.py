@@ -1,0 +1,272 @@
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from langflow.alembic.versions import (
+    a1f4c7e9d2b6_add_channel_active_workflow_selection as active_flow_selection_migration,
+)
+from langflow.alembic.versions import (
+    a4c7d0f3e5b9_fix_channel_identity_user_fk as identity_user_fk_migration,
+)
+from langflow.alembic.versions import (
+    a8e1c6d4f5b7_add_channel_outbound_delivery as outbound_delivery_migration,
+)
+from langflow.alembic.versions import (
+    b5d8e1f3a6c9_key_channel_outbound_delivery_parts as outbound_delivery_key_migration,
+)
+from langflow.alembic.versions import (
+    b9f2d7e6c4a1_add_channel_routing_and_discovery as routing_migration,
+)
+from langflow.alembic.versions import (
+    c0a3e8f7d5b2_add_channel_commands_and_execution_logs as command_migration,
+)
+from langflow.alembic.versions import (
+    c4a9e2d7f1b0_add_channel_gateway_schema as gateway_schema_migration,
+)
+from langflow.alembic.versions import (
+    c7e2f4a9b1d3_harden_channel_flow_selection as flow_selection_hardening_migration,
+)
+from langflow.alembic.versions import (
+    d1e4f9a8b6c3_ensure_channel_conversation_status_index as status_index_repair_migration,
+)
+from langflow.alembic.versions import (
+    d5b8f3a1c2e4_add_channel_file_asset_tracking as file_asset_migration,
+)
+from langflow.alembic.versions import (
+    e2f5a8c1d7b9_add_channel_production_controls as production_controls_migration,
+)
+from langflow.alembic.versions import (
+    e6c9a4b2d3f5_widen_channel_file_identifier as widen_file_identifier_migration,
+)
+from langflow.alembic.versions import (
+    f3a6c9e2b4d7_add_channel_message_and_config_audit as observability_migration,
+)
+from langflow.alembic.versions import (
+    f7d0b5c3e4a6_add_channel_webhook_jobs as webhook_job_migration,
+)
+
+_MIGRATIONS = (
+    gateway_schema_migration,
+    file_asset_migration,
+    widen_file_identifier_migration,
+    webhook_job_migration,
+    outbound_delivery_migration,
+    routing_migration,
+    command_migration,
+    status_index_repair_migration,
+    production_controls_migration,
+    observability_migration,
+    identity_user_fk_migration,
+    outbound_delivery_key_migration,
+    active_flow_selection_migration,
+    flow_selection_hardening_migration,
+)
+
+
+def _create_parent_tables(connection: sa.Connection) -> None:
+    connection.exec_driver_sql('CREATE TABLE "user" (id CHAR(32) PRIMARY KEY)')
+    connection.exec_driver_sql("CREATE TABLE flow (id CHAR(32) PRIMARY KEY)")
+    connection.exec_driver_sql("CREATE TABLE knowledge_base (id CHAR(32) PRIMARY KEY)")
+    connection.exec_driver_sql('CREATE TABLE "file" (id CHAR(32) PRIMARY KEY)')
+    connection.exec_driver_sql("CREATE TABLE job (job_id CHAR(32) PRIMARY KEY)")
+
+
+def _identity_user_foreign_keys(connection: sa.Connection) -> list[dict]:
+    return [
+        foreign_key
+        for foreign_key in sa.inspect(connection).get_foreign_keys("channel_identity")
+        if foreign_key.get("constrained_columns") == ["openxflow_user_id"]
+        and foreign_key.get("referred_table") == "user"
+    ]
+
+
+def _foreign_key_ondelete(foreign_key: dict) -> str:
+    return str((foreign_key.get("options") or {}).get("ondelete") or "").upper()
+
+
+def test_channel_migration_revision_chain() -> None:
+    assert [migration.revision for migration in _MIGRATIONS] == [
+        "c4a9e2d7f1b0",
+        "d5b8f3a1c2e4",
+        "e6c9a4b2d3f5",
+        "f7d0b5c3e4a6",
+        "a8e1c6d4f5b7",
+        "b9f2d7e6c4a1",
+        "c0a3e8f7d5b2",
+        "d1e4f9a8b6c3",
+        "e2f5a8c1d7b9",
+        "f3a6c9e2b4d7",
+        "a4c7d0f3e5b9",
+        "b5d8e1f3a6c9",
+        "a1f4c7e9d2b6",
+        "c7e2f4a9b1d3",
+    ]
+    assert [migration.down_revision for migration in _MIGRATIONS] == [
+        "e1705947c729",
+        "c4a9e2d7f1b0",
+        "d5b8f3a1c2e4",
+        "e6c9a4b2d3f5",
+        "f7d0b5c3e4a6",
+        "a8e1c6d4f5b7",
+        "b9f2d7e6c4a1",
+        "c0a3e8f7d5b2",
+        "d1e4f9a8b6c3",
+        "e2f5a8c1d7b9",
+        "f3a6c9e2b4d7",
+        "a4c7d0f3e5b9",
+        "b5d8e1f3a6c9",
+        "a1f4c7e9d2b6",
+    ]
+
+
+def test_channel_migrations_upgrade_and_downgrade_on_sqlite(monkeypatch) -> None:
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        _create_parent_tables(connection)
+        context = MigrationContext.configure(connection, opts={"render_as_batch": True})
+        operations = Operations(context)
+        for migration in _MIGRATIONS:
+            monkeypatch.setattr(migration, "op", operations)
+            migration.upgrade()
+
+        expected_tables = {
+            "channel_connection",
+            "channel_identity",
+            "channel_conversation_binding",
+            "channel_event_receipt",
+            "channel_binding_code",
+            "channel_file_asset",
+            "channel_webhook_job",
+            "channel_outbound_delivery",
+            "channel_workflow_command",
+            "channel_execution_log",
+            "channel_conversation_context_entry",
+            "channel_message_record",
+            "channel_configuration_audit",
+            "channel_active_workflow_selection",
+        }
+        inspector = sa.inspect(connection)
+        assert expected_tables.issubset(set(inspector.get_table_names()))
+
+        file_columns = {column["name"]: column for column in sa.inspect(connection).get_columns("channel_file_asset")}
+        assert file_columns["external_file_id"]["type"].length == 1024
+
+        outbound_columns = {
+            column["name"]: column for column in sa.inspect(connection).get_columns("channel_outbound_delivery")
+        }
+        assert outbound_columns["delivery_kind"]["type"].length == 32
+        assert outbound_columns["response_digest"]["type"].length == 64
+
+        outbound_unique = {
+            constraint["name"]: tuple(constraint["column_names"])
+            for constraint in sa.inspect(connection).get_unique_constraints("channel_outbound_delivery")
+        }
+        assert outbound_unique["uq_channel_outbound_delivery_event_kind_key"] == (
+            "connection_id",
+            "external_event_id",
+            "delivery_kind",
+            "delivery_key",
+        )
+
+        outbound_indexes = {
+            index["name"]: tuple(index["column_names"])
+            for index in sa.inspect(connection).get_indexes("channel_outbound_delivery")
+        }
+        assert outbound_indexes["ix_channel_outbound_delivery_status_updated"] == (
+            "status",
+            "updated_at",
+        )
+
+        conversation_indexes = {
+            index["name"]: tuple(index["column_names"])
+            for index in sa.inspect(connection).get_indexes("channel_conversation_binding")
+        }
+        assert conversation_indexes["ix_channel_conversation_binding_status"] == ("status",)
+
+        identity_user_foreign_keys = _identity_user_foreign_keys(connection)
+        assert len(identity_user_foreign_keys) == 1
+        assert _foreign_key_ondelete(identity_user_foreign_keys[0]) == "SET NULL"
+        identity_columns = {column["name"]: column for column in sa.inspect(connection).get_columns("channel_identity")}
+        assert identity_columns["openxflow_user_id"]["nullable"] is True
+
+        connection_columns = {column["name"] for column in sa.inspect(connection).get_columns("channel_connection")}
+        assert {"user_flow_selection_enabled", "flow_selection_ttl_hours"} <= connection_columns
+        command_columns = {column["name"] for column in sa.inspect(connection).get_columns("channel_workflow_command")}
+        assert "allow_persistent_selection" in command_columns
+        context_indexes = {
+            index["name"]: tuple(index["column_names"])
+            for index in sa.inspect(connection).get_indexes("channel_conversation_context_entry")
+        }
+        assert context_indexes["ix_channel_context_conversation_session_created"] == (
+            "conversation_binding_id",
+            "session_id",
+            "created_at",
+        )
+
+        for migration in reversed(_MIGRATIONS):
+            migration.downgrade()
+
+        remaining_tables = set(sa.inspect(connection).get_table_names())
+        assert expected_tables.isdisjoint(remaining_tables)
+        assert {"user", "flow", "knowledge_base", "file", "job"}.issubset(remaining_tables)
+
+
+def test_status_index_repair_handles_already_migrated_sqlite_database(monkeypatch) -> None:
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE channel_conversation_binding "
+            "(id CHAR(32) PRIMARY KEY, status VARCHAR(32) NOT NULL DEFAULT 'pending')"
+        )
+        context = MigrationContext.configure(connection, opts={"render_as_batch": True})
+        operations = Operations(context)
+        monkeypatch.setattr(status_index_repair_migration, "op", operations)
+
+        status_index_repair_migration.upgrade()
+        status_index_repair_migration.upgrade()
+
+        indexes = {
+            index["name"]: tuple(index["column_names"])
+            for index in sa.inspect(connection).get_indexes("channel_conversation_binding")
+        }
+        assert indexes["ix_channel_conversation_binding_status"] == ("status",)
+
+        status_index_repair_migration.downgrade()
+        indexes_after_downgrade = {
+            index["name"]: tuple(index["column_names"])
+            for index in sa.inspect(connection).get_indexes("channel_conversation_binding")
+        }
+        assert indexes_after_downgrade["ix_channel_conversation_binding_status"] == ("status",)
+
+
+def test_identity_user_fk_repair_normalizes_legacy_sqlite_database(monkeypatch) -> None:
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.exec_driver_sql('CREATE TABLE "user" (id CHAR(32) PRIMARY KEY)')
+        connection.exec_driver_sql("CREATE TABLE channel_connection (id CHAR(32) PRIMARY KEY)")
+        connection.exec_driver_sql(
+            "CREATE TABLE channel_identity ("
+            "id CHAR(32) PRIMARY KEY, "
+            "connection_id CHAR(32) NOT NULL, "
+            "openxflow_user_id CHAR(32), "
+            "CONSTRAINT fk_channel_identity_openxflow_user_id_user "
+            'FOREIGN KEY(openxflow_user_id) REFERENCES "user"(id) ON DELETE CASCADE'
+            ")"
+        )
+        context = MigrationContext.configure(connection, opts={"render_as_batch": True})
+        operations = Operations(context)
+        monkeypatch.setattr(identity_user_fk_migration, "op", operations)
+
+        identity_user_fk_migration.upgrade()
+        identity_user_fk_migration.upgrade()
+
+        foreign_keys = _identity_user_foreign_keys(connection)
+        assert len(foreign_keys) == 1
+        assert foreign_keys[0]["name"] == "fk_channel_identity_openxflow_user_id_user"
+        assert _foreign_key_ondelete(foreign_keys[0]) == "SET NULL"
+
+        identity_user_fk_migration.downgrade()
+        downgraded_foreign_keys = _identity_user_foreign_keys(connection)
+        assert len(downgraded_foreign_keys) == 1
+        assert _foreign_key_ondelete(downgraded_foreign_keys[0]) == "CASCADE"

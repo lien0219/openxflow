@@ -30,8 +30,8 @@ async def test_enforce_allows_all_when_disabled(authz_service):
 
 
 @pytest.mark.anyio
-async def test_enforce_allows_non_superuser_when_enabled():
-    """OSS stub does not deny; authorization plugin replaces this service for enforcement."""
+async def test_enforce_denies_unknown_user_when_enabled():
+    """Built-in RBAC fails closed when the principal does not exist."""
     settings = SimpleNamespace(
         auth_settings=SimpleNamespace(
             AUTHZ_ENABLED=True,
@@ -40,10 +40,10 @@ async def test_enforce_allows_non_superuser_when_enabled():
     )
     service = LangflowAuthorizationService(settings)
     user_id = uuid4()
-    assert await service.enforce(
+    assert not await service.enforce(
         user_id=user_id,
         domain="*",
-        obj="flow:abc",
+        obj=f"flow:{uuid4()}",
         act="write",
         context={"is_superuser": False},
     )
@@ -70,8 +70,8 @@ async def test_batch_enforce_all_true_when_disabled(authz_service):
 
 
 @pytest.mark.anyio
-async def test_batch_enforce_allows_non_superuser_when_enabled():
-    """OSS pass-through allows every batch request regardless of user context."""
+async def test_batch_enforce_denies_unknown_user_when_enabled():
+    """Built-in RBAC denies every batch request for an unknown principal."""
     settings = SimpleNamespace(
         auth_settings=SimpleNamespace(
             AUTHZ_ENABLED=True,
@@ -79,14 +79,14 @@ async def test_batch_enforce_allows_non_superuser_when_enabled():
         )
     )
     service = LangflowAuthorizationService(settings)
-    requests = [("flow:a", "read"), ("flow:b", "write")]
+    requests = [(f"flow:{uuid4()}", "read"), (f"flow:{uuid4()}", "write")]
     result = await service.batch_enforce(
         user_id=uuid4(),
         domain="*",
         requests=requests,
         context={"is_superuser": False},
     )
-    assert result == [True, True]
+    assert result == [False, False]
 
 
 @pytest.mark.anyio
@@ -101,8 +101,8 @@ async def test_batch_enforce_empty_requests(authz_service):
 
 
 @pytest.mark.anyio
-async def test_get_allowed_actions_returns_all_actions():
-    """Pass-through service returns every requested action regardless of user/context."""
+async def test_get_allowed_actions_returns_none_for_unknown_user():
+    """Built-in RBAC exposes no actions for an unknown principal."""
     settings = SimpleNamespace(
         auth_settings=SimpleNamespace(
             AUTHZ_ENABLED=True,
@@ -114,11 +114,11 @@ async def test_get_allowed_actions_returns_all_actions():
     result = await service.get_allowed_actions(
         user_id=uuid4(),
         domain="*",
-        obj="flow:abc",
+        obj=f"flow:{uuid4()}",
         actions=actions,
         context={"is_superuser": False},
     )
-    assert result == actions
+    assert result == []
 
 
 @pytest.mark.anyio

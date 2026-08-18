@@ -80,7 +80,7 @@ test.describe("Output Modal Copy Button", () => {
   );
 
   test(
-    "copy button should work with JSON output from API Request component",
+    "copy button should work with structured output from Mock Data component",
     { tag: ["@release", "@workspace"] },
     async ({ page }) => {
       await openBlankFlow(page);
@@ -93,33 +93,21 @@ test.describe("Output Modal Copy Button", () => {
       await page.getByTestId("disclosure-data sources").click();
 
       await page
-        .getByTestId("data_sourceAPI Request")
+        .getByTestId("data_sourceMock Data")
         .hover()
         .then(async () => {
-          await page.getByTestId("add-component-button-api-request").click();
-
-          await page.waitForTimeout(500);
-
-          await page
-            .getByTestId("popover-anchor-input-url_input")
-            .first()
-            .fill("https://httpbin.org/json");
+          await page.getByTestId("add-component-button-mock-data").click();
         });
 
-      await page.getByTestId("button_run_api request").click();
-
-      await page.waitForSelector("text=Running", {
-        timeout: 30000,
-        state: "visible",
-      });
+      const runButton = page.getByTestId("button_run_mock data");
+      await expect(runButton).toBeVisible({ timeout: 30000 });
+      await runButton.click();
 
       await page.waitForSelector(`text=${TEXTS.toastBuiltSuccessfully}`, {
         timeout: 30000,
       });
 
-      await page
-        .getByTestId("output-inspection-api response-apirequest")
-        .click();
+      await page.locator('[data-testid^="output-inspection-"]').first().click();
 
       await page.waitForSelector("text=Component Output", { timeout: 30000 });
 

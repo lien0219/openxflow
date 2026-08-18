@@ -29,7 +29,7 @@ def test_openai_compatible_provider_metadata_and_catalog(provider, api_key_varia
         base_url_variable,
     }
 
-    catalog = get_unified_models_detailed(providers=[provider])
+    catalog = get_unified_models_detailed(providers=[provider], model_type="llm")
     assert catalog[0]["provider"] == provider
     assert catalog[0]["models"]
     assert all(model["metadata"]["tool_calling"] for model in catalog[0]["models"])

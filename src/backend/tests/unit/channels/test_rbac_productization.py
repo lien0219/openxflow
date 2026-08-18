@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+from fastapi import HTTPException
+from langflow.api.v1.authz_audit import _audit_domain_context
+from langflow.api.v1.authz_me import _summary_domain_context
+from langflow.api.v1.authz_role_assignments import _domain_context
+from langflow.api.v1.schemas.authz_role_assignments import RoleAssignmentCreate
+from langflow.api.v1.schemas.authz_roles import RoleCreate
+from langflow.services.authorization.bootstrap import (
+    SYSTEM_ROLE_DEFINITIONS,
+    is_managed_service_user,
+)
+from pydantic import ValidationError
+
+
+def test_system_role_catalog_is_complete_and_least_privileged() -> None:
+    by_name = {definition.name: set(definition.permissions) for definition in SYSTEM_ROLE_DEFINITIONS}
+
+    assert set(by_name) == {
+        "platform_admin",
+        "organization_admin",
+        "channel_admin",
+        "resource_editor",
+        "viewer",
+        "auditor",
+        "member",
+    }
+    assert "rbac:*" in by_name["platform_admin"]
+    assert "rbac:assign" in by_name["organization_admin"]
+    assert "rbac:assign" in by_name["channel_admin"]
+    assert "rbac:*" not in by_name["channel_admin"]
+    assert "flow:write" not in by_name["viewer"]
+    assert by_name["member"] == set()
+
+
+def test_role_assignment_schema_supports_production_scopes() -> None:
+    for domain_type in ("organization", "org", "workspace", "project", "channel"):
+        domain_id = uuid4()
+        payload = RoleAssignmentCreate(
+            user_id=uuid4(),
+            role_id=uuid4(),
+            domain_type=domain_type,
+            domain_id=domain_id,
+        )
+        assert payload.domain_type == domain_type
+        assert payload.domain_id == domain_id
+
+
+def test_role_assignment_schema_rejects_invalid_scope_pairs() -> None:
+    with pytest.raises(ValidationError):
+        RoleAssignmentCreate(
+            user_id=uuid4(),
+            role_id=uuid4(),
+            domain_type="global",
+            domain_id=uuid4(),
+        )
+    with pytest.raises(ValidationError):
+        RoleAssignmentCreate(
+            user_id=uuid4(),
+            role_id=uuid4(),
+            domain_type="project",
+            domain_id=None,
+        )
+
+
+def test_custom_role_schema_accepts_delegated_management_permissions() -> None:
+    role = RoleCreate(
+        name="workspace_operator",
+        permissions=[
+            "rbac:read",
+            "rbac:assign",
+            "team:manage",
+            "user:read",
+            "channel:write",
+        ],
+    )
+
+    assert role.permissions == [
+        "rbac:read",
+        "rbac:assign",
+        "team:manage",
+        "user:read",
+        "channel:write",
+    ]
+
+
+def test_custom_role_schema_rejects_unknown_management_actions() -> None:
+    with pytest.raises(ValidationError):
+        RoleCreate(name="invalid", permissions=["rbac:superpower"])
+
+
+def test_domain_context_maps_channel_and_organization_aliases() -> None:
+    domain_id = uuid4()
+    expected_channel = (
+        f"channel:{domain_id}",
+        {"connection_id": domain_id},
+    )
+    expected_organization = (
+        f"organization:{domain_id}",
+        {"organization_id": domain_id},
+    )
+
+    assert _domain_context("channel", domain_id) == expected_channel
+    assert _summary_domain_context("channel", domain_id) == expected_channel
+    assert _audit_domain_context("channel", domain_id) == expected_channel
+    assert _domain_context("organization", domain_id) == expected_organization
+    assert _summary_domain_context("organization", domain_id) == expected_organization
+    assert _audit_domain_context("organization", domain_id) == expected_organization
+    assert _domain_context("global", None) == ("*", {})
+    assert _summary_domain_context("global", None) == ("*", {})
+    assert _audit_domain_context("global", None) == ("*", {})
+
+
+def test_summary_and_audit_contexts_fail_closed_without_scoped_id() -> None:
+    with pytest.raises(HTTPException):
+        _summary_domain_context("channel", None)
+    with pytest.raises(HTTPException):
+        _audit_domain_context("organization", None)
+
+
+def test_managed_channel_service_users_never_receive_default_roles() -> None:
+    service_user = SimpleNamespace(optins={"channel_service_identity": True})
+    human_user = SimpleNamespace(optins={})
+    assert is_managed_service_user(service_user)
+    assert not is_managed_service_user(human_user)

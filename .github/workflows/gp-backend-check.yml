@@ -6,6 +6,12 @@ on:
       - "src/lfx/src/lfx/components/**"
       - "src/backend/base/langflow/initial_setup/starter_projects/**"
 
+# Share the PR-branch write lock with py_autofix.yml. Bot-triggered follow-up
+# runs are isolated so they cannot replace a pending user-triggered run.
+concurrency:
+  group: pr-generator-writes-${{ github.event.pull_request.number }}-${{ github.actor != 'github-actions[bot]' && 'writer' || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   auto-commit:
     if: |

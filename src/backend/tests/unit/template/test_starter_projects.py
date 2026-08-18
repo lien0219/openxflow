@@ -13,6 +13,7 @@ import json
 from importlib import import_module
 from pathlib import Path
 
+import httpx
 import pytest
 
 # Import langflow validation utilities
@@ -41,9 +42,26 @@ def get_basic_template_files():
 
 
 @pytest.fixture(autouse=True)
-def disable_tracing(monkeypatch):
-    """Disable tracing for all template tests."""
+def isolate_template_external_services(monkeypatch):
+    """Keep template validation isolated from tracing and external GitHub availability."""
     monkeypatch.setenv("LANGFLOW_DEACTIVATE_TRACING", "true")
+    monkeypatch.setenv("LANGFLOW_SSRF_PROTECTION_ENABLED", "false")
+
+    original_get = httpx.AsyncClient.get
+
+    async def get_with_stubbed_github(self, url, *args, **kwargs):
+        url_string = str(url)
+        if url_string.startswith(("https://github.com/", "https://raw.githubusercontent.com/")):
+            request = httpx.Request("GET", url_string, headers=kwargs.get("headers"))
+            return httpx.Response(
+                200,
+                text="class ExampleComponent:\n    pass\n",
+                headers={"content-type": "text/plain; charset=utf-8"},
+                request=request,
+            )
+        return await original_get(self, url, *args, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", get_with_stubbed_github)
 
 
 class TestStarterProjects:

@@ -23,7 +23,8 @@ from .credentials import (
     get_api_key_for_provider,
     validate_model_provider_key,
 )
-from .instantiation import get_embeddings, get_llm
+from .embedding_instantiation import get_embeddings
+from .instantiation import get_llm
 from .model_catalog import (
     get_embedding_model_options,
     get_language_model_options,

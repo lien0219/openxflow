@@ -63,7 +63,7 @@ export const TEXTS = {
 
   // ─── Auth / login screen ────────────────────────────────────────────
   /** Visible on the sign-in route when LANGFLOW_AUTO_LOGIN=false. */
-  authSignInHeader: "sign in to langflow",
+  authSignInHeader: "Sign in to OpenXFlow",
   /** Default seeded username. */
   authDefaultCredential: "langflow",
   /** Explicit Playwright-only superuser password seeded in playwright.config.ts. */

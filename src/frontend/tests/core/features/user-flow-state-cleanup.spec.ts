@@ -86,7 +86,10 @@ test(
     await page.waitForSelector("#is_active", { timeout: 1500 });
     await page.locator("#is_active").click();
     await expect(page.locator("#is_active")).toBeChecked();
-    await page.getByText(TEXTS.save, { exact: true }).click();
+    await page
+      .getByRole("button", { name: TEXTS.save, exact: true })
+      .last()
+      .click();
     await page.waitForSelector("text=new user added", { timeout: 30000 });
 
     // Log out from admin
@@ -98,7 +101,9 @@ test(
     await page.evaluate(() => {
       sessionStorage.setItem("testMockAutoLogin", "true");
     });
-    await page.getByText(TEXTS.logout, { exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: TEXTS.logout })
+      .dispatchEvent("click");
 
     // ---- USER A SESSION ----
 
@@ -122,16 +127,12 @@ test(
 
     // Create a flow for User A
     await waitForNewProjectButton(page, { timeout: 60000 });
-    // Check that User A starts with an empty flows list
-    expect(
-      (
-        await page.waitForSelector("text=Welcome to LangFlow", {
-          timeout: 30000,
-        })
-      ).isVisible(),
-    );
-
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
+    // Check that User A starts with the current OpenXFlow empty state. Stable
+    // test IDs avoid coupling this regression test to translated brand copy.
+    await expect(page.getByTestId("mainpage_title").last()).toBeVisible({
+      timeout: 30000,
+    });
+    await expect(page.getByTestId("new_project_btn_empty_page")).toBeVisible({
       timeout: 30000,
     });
 
@@ -173,7 +174,9 @@ test(
     await page.evaluate(() => {
       sessionStorage.setItem("testMockAutoLogin", "true");
     });
-    await page.getByText(TEXTS.logout, { exact: true }).click();
+    await page
+      .getByRole("menuitem", { name: TEXTS.logout })
+      .dispatchEvent("click");
 
     // ---- ADMIN SESSION AGAIN ----
 

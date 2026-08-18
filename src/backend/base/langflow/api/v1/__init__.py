@@ -1,10 +1,21 @@
 from langflow.api.v1.api_key import router as api_key_router
 from langflow.api.v1.authz_audit import router as authz_audit_router
 from langflow.api.v1.authz_me import router as authz_me_router
-from langflow.api.v1.authz_role_assignments import router as authz_role_assignments_router
+from langflow.api.v1.authz_role_assignments import (
+    router as authz_role_assignments_router,
+)
 from langflow.api.v1.authz_roles import router as authz_roles_router
 from langflow.api.v1.authz_shares import router as authz_shares_router
+from langflow.api.v1.authz_startup import router as authz_startup_router
 from langflow.api.v1.authz_teams import router as authz_teams_router
+from langflow.api.v1.channel_admin import router as channel_admin_router
+from langflow.api.v1.channel_bindings import router as channel_bindings_router
+from langflow.api.v1.channel_management import router as channel_management_router
+from langflow.api.v1.channel_observability import router as channel_observability_router
+from langflow.api.v1.channel_resources import router as channel_resources_router
+from langflow.api.v1.channel_runtime import router as channel_runtime_router
+from langflow.api.v1.channel_webhooks import router as channel_webhooks_router
+from langflow.api.v1.channels import router as channels_router
 from langflow.api.v1.chat import router as chat_router
 from langflow.api.v1.endpoints import router as endpoints_router
 from langflow.api.v1.extensions import router as extensions_router
@@ -18,6 +29,7 @@ from langflow.api.v1.login import router as login_router
 from langflow.api.v1.mcp import router as mcp_router
 from langflow.api.v1.mcp_projects import router as mcp_projects_router
 from langflow.api.v1.memories import router as memories_router
+from langflow.api.v1.message_pages import router as message_pages_router
 from langflow.api.v1.model_options import router as model_options_router
 from langflow.api.v1.models import router as models_router
 from langflow.api.v1.monitor import router as monitor_router
@@ -29,7 +41,6 @@ from langflow.api.v1.traces import router as traces_router
 from langflow.api.v1.users import router as users_router
 from langflow.api.v1.validate import router as validate_router
 from langflow.api.v1.variable import router as variables_router
-from langflow.api.v1.voice_mode import router as voice_mode_router
 
 __all__ = [
     "api_key_router",
@@ -38,7 +49,16 @@ __all__ = [
     "authz_role_assignments_router",
     "authz_roles_router",
     "authz_shares_router",
+    "authz_startup_router",
     "authz_teams_router",
+    "channel_admin_router",
+    "channel_bindings_router",
+    "channel_management_router",
+    "channel_observability_router",
+    "channel_resources_router",
+    "channel_runtime_router",
+    "channel_webhooks_router",
+    "channels_router",
     "chat_router",
     "endpoints_router",
     "extensions_router",
@@ -52,6 +72,7 @@ __all__ = [
     "mcp_projects_router",
     "mcp_router",
     "memories_router",
+    "message_pages_router",
     "model_options_router",
     "models_router",
     "monitor_router",
@@ -63,5 +84,4 @@ __all__ = [
     "users_router",
     "validate_router",
     "variables_router",
-    "voice_mode_router",
 ]

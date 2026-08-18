@@ -7,14 +7,17 @@ jest.mock("@/customization/feature-flags", () => ({
 }));
 
 // Mock the API controllers - simplified without complex async operations
-const mockCheckHasStore = jest.fn();
-const mockCheckHasApiKey = jest.fn();
-
 jest.mock("../../controllers/API", () => ({
   __esModule: true,
-  checkHasStore: mockCheckHasStore,
-  checkHasApiKey: mockCheckHasApiKey,
+  checkHasStore: jest.fn(),
+  checkHasApiKey: jest.fn(),
 }));
+
+const { checkHasStore: mockCheckHasStore, checkHasApiKey: mockCheckHasApiKey } =
+  jest.requireMock("../../controllers/API") as {
+    checkHasStore: jest.Mock;
+    checkHasApiKey: jest.Mock;
+  };
 
 describe("useStoreStore", () => {
   beforeEach(() => {

@@ -1,0 +1,1088 @@
+import type { FormEvent, ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import type {
+  ChannelAccessPolicy,
+  ChannelConnection,
+  ChannelConnectionCreate,
+  ChannelConnectionUpdate,
+  ChannelContextMode,
+  ChannelResponseMode,
+  ChannelType,
+  ChannelUnconfiguredBehavior,
+} from "@/controllers/API/queries/channels";
+import useChannelCopy from "../use-channel-copy";
+import { parseAllowedExtensions, readConnectionSetting } from "../utils";
+
+type ConfigurableChannelType = Extract<
+  ChannelType,
+  "telegram" | "feishu" | "dingtalk" | "wecom"
+>;
+type WeComMode = "ai_bot" | "webhook";
+
+interface ConnectionFormState {
+  channelType: ConfigurableChannelType;
+  name: string;
+  botToken: string;
+  webhookSecret: string;
+  appId: string;
+  appSecret: string;
+  verificationToken: string;
+  encryptKey: string;
+  clientId: string;
+  clientSecret: string;
+  robotCode: string;
+  wecomMode: WeComMode;
+  wecomBotToken: string;
+  wecomBotName: string;
+  wecomPushWebhookUrl: string;
+  corpId: string;
+  corpSecret: string;
+  agentId: string;
+  callbackToken: string;
+  encodingAesKey: string;
+  publicBaseUrl: string;
+  maxFileSizeMb: string;
+  allowedExtensions: string;
+  accessPolicy: ChannelAccessPolicy;
+  defaultContextMode: ChannelContextMode;
+  defaultResponseMode: ChannelResponseMode;
+  unconfiguredBehavior: ChannelUnconfiguredBehavior;
+  maxConcurrency: string;
+  perUserConcurrency: string;
+  perUserQueueLimit: string;
+  rateLimitPerMinute: string;
+  dailyQuota: string;
+  taskTimeoutSeconds: string;
+  queueTimeoutSeconds: string;
+  sharedContextWindow: string;
+  contextRetentionDays: string;
+  autoDiscoverConversations: boolean;
+  pendingNoticeEnabled: boolean;
+  personalCommandsEnabled: boolean;
+  defaultAllowFileUpload: boolean;
+  enabled: boolean;
+}
+
+const DEFAULT_EXTENSIONS =
+  "pdf, docx, xlsx, pptx, csv, txt, md, json, html, rtf, xml, yaml, yml";
+
+const PROVIDER_KEYS: Record<ConfigurableChannelType, string> = {
+  telegram: "channels.provider.telegram",
+  feishu: "channels.provider.feishu",
+  dingtalk: "channels.provider.dingtalk",
+  wecom: "channels.provider.wecom",
+};
+
+interface ChannelConnectionDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  connection?: ChannelConnection | null;
+  initialChannelType?: ConfigurableChannelType;
+  loading?: boolean;
+  onSubmit: (value: {
+    payload: ChannelConnectionCreate | ChannelConnectionUpdate;
+    publicBaseUrl: string;
+  }) => Promise<void>;
+}
+
+interface FieldProps {
+  label: ReactNode;
+  children: ReactNode;
+  help?: ReactNode;
+}
+
+function Field({ label, children, help }: FieldProps) {
+  return (
+    <label className="flex flex-col gap-2 text-sm font-medium">
+      {label}
+      {children}
+      {help ? (
+        <span className="text-xs font-normal text-muted-foreground">
+          {help}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+interface ToggleCardProps {
+  label: ReactNode;
+  help: ReactNode;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}
+
+function ToggleCard({
+  label,
+  help,
+  checked,
+  onCheckedChange,
+}: ToggleCardProps) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg bg-muted/40 p-3">
+      <div>
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-muted-foreground">{help}</div>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
+}
+
+function boundedNumber(
+  value: string,
+  fallback: number,
+  minimum: number,
+  maximum?: number,
+): number {
+  const parsed = Number(value);
+  const normalized = Number.isFinite(parsed) ? parsed : fallback;
+  return Math.min(maximum ?? normalized, Math.max(minimum, normalized));
+}
+
+function emptyForm(
+  channelType: ConfigurableChannelType,
+  providerName: string,
+): ConnectionFormState {
+  return {
+    channelType,
+    name: providerName,
+    botToken: "",
+    webhookSecret: "",
+    appId: "",
+    appSecret: "",
+    verificationToken: "",
+    encryptKey: "",
+    clientId: "",
+    clientSecret: "",
+    robotCode: "",
+    wecomMode: "ai_bot",
+    wecomBotToken: "",
+    wecomBotName: "OpenXFlow",
+    wecomPushWebhookUrl: "",
+    corpId: "",
+    corpSecret: "",
+    agentId: "",
+    callbackToken: "",
+    encodingAesKey: "",
+    publicBaseUrl: "",
+    maxFileSizeMb: "10",
+    allowedExtensions: DEFAULT_EXTENSIONS,
+    accessPolicy: "hybrid",
+    defaultContextMode: "isolated",
+    defaultResponseMode: "mention_only",
+    unconfiguredBehavior: "notify_pending",
+    maxConcurrency: "10",
+    perUserConcurrency: "1",
+    perUserQueueLimit: "3",
+    rateLimitPerMinute: "20",
+    dailyQuota: "0",
+    taskTimeoutSeconds: "120",
+    queueTimeoutSeconds: "60",
+    sharedContextWindow: "20",
+    contextRetentionDays: "30",
+    autoDiscoverConversations: true,
+    pendingNoticeEnabled: true,
+    personalCommandsEnabled: true,
+    defaultAllowFileUpload: true,
+    enabled: true,
+  };
+}
+
+export default function ChannelConnectionDialog({
+  open,
+  onOpenChange,
+  connection,
+  initialChannelType = "telegram",
+  loading = false,
+  onSubmit,
+}: ChannelConnectionDialogProps) {
+  const copy = useChannelCopy();
+  const { t } = useTranslation();
+  const providerNameFor = (channelType: ConfigurableChannelType) =>
+    t(PROVIDER_KEYS[channelType]);
+  const isEditing = Boolean(connection);
+  const [form, setForm] = useState<ConnectionFormState>(() =>
+    emptyForm(initialChannelType, providerNameFor(initialChannelType)),
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const connectionType = connection?.channel_type;
+    const channelType: ConfigurableChannelType =
+      connectionType === "telegram" ||
+      connectionType === "feishu" ||
+      connectionType === "dingtalk" ||
+      connectionType === "wecom"
+        ? connectionType
+        : initialChannelType;
+    const allowed = readConnectionSetting<string[]>(
+      connection,
+      "allowed_file_extensions",
+      [],
+    );
+    const providerName = providerNameFor(channelType);
+    setForm({
+      ...emptyForm(channelType, providerName),
+      name: connection?.name ?? providerName,
+      wecomMode:
+        connection?.channel_type === "wecom" &&
+        connection.connection_mode === "webhook"
+          ? "webhook"
+          : "ai_bot",
+      publicBaseUrl: readConnectionSetting(connection, "public_base_url", ""),
+      maxFileSizeMb: String(
+        readConnectionSetting(connection, "max_file_size_mb", 10),
+      ),
+      allowedExtensions:
+        allowed.length > 0 ? allowed.join(", ") : DEFAULT_EXTENSIONS,
+      accessPolicy: connection?.access_policy ?? "hybrid",
+      defaultContextMode: connection?.default_context_mode ?? "isolated",
+      defaultResponseMode: connection?.default_response_mode ?? "mention_only",
+      unconfiguredBehavior:
+        connection?.unconfigured_behavior ?? "notify_pending",
+      maxConcurrency: String(connection?.max_concurrency ?? 10),
+      perUserConcurrency: String(connection?.per_user_concurrency ?? 1),
+      perUserQueueLimit: String(connection?.per_user_queue_limit ?? 3),
+      rateLimitPerMinute: String(connection?.rate_limit_per_minute ?? 20),
+      dailyQuota: String(connection?.daily_quota ?? 0),
+      taskTimeoutSeconds: String(connection?.task_timeout_seconds ?? 120),
+      queueTimeoutSeconds: String(connection?.queue_timeout_seconds ?? 60),
+      sharedContextWindow: String(connection?.shared_context_window ?? 20),
+      contextRetentionDays: String(connection?.context_retention_days ?? 30),
+      autoDiscoverConversations:
+        connection?.auto_discover_conversations ?? true,
+      pendingNoticeEnabled: connection?.pending_notice_enabled ?? true,
+      personalCommandsEnabled: connection?.personal_commands_enabled ?? true,
+      defaultAllowFileUpload: connection?.default_allow_file_upload ?? true,
+      enabled: connection?.enabled ?? true,
+    });
+  }, [connection, initialChannelType, open, t]);
+
+  const setField = <K extends keyof ConnectionFormState>(
+    key: K,
+    value: ConnectionFormState[K],
+  ) => setForm((current) => ({ ...current, [key]: value }));
+
+  const changeChannelType = (channelType: ConfigurableChannelType) => {
+    setForm((current) => {
+      const standardNames = [
+        "Telegram",
+        "Feishu",
+        "DingTalk",
+        "WeCom",
+        copy("飞书"),
+        copy("钉钉"),
+        copy("企业微信"),
+      ];
+      return {
+        ...emptyForm(channelType, providerNameFor(channelType)),
+        name: standardNames.includes(current.name)
+          ? providerNameFor(channelType)
+          : current.name,
+        publicBaseUrl: current.publicBaseUrl,
+        maxFileSizeMb: current.maxFileSizeMb,
+        allowedExtensions: current.allowedExtensions,
+        accessPolicy: current.accessPolicy,
+        defaultContextMode: current.defaultContextMode,
+        defaultResponseMode: current.defaultResponseMode,
+        unconfiguredBehavior: current.unconfiguredBehavior,
+        maxConcurrency: current.maxConcurrency,
+        perUserConcurrency: current.perUserConcurrency,
+        perUserQueueLimit: current.perUserQueueLimit,
+        rateLimitPerMinute: current.rateLimitPerMinute,
+        dailyQuota: current.dailyQuota,
+        taskTimeoutSeconds: current.taskTimeoutSeconds,
+        queueTimeoutSeconds: current.queueTimeoutSeconds,
+        sharedContextWindow: current.sharedContextWindow,
+        contextRetentionDays: current.contextRetentionDays,
+        autoDiscoverConversations: current.autoDiscoverConversations,
+        pendingNoticeEnabled: current.pendingNoticeEnabled,
+        personalCommandsEnabled: current.personalCommandsEnabled,
+        defaultAllowFileUpload: current.defaultAllowFileUpload,
+        enabled: current.enabled,
+      };
+    });
+  };
+
+  const connectionMode =
+    form.channelType === "dingtalk"
+      ? "stream"
+      : form.channelType === "wecom"
+        ? form.wecomMode
+        : "webhook";
+  const changingMode =
+    isEditing && connection?.connection_mode !== connectionMode;
+  const credentialsRequired = !isEditing || changingMode;
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!form.name.trim()) return;
+    if (
+      credentialsRequired &&
+      form.channelType === "telegram" &&
+      (!form.botToken.trim() ||
+        !/^[A-Za-z0-9_-]{16,256}$/.test(form.webhookSecret.trim()))
+    ) {
+      return;
+    }
+    if (
+      credentialsRequired &&
+      form.channelType === "feishu" &&
+      (!form.appId.trim() ||
+        !form.appSecret.trim() ||
+        !form.verificationToken.trim())
+    ) {
+      return;
+    }
+    if (
+      credentialsRequired &&
+      form.channelType === "dingtalk" &&
+      (!form.clientId.trim() || !form.clientSecret.trim())
+    ) {
+      return;
+    }
+    if (credentialsRequired && form.channelType === "wecom") {
+      const invalidAiBot =
+        form.wecomMode === "ai_bot" &&
+        (!form.wecomBotToken.trim() ||
+          form.encodingAesKey.trim().length !== 43);
+      const invalidInternalApp =
+        form.wecomMode === "webhook" &&
+        (!form.corpId.trim() ||
+          !form.corpSecret.trim() ||
+          !form.agentId.trim() ||
+          !form.callbackToken.trim() ||
+          form.encodingAesKey.trim().length !== 43);
+      if (invalidAiBot || invalidInternalApp || !form.publicBaseUrl.trim()) {
+        return;
+      }
+    }
+
+    const credentials: Record<string, string> = {};
+    if (form.channelType === "telegram") {
+      if (form.botToken.trim()) credentials.bot_token = form.botToken.trim();
+      if (form.webhookSecret.trim()) {
+        credentials.webhook_secret = form.webhookSecret.trim();
+      }
+    } else if (form.channelType === "feishu") {
+      if (form.appId.trim()) credentials.app_id = form.appId.trim();
+      if (form.appSecret.trim()) credentials.app_secret = form.appSecret.trim();
+      if (form.verificationToken.trim()) {
+        credentials.verification_token = form.verificationToken.trim();
+      }
+      if (form.encryptKey.trim()) {
+        credentials.encrypt_key = form.encryptKey.trim();
+      }
+    } else if (form.channelType === "dingtalk") {
+      if (form.clientId.trim()) credentials.client_id = form.clientId.trim();
+      if (form.clientSecret.trim()) {
+        credentials.client_secret = form.clientSecret.trim();
+      }
+      if (form.robotCode.trim()) credentials.robot_code = form.robotCode.trim();
+    } else if (form.wecomMode === "ai_bot") {
+      if (form.wecomBotToken.trim()) {
+        credentials.token = form.wecomBotToken.trim();
+      }
+      if (form.encodingAesKey.trim()) {
+        credentials.encoding_aes_key = form.encodingAesKey.trim();
+      }
+      if (form.wecomBotName.trim()) {
+        credentials.bot_name = form.wecomBotName.trim();
+      }
+      if (form.wecomPushWebhookUrl.trim()) {
+        credentials.message_push_webhook_url = form.wecomPushWebhookUrl.trim();
+      }
+    } else {
+      if (form.corpId.trim()) credentials.corp_id = form.corpId.trim();
+      if (form.corpSecret.trim()) {
+        credentials.corp_secret = form.corpSecret.trim();
+      }
+      if (form.agentId.trim()) credentials.agent_id = form.agentId.trim();
+      if (form.callbackToken.trim()) {
+        credentials.callback_token = form.callbackToken.trim();
+      }
+      if (form.encodingAesKey.trim()) {
+        credentials.encoding_aes_key = form.encodingAesKey.trim();
+      }
+    }
+
+    const settingsData = {
+      ...(connection?.settings_data ?? {}),
+      public_base_url: form.publicBaseUrl.trim(),
+      max_file_size_mb: Math.max(1, Number(form.maxFileSizeMb) || 10),
+      allowed_file_extensions: parseAllowedExtensions(form.allowedExtensions),
+    };
+    const productionSettings = {
+      auto_discover_conversations: form.autoDiscoverConversations,
+      unconfigured_behavior: form.unconfiguredBehavior,
+      pending_notice_enabled: form.pendingNoticeEnabled,
+      personal_commands_enabled: form.personalCommandsEnabled,
+      default_response_mode: form.defaultResponseMode,
+      default_allow_file_upload: form.defaultAllowFileUpload,
+      access_policy: form.accessPolicy,
+      default_context_mode: form.defaultContextMode,
+      max_concurrency: boundedNumber(form.maxConcurrency, 10, 1, 100),
+      per_user_concurrency: boundedNumber(form.perUserConcurrency, 1, 1, 10),
+      per_user_queue_limit: boundedNumber(form.perUserQueueLimit, 3, 1, 100),
+      rate_limit_per_minute: boundedNumber(
+        form.rateLimitPerMinute,
+        20,
+        0,
+        10000,
+      ),
+      daily_quota: boundedNumber(form.dailyQuota, 0, 0),
+      task_timeout_seconds: boundedNumber(
+        form.taskTimeoutSeconds,
+        120,
+        10,
+        3600,
+      ),
+      queue_timeout_seconds: boundedNumber(
+        form.queueTimeoutSeconds,
+        60,
+        5,
+        3600,
+      ),
+      shared_context_window: boundedNumber(
+        form.sharedContextWindow,
+        20,
+        0,
+        100,
+      ),
+      context_retention_days: boundedNumber(
+        form.contextRetentionDays,
+        30,
+        1,
+        365,
+      ),
+    };
+    const payload = isEditing
+      ? {
+          name: form.name.trim(),
+          enabled: form.enabled,
+          connection_mode: connectionMode,
+          ...productionSettings,
+          settings_data: settingsData,
+          ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
+        }
+      : {
+          name: form.name.trim(),
+          channel_type: form.channelType,
+          enabled: form.enabled,
+          connection_mode: connectionMode,
+          ...productionSettings,
+          settings_data: settingsData,
+          credentials,
+        };
+
+    await onSubmit({ payload, publicBaseUrl: form.publicBaseUrl.trim() });
+  };
+
+  const providerName = providerNameFor(form.channelType);
+  const keepValuePlaceholder = isEditing
+    ? t("channels.connectionDialog.keepValue")
+    : undefined;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            {t(
+              isEditing
+                ? "channels.connectionDialog.editTitle"
+                : "channels.connectionDialog.createTitle",
+              { provider: providerName },
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            {t("channels.connectionDialog.description")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t("channels.connectionDialog.name")}>
+              <Input
+                value={form.name}
+                onChange={(event) => setField("name", event.target.value)}
+                placeholder={t("channels.connectionDialog.namePlaceholder", {
+                  provider: providerName,
+                })}
+                required
+              />
+            </Field>
+            <Field label={t("channels.connectionDialog.channelType")}>
+              <select
+                className="primary-input h-10"
+                value={form.channelType}
+                onChange={(event) =>
+                  changeChannelType(
+                    event.target.value as ConfigurableChannelType,
+                  )
+                }
+                disabled={isEditing}
+              >
+                <option value="telegram">
+                  {t("channels.connectionDialog.telegramOption")}
+                </option>
+                <option value="feishu">
+                  {t("channels.connectionDialog.feishuOption")}
+                </option>
+                <option value="dingtalk">
+                  {t("channels.connectionDialog.dingtalkOption")}
+                </option>
+                <option value="wecom">
+                  {t("channels.connectionDialog.wecomOption")}
+                </option>
+              </select>
+            </Field>
+          </div>
+
+          {form.channelType === "telegram" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Bot Token">
+                <Input
+                  type="password"
+                  value={form.botToken}
+                  onChange={(event) => setField("botToken", event.target.value)}
+                  placeholder={
+                    isEditing
+                      ? t("channels.connectionDialog.keepToken")
+                      : "123456:ABC..."
+                  }
+                  required={credentialsRequired}
+                />
+              </Field>
+              <Field label="Webhook Secret">
+                <Input
+                  type="password"
+                  required={credentialsRequired}
+                  minLength={16}
+                  maxLength={256}
+                  pattern="[A-Za-z0-9_-]+"
+                  value={form.webhookSecret}
+                  onChange={(event) =>
+                    setField("webhookSecret", event.target.value)
+                  }
+                  placeholder={
+                    keepValuePlaceholder ??
+                    t("channels.connectionDialog.randomSecret")
+                  }
+                />
+              </Field>
+            </div>
+          ) : null}
+
+          {form.channelType === "feishu" ? (
+            <>
+              <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+                {t("channels.connectionDialog.feishuHelp")}
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="App ID">
+                  <Input
+                    value={form.appId}
+                    onChange={(event) => setField("appId", event.target.value)}
+                    placeholder={keepValuePlaceholder ?? "cli_xxxxxxxxx"}
+                    required={credentialsRequired}
+                  />
+                </Field>
+                <Field label="App Secret">
+                  <Input
+                    type="password"
+                    value={form.appSecret}
+                    onChange={(event) =>
+                      setField("appSecret", event.target.value)
+                    }
+                    placeholder={
+                      keepValuePlaceholder ??
+                      t("channels.connectionDialog.feishuSecret")
+                    }
+                    required={credentialsRequired}
+                  />
+                </Field>
+                <Field label="Verification Token">
+                  <Input
+                    type="password"
+                    value={form.verificationToken}
+                    onChange={(event) =>
+                      setField("verificationToken", event.target.value)
+                    }
+                    placeholder={
+                      keepValuePlaceholder ??
+                      t(
+                        "channels.connectionDialog.verificationTokenPlaceholder",
+                      )
+                    }
+                    required={credentialsRequired}
+                  />
+                </Field>
+                <Field label="Encrypt Key">
+                  <Input
+                    type="password"
+                    value={form.encryptKey}
+                    onChange={(event) =>
+                      setField("encryptKey", event.target.value)
+                    }
+                    placeholder={
+                      keepValuePlaceholder ??
+                      t("channels.connectionDialog.encryptKeyPlaceholder")
+                    }
+                  />
+                </Field>
+              </div>
+            </>
+          ) : null}
+
+          {form.channelType === "dingtalk" ? (
+            <>
+              <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+                {t("channels.connectionDialog.dingtalkHelp")}
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Client ID / AppKey">
+                  <Input
+                    value={form.clientId}
+                    onChange={(event) =>
+                      setField("clientId", event.target.value)
+                    }
+                    placeholder={keepValuePlaceholder ?? "dingxxxxxxxx"}
+                    required={credentialsRequired}
+                  />
+                </Field>
+                <Field label="Client Secret / AppSecret">
+                  <Input
+                    type="password"
+                    value={form.clientSecret}
+                    onChange={(event) =>
+                      setField("clientSecret", event.target.value)
+                    }
+                    placeholder={
+                      keepValuePlaceholder ??
+                      t("channels.connectionDialog.dingtalkSecret")
+                    }
+                    required={credentialsRequired}
+                  />
+                </Field>
+              </div>
+              <Field label="Robot Code">
+                <Input
+                  value={form.robotCode}
+                  onChange={(event) =>
+                    setField("robotCode", event.target.value)
+                  }
+                  placeholder={t(
+                    "channels.connectionDialog.robotCodePlaceholder",
+                  )}
+                />
+              </Field>
+            </>
+          ) : null}
+
+          {form.channelType === "wecom" ? (
+            <>
+              <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+                {form.wecomMode === "ai_bot"
+                  ? copy(
+                      "推荐使用智能机器人 API 模式：支持企业微信私聊、内部群聊、加密回调和流式响应。",
+                    )
+                  : copy(
+                      "自建应用模式适合员工与应用私聊；需要群成员共享机器人时请切换为智能机器人模式。",
+                    )}
+              </div>
+              <Field label={copy("企业微信接入模式")}>
+                <select
+                  className="primary-input h-10"
+                  value={form.wecomMode}
+                  onChange={(event) =>
+                    setField("wecomMode", event.target.value as WeComMode)
+                  }
+                >
+                  <option value="ai_bot">
+                    {copy("智能机器人 API（私聊 + 群聊，推荐）")}
+                  </option>
+                  <option value="webhook">
+                    {copy("企业自建应用（员工私聊）")}
+                  </option>
+                </select>
+              </Field>
+
+              {form.wecomMode === "ai_bot" ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label={copy("智能机器人 Token")}>
+                    <Input
+                      type="password"
+                      value={form.wecomBotToken}
+                      onChange={(event) =>
+                        setField("wecomBotToken", event.target.value)
+                      }
+                      placeholder={keepValuePlaceholder ?? copy("机器人 Token")}
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label="EncodingAESKey">
+                    <Input
+                      type="password"
+                      minLength={43}
+                      maxLength={43}
+                      value={form.encodingAesKey}
+                      onChange={(event) =>
+                        setField("encodingAesKey", event.target.value)
+                      }
+                      placeholder={
+                        keepValuePlaceholder ??
+                        t("channels.connectionDialog.encodingKeyPlaceholder")
+                      }
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label={copy("机器人名称")}>
+                    <Input
+                      value={form.wecomBotName}
+                      onChange={(event) =>
+                        setField("wecomBotName", event.target.value)
+                      }
+                      placeholder="OpenXFlow"
+                    />
+                  </Field>
+                  <Field
+                    label={copy("主动消息推送 Webhook（可选）")}
+                    help={copy(
+                      "仅在需要主动推送或超出回调窗口后发送消息时配置，必须使用企业微信官方群机器人 Webhook。",
+                    )}
+                  >
+                    <Input
+                      type="url"
+                      value={form.wecomPushWebhookUrl}
+                      onChange={(event) =>
+                        setField("wecomPushWebhookUrl", event.target.value)
+                      }
+                      placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+                    />
+                  </Field>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label={t("channels.connectionDialog.corpId")}>
+                    <Input
+                      value={form.corpId}
+                      onChange={(event) =>
+                        setField("corpId", event.target.value)
+                      }
+                      placeholder={keepValuePlaceholder ?? "wwxxxxxxxxxxxxxxxx"}
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label={t("channels.connectionDialog.agentId")}>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={form.agentId}
+                      onChange={(event) =>
+                        setField("agentId", event.target.value)
+                      }
+                      placeholder={keepValuePlaceholder ?? "1000002"}
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label={t("channels.connectionDialog.corpSecret")}>
+                    <Input
+                      type="password"
+                      value={form.corpSecret}
+                      onChange={(event) =>
+                        setField("corpSecret", event.target.value)
+                      }
+                      placeholder={
+                        keepValuePlaceholder ??
+                        t("channels.connectionDialog.corpSecretPlaceholder")
+                      }
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label={t("channels.connectionDialog.callbackToken")}>
+                    <Input
+                      type="password"
+                      value={form.callbackToken}
+                      onChange={(event) =>
+                        setField("callbackToken", event.target.value)
+                      }
+                      placeholder={
+                        keepValuePlaceholder ??
+                        t("channels.connectionDialog.callbackTokenPlaceholder")
+                      }
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                  <Field label="EncodingAESKey">
+                    <Input
+                      type="password"
+                      minLength={43}
+                      maxLength={43}
+                      value={form.encodingAesKey}
+                      onChange={(event) =>
+                        setField("encodingAesKey", event.target.value)
+                      }
+                      placeholder={
+                        keepValuePlaceholder ??
+                        t("channels.connectionDialog.encodingKeyPlaceholder")
+                      }
+                      required={credentialsRequired}
+                    />
+                  </Field>
+                </div>
+              )}
+            </>
+          ) : null}
+
+          <Field
+            label={t("channels.connectionDialog.publicUrl")}
+            help={
+              form.channelType === "dingtalk"
+                ? t("channels.connectionDialog.publicUrlStreamHelp")
+                : form.channelType === "wecom"
+                  ? t("channels.connectionDialog.publicUrlWecomHelp")
+                  : t("channels.connectionDialog.publicUrlHelp")
+            }
+          >
+            <Input
+              type="url"
+              value={form.publicBaseUrl}
+              onChange={(event) =>
+                setField("publicBaseUrl", event.target.value)
+              }
+              placeholder="https://openxflow.example.com"
+              required={form.channelType === "wecom"}
+            />
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t("channels.connectionDialog.maxFileSize")}>
+              <Input
+                type="number"
+                min={1}
+                value={form.maxFileSizeMb}
+                onChange={(event) =>
+                  setField("maxFileSizeMb", event.target.value)
+                }
+              />
+            </Field>
+            <Field label={t("channels.connectionDialog.allowedExtensions")}>
+              <Input
+                value={form.allowedExtensions}
+                onChange={(event) =>
+                  setField("allowedExtensions", event.target.value)
+                }
+                placeholder="pdf, docx, xlsx, pptx, txt, md, json"
+              />
+            </Field>
+          </div>
+
+          <div className="rounded-xl border p-4">
+            <div>
+              <div className="text-sm font-semibold">
+                {copy("生产策略与容量")}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {copy(
+                  "控制共享身份、群聊上下文、并发、排队、限流、配额和超时。",
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label={copy("访问策略")}>
+                <select
+                  className="primary-input h-10"
+                  value={form.accessPolicy}
+                  onChange={(event) =>
+                    setField(
+                      "accessPolicy",
+                      event.target.value as ChannelAccessPolicy,
+                    )
+                  }
+                >
+                  <option value="hybrid">
+                    {copy("混合：共享能力 + 个人资源")}
+                  </option>
+                  <option value="shared">
+                    {copy("共享：群成员共用机器人")}
+                  </option>
+                  <option value="bound_only">
+                    {copy("仅已绑定 OpenXFlow 用户")}
+                  </option>
+                </select>
+              </Field>
+              <Field label={copy("默认上下文模式")}>
+                <select
+                  className="primary-input h-10"
+                  value={form.defaultContextMode}
+                  onChange={(event) =>
+                    setField(
+                      "defaultContextMode",
+                      event.target.value as ChannelContextMode,
+                    )
+                  }
+                >
+                  <option value="isolated">{copy("按群成员和线程隔离")}</option>
+                  <option value="shared">{copy("群内共享上下文")}</option>
+                </select>
+              </Field>
+              <Field label={copy("默认响应模式")}>
+                <select
+                  className="primary-input h-10"
+                  value={form.defaultResponseMode}
+                  onChange={(event) =>
+                    setField(
+                      "defaultResponseMode",
+                      event.target.value as ChannelResponseMode,
+                    )
+                  }
+                >
+                  <option value="mention_only">{copy("仅被提及时响应")}</option>
+                  <option value="all_messages">{copy("响应全部消息")}</option>
+                  <option value="commands_only">{copy("仅响应指令")}</option>
+                  <option value="disabled">{copy("完全停用响应")}</option>
+                </select>
+              </Field>
+              <Field label={copy("未配置会话处理")}>
+                <select
+                  className="primary-input h-10"
+                  value={form.unconfiguredBehavior}
+                  onChange={(event) =>
+                    setField(
+                      "unconfiguredBehavior",
+                      event.target.value as ChannelUnconfiguredBehavior,
+                    )
+                  }
+                >
+                  <option value="notify_pending">
+                    {copy("记录并提示管理员配置")}
+                  </option>
+                  <option value="use_global_default">
+                    {copy("直接使用全局默认工作流")}
+                  </option>
+                  <option value="ignore">{copy("静默忽略")}</option>
+                </select>
+              </Field>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {[
+                ["maxConcurrency", copy("连接最大并发"), 1, 100],
+                ["perUserConcurrency", copy("单用户并发"), 1, 10],
+                ["perUserQueueLimit", copy("单用户队列上限"), 1, 100],
+                [
+                  "rateLimitPerMinute",
+                  copy("每分钟请求限制，0 为不限"),
+                  0,
+                  10000,
+                ],
+                ["dailyQuota", copy("每日配额，0 为不限"), 0, undefined],
+                ["queueTimeoutSeconds", copy("排队超时（秒）"), 5, 3600],
+                ["taskTimeoutSeconds", copy("执行超时（秒）"), 10, 3600],
+                ["sharedContextWindow", copy("共享上下文窗口"), 0, 100],
+                ["contextRetentionDays", copy("上下文保留天数"), 1, 365],
+              ].map(([key, label, min, max]) => (
+                <Field key={String(key)} label={String(label)}>
+                  <Input
+                    type="number"
+                    min={Number(min)}
+                    max={max === undefined ? undefined : Number(max)}
+                    value={form[key as keyof ConnectionFormState] as string}
+                    onChange={(event) =>
+                      setField(
+                        key as keyof ConnectionFormState,
+                        event.target.value as never,
+                      )
+                    }
+                  />
+                </Field>
+              ))}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <ToggleCard
+                label={copy("自动发现会话")}
+                help={copy("首次消息自动进入待配置会话列表。")}
+                checked={form.autoDiscoverConversations}
+                onCheckedChange={(checked) =>
+                  setField("autoDiscoverConversations", checked)
+                }
+              />
+              <ToggleCard
+                label={copy("待配置提示")}
+                help={copy("对尚未配置的会话发送一次友好提示。")}
+                checked={form.pendingNoticeEnabled}
+                onCheckedChange={(checked) =>
+                  setField("pendingNoticeEnabled", checked)
+                }
+              />
+              <ToggleCard
+                label={copy("允许个人指令")}
+                help={copy("已绑定成员可使用个人范围的工作流指令。")}
+                checked={form.personalCommandsEnabled}
+                onCheckedChange={(checked) =>
+                  setField("personalCommandsEnabled", checked)
+                }
+              />
+              <ToggleCard
+                label={copy("默认允许安全文件上传")}
+                help={copy("上传文件仍需通过内容扫描与知识库授权。")}
+                checked={form.defaultAllowFileUpload}
+                onCheckedChange={(checked) =>
+                  setField("defaultAllowFileUpload", checked)
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div>
+              <div className="text-sm font-medium">
+                {t("channels.connectionDialog.enable")}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {t("channels.connectionDialog.enableHelp")}
+              </div>
+            </div>
+            <Switch
+              checked={form.enabled}
+              onCheckedChange={(checked) => setField("enabled", checked)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => onOpenChange(false)}
+            >
+              {t("channels.actions.cancel")}
+            </Button>
+            <Button type="submit" loading={loading}>
+              {t(
+                isEditing
+                  ? "channels.actions.saveConnection"
+                  : "channels.actions.createConnection",
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

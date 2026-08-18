@@ -1,0 +1,7 @@
+extend = "../../../../../pyproject.toml"
+
+# The channel gateway is validated independently while it is introduced as a
+# large feature branch. Enforce correctness, import ordering, and syntax here;
+# repository-wide stylistic cleanup remains outside this feature's scope.
+[lint]
+select = ["E4", "E7", "E9", "F", "I"]

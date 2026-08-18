@@ -8,6 +8,7 @@ import {
 import { ProtectedAdminRoute } from "./components/authorization/authAdminGuard";
 import { ProtectedRoute } from "./components/authorization/authGuard";
 import { ProtectedLoginRoute } from "./components/authorization/authLoginGuard";
+import { ProtectedPermissionRoute } from "./components/authorization/authPermissionGuard";
 import { AuthSettingsGuard } from "./components/authorization/authSettingsGuard";
 import { PlaygroundAuthGate } from "./components/authorization/playgroundAuthGate";
 import ContextWrapper from "./contexts";
@@ -33,6 +34,7 @@ import SourceChunksPage from "./pages/MainPage/pages/knowledgePage/sourceChunksP
 import CollectionPage from "./pages/MainPage/pages/main-page";
 import SettingsPage from "./pages/SettingsPage";
 import ApiKeysPage from "./pages/SettingsPage/pages/ApiKeysPage";
+import ChannelsPage from "./pages/SettingsPage/pages/ChannelsPage";
 import DBProvidersPage from "./pages/SettingsPage/pages/DBProvidersPage";
 import GeneralPage from "./pages/SettingsPage/pages/GeneralPage";
 import GlobalVariablesPage from "./pages/SettingsPage/pages/GlobalVariablesPage";
@@ -40,6 +42,7 @@ import MCPServersPage from "./pages/SettingsPage/pages/MCPServersPage";
 import McpClientPage from "./pages/SettingsPage/pages/McpClientPage";
 import ModelProvidersPage from "./pages/SettingsPage/pages/ModelProvidersPage";
 import MessagesPage from "./pages/SettingsPage/pages/messagesPage";
+import PermissionsPage from "./pages/SettingsPage/pages/PermissionsPage";
 import ShortcutsPage from "./pages/SettingsPage/pages/ShortcutsPage";
 import ViewPage from "./pages/ViewPage";
 
@@ -159,7 +162,7 @@ const router = createBrowserRouter(
                   <Route path="db-providers" element={<DBProvidersPage />} />
                   <Route path="mcp-servers" element={<MCPServersPage />} />
                   <Route path="mcp-client" element={<McpClientPage />} />
-
+                  <Route path="channels" element={<ChannelsPage />} />
                   <Route path="api-keys" element={<ApiKeysPage />} />
                   <Route
                     path="general/:scrollId?"
@@ -171,6 +174,14 @@ const router = createBrowserRouter(
                   />
                   <Route path="shortcuts" element={<ShortcutsPage />} />
                   <Route path="messages" element={<MessagesPage />} />
+                  <Route
+                    path="permissions"
+                    element={
+                      <ProtectedPermissionRoute>
+                        <PermissionsPage />
+                      </ProtectedPermissionRoute>
+                    }
+                  />
                   {CustomRoutesStore()}
                 </Route>
                 {CustomRoutesStorePages()}

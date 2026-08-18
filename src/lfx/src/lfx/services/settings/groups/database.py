@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from shutil import copy2
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from lfx.log.logger import logger
 from lfx.utils.util_strings import is_valid_database_url, sanitize_database_url
@@ -45,25 +45,32 @@ class DatabaseSettings(BaseModel):
     If not provided, a hash of the database URL will be used. Useful when multiple Langflow
     instances share the same database and need coordinated migration locking."""
 
-    sqlite_pragmas: dict | None = {"synchronous": "NORMAL", "journal_mode": "WAL", "busy_timeout": 30000}
+    sqlite_pragmas: dict | None = {
+        "synchronous": "NORMAL",
+        "journal_mode": "WAL",
+        "busy_timeout": 5000,
+        "wal_autocheckpoint": 1000,
+    }
     """SQLite pragmas to use when connecting to the database."""
 
     db_driver_connection_settings: dict | None = None
     """Database driver connection settings."""
 
-    db_connection_settings: dict | None = {
-        "pool_size": 20,
-        "max_overflow": 30,
-        "pool_timeout": 30,
-        "pool_pre_ping": True,
-        "pool_recycle": 1800,
-        "echo": False,
-    }
+    db_connection_settings: dict | None = Field(
+        default_factory=lambda: {
+            "pool_size": 20,
+            "max_overflow": 30,
+            "pool_timeout": 30,
+            "pool_pre_ping": True,
+            "pool_recycle": 1800,
+            "echo": False,
+        },
+        validate_default=True,
+    )
     """Database connection settings optimized for high load scenarios.
-    Note: These settings are most effective with PostgreSQL. For SQLite:
-    - Reduce pool_size and max_overflow if experiencing lock contention
-    - SQLite has limited concurrent write capability even with WAL mode
-    - Best for read-heavy or moderate write workloads
+    Note: These settings are most effective with PostgreSQL. File-backed SQLite
+    uses a small pool for concurrent WAL readers, while application-level
+    coordination serializes write transactions.
 
     Settings:
     - pool_size: Number of connections to maintain (increase for higher concurrency)
@@ -155,3 +162,49 @@ class DatabaseSettings(BaseModel):
             value = f"sqlite:///{final_path}"
 
         return value
+
+    @model_validator(mode="after")
+    def validate_sqlite_worker_mode(self):
+        """Fail fast when multiple server workers target one SQLite file."""
+        database_url = str(os.getenv("LANGFLOW_DATABASE_URL") or self.database_url or "")
+        if not database_url.startswith("sqlite"):
+            return self
+        configured_workers = getattr(self, "workers", None)
+        if configured_workers is None:
+            raw_workers = os.getenv("LANGFLOW_WORKERS", "1")
+            try:
+                workers = int(raw_workers)
+            except (TypeError, ValueError):
+                workers = 1
+        else:
+            workers = configured_workers
+        if workers != 1:
+            msg = (
+                "SQLite requires LANGFLOW_WORKERS=1. Multiple OpenXFlow workers cannot safely share "
+                "one SQLite file; use one worker locally or PostgreSQL for multi-worker deployments."
+            )
+            raise ValueError(msg)
+        return self
+
+    @field_validator("db_connection_settings", mode="after")
+    @classmethod
+    def configure_sqlite_pool(cls, value, info):
+        """Use loop-neutral pools for SQLite async engines.
+
+        File-backed SQLite uses ``NullPool`` so SQLAlchemy never keeps an
+        event-loop-bound ``asyncio.Queue`` between sessions. In-memory
+        SQLite uses ``StaticPool`` to preserve one shared database without
+        introducing an async queue. WAL and the application write
+        coordinator continue to provide read concurrency and safe writes.
+        """
+        database_url = str(os.getenv("LANGFLOW_DATABASE_URL") or info.data.get("database_url") or "")
+        if not database_url.startswith("sqlite"):
+            return value
+
+        connection_settings = dict(value or {})
+        is_memory = database_url in {"sqlite://", "sqlite:///:memory:"} or ":memory:" in database_url
+        connection_settings["poolclass"] = "StaticPool" if is_memory else "NullPool"
+        for pool_option in ("pool_size", "max_overflow", "pool_timeout", "pool_recycle"):
+            connection_settings.pop(pool_option, None)
+        connection_settings["pool_pre_ping"] = True
+        return connection_settings

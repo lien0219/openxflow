@@ -20,7 +20,7 @@ from lfx.base.models.openai_constants import (
     OPENAI_MODELS_DETAILED,
 )
 from lfx.base.models.openrouter_constants import OPENROUTER_MODELS_DETAILED
-from lfx.base.models.qwen_constants import QWEN_MODELS_DETAILED
+from lfx.base.models.qwen_constants import QWEN_EMBEDDING_MODELS_DETAILED, QWEN_MODELS_DETAILED
 from lfx.base.models.watsonx_constants import WATSONX_MODELS_DETAILED
 
 
@@ -45,6 +45,7 @@ _STATIC_MODELS_DETAILED: list[list[dict]] = [
     WATSONX_MODELS_DETAILED,
     DEEPSEEK_MODELS_DETAILED,
     QWEN_MODELS_DETAILED,
+    QWEN_EMBEDDING_MODELS_DETAILED,
 ]
 
 

@@ -70,3 +70,50 @@ class ShareAction(str, Enum):
     CREATE = "create"
     DELETE = "delete"
     UPDATE = "update"
+
+
+class ChannelAction(str, Enum):
+    """Actions authorized on a channel connection and its child resources."""
+
+    READ = "read"
+    WRITE = "write"
+    CREATE = "create"
+    DELETE = "delete"
+    EXECUTE = "execute"
+    BIND = "bind"
+    AUDIT = "audit"
+
+
+class AuditAction(str, Enum):
+    """Actions authorized on platform and resource audit streams."""
+
+    READ = "read"
+    EXPORT = "export"
+
+
+class RbacAction(str, Enum):
+    """Actions authorized on role definitions and scoped assignments."""
+
+    READ = "read"
+    MANAGE = "manage"
+    ASSIGN = "assign"
+
+
+class TeamAction(str, Enum):
+    """Actions authorized on teams, memberships and team role grants."""
+
+    READ = "read"
+    CREATE = "create"
+    WRITE = "write"
+    DELETE = "delete"
+    MANAGE = "manage"
+
+
+class UserAction(str, Enum):
+    """Actions authorized on the user directory and account administration."""
+
+    READ = "read"
+    CREATE = "create"
+    WRITE = "write"
+    DELETE = "delete"
+    MANAGE = "manage"

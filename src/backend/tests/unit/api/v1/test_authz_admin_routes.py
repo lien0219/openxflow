@@ -54,6 +54,9 @@ class _FakeAsyncSession:
         if self._commit_raises is not None:
             raise self._commit_raises
 
+    async def flush(self) -> None:
+        return None
+
     async def rollback(self) -> None:
         self.rolled_back += 1
 
@@ -115,8 +118,8 @@ class _StubAuthz:
         return self.effective_perms_payload or {}
 
 
-def _make_user(*, is_superuser: bool = False) -> SimpleNamespace:
-    return SimpleNamespace(id=uuid4(), is_superuser=is_superuser, username="u")
+def _make_user(*, is_superuser: bool = False, is_active: bool = True) -> SimpleNamespace:
+    return SimpleNamespace(id=uuid4(), is_superuser=is_superuser, is_active=is_active, username="u")
 
 
 def _make_role_row(
@@ -149,6 +152,11 @@ def _make_role_row(
 @pytest.fixture
 def stub_authz(monkeypatch):
     from langflow.api.v1 import authz_me, authz_role_assignments, authz_roles, authz_teams
+
+    async def _skip_bootstrap(_session) -> None:
+        return None
+
+    monkeypatch.setattr(authz_role_assignments, "ensure_authorization_bootstrap", _skip_bootstrap)
 
     def _apply(*, allow: bool = True) -> _StubAuthz:
         stub = _StubAuthz(allow=allow)
@@ -190,8 +198,6 @@ def test_role_create_accepts_canonical_permission_slugs():
         "flow:*:read",  # legacy three-segment form rejected
         "flow",  # missing action
         "flow:read:extra",  # too many segments
-        "Flow:read",  # uppercase resource
-        "flow:READ",  # uppercase action
         "unknown:read",  # unknown resource
         "flow:invent",  # unknown action
         "*:read",  # resource wildcard not allowed
@@ -214,6 +220,14 @@ def test_role_create_rejects_non_canonical_permission_slugs(bad_slug):
 
     with pytest.raises(ValidationError):
         RoleCreate(name="bad", permissions=[bad_slug])
+
+
+def test_role_create_normalizes_and_deduplicates_permission_slugs():
+    from langflow.api.v1.schemas.authz_roles import RoleCreate
+
+    payload = RoleCreate(name="normalized", permissions=[" Flow:READ ", "flow:read"])
+
+    assert payload.permissions == ["flow:read"]
 
 
 @pytest.mark.parametrize(
@@ -658,7 +672,7 @@ def test_role_assignment_create_rejects_unknown_domain_type():
         RoleAssignmentCreate(
             user_id=uuid4(),
             role_id=uuid4(),
-            domain_type="organization",  # not in the Literal
+            domain_type="tenant",
             domain_id=uuid4(),
         )
 
@@ -743,7 +757,7 @@ async def test_create_assignment_invokes_invalidate_user(stub_authz):
     from langflow.services.database.models.user.model import User
 
     authz = stub_authz()
-    target_user = SimpleNamespace(id=uuid4())
+    target_user = SimpleNamespace(id=uuid4(), optins={})
     role = SimpleNamespace(id=uuid4(), name="viewer")
     session = _FakeAsyncSession(
         {(User, target_user.id): target_user, (AuthzRole, role.id): role},
@@ -794,12 +808,11 @@ async def test_update_team_clears_description_via_explicit_null(stub_authz):
     """PATCH with description=null clears the field via presence check."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
-    from langflow.services.database.models.auth import AuthzTeam
 
     stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, description="old description")
-    session = _FakeAsyncSession({(AuthzTeam, team_id): team})
+    session = _FakeAsyncSession(exec_results=[[team]])
     user = _make_user(is_superuser=True)
     payload = TeamUpdate(description=None)
     assert "description" in payload.model_fields_set
@@ -818,12 +831,11 @@ async def test_update_team_omitted_description_untouched(stub_authz):
     """Omitting description leaves the existing value alone."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
-    from langflow.services.database.models.auth import AuthzTeam
 
     stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, description="keep me")
-    session = _FakeAsyncSession({(AuthzTeam, team_id): team})
+    session = _FakeAsyncSession(exec_results=[[team]])
     user = _make_user(is_superuser=True)
     # Only update team_name — description must stay "keep me".
     payload = TeamUpdate(team_name="Renamed")
@@ -843,12 +855,11 @@ async def test_update_team_display_only_change_skips_invalidate_all(stub_authz):
     """Renaming or re-describing a team doesn't touch policy — no cache flush."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
-    from langflow.services.database.models.auth import AuthzTeam
 
     authz = stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, team_name="Eng", adom_name="eng", is_active=True)
-    session = _FakeAsyncSession({(AuthzTeam, team_id): team})
+    session = _FakeAsyncSession(exec_results=[[team]])
     user = _make_user(is_superuser=True)
 
     await authz_teams.update_team(
@@ -865,12 +876,11 @@ async def test_update_team_adom_change_triggers_invalidate_all(stub_authz):
     """``adom_name`` is the slug a plugin may compile against — invalidate on change."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
-    from langflow.services.database.models.auth import AuthzTeam
 
     authz = stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, adom_name="eng")
-    session = _FakeAsyncSession({(AuthzTeam, team_id): team})
+    session = _FakeAsyncSession(exec_results=[[team]])
     user = _make_user(is_superuser=True)
 
     await authz_teams.update_team(
@@ -887,12 +897,11 @@ async def test_update_team_is_active_change_triggers_invalidate_all(stub_authz):
     """Deactivating a team must take effect on the next enforce call."""
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamUpdate
-    from langflow.services.database.models.auth import AuthzTeam
 
     authz = stub_authz()
     team_id = uuid4()
     team = _make_team_row(id=team_id, is_active=True)
-    session = _FakeAsyncSession({(AuthzTeam, team_id): team})
+    session = _FakeAsyncSession(exec_results=[[team]])
     user = _make_user(is_superuser=True)
 
     await authz_teams.update_team(
@@ -923,14 +932,14 @@ async def test_create_team_requires_superuser(stub_authz):
 async def test_add_member_invalidates_target_user(stub_authz):
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamMemberCreate
-    from langflow.services.database.models.auth import AuthzTeam
     from langflow.services.database.models.user.model import User
 
     authz = stub_authz()
     team = SimpleNamespace(id=uuid4(), team_name="Eng")
-    target_user = SimpleNamespace(id=uuid4())
+    target_user = SimpleNamespace(id=uuid4(), optins={})
     session = _FakeAsyncSession(
-        {(AuthzTeam, team.id): team, (User, target_user.id): target_user},
+        {(User, target_user.id): target_user},
+        exec_results=[[team]],
     )
     actor = _make_user(is_superuser=True)
     payload = TeamMemberCreate(user_id=target_user.id)
@@ -949,14 +958,14 @@ async def test_add_member_invalidates_target_user(stub_authz):
 async def test_add_member_duplicate_returns_409(stub_authz):
     from langflow.api.v1 import authz_teams
     from langflow.api.v1.schemas.authz_teams import TeamMemberCreate
-    from langflow.services.database.models.auth import AuthzTeam
     from langflow.services.database.models.user.model import User
 
     stub_authz()
     team = SimpleNamespace(id=uuid4(), team_name="Eng")
-    target_user = SimpleNamespace(id=uuid4())
+    target_user = SimpleNamespace(id=uuid4(), optins={})
     session = _FakeAsyncSession(
-        {(AuthzTeam, team.id): team, (User, target_user.id): target_user},
+        {(User, target_user.id): target_user},
+        exec_results=[[team]],
         commit_raises=IntegrityError("dup", {}, Exception()),
     )
     actor = _make_user(is_superuser=True)
@@ -1160,6 +1169,11 @@ def failing_invalidate_authz(monkeypatch):
     """Install a stub whose invalidate_user raises; assert no 5xx leaks out."""
     from langflow.api.v1 import authz_role_assignments, authz_roles, authz_teams
 
+    async def _skip_bootstrap(_session) -> None:
+        return None
+
+    monkeypatch.setattr(authz_role_assignments, "ensure_authorization_bootstrap", _skip_bootstrap)
+
     def _apply(*, fail_invalidate_all: bool = False) -> _FailingInvalidateUserAuthz:
         stub = _FailingInvalidateUserAuthz(fail_invalidate_all=fail_invalidate_all)
         for module in (authz_roles, authz_role_assignments, authz_teams):
@@ -1178,7 +1192,7 @@ async def test_create_assignment_succeeds_when_invalidate_user_fails(failing_inv
     from langflow.services.database.models.user.model import User
 
     authz = failing_invalidate_authz()
-    target_user = SimpleNamespace(id=uuid4())
+    target_user = SimpleNamespace(id=uuid4(), optins={})
     role = SimpleNamespace(id=uuid4(), name="viewer")
     session = _FakeAsyncSession(
         {(User, target_user.id): target_user, (AuthzRole, role.id): role},
@@ -1202,7 +1216,7 @@ async def test_create_assignment_succeeds_when_invalidate_user_fails(failing_inv
 async def test_delete_assignment_succeeds_when_invalidate_user_fails(failing_invalidate_authz):
     """Revoke: stale cache risk is sharpest here — must still report success and flush."""
     from langflow.api.v1 import authz_role_assignments
-    from langflow.services.database.models.auth import AuthzRoleAssignment
+    from langflow.services.database.models.auth import AuthzRole, AuthzRoleAssignment
 
     authz = failing_invalidate_authz()
     assignment_id = uuid4()
@@ -1214,7 +1228,8 @@ async def test_delete_assignment_succeeds_when_invalidate_user_fails(failing_inv
         domain_type="global",
         domain_id=None,
     )
-    session = _FakeAsyncSession({(AuthzRoleAssignment, assignment_id): assignment})
+    role = SimpleNamespace(id=assignment.role_id, name="viewer")
+    session = _FakeAsyncSession({(AuthzRoleAssignment, assignment_id): assignment, (AuthzRole, role.id): role})
     actor = _make_user(is_superuser=True)
 
     await authz_role_assignments.delete_assignment(
@@ -1232,7 +1247,7 @@ async def test_delete_assignment_succeeds_when_invalidate_user_fails(failing_inv
 async def test_delete_assignment_succeeds_when_both_invalidations_fail(failing_invalidate_authz):
     """Total invalidation failure is logged but still doesn't propagate — DB is durable."""
     from langflow.api.v1 import authz_role_assignments
-    from langflow.services.database.models.auth import AuthzRoleAssignment
+    from langflow.services.database.models.auth import AuthzRole, AuthzRoleAssignment
 
     authz = failing_invalidate_authz(fail_invalidate_all=True)
     assignment_id = uuid4()
@@ -1244,7 +1259,8 @@ async def test_delete_assignment_succeeds_when_both_invalidations_fail(failing_i
         domain_type="global",
         domain_id=None,
     )
-    session = _FakeAsyncSession({(AuthzRoleAssignment, assignment_id): assignment})
+    role = SimpleNamespace(id=assignment.role_id, name="viewer")
+    session = _FakeAsyncSession({(AuthzRoleAssignment, assignment_id): assignment, (AuthzRole, role.id): role})
     actor = _make_user(is_superuser=True)
 
     # Even with both calls failing, the API must return success — there is no
@@ -1266,8 +1282,9 @@ async def test_remove_member_succeeds_when_invalidate_user_fails(failing_invalid
     authz = failing_invalidate_authz()
     team_id = uuid4()
     user_id = uuid4()
+    team = SimpleNamespace(id=team_id, team_name="Eng")
     member = SimpleNamespace(team_id=team_id, user_id=user_id)
-    session = _FakeAsyncSession(exec_results=[[member]])
+    session = _FakeAsyncSession(exec_results=[[team], [member]])
     actor = _make_user(is_superuser=True)
 
     await authz_teams.remove_member(
@@ -1392,7 +1409,6 @@ async def test_list_teams_passes_limit_offset_to_query(stub_authz):
 @pytest.mark.asyncio
 async def test_list_members_passes_limit_offset_to_query(stub_authz):
     from langflow.api.v1 import authz_teams
-    from langflow.services.database.models.auth import AuthzTeam
 
     stub_authz()
     team_id = uuid4()
@@ -1401,11 +1417,14 @@ async def test_list_members_passes_limit_offset_to_query(stub_authz):
 
     class _RecordingSession(_FakeAsyncSession):
         async def exec(self, stmt):  # type: ignore[override]
+            if "stmt" not in captured:
+                captured["stmt"] = None
+                return _ExecResult([team])
             captured["stmt"] = stmt
             return _ExecResult([])
 
-    session = _RecordingSession({(AuthzTeam, team_id): team})
-    user = _make_user()
+    session = _RecordingSession()
+    user = _make_user(is_superuser=True)
 
     await authz_teams.list_members(
         team_id=team_id,

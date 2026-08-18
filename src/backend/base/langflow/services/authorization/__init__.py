@@ -1,6 +1,8 @@
-"""OSS authorization service package (pass-through default; plugins enforce)."""
+"""OpenXFlow authorization service package."""
 
 from langflow.services.authorization.actions import (
+    AuditAction,
+    ChannelAction,
     DeploymentAction,
     FileAction,
     FlowAction,
@@ -29,6 +31,8 @@ from langflow.services.authorization.listing import filter_visible_resources
 from langflow.services.authorization.service import LangflowAuthorizationService
 
 __all__ = [
+    "AuditAction",
+    "ChannelAction",
     "DeploymentAction",
     "FileAction",
     "FlowAction",

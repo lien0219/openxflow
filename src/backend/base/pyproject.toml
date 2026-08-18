@@ -78,6 +78,7 @@ dependencies = [
     "setuptools>=80.0.0,<81.0.0",
     "nanoid>=2.0.0,<3.0.0",
     "filelock>=3.20.1,<4.0.0",
+    "dingtalk-stream>=0.24.3,<0.25.0",
     "grandalf>=0.8.0,<1.0.0",
     "spider-client>=0.0.27,<1.0.0",
     "clickhouse-connect==0.7.19",
