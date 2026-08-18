@@ -89,7 +89,7 @@ async def _run_outbound_delivery_maintenance(stop_event: asyncio.Event) -> None:
                 stop_event.wait(),
                 timeout=config.cleanup_interval_seconds,
             )
-        except TimeoutError:
+        except asyncio.TimeoutError:
             pass
 
 
