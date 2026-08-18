@@ -198,10 +198,15 @@ async def test_telegram_workflow_updates_processing_placeholder() -> None:
 
 
 def test_help_message_exposes_interactive_actions() -> None:
-    message = ChannelDispatchService._help_message(bound=True)
+    message = ChannelDispatchService._help_message(
+        bound_user=SimpleNamespace(username="member"),
+        is_admin=False,
+        access_policy="bound_only",
+        conversation_type="private",
+    )
 
     assert message.message_type == ChannelMessageType.CARD
-    assert [action.value for action in message.actions] == ["/bind", "/commands"]
+    assert [action.value for action in message.actions] == ["/commands", "/whoami", "/files", "/knowledge"]
 
 
 class CommitTrackingSession:
