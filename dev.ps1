@@ -9,6 +9,7 @@ param(
     [int]$FrontendPort = 3000,
     [string]$ListenHost = "0.0.0.0",
     [switch]$SkipPreCommit,
+    [switch]$InstallTestBrowsers,
     [switch]$NoBrowser
 )
 
@@ -101,7 +102,7 @@ function Install-ProjectDependencies {
     Write-Section "Checking development prerequisites"
     Assert-Command -Name "uv" -InstallHint "Install uv from https://docs.astral.sh/uv/getting-started/installation/."
     Assert-Command -Name "node" -InstallHint "Install Node.js 20.19 or newer from https://nodejs.org/."
-    Assert-Command -Name "npm" -InstallHint "npm is normally installed together with Node.js."
+    Assert-Command -Name "npm.cmd" -InstallHint "npm is normally installed together with Node.js."
     Assert-NodeVersion
 
     Set-Location $ProjectRoot
@@ -127,10 +128,19 @@ function Install-ProjectDependencies {
 
     Write-Section "Installing frontend dependencies"
     Push-Location $FrontendRoot
+    $previousPuppeteerSkipDownload = [Environment]::GetEnvironmentVariable("PUPPETEER_SKIP_DOWNLOAD", "Process")
+    $previousChromedriverSkipDownload = [Environment]::GetEnvironmentVariable("CHROMEDRIVER_SKIP_DOWNLOAD", "Process")
     try {
-        Invoke-NativeCommand -Command "npm" -Arguments @("ci")
+        if (-not $InstallTestBrowsers) {
+            $env:PUPPETEER_SKIP_DOWNLOAD = "true"
+            $env:CHROMEDRIVER_SKIP_DOWNLOAD = "true"
+            Write-Host "Skipping test-only browser downloads. Use -InstallTestBrowsers to include them." -ForegroundColor DarkGray
+        }
+        Invoke-NativeCommand -Command "npm.cmd" -Arguments @("ci")
     }
     finally {
+        [Environment]::SetEnvironmentVariable("PUPPETEER_SKIP_DOWNLOAD", $previousPuppeteerSkipDownload, "Process")
+        [Environment]::SetEnvironmentVariable("CHROMEDRIVER_SKIP_DOWNLOAD", $previousChromedriverSkipDownload, "Process")
         Pop-Location
     }
 
@@ -193,7 +203,7 @@ function Start-BackendService {
 }
 
 function Start-FrontendService {
-    Assert-Command -Name "npm" -InstallHint "Run '.\dev.ps1 install' first."
+    Assert-Command -Name "npm.cmd" -InstallHint "Run '.\dev.ps1 install' first."
     Assert-PortAvailable -Port $FrontendPort -ServiceName "Frontend"
     $env:VITE_HOST = $ListenHost
     $env:VITE_PORT = "$FrontendPort"
@@ -202,7 +212,7 @@ function Start-FrontendService {
     Push-Location $FrontendRoot
     try {
         Write-Section "Starting frontend on http://localhost:$FrontendPort"
-        Invoke-NativeCommand -Command "npm" -Arguments @("run", "start")
+        Invoke-NativeCommand -Command "npm.cmd" -Arguments @("run", "start")
     }
     finally {
         Pop-Location
@@ -278,6 +288,7 @@ Common options:
   -FrontendPort 3000
   -ListenHost 0.0.0.0
   -SkipPreCommit
+  -InstallTestBrowsers
   -NoBrowser
 
 Environment variable equivalents:

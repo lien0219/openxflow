@@ -1012,7 +1012,6 @@
   "globalVars.noDataAvailable": "无可用数据",
   "globalVars.pageDescription": "管理全局变量并将其赋值给字段。",
   "globalVars.pageTitle": "全局变量",
-  "header.goToDiscord": "前往 Discord 服务器",
   "header.goToGithub": "访问 GitHub 代码库",
   "header.home": "返回首页",
   "header.notifications": "通知和错误",

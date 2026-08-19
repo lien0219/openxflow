@@ -2,9 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { LangflowCounts } from "../langflow-counts";
 
 jest.mock("@/stores/darkStore", () => ({
-  useDarkStore: (
-    selector: (s: { stars: number; discordCount: number }) => unknown,
-  ) => selector({ stars: 1234, discordCount: 5678 }),
+  useDarkStore: (selector: (s: { stars: number }) => unknown) =>
+    selector({ stars: 1234 }),
 }));
 
 jest.mock("react-i18next", () => ({
@@ -12,7 +11,6 @@ jest.mock("react-i18next", () => ({
     t: (key: string) => {
       const map: Record<string, string> = {
         "header.goToGithub": "Go to GitHub repo",
-        "header.goToDiscord": "Go to Discord server",
       };
       return map[key] ?? key;
     },
@@ -51,10 +49,10 @@ describe("LangflowCounts accessibility", () => {
     ).toBeInTheDocument();
   });
 
-  it("should_expose_discord_button_with_accessible_name", () => {
+  it("should_not_expose_discord_button", () => {
     expect(
-      screen.getByRole("button", { name: "Go to Discord server" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /discord/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("should_hide_github_icon_from_assistive_technology", () => {
@@ -65,16 +63,7 @@ describe("LangflowCounts accessibility", () => {
     expect(svg).toHaveAttribute("aria-hidden", "true");
   });
 
-  it("should_hide_discord_icon_from_assistive_technology", () => {
-    const discordButton = screen.getByRole("button", {
-      name: "Go to Discord server",
-    });
-    const svg = discordButton.querySelector("svg");
-    expect(svg).toHaveAttribute("aria-hidden", "true");
-  });
-
   it("should_hide_count_text_from_assistive_technology", () => {
     expect(screen.getByText("1234")).toHaveAttribute("aria-hidden", "true");
-    expect(screen.getByText("5678")).toHaveAttribute("aria-hidden", "true");
   });
 });

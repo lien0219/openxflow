@@ -1012,7 +1012,6 @@
   "globalVars.noDataAvailable": "Aucune donnée disponible",
   "globalVars.pageDescription": "Gérer les variables globales et les attribuer à des champs.",
   "globalVars.pageTitle": "Variables globales",
-  "header.goToDiscord": "Accéder au serveur Discord",
   "header.goToGithub": "Accéder au dépôt « GitHub »",
   "header.home": "Retour à la page d'accueil",
   "header.notifications": "Notifications et erreurs",

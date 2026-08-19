@@ -1012,7 +1012,6 @@
   "globalVars.noDataAvailable": "使用可能なデータがありません",
   "globalVars.pageDescription": "グローバル変数を管理し、それらをフィールドに割り当てます。",
   "globalVars.pageTitle": "グローバル変数",
-  "header.goToDiscord": "Discordサーバーへ移動",
   "header.goToGithub": "GitHub のリポジトリへ移動",
   "header.home": "ホームへ",
   "header.notifications": "通知とエラー",
