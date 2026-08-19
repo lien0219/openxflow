@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { FaGithub } from "react-icons/fa";
 import { DATASTAX_DOCS_URL, DOCS_URL, GITHUB_URL } from "@/constants/constants";
 import { useLogout } from "@/controllers/API/queries/auth";
+import { CustomAdminPageMenuItem } from "@/customization/components/custom-admin-page-menu-item";
 import { CustomProfileIcon } from "@/customization/components/custom-profile-icon";
 import { ENABLE_DATASTAX_LANGFLOW } from "@/customization/feature-flags";
 import { useCustomNavigate } from "@/customization/hooks/use-custom-navigate";
@@ -97,6 +98,8 @@ export const AccountMenu = () => {
                 </span>
               </HeaderMenuItemButton>
             )}
+
+            <CustomAdminPageMenuItem onNavigate={(path) => navigate(path)} />
             <HeaderMenuItemLink
               newPage
               href={ENABLE_DATASTAX_LANGFLOW ? DATASTAX_DOCS_URL : DOCS_URL}
@@ -111,7 +114,7 @@ export const AccountMenu = () => {
                 className="flex items-center gap-2"
                 data-testid="menu_github_button"
               >
-                <FaGithub className="h-4 w-4" />
+                <FaGithub className="h-4 w-4" aria-hidden="true" />
                 {t("account.github")}
               </span>
             </HeaderMenuItemLink>

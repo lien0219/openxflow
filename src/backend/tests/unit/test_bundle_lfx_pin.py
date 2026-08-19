@@ -10,10 +10,16 @@ running ``make``.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
 import pytest
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10: tomllib is stdlib only on 3.11+
+    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 _SCRIPT = REPO_ROOT / "scripts" / "ci" / "sync_bundle_lfx_pin.py"
@@ -87,7 +93,8 @@ class TestRewriteLfxDep:
             assert mod.rewrite_lfx_dep(self_ref, self.FLOOR) == self_ref
 
     def test_leaves_nightly_form_untouched(self):
-        # update_bundle_versions.py rewrites to this; sync must not clobber it.
+        # Legacy form from the retired nightly bundle-rename track (see
+        # src/bundles/NIGHTLY.md); sync must not clobber it if encountered.
         assert mod.rewrite_lfx_dep('"lfx-nightly==1.10.0.dev38"', self.FLOOR) == '"lfx-nightly==1.10.0.dev38"'
 
     def test_only_rewrites_runtime_dep_in_full_block(self):
@@ -136,3 +143,18 @@ class TestSyncBundles:
         mod.sync_bundles("1.10.0", bundles)
         second = dict(mod.sync_bundles("1.10.0", bundles))
         assert second == {"arxiv": False}
+
+
+def test_bundle_manifests_match_distribution_versions():
+    """Keep published extension identity aligned with wheel metadata."""
+    for pyproject in sorted((REPO_ROOT / "src" / "bundles").glob("*/pyproject.toml")):
+        project_version = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+        manifests = sorted(pyproject.parent.glob("src/*/extension.json"))
+        if pyproject.parent.name != "lfx-bundles":
+            assert manifests, f"{pyproject.relative_to(REPO_ROOT)} is missing extension.json"
+        for manifest in manifests:
+            manifest_version = json.loads(manifest.read_text(encoding="utf-8"))["version"]
+            assert manifest_version == project_version, (
+                f"{manifest.relative_to(REPO_ROOT)} has version {manifest_version}, "
+                f"but {pyproject.relative_to(REPO_ROOT)} has {project_version}"
+            )

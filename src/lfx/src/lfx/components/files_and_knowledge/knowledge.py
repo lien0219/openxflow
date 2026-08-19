@@ -41,10 +41,11 @@ from lfx.base.knowledge_bases.knowledge_base_utils import get_knowledge_bases
 from lfx.base.models.unified_models import get_embedding_model_options, get_embeddings
 from lfx.base.vectorstores.chroma_security import chroma_langchain_collection_kwargs
 from lfx.components.files_and_knowledge._kb_paths import (
-    get_knowledge_bases_root_path as _get_knowledge_bases_root_path,
+    KBKeyDecryptError,
+    load_kb_metadata,
 )
 from lfx.components.files_and_knowledge._kb_paths import (
-    load_kb_metadata,
+    get_knowledge_bases_root_path as _get_knowledge_bases_root_path,
 )
 from lfx.components.processing.converter import convert_to_dataframe
 from lfx.custom import Component
@@ -543,7 +544,9 @@ class KnowledgeComponent(Component):
                     msg = f"Embedding validation failed: {e!s}"
                     raise ValueError(msg) from e
 
-                kb_path = _get_knowledge_bases_root_path() / kb_user / field_value["01_new_kb_name"]
+                kb_path = self._resolve_kb_path(
+                    _get_knowledge_bases_root_path(), kb_user, field_value["01_new_kb_name"]
+                )
                 kb_path.mkdir(parents=True, exist_ok=True)
 
                 build_config["knowledge_base"]["value"] = field_value["01_new_kb_name"]
@@ -593,6 +596,19 @@ class KnowledgeComponent(Component):
     def _get_kb_root(self) -> Path:
         """Return the root directory for knowledge bases."""
         return _get_knowledge_bases_root_path()
+
+    @staticmethod
+    def _resolve_kb_path(kb_root: Path, kb_user: str, kb_name: str) -> Path:
+        """Resolve the selected KB inside the authenticated user's directory."""
+        # Lazy import keeps lfx importable without langflow's DB services.
+        from langflow.services.memory_base.kb_path_helpers import validate_kb_path
+
+        user_root = kb_root / kb_user
+        validate_kb_path(kb_root, user_root)
+
+        kb_path = user_root / kb_name
+        validate_kb_path(user_root, kb_path)
+        return kb_path
 
     @staticmethod
     def _scalar_notna(value) -> bool:
@@ -846,17 +862,31 @@ class KnowledgeComponent(Component):
             self.log(f"Warning: Could not update backend metadata metrics: {e}")
 
     @staticmethod
-    def _normalize_backend_selection(value: Any) -> tuple[str, dict[str, Any]]:
+    def _default_backend_selection() -> tuple[str, dict[str, Any]]:
+        """Deployment default for a new KB with no explicit backend chosen.
+
+        pgVector is environment-driven: when ``PGVECTOR_CONNECTION_STRING`` is set
+        the deployment snap-configures to Postgres, so an unspecified selection
+        (headless flows, multi-replica) becomes ``postgres``. Otherwise Chroma.
+        """
+        from lfx.base.knowledge_bases.backends.postgres import postgres_env_configured
+
+        if postgres_env_configured():
+            return BackendType.POSTGRES.value, {}
+        return BackendType.CHROMA.value, {}
+
+    @classmethod
+    def _normalize_backend_selection(cls, value: Any) -> tuple[str, dict[str, Any]]:
         """Normalize a DBProviderInput value into backend type/config."""
         if not value:
-            return BackendType.CHROMA.value, {}
+            return cls._default_backend_selection()
 
         if isinstance(value, str):
-            backend_type = value if value == BackendType.OPENSEARCH.value else BackendType.CHROMA.value
-            return (
-                backend_type,
-                _DEFAULT_OPENSEARCH_CONFIG.copy() if backend_type == BackendType.OPENSEARCH.value else {},
-            )
+            if value == BackendType.OPENSEARCH.value:
+                return BackendType.OPENSEARCH.value, _DEFAULT_OPENSEARCH_CONFIG.copy()
+            if value == BackendType.POSTGRES.value:
+                return BackendType.POSTGRES.value, {}
+            return BackendType.CHROMA.value, {}
 
         if not isinstance(value, dict):
             return BackendType.CHROMA.value, {}
@@ -869,6 +899,9 @@ class KnowledgeComponent(Component):
                 backend_config = {}
             return BackendType.OPENSEARCH.value, {**_DEFAULT_OPENSEARCH_CONFIG, **backend_config}
 
+        if backend_type == BackendType.POSTGRES.value:
+            return BackendType.POSTGRES.value, {}
+
         if backend_type == "chroma_cloud":
             backend_config = value.get("backend_config") or value.get("config") or {}
             if not isinstance(backend_config, dict):
@@ -878,14 +911,21 @@ class KnowledgeComponent(Component):
         return BackendType.CHROMA.value, {}
 
     @staticmethod
-    def _get_backend_from_metadata(kb_path: Path) -> tuple[str, dict[str, Any]]:
+    def _get_backend_from_metadata(kb_path: Path) -> tuple[str, dict[str, Any]] | None:
+        """Read ``(backend_type, backend_config)`` off the on-disk sidecar.
+
+        Returns ``None`` — never a Chroma default — when the sidecar is absent or
+        unreadable. "Could not resolve" has to stay distinguishable from
+        "explicitly local", or a replica that merely lacks the file writes a
+        remote-backed KB into a local store. See ``_resolve_backend_config``.
+        """
         metadata_path = kb_path / "embedding_metadata.json"
         if not metadata_path.exists():
-            return BackendType.CHROMA.value, {}
+            return None
         try:
             metadata = json.loads(metadata_path.read_text())
         except (OSError, json.JSONDecodeError):
-            return BackendType.CHROMA.value, {}
+            return None
 
         backend_type = str(metadata.get("backend_type") or BackendType.CHROMA.value)
         backend_config = metadata.get("backend_config") or {}
@@ -979,7 +1019,7 @@ class KnowledgeComponent(Component):
             raise ValueError(msg)
         vector_store_dir.mkdir(parents=True, exist_ok=True)
 
-        backend_type, backend_config = self._get_backend_from_metadata(vector_store_dir)
+        backend_type, backend_config = await self._resolve_backend_config(vector_store_dir)
         backend = create_backend(
             backend_type,
             kb_name=self.knowledge_base,
@@ -1119,7 +1159,7 @@ class KnowledgeComponent(Component):
 
         kb_root = self._get_kb_root()
 
-        self._cached_kb_path = kb_root / kb_user / self.knowledge_base
+        self._cached_kb_path = self._resolve_kb_path(kb_root, kb_user, self.knowledge_base)
 
         return self._cached_kb_path
 
@@ -1229,7 +1269,18 @@ class KnowledgeComponent(Component):
                     try:
                         api_key = decrypt_api_key(encrypted_key, settings_service)
                     except (InvalidToken, TypeError, ValueError) as e:
-                        self.log(f"Could not decrypt API key. Please provide it manually. Error: {e}")
+                        if not self.api_key:
+                            log_label = f"knowledge base '{self.knowledge_base}'"
+                            msg = (
+                                f"Cannot decrypt the stored embedding API key for {log_label}. "
+                                "This usually means the server's SECRET_KEY changed after the "
+                                "key was saved. To recover, supply the embedding provider API "
+                                "key on the component's 'Embedding Provider API Key' input and "
+                                "re-run ingestion — the key will be re-encrypted with the "
+                                "current SECRET_KEY."
+                            )
+                            raise KBKeyDecryptError(msg) from e
+                        logger.warning("Stored API key undecryptable; using component-supplied key. Error: %s", e)
 
             if self.api_key:
                 api_key = self.api_key
@@ -1519,30 +1570,58 @@ class KnowledgeComponent(Component):
             return None
         return self.user_id if isinstance(self.user_id, uuid.UUID) else uuid.UUID(self.user_id)
 
-    def _get_kb_metadata(self, kb_path: Path) -> dict:
+    def _get_kb_metadata(self, kb_path: Path, *, require_api_key: bool = False) -> dict:
         """Load the knowledge base's embedding metadata file."""
         raise_error_if_astra_cloud_disable_component(astra_error_msg)
-        return load_kb_metadata(kb_path, log_label=f"knowledge base '{self.knowledge_base}'")
+        return load_kb_metadata(
+            kb_path,
+            log_label=f"knowledge base '{self.knowledge_base}'",
+            require_api_key=require_api_key,
+        )
 
-    async def _resolve_backend(self, *, kb_user: str) -> tuple[str, dict[str, Any]]:  # noqa: ARG002
-        """Return ``(backend_type, backend_config)`` for this KB."""
+    async def _backend_from_record(self) -> tuple[str, dict[str, Any]] | None:
+        """Read ``(backend_type, backend_config)`` off the KB's database row.
+
+        Returns ``None`` when there is no row to read — a legacy KB predating the
+        record, or bare lfx with no langflow installed. A lookup that *fails* is a
+        different situation and is allowed to propagate: guessing a backend after a
+        database error is how vectors end up in a store nothing queries.
+        """
         try:
             from langflow.api.utils import knowledge_base_service
+        except ImportError:
+            return None
 
-            user_uuid = self._user_uuid
-            if user_uuid is None:
-                return BackendType.CHROMA.value, {}
-            record = await knowledge_base_service.get_by_user_and_name(user_uuid, self.knowledge_base)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("KB record lookup failed: %s", exc)
-            return BackendType.CHROMA.value, {}
-
+        user_uuid = self._user_uuid
+        if user_uuid is None:
+            return None
+        record = await knowledge_base_service.get_by_user_and_name(user_uuid, self.knowledge_base)
         if record is None:
-            return BackendType.CHROMA.value, {}
-        return (
-            record.backend_type or BackendType.CHROMA.value,
-            record.backend_config or {},
-        )
+            return None
+        return record.backend_type or BackendType.CHROMA.value, record.backend_config or {}
+
+    async def _resolve_backend_config(self, kb_path: Path) -> tuple[str, dict[str, Any]]:
+        """Resolve this KB's backend — database row first, on-disk sidecar second.
+
+        Ingestion used to read the sidecar while retrieval read the row. Across
+        replicas those disagree: a pod without the sidecar fell back to local
+        Chroma and wrote vectors there, while queries followed the row to the
+        configured remote backend and found nothing — silently. Both paths resolve
+        here now, and a backend that cannot be resolved raises rather than
+        defaulting to local storage.
+        """
+        resolved = await self._backend_from_record()
+        if resolved is None:
+            resolved = self._get_backend_from_metadata(kb_path)
+        if resolved is None:
+            msg = (
+                f"Cannot determine the vector-store backend for knowledge base "
+                f"'{self.knowledge_base}': it has no database record and no readable "
+                f"embedding metadata. Refusing to fall back to local storage, which "
+                f"would write to a different store than queries read from."
+            )
+            raise ValueError(msg)
+        return resolved
 
     def _resolve_model_selection(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
         """Resolve the ``get_embeddings``-compatible model selection from metadata."""
@@ -1625,22 +1704,26 @@ class KnowledgeComponent(Component):
                 msg = f"User with ID {self.user_id} not found."
                 raise ValueError(msg)
             kb_user = current_user.username
-        kb_path = _get_knowledge_bases_root_path() / kb_user / self.knowledge_base
+        kb_path = self._resolve_kb_path(_get_knowledge_bases_root_path(), kb_user, self.knowledge_base)
 
-        metadata = self._get_kb_metadata(kb_path)
+        component_api_key = self.api_key if getattr(self, "api_key", None) else None
+        needs_stored_key = not component_api_key
+        metadata = self._get_kb_metadata(kb_path, require_api_key=needs_stored_key)
         if not metadata:
             msg = f"Metadata not found for knowledge base: {self.knowledge_base}. Ensure it has been indexed."
             raise ValueError(msg)
 
+        api_key = component_api_key or metadata.get("api_key")
         model_selection = self._resolve_model_selection(metadata)
         chunk_size = metadata.get("chunk_size")
         embedding_function = get_embeddings(
             model=model_selection,
             user_id=self.user_id,
+            api_key=api_key,
             chunk_size=chunk_size,
         )
 
-        backend_type, backend_config = await self._resolve_backend(kb_user=kb_user)
+        backend_type, backend_config = await self._resolve_backend_config(kb_path)
         backend = create_backend(
             backend_type,
             kb_name=self.knowledge_base,

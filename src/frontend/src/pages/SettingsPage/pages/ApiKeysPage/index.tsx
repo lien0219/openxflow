@@ -1,8 +1,8 @@
 import type { SelectionChangedEvent } from "ag-grid-community";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import Loading from "@/components/ui/loading";
 import {
-  type IApiKeysDataArray,
   useDeleteApiKey,
   useGetApiKeysQuery,
 } from "@/controllers/API/queries/api-keys";
@@ -18,39 +18,26 @@ export default function ApiKeysPage() {
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
   const setErrorData = useAlertStore((state) => state.setErrorData);
   const { userData } = useContext(AuthContext);
-  const [userId, setUserId] = useState("");
-  const [keysList, setKeysList] = useState<IApiKeysDataArray[]>([]);
-  const { data: apiKeysData, refetch } = useGetApiKeysQuery({
-    enabled: !!userData,
+  const {
+    data: apiKeysData,
+    isFetching,
+    isLoading,
+    refetch,
+  } = useGetApiKeysQuery({
+    enabled: Boolean(userData),
   });
-
-  function updateApiKeysState(data: {
-    api_keys: IApiKeysDataArray[];
-    user_id: string;
-  }) {
-    const updatedKeysList = data["api_keys"].map((apikey) => ({
-      ...apikey,
-      name: apikey.name && apikey.name !== "" ? apikey.name : "Untitled",
-    }));
-    setKeysList(updatedKeysList);
-    setUserId(data["user_id"]);
-  }
+  const userId = apiKeysData?.user_id ?? "";
+  const keysList = useMemo(
+    () =>
+      apiKeysData?.api_keys.map((apikey) => ({
+        ...apikey,
+        name: apikey.name && apikey.name !== "" ? apikey.name : "Untitled",
+      })) ?? [],
+    [apiKeysData],
+  );
 
   async function getApiKeysQuery() {
-    const { data } = await refetch();
-    if (data !== undefined) {
-      updateApiKeysState(data);
-    }
-  }
-
-  useEffect(() => {
-    if (apiKeysData !== undefined) {
-      updateApiKeysState(apiKeysData);
-    }
-  }, [apiKeysData]);
-
-  function resetFilter() {
-    getApiKeysQuery();
+    await refetch();
   }
 
   const { mutate } = useDeleteApiKey();
@@ -61,7 +48,7 @@ export default function ApiKeysPage() {
         { keyId: selectedRows[i] },
         {
           onSuccess: () => {
-            resetFilter();
+            getApiKeysQuery();
             setSuccessData({
               title:
                 selectedRows.length === 1
@@ -84,6 +71,8 @@ export default function ApiKeysPage() {
   }
 
   const columnDefs = getColumnDefs(t);
+  const showInitialLoading =
+    Boolean(userData) && (isLoading || isFetching) && keysList.length === 0;
 
   return (
     <div className="flex h-full w-full flex-col justify-between gap-6">
@@ -94,19 +83,29 @@ export default function ApiKeysPage() {
       />
 
       <div className="flex h-full w-full flex-col justify-between">
-        <TableComponent
-          key={"apiKeys"}
-          onDelete={handleDeleteApi}
-          overlayNoRowsTemplate={t("settings.noDataAvailable")}
-          onSelectionChanged={(event: SelectionChangedEvent) => {
-            setSelectedRows(event.api.getSelectedRows().map((row) => row.id));
-          }}
-          rowSelection="multiple"
-          suppressRowClickSelection={true}
-          pagination={true}
-          columnDefs={columnDefs}
-          rowData={keysList}
-        />
+        {showInitialLoading ? (
+          <div className="flex h-full min-h-72 w-full items-center justify-center rounded-md border">
+            <Loading
+              aria-label={t("common.loading", "Loading")}
+              className="h-6 w-6 text-primary"
+            />
+          </div>
+        ) : (
+          <TableComponent
+            key={"apiKeys"}
+            tableLabel={t("settings.apiKeysTitle")}
+            onDelete={handleDeleteApi}
+            overlayNoRowsTemplate={t("settings.noDataAvailable")}
+            onSelectionChanged={(event: SelectionChangedEvent) => {
+              setSelectedRows(event.api.getSelectedRows().map((row) => row.id));
+            }}
+            rowSelection="multiple"
+            suppressRowClickSelection={true}
+            pagination={true}
+            columnDefs={columnDefs}
+            rowData={keysList}
+          />
+        )}
       </div>
     </div>
   );

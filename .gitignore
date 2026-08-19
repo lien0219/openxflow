@@ -195,6 +195,9 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# IBM Equal Access accessibility scan results
+docs/a11y-results/
+
 # PyBuilder
 target/
 
@@ -266,6 +269,7 @@ src/backend/langflow/frontend/
 src/backend/base/langflow/frontend/
 .docker
 scratchpad*
+scratch/
 chroma*/*
 stuff/*
 src/frontend/playwright-report/index.html
@@ -273,6 +277,7 @@ src/frontend/playwright-report/index.html
 prof/*
 
 src/frontend/temp
+src/frontend/temp-live
 *-shm
 *-wal
 .history
@@ -300,3 +305,15 @@ tmp_toolguard/
 #whitesource
 whitesource/
 /.codex
+
+#ai folders
+.bob/
+_context
+
+# Cursor local (personal) settings
+.cursor/settings.local.json
+
+# Mend
+requirements-mend.txt
+requirements-workspace-mend.txt
+requirements-gp-mend.txt

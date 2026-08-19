@@ -34,8 +34,6 @@ async function gettingStartedActionsTestFn(
     timeout: 30000,
   });
 
-  await page.waitForTimeout(2000);
-
   await cleanAllFlows(page);
   await cleanOldFolders(page);
 

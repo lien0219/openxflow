@@ -1,8 +1,8 @@
 """Regression tests for ``update_lf_base_dependency``.
 
 The nightly bump pins base's ``lfx`` dependency to the exact ``==X.Y.0.devN`` so the dev
-release resolves down the tree. Base also carries ``lfx[extra]`` references (the relocated
-cassio/toolguard features) that are pulled by ``langflow-base[complete]``. If those keep a
+release resolves down the tree. Base also carries compatibility ``lfx[extra]`` references
+for the relocated Cassandra and ToolGuard features. If those keep a
 ``~=X.Y.0`` floor while the bare ``lfx`` dep is pinned to the dev version, the floor
 (``>=X.Y.0``) excludes ``X.Y.0.devN`` (PEP 440 dev releases sort *below* the final) and the
 resolve becomes unsatisfiable. These tests lock in that all ``lfx`` forms -- bare and with
@@ -31,7 +31,7 @@ def pyproject(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "\n"
         "[project.optional-dependencies]\n"
         'cassandra = ["lfx[cassandra]~=1.11.0"]\n'
-        "toolguard = [\"lfx[toolguard]~=1.11.0; python_version < '3.14'\"]\n"
+        "toolguard = [\"lfx[toolguard]~=1.11.0; sys_platform != 'win32'\"]\n"
         'beautifulsoup = ["lfx~=1.11.0"]\n'
     )
     path = tmp_path / "pyproject.toml"
@@ -48,7 +48,7 @@ def test_pins_bare_and_extras_lfx_to_exact_dev(pyproject: Path) -> None:
     # Every lfx reference -- bare and with extras -- is pinned to the exact dev version.
     assert '"lfx==1.11.0.dev26"' in result
     assert '"lfx[cassandra]==1.11.0.dev26"' in result
-    assert "\"lfx[toolguard]==1.11.0.dev26; python_version < '3.14'\"" in result
+    assert "\"lfx[toolguard]==1.11.0.dev26; sys_platform != 'win32'\"" in result
 
     # No `~=` floor survives -- a surviving floor is exactly what makes the nightly
     # resolve unsatisfiable.
@@ -85,3 +85,23 @@ def test_pattern_skips_unrelated_packages(pyproject: Path) -> None:
     # ...but `lfx-bundles` / `lfxthing` keep their own floors untouched.
     assert re.search(r'"lfx-bundles~=1\.11\.0"', result)
     assert re.search(r'"lfxthing~=1\.11\.0"', result)
+
+
+def test_root_base_pins_preserve_each_optional_extra(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "pyproject.toml"
+    path.write_text(
+        "[project]\n"
+        'dependencies = ["langflow-base~=1.12.0"]\n'
+        "[project.optional-dependencies]\n"
+        'audio = ["langflow-base[audio]~=1.12.0"]\n'
+        'postgresql = ["langflow-base[postgresql]~=1.12.0"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "BASE_DIR", tmp_path)
+
+    mod.update_base_dep(path.name, "1.12.0.dev26")
+
+    result = path.read_text(encoding="utf-8")
+    assert '"langflow-base==1.12.0.dev26"' in result
+    assert '"langflow-base[audio]==1.12.0.dev26"' in result
+    assert '"langflow-base[postgresql]==1.12.0.dev26"' in result

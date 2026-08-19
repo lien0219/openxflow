@@ -16,33 +16,53 @@ from langflow.services.authorization.actions import (
     FlowAction,
     KnowledgeBaseAction,
     ProjectAction,
+    ProviderAccountAction,
     RbacAction,
     ShareAction,
     TeamAction,
     UserAction,
     VariableAction,
+    VoiceAction,
 )
 
 _RESOURCE_ACTIONS: dict[str, frozenset[str]] = {
-    "flow": frozenset({action.value for action in FlowAction}) | {"*"},
-    "deployment": frozenset({action.value for action in DeploymentAction}) | {"*"},
-    "project": frozenset({action.value for action in ProjectAction}) | {"*"},
-    "knowledge_base": frozenset({action.value for action in KnowledgeBaseAction}) | {"*"},
-    "variable": frozenset({action.value for action in VariableAction}) | {"*"},
-    "file": frozenset({action.value for action in FileAction}) | {"*"},
-    "share": frozenset({action.value for action in ShareAction}) | {"*"},
-    "channel": frozenset({action.value for action in ChannelAction}) | {"*"},
-    "audit": frozenset({action.value for action in AuditAction}) | {"*"},
-    "rbac": frozenset({action.value for action in RbacAction}) | {"*"},
-    "team": frozenset({action.value for action in TeamAction}) | {"*"},
-    "user": frozenset({action.value for action in UserAction}) | {"*"},
+    "flow": frozenset({a.value for a in FlowAction}) | {"*"},
+    "deployment": frozenset({a.value for a in DeploymentAction}) | {"*"},
+    "project": frozenset({a.value for a in ProjectAction}) | {"*"},
+    "knowledge_base": frozenset({a.value for a in KnowledgeBaseAction}) | {"*"},
+    "variable": frozenset({a.value for a in VariableAction}) | {"*"},
+    "file": frozenset({a.value for a in FileAction}) | {"*"},
+    "share": frozenset({a.value for a in ShareAction}) | {"*"},
+    "channel": frozenset({a.value for a in ChannelAction}) | {"*"},
+    "audit": frozenset({a.value for a in AuditAction}) | {"*"},
+    "rbac": frozenset({a.value for a in RbacAction}) | {"*"},
+    "team": frozenset({a.value for a in TeamAction}) | {"*"},
+    "user": frozenset({a.value for a in UserAction}) | {"*"},
+    "provider_account": frozenset({a.value for a in ProviderAccountAction}) | {"*"},
+    "voice": frozenset({a.value for a in VoiceAction}) | {"*"},
 }
 
 _PERMISSION_SLUG_RE = re.compile(r"^[a-z_]+:[a-z_*]+$")
+_MODEL_COMPONENT_PERMISSION_RE = re.compile(r"^component:models/(?:[a-z0-9][a-z0-9._-]*|\*):read$")
 
 
 def _validate_permission_slug(slug: str) -> str:
-    normalized = slug.strip().lower()
+    stripped = slug.strip()
+    normalized = stripped.lower()
+    # Pydantic coerces ``list[str]`` so we only ever see strings here; the
+    # regex check carries the real format guarantee.
+    # Model-provider palette permissions are the single supported nested
+    # object form. Keep this exception deliberately narrow so accepting
+    # ``component:models/openai:read`` does not make arbitrary three-segment
+    # slugs valid. Provider IDs share the registry's stable-ID alphabet.
+    if _MODEL_COMPONENT_PERMISSION_RE.fullmatch(stripped):
+        return stripped
+    if stripped.startswith("component:models/") and _MODEL_COMPONENT_PERMISSION_RE.fullmatch(normalized):
+        msg = f"permission {slug!r} must use a lowercase model-provider id"
+        raise ValueError(msg)
+    if _MODEL_COMPONENT_PERMISSION_RE.fullmatch(normalized):
+        return normalized
+
     if not _PERMISSION_SLUG_RE.fullmatch(normalized):
         msg = (
             f"permission {slug!r} is not in the canonical "
@@ -71,9 +91,16 @@ class RoleCreate(BaseModel):
     permissions: list[str] = Field(
         default_factory=list,
         description=(
-            "Canonical ``<resource>:<action>`` permissions. Supported resources are "
-            "flow, deployment, project, knowledge_base, variable, file, share, channel, "
-            "audit, rbac, team and user."
+            "Permission slugs in the canonical ``<resource>:<action>`` form — for "
+            "example ``flow:read``, ``deployment:execute``, ``share:create``. "
+            "Resources must be one of flow, deployment, project, knowledge_base, "
+            "variable, file, share, provider_account, voice, plus the narrow model-provider form "
+            "``component:models/<provider-id>:read``. Actions are constrained per-resource (see "
+            "``services/authorization/actions.py``): e.g. ``deploy`` is only valid "
+            "on ``flow``, ``ingest`` only on ``knowledge_base``, ``update`` only on "
+            "``share``. ``*`` (all actions on that resource) is always accepted. "
+            "A registered authorization plugin is responsible for compiling these "
+            "into its policy format."
         ),
     )
     parent_role_id: UUID | None = Field(default=None)

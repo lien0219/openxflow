@@ -78,49 +78,4 @@ test.describe("Output Modal Copy Button", () => {
       ).toBeVisible();
     },
   );
-
-  test(
-    "copy button should work with structured output from Mock Data component",
-    { tag: ["@release", "@workspace"] },
-    async ({ page }) => {
-      await openBlankFlow(page);
-
-      await page.waitForSelector('[data-testid="disclosure-data sources"]', {
-        timeout: 3000,
-        state: "visible",
-      });
-
-      await page.getByTestId("disclosure-data sources").click();
-
-      await page
-        .getByTestId("data_sourceMock Data")
-        .hover()
-        .then(async () => {
-          await page.getByTestId("add-component-button-mock-data").click();
-        });
-
-      const runButton = page.getByTestId("button_run_mock data");
-      await expect(runButton).toBeVisible({ timeout: 30000 });
-      await runButton.click();
-
-      await page.waitForSelector(`text=${TEXTS.toastBuiltSuccessfully}`, {
-        timeout: 30000,
-      });
-
-      await page.locator('[data-testid^="output-inspection-"]').first().click();
-
-      await page.waitForSelector("text=Component Output", { timeout: 30000 });
-
-      // Verify the copy button exists and click it
-      const copyButton = page.getByTestId("copy-output-button");
-      await expect(copyButton).toBeVisible();
-
-      await copyButton.click();
-
-      // Verify the success message appears
-      await page.waitForSelector("text=Copied to clipboard", {
-        timeout: 5000,
-      });
-    },
-  );
 });

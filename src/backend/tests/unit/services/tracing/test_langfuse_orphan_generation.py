@@ -162,6 +162,43 @@ class TestRootRunReparentingHandler:
         ctx = handler.captured[-1]
         assert not ctx.is_valid
 
+    def test_handler_is_deepcopy_and_copy_safe(self):
+        """Survive ``copy.deepcopy`` / ``copy.copy`` by returning self.
+
+        The handler never recurses into the langfuse client.
+
+        Langflow deep-copies flow/graph state (restore-point snapshots, working-flow
+        copies, component build). The real langfuse ``CallbackHandler`` / ``Langfuse``
+        client is NOT deep-copyable — its singleton ``LangfuseResourceManager.__new__``
+        is keyword-only, so ``copy.deepcopy`` (which calls ``cls.__new__(cls)`` with
+        no args) raises ``TypeError: __new__() missing 3 required keyword-only
+        arguments``. That surfaced to users as a failed Agent build. A base whose
+        deepcopy explodes stands in for that; the subclass must short-circuit it.
+        """
+        import copy
+
+        from langflow.services.tracing.langfuse import _root_run_reparenting_handler_cls
+
+        class _NonCopyableBase:
+            def __init__(self, *, trace_context=None, **kwargs):  # noqa: ARG002
+                self.trace_context = trace_context
+
+            def __deepcopy__(self, memo):
+                msg = "LangfuseResourceManager.__new__() missing 3 required keyword-only arguments"
+                raise TypeError(msg)
+
+            def __copy__(self):
+                msg = "LangfuseResourceManager.__new__() missing 3 required keyword-only arguments"
+                raise TypeError(msg)
+
+        handler_cls = _root_run_reparenting_handler_cls(_NonCopyableBase)
+        handler = handler_cls(trace_context={"trace_id": "a" * 32}, otel_parent=None)
+
+        assert copy.deepcopy(handler) is handler
+        assert copy.copy(handler) is handler
+        # Deep-copying a container that holds the handler must not raise either.
+        assert copy.deepcopy({"callbacks": [handler]})["callbacks"][0] is handler
+
 
 def _build_real_langfuse_client_or_skip(tracer_provider):
     """Construct a real Langfuse client wired to ``tracer_provider``.
@@ -274,3 +311,40 @@ class TestRootGenerationNestsUnderFlowTrace:
         # And nest under the component span (not be a root of its own trace).
         assert generation_span.parent is not None
         assert generation_span.parent.span_id == component_span.context.span_id
+
+
+def test_handler_deepcopy_returns_self(monkeypatch):
+    """Regression test for https://github.com/langflow-ai/langflow/issues/13965.
+
+    _RootRunReparentingCallbackHandler.__deepcopy__ must return self so that
+    deepcopy(component) in component_tool.py never triggers
+    LangfuseResourceManager.__new__() with missing credential kwargs.
+    """
+    import copy
+
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_BASE_URL", "http://localhost:3000")
+
+    from langflow.services.tracing.langfuse import LangFuseTracer
+
+    with patch("langflow.services.tracing.langfuse._get_or_create_shared_client") as mock_client:
+        mock_client.return_value.auth_check.return_value = True
+        mock_client.return_value.start_span.return_value.__enter__ = lambda s: s
+        mock_client.return_value.start_span.return_value.__exit__ = lambda *_: None
+        mock_client.return_value.start_span.return_value.id = "root-span-id"
+        mock_client.return_value.start_span.return_value.update_trace = lambda **_: None
+
+        tracer = LangFuseTracer(
+            trace_name="test-flow - abc",
+            trace_type="flow",
+            project_name="test",
+            trace_id=uuid.uuid4(),
+        )
+
+    handler = tracer.get_langchain_callback()
+    assert handler is not None, "Expected a callback handler when Langfuse is configured"
+
+    # The key assertion: deepcopy must not raise and must return the same instance.
+    copied = copy.deepcopy(handler)
+    assert copied is handler, "deepcopy of handler should return self (no reconstruction of LangfuseResourceManager)"
