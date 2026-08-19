@@ -3,16 +3,17 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Collection
+from copy import deepcopy
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 from uuid import UUID, uuid4
 
 import orjson
 import sqlalchemy as sa
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from lfx.custom.custom_component.component import Component
 from lfx.custom.utils import (
     add_code_field_to_build_config,
@@ -22,21 +23,37 @@ from lfx.custom.utils import (
 )
 from lfx.graph.graph.base import Graph
 from lfx.graph.schema import RunOutputs
-from lfx.interface.components import component_cache
 from lfx.log.logger import logger
+from lfx.observability import execution_protocol
+from lfx.schema.legacy_render import project_payload_to_v1
 from lfx.schema.schema import InputValueRequest
-from lfx.services.settings.service import SettingsService
-from lfx.utils.flow_validation import (
-    CustomComponentValidationError,
-    code_hash_matches_any_template,
-    get_component_hash_lookups_for_validation,
-    get_trusted_code_for_validation,
+from lfx.services.model_provider_policy import (
+    ModelProviderPolicyPurpose,
+    reset_current_model_provider_policy_context,
+    resolve_model_provider_policy,
+    set_current_model_provider_policy_context,
 )
-from sqlmodel import select
+from lfx.services.settings.service import SettingsService
+from lfx.utils.component_aliases import ComponentIdentityIndex, build_component_identity_index
+from lfx.utils.flow_validation import CustomComponentValidationError
 
-from langflow.api.utils import CurrentActiveUser, DbSession, extract_global_variables_from_headers, parse_value
+from langflow.api.utils import (
+    CurrentActiveUser,
+    DbSession,
+    extract_global_variables_from_headers,
+    parse_value,
+    release_db_transaction,
+)
+from langflow.api.utils.execution_errors import caller_owns_flow as _caller_owns_flow
+from langflow.api.utils.execution_errors import error_for_client
+from langflow.api.v1.custom_component_policy import (
+    CatalogPolicyHTTPException,
+    enforce_catalog_policy_for_component_type,
+    resolve_component_code_for_action,
+)
 from langflow.api.v1.files import get_flow
 from langflow.api.v1.global_variable_defaults import apply_global_variable_defaults
+from langflow.api.v1.run_validation import raise_if_hitl_unsupported
 from langflow.api.v1.schemas import (
     ConfigResponse,
     CustomComponentRequest,
@@ -48,6 +65,7 @@ from langflow.api.v1.schemas import (
     UpdateCustomComponentRequest,
     UploadFileResponse,
 )
+from langflow.api.warm_graph import try_warm_run_graph
 from langflow.events.event_manager import create_stream_tokens_event_manager
 from langflow.exceptions.api import APIException, InvalidChatInputError
 from langflow.exceptions.serialization import SerializationError
@@ -57,11 +75,14 @@ from langflow.processing.process import process_tweaks, run_graph_internal
 from langflow.schema.graph import Tweaks
 from langflow.services.auth.utils import (
     api_key_security,
-    get_current_active_user,
     get_current_user_for_sse,
     get_optional_user,
 )
 from langflow.services.authorization import FlowAction, ensure_flow_permission
+from langflow.services.authorization.access_ceiling import (
+    external_access_allows,
+    get_current_external_access_context,
+)
 from langflow.services.cache.utils import save_uploaded_file
 from langflow.services.database.models.flow.model import Flow, FlowRead
 from langflow.services.database.models.flow.utils import get_all_webhook_components_in_flow
@@ -69,6 +90,7 @@ from langflow.services.database.models.jobs.model import JobType
 from langflow.services.database.models.user.model import User, UserRead
 from langflow.services.deps import (
     get_auth_service,
+    get_catalog_policy_service,
     get_job_service,
     get_memory_base_service,
     get_session_service,
@@ -81,14 +103,6 @@ from langflow.services.telemetry.schema import RunPayload
 from langflow.utils.compression import compress_response
 from langflow.utils.version import get_version_info
 
-
-def _requires_component_hash_lookups(settings: object, user: CurrentActiveUser) -> bool:
-    requires_admin_only_hashes = (
-        getattr(settings, "custom_component_admin_only", False) is True and not user.is_superuser
-    )
-    return requires_admin_only_hashes or not settings.allow_custom_components
-
-
 if TYPE_CHECKING:
     from langflow.events.event_manager import EventManager
 
@@ -96,6 +110,41 @@ router = APIRouter(tags=["Base"])
 
 # SSE Constants
 SSE_HEARTBEAT_TIMEOUT_SECONDS = 30.0
+
+
+def _has_nonempty_tweaks(tweaks: Tweaks | dict | None) -> bool:
+    """Handle both the Tweaks RootModel and ordinary mappings."""
+    return bool(getattr(tweaks, "root", tweaks))
+
+
+def _enforce_owner_only_tweaks(
+    flow: Flow | FlowRead,
+    user: User | UserRead,
+    tweaks: Tweaks | dict | None,
+) -> None:
+    """Reject caller-controlled graph mutation without revealing a shared flow."""
+    if _has_nonempty_tweaks(tweaks) and not _caller_owns_flow(flow, user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flow not found")
+
+
+def _graph_executes_as_actor(
+    graph: Graph,
+    user: User | UserRead,
+    *,
+    flow_id: UUID | str,
+) -> bool:
+    """Reject cached graphs whose instantiated components retain another principal."""
+    actor_id = str(user.id)
+    if str(getattr(graph, "flow_id", None)) != str(flow_id):
+        return False
+    if str(getattr(graph, "user_id", None)) != actor_id:
+        return False
+    for vertex in getattr(graph, "vertices", []):
+        component = getattr(vertex, "custom_component", None)
+        component_user_id = getattr(component, "_user_id", None)
+        if component_user_id is not None and str(component_user_id) != actor_id:
+            return False
+    return True
 
 
 _SIMPLIFIED_API_FORM_FIELDS = (
@@ -168,27 +217,112 @@ async def parse_input_request_from_body(http_request: Request) -> SimplifiedAPIR
         return SimplifiedAPIRequest()
 
 
-@router.get("/all", dependencies=[Depends(get_current_active_user)])
-async def get_all(request: Request):
+@router.get("/all")
+async def get_all(request: Request, current_user: CurrentActiveUser, *, include_blocked: bool = False):
     """Retrieve all component types with compression for better performance.
 
     Returns a compressed response containing all available component types,
     with display_names translated to the locale indicated by Accept-Language.
     """
-    from langflow.interface.components import get_and_cache_all_types_dict
+    if include_blocked and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only superusers can include blocked catalog components.",
+        )
+
+    from langflow.interface.components import get_and_cache_all_types_dict, get_component_identity_index
     from langflow.utils.i18n import build_component_display_names, translate_component_dict
 
     try:
+        catalog_policy_snapshot = get_catalog_policy_service().snapshot
         all_types_en = await get_and_cache_all_types_dict(settings_service=get_settings_service())
+        component_identity_index = get_component_identity_index(all_types_en)
+        visible_types_en = _filter_component_palette_by_provider_policy(
+            all_types_en,
+            user_id=current_user.id,
+            attributes={"is_superuser": bool(current_user.is_superuser)},
+        )
+        if not include_blocked:
+            visible_types_en = _filter_component_palette_by_catalog_policy(
+                visible_types_en,
+                blocked_component_keys=catalog_policy_snapshot.blocked_component_keys,
+                component_identity_index=component_identity_index,
+            )
 
         locale = getattr(request.state, "locale", "en")
-        all_types = translate_component_dict(all_types_en, locale) if locale != "en" else all_types_en
+        all_types = translate_component_dict(visible_types_en, locale) if locale != "en" else visible_types_en
 
-        component_display_names = build_component_display_names(all_types_en)
+        component_display_names = build_component_display_names(visible_types_en)
         return compress_response({**all_types, "component_display_names": component_display_names})
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _filter_component_palette_by_provider_policy(
+    all_types: dict[str, dict[str, dict]],
+    *,
+    user_id: UUID | str | None,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, dict[str, dict]]:
+    """Return a request-local palette with denied model providers removed.
+
+    The component registry is a process-wide cache. Copy category mappings and
+    never delete from the cached object, otherwise one user's policy decision
+    would leak into every later request. Unrelated components in mixed bundles
+    have no ``model_provider_id`` and always remain present.
+    """
+    provider_ids = {
+        provider_id
+        for components in all_types.values()
+        for component in components.values()
+        if isinstance(component, dict)
+        and isinstance((metadata := component.get("metadata")), dict)
+        and isinstance((provider_id := metadata.get("model_provider_id")), str)
+        and provider_id
+    }
+    policy = resolve_model_provider_policy(
+        user_id=user_id,
+        providers=provider_ids,
+        purpose=ModelProviderPolicyPurpose.DISCOVER,
+        attributes=attributes,
+    )
+    return {
+        category: {
+            name: component
+            for name, component in components.items()
+            if not isinstance(component, dict)
+            or not isinstance(component.get("metadata"), dict)
+            or not (provider_id := component["metadata"].get("model_provider_id"))
+            or policy.allows(provider_id)
+        }
+        for category, components in all_types.items()
+    }
+
+
+def _filter_component_palette_by_catalog_policy(
+    all_types: dict[str, dict[str, dict]],
+    *,
+    blocked_component_keys: Collection[str],
+    component_identity_index: ComponentIdentityIndex | None = None,
+) -> dict[str, dict[str, dict]]:
+    """Return shallow category copies with canonically blocked components removed.
+
+    Policy keys and component-registry keys use the same collision-aware
+    identity resolver as flow/runtime validation. Category order, component
+    order, and empty categories are preserved. Component payloads remain
+    shared with the process-wide cache and are never mutated or deep-copied.
+    """
+    identity_index = component_identity_index or build_component_identity_index(all_types)
+    blocked_identities = identity_index.resolve_many(blocked_component_keys)
+    return {
+        category: {
+            component_key: component
+            for component_key, component in components.items()
+            if identity_index.resolve(component_key).isdisjoint(blocked_identities)
+        }
+        for category, components in all_types.items()
+    }
 
 
 def validate_input_and_tweaks(input_request: SimplifiedAPIRequest) -> None:
@@ -232,8 +366,13 @@ async def simple_run_flow(
     event_manager: EventManager | None = None,
     context: dict | None = None,
     run_id: str | None = None,
+    expose_error_details: bool = False,
 ):
     validate_input_and_tweaks(input_request)
+    policy_context_token = set_current_model_provider_policy_context(
+        user_id=getattr(api_key_user, "id", None),
+        attributes={"is_superuser": bool(getattr(api_key_user, "is_superuser", False))},
+    )
     try:
         task_result: list[RunOutputs] = []
         user_id = api_key_user.id if api_key_user else None
@@ -241,18 +380,25 @@ async def simple_run_flow(
         if flow.data is None:
             msg = f"Flow {flow_id_str} has no data"
             raise ValueError(msg)
-        graph_data = flow.data.copy()
-        graph_data = process_tweaks(graph_data, input_request.tweaks or {}, stream=stream)
-        # Mirror the Playground's one-time fix in-memory: bind empty fields whose
-        # display_name matches a user global variable's default_fields. Without
-        # this, API-only workflows never trigger the frontend hook that persists
-        # load_from_db=true, so variables with "Apply to Fields" silently fail.
-        # See: https://github.com/langflow-ai/langflow/issues/11781
-        if user_id is not None:
-            graph_data = await apply_global_variable_defaults(graph_data, user_id)
-        graph = Graph.from_payload(
-            graph_data, flow_id=flow_id_str, user_id=str(user_id), flow_name=flow.name, context=context
-        )
+        # Opt-in warm fast-path: serve a deepcopy of the pre-built
+        # template + apply this run's identity, skipping from_payload and the flow-row
+        # rebuild. Returns None (-> cold rebuild below) for tweaks / context / auto-bind
+        # flows / HITL / disabled registry / cache-miss. See ``try_warm_run_graph``.
+        graph = await try_warm_run_graph(flow, input_request, user_id=user_id, context=context, stream=stream)
+        if graph is None:
+            graph_data = flow.data.copy()
+            graph_data = process_tweaks(graph_data, input_request.tweaks or {}, stream=stream)
+            raise_if_hitl_unsupported(graph_data)
+            # Mirror the Playground's one-time fix in-memory: bind empty fields whose
+            # display_name matches a user global variable's default_fields. Without
+            # this, API-only workflows never trigger the frontend hook that persists
+            # load_from_db=true, so variables with "Apply to Fields" silently fail.
+            # See: https://github.com/langflow-ai/langflow/issues/11781
+            if user_id is not None:
+                graph_data = await apply_global_variable_defaults(graph_data, user_id)
+            graph = Graph.from_payload(
+                graph_data, flow_id=flow_id_str, user_id=str(user_id), flow_name=flow.name, context=context
+            )
         # Forward the caller-supplied identifier to tracing providers without
         # affecting authn/authz. The API-key owner remains the effective user
         # for permissions, global variables, and job ownership.
@@ -298,46 +444,59 @@ async def simple_run_flow(
                 user_id=user_id,
                 job_type=JobType.WORKFLOW,
             )
-            task_result, session_id = await _job_svc.execute_with_status(
-                run_id_uuid,
-                run_graph_internal,
-                graph=graph,
-                flow_id=flow_id_str,
-                session_id=input_request.session_id,
-                inputs=inputs,
-                outputs=outputs,
-                stream=stream,
-                event_manager=event_manager,
-            )
+            # The funnel default. Binding is outermost-wins, so a caller that already named its
+            # surface (webhook, mcp, openai_responses) keeps it and only the bare v1 route lands
+            # here; a new surface that reuses simple_run_flow is labelled "v1" rather than nothing.
+            with execution_protocol("v1"):
+                task_result, session_id = await _job_svc.execute_with_status(
+                    run_id_uuid,
+                    run_graph_internal,
+                    graph=graph,
+                    flow_id=flow_id_str,
+                    session_id=input_request.session_id,
+                    inputs=inputs,
+                    outputs=outputs,
+                    stream=stream,
+                    event_manager=event_manager,
+                )
         except Exception as exc:
+            if isinstance(exc, HTTPException):
+                if expose_error_details:
+                    raise
+                raise error_for_client(exc, expose_details=expose_error_details) from exc
             await logger.aerror(
                 "Workflow job execution failed for flow %s: %s",
                 flow.id,
                 str(exc),
                 exc_info=True,
             )
+            client_error = error_for_client(exc, expose_details=expose_error_details)
             raise APIException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                exception=exc,
-                flow=flow,
+                exception=client_error,
+                flow=flow if expose_error_details else None,
             ) from exc
 
-        # Fire memory-base auto-capture hook — non-blocking background effect.
-        try:
-            _run_id_uuid = UUID(graph.run_id) if graph.run_id else None  # type-cast only
-            await get_task_service().fire_and_forget_task(
-                get_memory_base_service().on_flow_output,
-                flow_id=flow.id,
-                session_id=session_id,
-                job_id=_run_id_uuid,
-            )
-        except (RuntimeError, ValueError, OSError):
-            await logger.awarning("Memory base hook scheduling failed for flow %s", flow.id, exc_info=True)
+        # Memory-base auto-capture resolves the flow owner's private credentials.
+        # Delegated/public executions must never trigger that owner-scoped side effect.
+        if flow.user_id is not None and str(flow.user_id) == str(user_id):
+            try:
+                _run_id_uuid = UUID(graph.run_id) if graph.run_id else None  # type-cast only
+                await get_task_service().fire_and_forget_task(
+                    get_memory_base_service().on_flow_output,
+                    flow_id=flow.id,
+                    session_id=session_id,
+                    job_id=_run_id_uuid,
+                )
+            except (RuntimeError, ValueError, OSError):
+                await logger.awarning("Memory base hook scheduling failed for flow %s", flow.id, exc_info=True)
 
         return RunResponse(outputs=task_result, session_id=session_id)
 
     except sa.exc.StatementError as exc:
         raise ValueError(str(exc)) from exc
+    finally:
+        reset_current_model_provider_policy_context(policy_context_token)
 
 
 def _get_vertex_ids_from_flow(flow: Flow) -> list[str]:
@@ -393,14 +552,16 @@ async def simple_run_flow_task(
                 {"ids": vertex_ids, "to_run": vertex_ids, "run_id": run_id},
             )
 
-        result = await simple_run_flow(
-            flow=flow,
-            input_request=input_request,
-            stream=stream,
-            api_key_user=api_key_user,
-            event_manager=effective_event_manager,
-            run_id=run_id,
-        )
+        with execution_protocol("webhook"):
+            result = await simple_run_flow(
+                flow=flow,
+                input_request=input_request,
+                stream=stream,
+                api_key_user=api_key_user,
+                event_manager=effective_event_manager,
+                run_id=run_id,
+                expose_error_details=api_key_user is not None and _caller_owns_flow(flow, api_key_user),
+            )
 
         if should_emit and flow_id is not None:
             await webhook_event_manager.emit(flow_id, "end", {"run_id": run_id, "success": True})
@@ -436,6 +597,36 @@ async def simple_run_flow_task(
         return None
 
 
+def _v1_run_response(response: RunResponse) -> JSONResponse:
+    """Serialize a RunResponse with content_blocks projected to the v1 shape.
+
+    The /run result holds Messages whose content_blocks serialize through the
+    shared (v2) Message serializer, so project them at this v1 boundary to keep
+    the release-1.11.0 wire shape. The live objects and the v2 path are untouched.
+    """
+    return JSONResponse(content=project_payload_to_v1(jsonable_encoder(response)))
+
+
+def _project_run_event(value):
+    """Project a /run stream event's content_blocks to the v1 shape.
+
+    Covers add_message events and the final ``end`` result (which nests messages)
+    before they reach a v1 client. The v2 path drains a different queue and never
+    passes through here. The substring guard skips events that carry no
+    content_blocks (tokens, ...).
+    """
+    if not isinstance(value, (bytes, bytearray)):
+        return value
+    raw = value.decode("utf-8")
+    if "content_blocks" not in raw:
+        return value
+    try:
+        event = json.loads(raw.rstrip("\n"))
+    except (ValueError, TypeError):
+        return value
+    return (json.dumps(project_payload_to_v1(event)) + "\n\n").encode("utf-8")
+
+
 async def consume_and_yield(queue: asyncio.Queue, client_consumed_queue: asyncio.Queue) -> AsyncGenerator:
     """Consumes events from a queue and yields them to the client while tracking timing metrics.
 
@@ -461,7 +652,7 @@ async def consume_and_yield(queue: asyncio.Queue, client_consumed_queue: asyncio
         if value is None:
             break
         get_time = time.time()
-        yield value
+        yield _project_run_event(value)
         get_time_yield = time.time()
         client_consumed_queue.put_nowait(event_id)
         await logger.adebug(
@@ -478,6 +669,8 @@ async def run_flow_generator(
     event_manager: EventManager,
     client_consumed_queue: asyncio.Queue,
     context: dict | None = None,
+    *,
+    expose_error_details: bool = False,
 ) -> None:
     """Executes a flow asynchronously and manages event streaming to the client.
 
@@ -491,6 +684,7 @@ async def run_flow_generator(
         event_manager (EventManager): Manages the streaming of events to the client
         client_consumed_queue (asyncio.Queue): Tracks client consumption of events
         context (dict | None): Optional context to pass to the flow
+        expose_error_details: Whether client events may contain owner debugging details.
 
     Events Generated:
         - "add_message": Sent when new messages are added during flow execution
@@ -512,12 +706,14 @@ async def run_flow_generator(
             api_key_user=api_key_user,
             event_manager=event_manager,
             context=context,
+            expose_error_details=expose_error_details,
         )
         event_manager.on_end(data={"result": result.model_dump()})
         await client_consumed_queue.get()
     except Exception as e:  # noqa: BLE001 - Catch ALL exceptions to ensure errors are propagated in streaming
         await logger.aerror(f"Error running flow: {e}")
-        event_manager.on_error(data={"error": str(e)})
+        client_error = error_for_client(e, expose_details=expose_error_details)
+        event_manager.on_error(data={"error": str(client_error)})
     finally:
         await event_manager.queue.put((None, None, time.time))
 
@@ -630,12 +826,8 @@ async def _run_flow_internal(
         HTTPException: For flow not found (404) or invalid input (400)
         APIException: For internal execution errors (500)
     """
-    # Authorization happens upstream: every caller of _run_flow_internal must
-    # have called ensure_flow_permission(FlowAction.EXECUTE, ...) before
-    # invoking us. The owner-only check that used to live here would reject any
-    # plugin execute-grant on a shared flow, defeating the plugin's
-    # purpose. Adding a defense-in-depth check here would re-introduce the
-    # same regression.
+    # Authorization happens upstream. A granted share may execute the stored
+    # graph, but only the owner may mutate it through request tweaks.
     telemetry_service = get_telemetry_service()
 
     # If input_request is None, manually parse the request body
@@ -645,6 +837,9 @@ async def _run_flow_internal(
 
     if flow is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flow not found")
+
+    expose_error_details = _caller_owns_flow(flow, api_key_user)
+    _enforce_owner_only_tweaks(flow, api_key_user, input_request.tweaks)
 
     # Extract request-level variables from headers with prefix X-LANGFLOW-GLOBAL-VAR-*
     request_variables = extract_global_variables_from_headers(http_request.headers)
@@ -671,6 +866,7 @@ async def _run_flow_internal(
                 event_manager=event_manager,
                 client_consumed_queue=asyncio_queue_client_consumed,
                 context=context,
+                expose_error_details=expose_error_details,
             )
         )
 
@@ -693,6 +889,7 @@ async def _run_flow_internal(
             api_key_user=api_key_user,
             context=context,
             run_id=run_id,
+            expose_error_details=expose_error_details,
         )
         end_time = time.perf_counter()
         background_tasks.add_task(
@@ -719,14 +916,27 @@ async def _run_flow_internal(
         )
         if "badly formed hexadecimal UUID string" in str(exc):
             # This means the Flow ID is not a valid UUID which means it can't find the flow
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            http_error = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+            raise error_for_client(http_error, expose_details=expose_error_details) from exc
         if isinstance(exc, CustomComponentValidationError):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            http_error = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+            raise error_for_client(http_error, expose_details=expose_error_details) from exc
         if "not found" in str(exc):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-        raise APIException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, exception=exc, flow=flow) from exc
+            http_error = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+            raise error_for_client(http_error, expose_details=expose_error_details) from exc
+        client_error = error_for_client(exc, expose_details=expose_error_details)
+        raise APIException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            exception=client_error,
+            flow=flow if expose_error_details else None,
+        ) from exc
     except InvalidChatInputError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        http_error = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise error_for_client(http_error, expose_details=expose_error_details) from exc
+    except HTTPException as exc:
+        if expose_error_details:
+            raise
+        raise error_for_client(exc, expose_details=expose_error_details) from exc
     except Exception as exc:
         background_tasks.add_task(
             telemetry_service.log_package_run,
@@ -738,9 +948,14 @@ async def _run_flow_internal(
                 run_id=run_id,
             ),
         )
-        raise APIException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, exception=exc, flow=flow) from exc
+        client_error = error_for_client(exc, expose_details=expose_error_details)
+        raise APIException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            exception=client_error,
+            flow=flow if expose_error_details else None,
+        ) from exc
 
-    return result
+    return _v1_run_response(result)
 
 
 @router.post("/run/{flow_id_or_name}", response_model=None, response_model_exclude_none=True)
@@ -819,6 +1034,7 @@ async def simplified_run_flow_session(
     input_request: SimplifiedAPIRequest | None = None,
     stream: bool = False,
     api_key_user: CurrentActiveUser,
+    session: DbSession,
     context: dict | None = None,
     http_request: Request,
 ):
@@ -834,6 +1050,8 @@ async def simplified_run_flow_session(
         input_request (SimplifiedAPIRequest | None): Input parameters for the flow
         stream (bool): Whether to stream the response
         api_key_user (User): Authenticated user from session
+        session (AsyncSession): Request-scoped DB session (shared with the auth
+            dependency); its transaction is released before the flow runs
         context (dict | None): Optional context to pass to the flow
         http_request (Request): The incoming HTTP request for extracting global variables
 
@@ -874,6 +1092,15 @@ async def simplified_run_flow_session(
         workspace_id=flow.workspace_id,
         folder_id=flow.folder_id,
     )
+
+    # ``session`` is the same cached dependency the auth chain used, so this
+    # ends the transaction opened by the auth reads before the flow runs —
+    # the run can take minutes and would otherwise hold the request
+    # transaction (and its pooled connection) open the whole time (#14445).
+    # The API-key ``/run`` variant is not affected: ``api_key_security``
+    # scopes its own short-lived session.
+    await release_db_transaction(session)
+
     return await _run_flow_internal(
         background_tasks=background_tasks,
         flow=flow,
@@ -889,6 +1116,7 @@ async def simplified_run_flow_session(
 async def webhook_events_stream(
     auth: Annotated[SseAuth, Depends(get_flow_for_sse_user)],
     request: Request,
+    session: DbSession,
 ):
     """Server-Sent Events (SSE) endpoint for real-time webhook build updates.
 
@@ -912,6 +1140,12 @@ async def webhook_events_stream(
         folder_id=getattr(flow, "folder_id", None),
     )
 
+    # ``session`` is the same cached dependency the SSE auth chain used. The
+    # EventSource stream below is indefinite and the session dependency is
+    # only torn down when it ends, so without this commit every open tab
+    # would hold a pooled connection in an idle transaction (#14445).
+    await release_db_transaction(session)
+
     async def event_generator() -> AsyncGenerator[str, None]:
         """Generate SSE events from the webhook event manager."""
         flow_id_str = str(flow.id)
@@ -928,7 +1162,14 @@ async def webhook_events_stream(
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_TIMEOUT_SECONDS)
                     event_type = event["event"]
-                    event_data = json.dumps(event["data"])
+                    payload = event["data"]
+                    # add_message carries message.model_dump(), which holds the new
+                    # content_blocks union at both the top level and the nested Data
+                    # mirror. Project both to the v1 shape for this v1 SSE, matching
+                    # the build stream and /run.
+                    if event_type == "add_message":
+                        payload = project_payload_to_v1(payload)
+                    event_data = json.dumps(payload)
                     yield f"event: {event_type}\ndata: {event_data}\n\n"
                 except asyncio.TimeoutError:
                     yield f"event: heartbeat\ndata: {json.dumps({'timestamp': time.time()})}\n\n"
@@ -993,6 +1234,8 @@ async def webhook_run_flow(
     if not data:
         error_msg = "Request body is empty. You should provide a JSON payload containing the flow ID."
         raise HTTPException(status_code=400, detail=error_msg)
+
+    raise_if_hitl_unsupported(flow.data or {})
 
     try:
         # get all webhook components in the flow
@@ -1109,79 +1352,114 @@ async def experimental_run_flow(
         folder_id=flow.folder_id,
     )
 
-    session_service = get_session_service()
+    expose_error_details = _caller_owns_flow(flow, api_key_user)
+    _enforce_owner_only_tweaks(flow, api_key_user, tweaks)
+
     flow_id_str = str(flow.id)
     if outputs is None:
         outputs = []
     if inputs is None:
         inputs = [InputValueRequest(components=[], input_value="")]
 
+    graph: Graph | None = None
     if session_id:
+        session_service = get_session_service()
         try:
             session_data = await session_service.load_session(session_id, flow_id=flow_id_str)
         except Exception as exc:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+            await logger.aexception("Failed to load advanced-run session for flow %s", flow.id)
+            client_error = error_for_client(exc, expose_details=expose_error_details)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(client_error)) from exc
         graph, _artifacts = session_data or (None, None)
         if graph is None:
             msg = f"Session {session_id} not found"
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
-    else:
-        try:
-            # Get the flow that matches the flow_id and belongs to the user
-            # flow = session.query(Flow).filter(Flow.id == flow_id).filter(Flow.user_id == api_key_user.id).first()
-            stmt = select(Flow).where(Flow.id == flow.id).where(Flow.user_id == api_key_user.id)
-            flow = (await session.exec(stmt)).first()
-        except sa.exc.StatementError as exc:
-            # StatementError('(builtins.ValueError) badly formed hexadecimal UUID string')
-            if "badly formed hexadecimal UUID string" in str(exc):
-                await logger.aerror(f"Flow ID {flow_id_str} is not a valid UUID")
-                # This means the Flow ID is not a valid UUID which means it can't find the flow
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        if not _graph_executes_as_actor(graph, api_key_user, flow_id=flow.id):
+            # Cache keys are legacy and not actor-scoped. Reusing an instantiated
+            # graph across principals would retain the first actor's component
+            # credentials, variables, files, and tweaks. Rebuild the immutable
+            # stored flow under the current actor instead.
+            await logger.awarning(
+                "Ignoring advanced-run graph cached under another execution principal for flow %s",
+                flow.id,
+            )
+            graph = None
 
-        if flow is None:
-            msg = f"Flow {flow_id_str} not found"
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
-
+    if graph is None:
         if flow.data is None:
             msg = f"Flow {flow_id_str} has no data"
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+            if expose_error_details:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+            client_error = error_for_client(ValueError(msg), expose_details=False)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(client_error),
+            )
         try:
-            graph_data = flow.data
+            graph_data = deepcopy(flow.data)
             graph_data = process_tweaks(graph_data, tweaks or {})
-            graph = Graph.from_payload(graph_data, flow_id=flow_id_str)
+            raise_if_hitl_unsupported(graph_data)
+            graph = Graph.from_payload(
+                graph_data,
+                flow_id=flow_id_str,
+                user_id=str(api_key_user.id),
+                flow_name=flow.name,
+            )
         except CustomComponentValidationError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            await logger.aexception("Advanced-run flow validation failed for flow %s", flow.id)
+            http_error = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+            raise error_for_client(http_error, expose_details=expose_error_details) from exc
+        except HTTPException as exc:
+            await logger.aexception("Advanced-run flow validation failed for flow %s", flow.id)
+            if expose_error_details:
+                # error_for_client returns ``exc`` itself here; re-raise rather
+                # than chaining the exception to itself.
+                raise
+            raise error_for_client(exc, expose_details=expose_error_details) from exc
         except Exception as exc:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+            await logger.aexception("Failed to build advanced-run graph for flow %s", flow.id)
+            client_error = error_for_client(exc, expose_details=expose_error_details)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(client_error)) from exc
+
+    # Graph execution below can run for minutes; end any request transaction
+    # opened by dependency resolution so it does not pin a pooled connection
+    # (Postgres: idle-in-transaction) for the whole run (#14445).
+    await release_db_transaction(session)
 
     try:
-        task_result, session_id = await run_graph_internal(
-            graph=graph,
-            flow_id=flow_id_str,
-            session_id=session_id,
-            inputs=inputs,
-            outputs=outputs,
-            stream=stream,
-        )
+        with execution_protocol("v1.advanced"):
+            task_result, session_id = await run_graph_internal(
+                graph=graph,
+                flow_id=flow_id_str,
+                session_id=session_id,
+                inputs=inputs,
+                outputs=outputs,
+                stream=stream,
+            )
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        await logger.aexception("Advanced-run execution failed for flow %s", flow.id)
+        if isinstance(exc, HTTPException):
+            if expose_error_details:
+                raise
+            raise error_for_client(exc, expose_details=expose_error_details) from exc
+        client_error = error_for_client(exc, expose_details=expose_error_details)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(client_error)) from exc
 
-    # Fire memory-base auto-capture hook — non-blocking background effect.
-    try:
-        _run_id_uuid = UUID(graph.run_id) if graph.run_id else None  # type-cast only
-        await get_task_service().fire_and_forget_task(
-            get_memory_base_service().on_flow_output,
-            flow_id=flow.id,
-            session_id=session_id,
-            job_id=_run_id_uuid,
-        )
-    except (RuntimeError, ValueError, OSError):
-        await logger.awarning("Memory base hook scheduling failed for flow %s", flow.id, exc_info=True)
+    # Memory-base auto-capture is owner-scoped; shared callers must not spend or
+    # persist through the flow owner's private credentials.
+    if _caller_owns_flow(flow, api_key_user):
+        try:
+            _run_id_uuid = UUID(graph.run_id) if graph.run_id else None  # type-cast only
+            await get_task_service().fire_and_forget_task(
+                get_memory_base_service().on_flow_output,
+                flow_id=flow.id,
+                session_id=session_id,
+                job_id=_run_id_uuid,
+            )
+        except (RuntimeError, ValueError, OSError):
+            await logger.awarning("Memory base hook scheduling failed for flow %s", flow.id, exc_info=True)
 
-    return RunResponse(outputs=task_result, session_id=session_id)
+    return _v1_run_response(RunResponse(outputs=task_result, session_id=session_id))
 
 
 @router.post(
@@ -1227,6 +1505,7 @@ async def get_task_status(_task_id: str) -> TaskStatusResponse:
 async def create_upload_file(
     file: UploadFile,
     flow: Annotated[Flow, Depends(get_flow)],
+    current_user: CurrentActiveUser,
     settings_service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> UploadFileResponse:
     """Upload a file for a specific flow (Deprecated).
@@ -1238,6 +1517,17 @@ async def create_upload_file(
     ``/api/v1/files/upload/{flow_id}`` so authenticated callers can't fill
     disk through this route either.
     """
+    # Writing a file to a flow's storage is a flow mutation: enforce WRITE so
+    # the external access ceiling (e.g. a "viewer") cannot upload via this
+    # deprecated route. Mirrors the non-deprecated twin in files.py.
+    await ensure_flow_permission(
+        current_user,
+        FlowAction.WRITE,
+        flow_id=flow.id,
+        flow_user_id=flow.user_id,
+        workspace_id=flow.workspace_id,
+        folder_id=flow.folder_id,
+    )
     try:
         max_file_size_upload = settings_service.settings.max_file_size_upload
     except Exception as exc:
@@ -1274,57 +1564,36 @@ async def custom_component(
     user: CurrentActiveUser,
     request: Request,
 ) -> CustomComponentResponse:
+    # Building a custom component instantiates (and partially executes) posted
+    # code. That is a create/write-class action, so enforce the external access
+    # ceiling directly: a "viewer" external identity is denied while
+    # editor/admin (and all non-external users) pass unchanged. This route is
+    # not tied to a single owned resource, so the deny-only primitive is used
+    # instead of an ``ensure_*_permission`` guard.
+    external_context = get_current_external_access_context()
+    if external_context is not None and not external_access_allows("create", external_context):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="External credentials do not allow this action",
+        )
+
     settings_service = get_settings_service()
     settings = settings_service.settings
-    all_known = None
-    if _requires_component_hash_lookups(settings, user):
-        # Lazily compute hash lookups if they haven't been built yet
-        # (e.g. during startup before the cache is fully populated).
-        get_component_hash_lookups_for_validation()
-        all_known = component_cache.all_known_hashes
-        if all_known is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Component templates are still initializing. Please try again in a few seconds.",
-            )
-
-    # In admin-only mode, non-admin users may create/refresh only known server
-    # templates. Truly custom code creation remains restricted to administrators.
-    if (
-        getattr(settings, "custom_component_admin_only", False) is True
-        and not user.is_superuser
-        and not code_hash_matches_any_template(raw_code.code, all_known)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Custom component creation is restricted to administrators",
-        )
-
-    if not settings.allow_custom_components and not code_hash_matches_any_template(raw_code.code, all_known):
-        # Allow updating to a known server template (core component update),
-        # but block truly custom code.
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Custom component creation is disabled",
-        )
-
-    # In restricted mode the request only reached here by matching a known
-    # template hash. That hash is a truncated digest, so a second-preimage
-    # collision could clear the gate with attacker-controlled bytes. Execute
-    # the server's trusted copy keyed by the same hash instead of the client
-    # bytes, and fail closed if no trusted source can be recovered.
-    effective_code = raw_code.code
-    if _requires_component_hash_lookups(settings, user):
-        effective_code = get_trusted_code_for_validation(raw_code.code)
-        if effective_code is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Custom component creation is disabled",
-            )
+    catalog_policy_snapshot = get_catalog_policy_service().snapshot
+    effective_code = resolve_component_code_for_action(
+        raw_code.code,
+        user=user,
+        settings=settings,
+        snapshot=catalog_policy_snapshot,
+        disabled_detail="Custom component creation is disabled",
+        admin_only_detail="Custom component creation is restricted to administrators",
+    )
 
     component = Component(_code=effective_code)
 
     built_frontend_node, component_instance = build_custom_component_template(component, user_id=user.id)
+    type_ = get_instance_name(component_instance)
+    enforce_catalog_policy_for_component_type(type_, snapshot=catalog_policy_snapshot)
     if raw_code.frontend_node is not None:
         built_frontend_node = await component_instance.update_frontend_node(built_frontend_node, raw_code.frontend_node)
 
@@ -1335,7 +1604,6 @@ async def custom_component(
             field_name="tool_mode",
             field_value=tool_mode,
         )
-    type_ = get_instance_name(component_instance)
     locale = getattr(request.state, "locale", "en")
     if locale != "en":
         from langflow.utils.i18n import translate_component_node
@@ -1363,56 +1631,46 @@ async def custom_component_update(
         HTTPException: If an error occurs during component building or updating.
         SerializationError: If serialization of the updated component node fails.
     """
+    # Updating a custom component instantiates (and partially executes) posted
+    # code, a create/write-class action. Enforce the external access ceiling
+    # directly so a "viewer" external identity is denied; editor/admin (and all
+    # non-external users) pass unchanged. Same action string as ``custom_component``.
+    external_context = get_current_external_access_context()
+    if external_context is not None and not external_access_allows("create", external_context):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="External credentials do not allow this action",
+        )
+
     settings_service = get_settings_service()
-    all_known = None
-    if _requires_component_hash_lookups(settings_service.settings, user):
-        get_component_hash_lookups_for_validation()
-        all_known = component_cache.all_known_hashes
-        if all_known is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Component templates are still initializing. Please try again in a few seconds.",
-            )
+    catalog_policy_snapshot = get_catalog_policy_service().snapshot
+    effective_code = resolve_component_code_for_action(
+        code_request.code,
+        user=user,
+        settings=settings_service.settings,
+        snapshot=catalog_policy_snapshot,
+        disabled_detail="Custom component creation is disabled",
+        admin_only_detail="Custom component editing is restricted to administrators",
+    )
 
-    # In admin-only mode, non-admin users may refresh/update only known server
-    # templates. Truly custom code edits remain restricted to administrators.
-    if (
-        getattr(settings_service.settings, "custom_component_admin_only", False) is True
-        and not user.is_superuser
-        and not code_hash_matches_any_template(code_request.code, all_known)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Custom component editing is restricted to administrators",
-        )
-
-    if not settings_service.settings.allow_custom_components and not code_hash_matches_any_template(
-        code_request.code, all_known
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Custom component creation is disabled",
-        )
-
-    # In restricted mode the request only reached here by matching a known
-    # template hash. Because that hash is a truncated digest, execute the
-    # server's trusted copy keyed by the same hash rather than the client
-    # bytes (defeats a hash collision), failing closed if it can't be found.
-    effective_code = code_request.code
-    if _requires_component_hash_lookups(settings_service.settings, user):
-        effective_code = get_trusted_code_for_validation(code_request.code)
-        if effective_code is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Custom component creation is disabled",
-            )
-
+    policy_context_token = set_current_model_provider_policy_context(
+        user_id=user.id,
+        attributes={"is_superuser": bool(user.is_superuser)},
+    )
     try:
         component = Component(_code=effective_code)
         component_node, cc_instance = build_custom_component_template(
             component,
             user_id=user.id,
         )
+        component_type = get_instance_name(cc_instance)
+        enforce_catalog_policy_for_component_type(component_type, snapshot=catalog_policy_snapshot)
+
+        if isinstance(cc_instance, Component):
+            # Dynamic configuration may resolve DB-backed credentials or call
+            # provider APIs. Apply the same standalone-component policy before
+            # either can happen.
+            cc_instance.require_model_provider_policy(ModelProviderPolicyPurpose.CONFIGURE)
 
         component_node["tool_mode"] = code_request.tool_mode
 
@@ -1475,15 +1733,19 @@ async def custom_component_update(
                 field_value=code_request.field_value,
             )
 
+    except CatalogPolicyHTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        reset_current_model_provider_policy_context(policy_context_token)
 
     locale = getattr(request.state, "locale", "en")
     if locale != "en":
         from langflow.utils.i18n import translate_component_node
 
         try:
-            component_node = translate_component_node(get_instance_name(cc_instance), component_node, locale)
+            component_node = translate_component_node(component_type, component_node, locale)
         except Exception:  # noqa: BLE001
             logger.exception("Failed to translate component node", extra={"locale": locale})
 
@@ -1514,14 +1776,27 @@ async def get_config(
     """
     try:
         settings_service: SettingsService = get_settings_service()
+        try:
+            catalog_governance_enabled = get_catalog_policy_service().enabled
+        except Exception as exc:  # noqa: BLE001
+            # Catalog governance is explicitly fail-open. A broken custom
+            # policy implementation must not break the public config endpoint
+            # or expose its internal exception text.
+            await logger.aexception("Catalog policy status unavailable; reporting governance disabled", exception=exc)
+            catalog_governance_enabled = False
 
         if user is None:
             return PublicConfigResponse.from_settings(
                 settings_service.settings,
                 settings_service.auth_settings,
+                catalog_governance_enabled=catalog_governance_enabled,
             )
 
-        return ConfigResponse.from_settings(settings_service.settings, settings_service.auth_settings)
+        return ConfigResponse.from_settings(
+            settings_service.settings,
+            settings_service.auth_settings,
+            catalog_governance_enabled=catalog_governance_enabled,
+        )
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

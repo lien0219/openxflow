@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlmodel import col, select
 
 from langflow.api.utils import CurrentActiveUser, DbSession
@@ -25,6 +26,8 @@ class AuthzAuditLogRead(BaseModel):
 
     id: UUID
     user_id: UUID | None
+    actor_type: str | None = None
+    actor_id: UUID | None = None
     action: str
     resource_type: str | None
     resource_id: UUID | None
@@ -77,6 +80,14 @@ async def list_audit_log(
     session: DbSession,
     current_user: CurrentActiveUser,
     user_id: Annotated[UUID | None, Query(description="Filter by acting user id.")] = None,
+    actor_type: Annotated[
+        str | None,
+        Query(description="Filter by credential actor type; ``unknown`` also includes legacy rows without a type."),
+    ] = None,
+    actor_id: Annotated[
+        UUID | None,
+        Query(description="Filter by first-class credential actor UUID."),
+    ] = None,
     resource_type: Annotated[
         str | None,
         Query(description="Filter by resource type slug, e.g. ``flow`` or ``deployment``."),
@@ -88,7 +99,7 @@ async def list_audit_log(
     ] = None,
     result: Annotated[
         str | None,
-        Query(description="Filter by decision result (``allow`` / ``deny`` / ``owner_override``)."),
+        Query(description="Filter by audit result (``allow`` / ``deny`` / ``owner_override`` / ``skip``)."),
     ] = None,
     since: Annotated[datetime | None, Query(description="Inclusive lower bound on ``timestamp``.")] = None,
     until: Annotated[datetime | None, Query(description="Exclusive upper bound on ``timestamp``.")] = None,
@@ -128,6 +139,19 @@ async def list_audit_log(
     base = select(AuthzAuditLog)
     if user_id is not None:
         base = base.where(AuthzAuditLog.user_id == user_id)
+    if actor_type == "unknown":
+        # Historical rows may have a NULL actor_type; expose them through the
+        # same legacy/unknown filter as explicitly classified rows.
+        base = base.where(
+            or_(
+                AuthzAuditLog.actor_type == actor_type,
+                col(AuthzAuditLog.actor_type).is_(None),
+            )
+        )
+    elif actor_type is not None:
+        base = base.where(AuthzAuditLog.actor_type == actor_type)
+    if actor_id is not None:
+        base = base.where(AuthzAuditLog.actor_id == actor_id)
     if forced_resource_type is not None:
         base = base.where(AuthzAuditLog.resource_type == forced_resource_type)
     elif resource_type is not None:
@@ -150,7 +174,14 @@ async def list_audit_log(
     total_stmt = select(func.count()).select_from(base.subquery())
     total = int((await session.exec(total_stmt)).first() or 0)
 
-    page_stmt = base.order_by(col(AuthzAuditLog.timestamp).desc()).offset((page - 1) * size).limit(size)
+    page_stmt = (
+        base.order_by(
+            col(AuthzAuditLog.timestamp).desc(),
+            col(AuthzAuditLog.id).desc(),
+        )
+        .offset((page - 1) * size)
+        .limit(size)
+    )
     rows = list(await session.exec(page_stmt))
 
     items = [AuthzAuditLogRead.model_validate(row, from_attributes=True) for row in rows]

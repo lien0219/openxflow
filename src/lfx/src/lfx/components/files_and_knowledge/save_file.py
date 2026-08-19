@@ -1,3 +1,4 @@
+import contextlib
 import json
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path, PurePath, PureWindowsPath
@@ -15,6 +16,7 @@ from lfx.io import BoolInput, DropdownInput, SecretStrInput, StrInput
 from lfx.schema import Data, DataFrame, Message
 from lfx.services.deps import get_settings_service, get_storage_service, session_scope
 from lfx.template.field.base import Output
+from lfx.utils.file_path_security import component_file_access_scopes, enforce_local_file_access
 from lfx.utils.validate_cloud import is_astra_cloud_environment
 
 
@@ -38,14 +40,7 @@ def _is_default_storage(storage_name: str) -> bool:
 
 class SaveToFileComponent(Component):
     display_name = "Write File"
-    description = (
-        "Save data to a file. "
-        "Arguments: 'input' — the content to save (pass a DataFrame directly, or a JSON string "
-        "for tabular data, or plain text for messages); "
-        "'file_name' — the name to save as, without extension (e.g. 'report'); "
-        "'file_format' — output format: 'csv', 'json', 'txt', 'html', 'excel', 'markdown' (optional). "
-        "Returns a confirmation with the file path or URL."
-    )
+    description = "Save content to a file in the specified format and return its path."
     documentation: str = "https://docs.langflow.org/write-file"
     icon = "file-text"
     name = "SaveToFile"
@@ -150,26 +145,26 @@ class SaveToFileComponent(Component):
         SecretStrInput(
             name="aws_access_key_id",
             display_name="AWS Access Key ID",
-            info="AWS Access key ID.",
+            info="Optional. Falls back to the AWS_ACCESS_KEY_ID environment variable.",
             show=_is_default_storage("AWS"),
             advanced=not _is_default_storage("AWS"),
-            required=True,
+            required=False,
         ),
         SecretStrInput(
             name="aws_secret_access_key",
             display_name="AWS Secret Key",
-            info="AWS Secret Key.",
+            info="Optional. Falls back to the AWS_SECRET_ACCESS_KEY environment variable.",
             show=_is_default_storage("AWS"),
             advanced=not _is_default_storage("AWS"),
-            required=True,
+            required=False,
         ),
         StrInput(
             name="bucket_name",
             display_name="S3 Bucket Name",
-            info="Enter the name of the S3 bucket.",
+            info="Optional. Falls back to the configured object storage bucket.",
             show=_is_default_storage("AWS"),
             advanced=not _is_default_storage("AWS"),
-            required=True,
+            required=False,
         ),
         StrInput(
             name="aws_region",
@@ -207,7 +202,25 @@ class SaveToFileComponent(Component):
         ),
     ]
 
-    outputs = [Output(display_name="File Path", name="message", method="save_to_file")]
+    outputs = [
+        Output(
+            display_name="File Path",
+            name="message",
+            method="save_to_file",
+            # Tool-facing documentation: ``build_description`` prefers output
+            # ``info`` over the component description when this component is
+            # exposed as an agent tool, so the argument reference lives here
+            # instead of bloating the UI card description.
+            info=(
+                "Save data to a file. "
+                "Arguments: 'input' — the content to save (pass a DataFrame directly, or a JSON string "
+                "for tabular data, or plain text for messages); "
+                "'file_name' — the name to save as, without extension (e.g. 'report'); "
+                "'file_format' — output format: 'csv', 'json', 'txt', 'html', 'excel', 'markdown' (optional). "
+                "Returns a confirmation with the file path or URL."
+            ),
+        )
+    ]
 
     def update_build_config(self, build_config, field_value, field_name=None):
         """Update build configuration to show/hide fields based on storage location selection."""
@@ -413,8 +426,13 @@ class SaveToFileComponent(Component):
         plain_text_formats = ["txt", "json", "markdown", "md", "csv", "xml", "html", "yaml", "log", "tsv", "jsonl"]
         return fmt.lower() in plain_text_formats
 
-    async def _upload_file(self, file_path: Path) -> None:
-        """Upload the saved file using the upload_user_file service."""
+    async def _upload_file(self, file_path: Path) -> Any:
+        """Upload the saved file using the upload_user_file service.
+
+        Returns the ``UploadFileResponse`` (with the durable storage ``path`` and
+        ``provider``) so the caller can report the real destination and, for
+        remote backends, discard the local staging copy.
+        """
         from langflow.api.v2.files import upload_user_file
         from langflow.services.database.models.user.crud import get_user_by_id
 
@@ -432,7 +450,7 @@ class SaveToFileComponent(Component):
                     raise ValueError(msg)
                 current_user = await get_user_by_id(db, self.user_id)
 
-                await upload_user_file(
+                return await upload_user_file(
                     file=UploadFile(filename=file_path.name, file=f, size=file_path.stat().st_size),
                     session=db,
                     current_user=current_user,
@@ -545,14 +563,13 @@ class SaveToFileComponent(Component):
     async def _save_message(self, message: Message, path: Path, fmt: str) -> str:
         """Save a Message to the specified file format, handling async iterators."""
         content = ""
-        if message.text is None:
-            content = ""
-        elif isinstance(message.text, AsyncIterator):
-            async for item in message.text:
+        stream = message.text_stream if hasattr(message, "text_stream") else None
+        if stream is not None and isinstance(stream, AsyncIterator):
+            async for item in stream:
                 content += str(item) + " "
             content = content.strip()
-        elif isinstance(message.text, Iterator):
-            content = " ".join(str(item) for item in message.text)
+        elif stream is not None and isinstance(stream, Iterator):
+            content = " ".join(str(item) for item in stream)
         else:
             content = str(message.text)
 
@@ -638,9 +655,19 @@ class SaveToFileComponent(Component):
             msg = f"Invalid file format '{file_format}' for {self._get_input_type()}. Allowed: {allowed_formats}"
             raise ValueError(msg)
 
-        # Prepare file path
-        file_path = Path(self._get_safe_local_file_name())
+        # Prepare file path. file_name is tenant-controlled and this writes to local disk.
+        settings = get_settings_service().settings
+        scope_ids = component_file_access_scopes(self)
+        file_path = Path(self._get_safe_local_file_name()).expanduser()
+        if settings.restrict_local_file_access and not file_path.is_absolute():
+            # New files belong to the authenticated user's storage namespace. If no
+            # user/flow scope exists, ``enforce_local_file_access`` below fails closed.
+            scope_root = Path(scope_ids[0]) if scope_ids else Path()
+            file_path = Path(settings.config_dir) / scope_root / file_path
         file_path = self._adjust_file_path_with_format(file_path, file_format)
+        file_path = enforce_local_file_access(file_path, scope_ids=scope_ids)
+        if not file_path.parent.exists():
+            file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Save the input to file based on type
         if self._get_input_type() == "DataFrame":
@@ -653,10 +680,42 @@ class SaveToFileComponent(Component):
             msg = f"Unsupported input type: {self._get_input_type()}"
             raise ValueError(msg)
 
-        # Upload the saved file
-        await self._upload_file(file_path)
+        # Upload the saved file into the configured storage backend.
+        upload_result = await self._upload_file(file_path)
 
-        # Return the final file path and confirmation message
+        # When the backend is remote (e.g. S3) the local file was only a
+        # serialization staging area — the durable copy now lives in the storage
+        # service. Delete the staging file (matching AWS-mode cleanup) and report
+        # the storage destination instead of the misleading local path.
+        # Why: on disposable executor pods the local copy is both redundant and
+        # unreachable by other pods, so leaving it behind leaks a file and makes
+        # the returned path point somewhere that does not durably exist. For local
+        # storage the staged file IS the durable artifact, so it is kept as-is.
+        #
+        # Exception: append_mode accumulates content by reading the persisted local
+        # file across calls (should_append hinges on path.exists()). Deleting it
+        # would make the next append silently fall back to overwrite and lose the
+        # accumulated content — so the staging file is preserved when appending.
+        settings = get_settings_service().settings
+        if settings.storage_type != "local":
+            if not getattr(self, "append_mode", False):
+                with contextlib.suppress(OSError):
+                    file_path.unlink()
+            destination = upload_result.path if upload_result is not None else file_path.name
+            provider = (
+                upload_result.provider
+                if upload_result is not None and upload_result.provider
+                else settings.storage_type
+            ).upper()
+            action = (
+                "appended to"
+                if getattr(self, "append_mode", False) and self._is_plain_text_format(file_format)
+                else "saved successfully as"
+            )
+            return Message(text=f"{self._get_input_type()} {action} '{destination}' in {provider} storage")
+
+        # Local storage: the staged file is the durable artifact — keep it and
+        # report its on-disk path.
         final_path = Path.cwd() / file_path if not file_path.is_absolute() else file_path
         return Message(text=f"{confirmation} at {final_path}")
 
@@ -666,19 +725,19 @@ class SaveToFileComponent(Component):
 
         import boto3
 
-        from lfx.base.data.cloud_storage_utils import create_s3_client, validate_aws_credentials
-
         # Get AWS credentials from component inputs or fall back to environment variables
         aws_access_key_id = getattr(self, "aws_access_key_id", None)
         if aws_access_key_id and hasattr(aws_access_key_id, "get_secret_value"):
             aws_access_key_id = aws_access_key_id.get_secret_value()
-        if not aws_access_key_id:
+        access_key_from_environment = not aws_access_key_id
+        if access_key_from_environment:
             aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
 
         aws_secret_access_key = getattr(self, "aws_secret_access_key", None)
         if aws_secret_access_key and hasattr(aws_secret_access_key, "get_secret_value"):
             aws_secret_access_key = aws_secret_access_key.get_secret_value()
-        if not aws_secret_access_key:
+        secret_key_from_environment = not aws_secret_access_key
+        if secret_key_from_environment:
             aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
 
         bucket_name = getattr(self, "bucket_name", None)
@@ -707,15 +766,15 @@ class SaveToFileComponent(Component):
             )
             raise ValueError(msg)
 
-        # Validate AWS credentials
-        validate_aws_credentials(self)
-
-        # Create S3 client
-        s3_client = create_s3_client(self)
+        # Create S3 client from the resolved component or fallback values
         client_config: dict[str, Any] = {
             "aws_access_key_id": str(aws_access_key_id),
             "aws_secret_access_key": str(aws_secret_access_key),
         }
+        if access_key_from_environment and secret_key_from_environment:
+            aws_session_token = os.getenv("AWS_SESSION_TOKEN")
+            if aws_session_token:
+                client_config["aws_session_token"] = aws_session_token
 
         # Get region from component input, environment variable, or settings
         aws_region = getattr(self, "aws_region", None)
@@ -730,10 +789,19 @@ class SaveToFileComponent(Component):
         content = self._extract_content_for_upload()
         file_format = self._get_file_format_for_location("AWS")
 
-        # Generate file path
-        file_path = f"{self.file_name}.{file_format}"
+        # Generate file path. Namespace by user_id so concurrent multi-user runs
+        # writing the same file_name don't overwrite each other — mirrors how the
+        # platform storage service isolates files under "{user_id}/". Layout:
+        #   {s3_prefix}/{user_id}/{file_name}.{ext}
+        file_name = f"{self.file_name}.{file_format}"
+        path_segments = []
         if hasattr(self, "s3_prefix") and self.s3_prefix:
-            file_path = f"{self.s3_prefix.rstrip('/')}/{file_path}"
+            path_segments.append(self.s3_prefix.rstrip("/"))
+        user_id = self.user_id
+        if user_id and str(user_id) != "None":
+            path_segments.append(str(user_id))
+        path_segments.append(file_name)
+        file_path = "/".join(path_segments)
 
         # Create temporary file
         import tempfile

@@ -98,7 +98,10 @@ def test_minimal_manifest_round_trip() -> None:
         ({"name": ""}, "name"),
         ({"lfx": {"compat": []}}, "compat"),
         ({"lfx": {"compat": ["0"]}}, "compat"),
-        ({"bundles": []}, "bundles"),
+        # Empty bundles is now allowed at the field level (provider-only
+        # extensions ship no components); the cross-field rule rejects a manifest
+        # that declares neither a bundle nor a provider.
+        ({"bundles": []}, "at least one bundle"),
         ({"bundles": [{"name": "Bad-Name", "path": "x"}]}, "name"),
         ({"bundles": [{"name": "x", "path": "/abs/path"}]}, "path"),
         ({"bundles": [{"name": "x", "path": "../escape"}]}, "path"),
@@ -158,31 +161,20 @@ def test_deferred_field_accepted_when_omitted(field_name: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Multi-bundle deferred
+# Multi-bundle
 # ---------------------------------------------------------------------------
 
 
-def test_multi_bundle_rejected_at_model_level() -> None:
-    """Pydantic rejects multi-bundle via the field-level ``max_length=1``.
-
-    The dedicated ``multi-bundle-deferred-in-this-milestone`` discriminant is
-    surfaced by the validator pipeline in ``lfx.extension.validate`` (covered by
-    ``test_validate.py``); at the model level we only need to confirm the
-    constraint is enforced on the ``bundles`` field, which also means it lands
-    in the published JSON Schema.
-    """
-    bad = _with(
+def test_multi_bundle_accepted_at_model_level() -> None:
+    data = _with(
         _VALID,
         bundles=[
             {"name": "aa", "path": "aa"},
             {"name": "bb", "path": "bb"},
         ],
     )
-    with pytest.raises(ValidationError) as exc_info:
-        ExtensionManifest.model_validate(bad)
-    error = exc_info.value.errors()[0]
-    assert error["loc"] == ("bundles",)
-    assert error["type"] == "too_long"
+    manifest = ExtensionManifest.model_validate(data)
+    assert [bundle.name for bundle in manifest.bundles] == ["aa", "bb"]
 
 
 def test_duplicate_bundle_names_rejected() -> None:

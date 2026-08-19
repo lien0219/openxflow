@@ -1,10 +1,10 @@
 import { type FC, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FaGithub } from "react-icons/fa";
+import { FaDiscord, FaGithub } from "react-icons/fa";
 import IconComponent from "@/components/common/genericIconComponent";
 import ShadTooltip from "@/components/common/shadTooltipComponent";
 import { Button } from "@/components/ui/button";
-import { GITHUB_URL } from "@/constants/constants";
+import { DISCORD_URL, GITHUB_URL } from "@/constants/constants";
 import { useGetUserData, useUpdateUser } from "@/controllers/API/queries/auth";
 import ModalsComponent from "@/pages/MainPage/components/modalsComponent";
 import useFlowsManagerStore from "@/stores/flowsManagerStore";
@@ -15,11 +15,15 @@ import { cn } from "@/utils/utils";
 export const GetStartedProgress: FC<{
   userData: Users;
   isGithubStarred: boolean;
+  isDiscordJoined?: boolean;
   handleDismissDialog: () => void;
-}> = ({ userData, isGithubStarred, handleDismissDialog }) => {
+}> = ({ userData, isGithubStarred, isDiscordJoined, handleDismissDialog }) => {
   const { t } = useTranslation();
   const [isGithubStarredChild, setIsGithubStarredChild] =
     useState(isGithubStarred);
+  const [isDiscordJoinedChild, setIsDiscordJoinedChild] = useState(
+    isDiscordJoined ?? Boolean(userData?.optins?.discord_clicked),
+  );
   const [newProjectModal, setNewProjectModal] = useState(false);
   const hideNewFlowButton = useUtilityStore((state) => state.hideNewFlowButton);
 
@@ -37,15 +41,23 @@ export const GetStartedProgress: FC<{
   const hasFlows = flows && flows?.length > 0;
 
   const percentageGetStarted = useMemo(() => {
-    const stepValue = 50;
+    const stepValue = 33;
     let totalPercentage = 0;
 
     if (userData?.optins?.github_starred) {
       totalPercentage += stepValue;
     }
 
+    if (userData?.optins?.discord_clicked) {
+      totalPercentage += stepValue;
+    }
+
     if (hasFlows) {
       totalPercentage += stepValue;
+    }
+
+    if (totalPercentage === 99) {
+      return 100;
     }
 
     return Math.min(totalPercentage, 100);
@@ -66,6 +78,9 @@ export const GetStartedProgress: FC<{
           if (key === "github_starred") {
             setIsGithubStarredChild(true);
             window.open(GITHUB_URL, "_blank", "noopener,noreferrer");
+          } else if (key === "discord_clicked") {
+            setIsDiscordJoinedChild(true);
+            window.open(DISCORD_URL, "_blank", "noopener,noreferrer");
           } else if (key === "dialog_dismissed") {
             handleDismissDialog();
           }
@@ -94,6 +109,7 @@ export const GetStartedProgress: FC<{
           onClick={() => handleUserTrack("dialog_dismissed")}
           className="text-muted-foreground hover:text-foreground"
           data-testid="close_get_started_dialog"
+          aria-label={t("sidebar.closeGetStarted")}
         >
           <IconComponent name="X" className="h-4 w-4" />
         </button>
@@ -144,7 +160,7 @@ export const GetStartedProgress: FC<{
                 />
               </span>
             ) : (
-              <FaGithub className="h-4 w-4 shrink-0" />
+              <FaGithub className="h-4 w-4 shrink-0" aria-hidden="true" />
             )}
             <ShadTooltip content={t("sidebar.starRepo")} side="right">
               <span
@@ -154,6 +170,53 @@ export const GetStartedProgress: FC<{
                 )}
               >
                 {t("sidebar.starRepo")}
+              </span>
+            </ShadTooltip>
+          </div>
+        </Button>
+
+        <Button
+          data-testid="discord_joined_btn_get_started"
+          unstyled
+          className={cn(
+            "w-full",
+            isDiscordJoinedChild && "pointer-events-none",
+          )}
+          onClick={(e) => {
+            if (isDiscordJoinedChild) {
+              e.preventDefault();
+              return;
+            }
+            handleUserTrack("discord_clicked");
+          }}
+        >
+          <div
+            className={cn(
+              "flex min-w-0 items-center gap-2 rounded-md p-2 py-[10px] hover:bg-muted",
+              isDiscordJoinedChild && "pointer-events-none",
+            )}
+          >
+            {isDiscordJoinedChild ? (
+              <span data-testid="discord_joined_icon_get_started">
+                <IconComponent
+                  name="Check"
+                  className="h-4 w-4 shrink-0 text-accent-emerald-foreground"
+                />
+              </span>
+            ) : (
+              <FaDiscord
+                className="h-4 w-4 shrink-0 text-[#5865F2]"
+                aria-hidden="true"
+              />
+            )}
+            <ShadTooltip content={t("sidebar.joinCommunity")} side="right">
+              <span
+                className={cn(
+                  "truncate text-sm",
+                  isDiscordJoinedChild && "text-muted-foreground line-through",
+                )}
+              >
+                {t("sidebar.joinCommunity")}
               </span>
             </ShadTooltip>
           </div>

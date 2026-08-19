@@ -49,7 +49,12 @@ export function FlowBuilderWelcome({
 
   useEffect(() => {
     const handleKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      // Radix's DismissableLayer preventDefaults the Escape it consumes to
+      // dismiss a dialog (e.g. the TemplatesModal opened from "Browse
+      // more…") but does not stop propagation, so without this guard one
+      // keypress would close both the modal and the welcome underneath,
+      // stranding keyboard/screen-reader focus on the canvas (LE-2041 QA).
+      if (e.key === "Escape" && !e.defaultPrevented) onClose();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
@@ -111,6 +116,7 @@ export function FlowBuilderWelcome({
         className="absolute left-1.5 top-1.5 z-10 flex w-10 animate-in flex-col items-center gap-1.5 rounded-lg border border-border bg-background p-1 duration-300 fade-in slide-in-from-left-2"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mirror the real always-visible nav, Agent tab included. */}
         {NAV_ITEMS.map((item) => {
           const tooltip = t(item.tooltip);
           return (

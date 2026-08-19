@@ -87,6 +87,8 @@ Common options:
   -NoBrowser
 ```
 
+The Windows helper skips the test-only Puppeteer and Chromedriver browser downloads by default. Pass `-InstallTestBrowsers` when those browser binaries are required for local accessibility testing.
+
 The Windows helper detects a `.venv` created by WSL, Linux, or macOS and recreates it as a native Windows virtual environment. A virtual environment cannot be shared between Windows and WSL.
 
 If PowerShell blocks local scripts, either use `dev.cmd` or allow locally created scripts for the current user:

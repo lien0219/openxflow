@@ -8,6 +8,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from lfx.log.logger import logger
+from lfx.services.authorization import AuthorizationMutation, AuthorizationMutationKind
+from lfx.utils.util_strings import escape_like_pattern
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
@@ -23,6 +25,11 @@ from langflow.api.v1.schemas.authz_teams import (
 )
 from langflow.services.authorization.bootstrap import is_managed_service_user
 from langflow.services.authorization.invalidation import safe_invalidate_all, safe_invalidate_user
+from langflow.services.authorization.lifecycle import (
+    acquire_identity_mutation_lock,
+    safe_identity_mutation_committed,
+    stage_identity_mutation,
+)
 from langflow.services.authorization.team_roles import (
     TeamRoleGrant,
     create_team_role_grant,
@@ -120,8 +127,10 @@ async def list_teams(
     # protected by ``_require_team_reader`` below.
     statement = select(AuthzTeam)
     if search:
-        like = f"%{search}%"
-        statement = statement.where((AuthzTeam.team_name.ilike(like)) | (AuthzTeam.adom_name.ilike(like)))
+        like = f"%{escape_like_pattern(search)}%"
+        statement = statement.where(
+            (AuthzTeam.team_name.ilike(like, escape="\\")) | (AuthzTeam.adom_name.ilike(like, escape="\\"))
+        )
     if is_active is not None:
         statement = statement.where(AuthzTeam.is_active == is_active)
     statement = statement.order_by(AuthzTeam.team_name, AuthzTeam.id).offset(offset).limit(limit)
@@ -148,6 +157,12 @@ async def create_team(
     session: DbSession,
 ) -> TeamRead:
     _require_superuser(current_user)
+    authorization_service = get_authorization_service()
+    await acquire_identity_mutation_lock(
+        authorization_service,
+        session,
+        kind=AuthorizationMutationKind.TEAM_CREATED,
+    )
     team = AuthzTeam(
         team_name=payload.team_name,
         adom_name=payload.adom_name,
@@ -155,7 +170,16 @@ async def create_team(
         is_active=payload.is_active,
     )
     session.add(team)
+    mutation = AuthorizationMutation(
+        kind=AuthorizationMutationKind.TEAM_CREATED,
+        entity_id=team.id,
+        actor_user_id=current_user.id,
+        team_id=team.id,
+        policy_relevant_fields=("adom_name", "is_active"),
+    )
     try:
+        await session.flush()
+        await stage_identity_mutation(authorization_service, session, mutation)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -163,6 +187,7 @@ async def create_team(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Team with adom_name {payload.adom_name!r} already exists",
         ) from exc
+    await safe_identity_mutation_committed(authorization_service, mutation)
     await session.refresh(team)
     await audit_decision(
         user_id=current_user.id,
@@ -183,10 +208,17 @@ async def update_team(
     session: DbSession,
 ) -> TeamRead:
     _require_superuser(current_user)
+    authorization_service = get_authorization_service()
+    await acquire_identity_mutation_lock(
+        authorization_service,
+        session,
+        kind=AuthorizationMutationKind.TEAM_UPDATED,
+        entity_id=team_id,
+    )
     team = await _get_team(session, team_id, for_update=True)
-
     policy_relevant_changed = False
     changed_fields: list[str] = []
+    previous_adom_name = team.adom_name
     if payload.team_name is not None and team.team_name != payload.team_name:
         team.team_name = payload.team_name
         changed_fields.append("team_name")
@@ -194,6 +226,9 @@ async def update_team(
         team.adom_name = payload.adom_name
         changed_fields.append("adom_name")
         policy_relevant_changed = True
+    # description is nullable on the DB side, so use a presence check
+    # (model_fields_set) instead of ``is not None`` — an explicit "description":
+    # null in the body clears the field, while omitting it leaves the row alone.
     if "description" in payload.model_fields_set and team.description != payload.description:
         team.description = payload.description
         changed_fields.append("description")
@@ -202,8 +237,17 @@ async def update_team(
         changed_fields.append("is_active")
         policy_relevant_changed = True
     team.updated_at = datetime.now(timezone.utc)
-
+    mutation = AuthorizationMutation(
+        kind=AuthorizationMutationKind.TEAM_UPDATED,
+        entity_id=team.id,
+        actor_user_id=current_user.id,
+        team_id=team.id,
+        policy_relevant_fields=tuple(sorted(set(changed_fields) & {"adom_name", "is_active"})),
+        previous_identifier=previous_adom_name if team.adom_name != previous_adom_name else None,
+    )
     try:
+        await session.flush()
+        await stage_identity_mutation(authorization_service, session, mutation)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -211,6 +255,7 @@ async def update_team(
             status_code=status.HTTP_409_CONFLICT,
             detail="adom_name conflict — another team already uses this slug",
         ) from exc
+    await safe_identity_mutation_committed(authorization_service, mutation)
     await session.refresh(team)
     if policy_relevant_changed:
         await safe_invalidate_all(get_authorization_service(), op="team:update")
@@ -232,12 +277,31 @@ async def delete_team(
     session: DbSession,
 ) -> None:
     _require_superuser(current_user)
+    authorization_service = get_authorization_service()
+    await acquire_identity_mutation_lock(
+        authorization_service,
+        session,
+        kind=AuthorizationMutationKind.TEAM_DELETED,
+        entity_id=team_id,
+    )
     team = await _get_team(session, team_id, for_update=True)
     team_name = team.team_name
     await delete_all_team_role_grants(session, team_id)
+    mutation = AuthorizationMutation(
+        kind=AuthorizationMutationKind.TEAM_DELETED,
+        entity_id=team_id,
+        actor_user_id=current_user.id,
+        team_id=team_id,
+        policy_relevant_fields=("adom_name", "is_active"),
+        previous_identifier=team.adom_name,
+    )
+    # Cascade on team_members handles cleanup; share rows targeting this team
+    # are left in place (caller may want to migrate them before deleting).
     await session.delete(team)
+    await session.flush()
+    await stage_identity_mutation(authorization_service, session, mutation)
     await session.commit()
-    await safe_invalidate_all(get_authorization_service(), op="team:delete")
+    await safe_identity_mutation_committed(authorization_service, mutation)
     await audit_decision(
         user_id=current_user.id,
         action="team:delete",
@@ -365,6 +429,13 @@ async def add_member(
     session: DbSession,
 ) -> TeamMemberRead:
     _require_superuser(current_user)
+    authorization_service = get_authorization_service()
+    await acquire_identity_mutation_lock(
+        authorization_service,
+        session,
+        kind=AuthorizationMutationKind.TEAM_MEMBER_ADDED,
+        affected_user_ids=(payload.user_id,),
+    )
     team = await _get_team(session, team_id, for_update=True)
     user = await session.get(User, payload.user_id)
     if user is None:
@@ -377,6 +448,14 @@ async def add_member(
 
     member = AuthzTeamMember(team_id=team_id, user_id=payload.user_id, source=payload.source)
     session.add(member)
+    mutation = AuthorizationMutation(
+        kind=AuthorizationMutationKind.TEAM_MEMBER_ADDED,
+        entity_id=member.id,
+        actor_user_id=current_user.id,
+        affected_user_ids=(payload.user_id,),
+        team_id=team_id,
+        policy_relevant_fields=("team_id", "user_id", "source"),
+    )
     try:
         await session.flush()
         await sync_team_member_grants(
@@ -385,6 +464,7 @@ async def add_member(
             user_id=payload.user_id,
             assigned_by=current_user.id,
         )
+        await stage_identity_mutation(authorization_service, session, mutation)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -392,6 +472,7 @@ async def add_member(
             status_code=status.HTTP_409_CONFLICT,
             detail="User is already a member of this team",
         ) from exc
+    await safe_identity_mutation_committed(authorization_service, mutation)
     await session.refresh(member)
     await safe_invalidate_user(get_authorization_service(), payload.user_id, op="team_member:create")
     await audit_decision(
@@ -417,6 +498,13 @@ async def remove_member(
     session: DbSession,
 ) -> None:
     _require_superuser(current_user)
+    authorization_service = get_authorization_service()
+    await acquire_identity_mutation_lock(
+        authorization_service,
+        session,
+        kind=AuthorizationMutationKind.TEAM_MEMBER_REMOVED,
+        affected_user_ids=(user_id,),
+    )
     await _get_team(session, team_id, for_update=True)
     member = (
         await session.exec(
@@ -429,8 +517,19 @@ async def remove_member(
     if member is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Membership not found")
     await remove_team_member_grants(session, team_id=team_id, user_id=user_id)
+    mutation = AuthorizationMutation(
+        kind=AuthorizationMutationKind.TEAM_MEMBER_REMOVED,
+        entity_id=member.id,
+        actor_user_id=current_user.id,
+        affected_user_ids=(user_id,),
+        team_id=team_id,
+        policy_relevant_fields=("team_id", "user_id", "source"),
+    )
     await session.delete(member)
+    await session.flush()
+    await stage_identity_mutation(authorization_service, session, mutation)
     await session.commit()
+    await safe_identity_mutation_committed(authorization_service, mutation)
     await safe_invalidate_user(get_authorization_service(), user_id, op="team_member:delete")
     await audit_decision(
         user_id=current_user.id,

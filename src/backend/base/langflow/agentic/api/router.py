@@ -4,22 +4,30 @@ This module provides the HTTP endpoints for the Langflow Assistant.
 All business logic is delegated to service modules.
 """
 
+import asyncio
+import contextlib
+import json
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from lfx.base.models.provider_registry import is_api_key_optional
 from lfx.base.models.unified_models import (
     get_all_variables_for_provider,
-    get_model_provider_variable_mapping,
     get_provider_required_variable_keys,
+    get_provider_secret_variable_key,
     get_unified_models_detailed,
 )
 from lfx.log.logger import logger
+from lfx.services.deps import get_settings_service
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from langflow.agentic.api.schemas import AssistantRequest
+from langflow.agentic.api.deps import require_agentic_experience
+from langflow.agentic.api.schemas import AssistantRequest, HeadlessAssistantRequest
+from langflow.agentic.helpers.sse import format_complete_event, format_error_event
 from langflow.agentic.services.assistant_service import (
     execute_flow_with_validation,
     execute_flow_with_validation_streaming,
@@ -31,11 +39,12 @@ from langflow.agentic.services.flow_types import (
 )
 from langflow.agentic.services.provider_service import (
     PREFERRED_PROVIDERS,
+    build_live_only_provider_entries,
     get_default_model,
     get_enabled_providers_for_user,
     list_installed_tool_calling_models,
 )
-from langflow.api.utils.core import CurrentActiveUser, DbSession
+from langflow.api.utils.core import CurrentActiveUser, DbSession, release_db_transaction
 
 router = APIRouter(prefix="/agentic", tags=["Agentic"])
 
@@ -46,7 +55,7 @@ class _AssistantContext:
 
     provider: str
     model_name: str
-    api_key_name: str
+    api_key_name: str | None
     session_id: str
     global_vars: dict[str, str]
     max_retries: int
@@ -62,7 +71,6 @@ async def _resolve_assistant_context(
     Raises:
         HTTPException: If provider is not configured or API key is missing.
     """
-    provider_variable_map = get_model_provider_variable_mapping()
     enabled_providers, _ = await get_enabled_providers_for_user(user_id, session)
 
     if not enabled_providers:
@@ -86,8 +94,8 @@ async def _resolve_assistant_context(
             detail=f"Provider '{provider}' is not configured. Available providers: {enabled_providers}",
         )
 
-    api_key_name = provider_variable_map.get(provider)
-    if not api_key_name:
+    api_key_name = get_provider_secret_variable_key(provider)
+    if not api_key_name and not is_api_key_optional(provider):
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
     model_name = request.model_name or get_default_model(provider, user_id=user_id) or ""
@@ -114,6 +122,11 @@ async def _resolve_assistant_context(
         "MODEL_NAME": model_name,
         "PROVIDER": provider,
     }
+
+    # Seeded here (not per-endpoint) so /assist and /execute/{flow_name}
+    # honor the budget the same way /assist/stream does.
+    if request.iterations_limit is not None:
+        global_vars["ITERATIONS_LIMIT"] = str(request.iterations_limit)
 
     # Inject all provider variables into the global context
     global_vars.update(provider_vars)
@@ -154,7 +167,7 @@ async def _validate_flow_access(flow_id: str | None, user_id: UUID, session: Asy
         raise HTTPException(status_code=404, detail="Flow not found.")
 
 
-@router.post("/execute/{flow_name}")
+@router.post("/execute/{flow_name}", dependencies=[Depends(require_agentic_experience)])
 async def execute_named_flow(
     flow_name: str,
     request: AssistantRequest,
@@ -168,6 +181,10 @@ async def execute_named_flow(
     silent 500 into a successful run, or a clear 4xx when no provider is set.
     """
     ctx = await _resolve_assistant_context(request, current_user.id, session)
+
+    # The flow run below can wait on a model for minutes; don't hold the
+    # request transaction (and its pooled connection) open across it (#14445).
+    await release_db_transaction(session)
 
     global_vars = dict(ctx.global_vars)
     if request.component_id:
@@ -195,9 +212,14 @@ async def check_assistant_config(
 ) -> dict:
     """Check if the Langflow Assistant is properly configured.
 
-    Returns available providers with their configured status and available models.
+    Returns available providers with their configured status and available models, plus
+    ``enabled``: whether ``agentic_experience`` gates the assistant off. Provider config and
+    the feature gate are independent failure modes -- without ``enabled`` a caller cannot tell
+    "no provider connected" from "feature disabled", and every /assist call 404s with no way
+    to explain why. This probe stays ungated so that distinction survives the gate.
     """
     user_id = current_user.id
+    enabled = get_settings_service().settings.agentic_experience
     enabled_providers, _ = await get_enabled_providers_for_user(user_id, session)
 
     all_providers = []
@@ -249,6 +271,17 @@ async def check_assistant_config(
                     }
                 )
 
+    # Live providers with an all-deprecated static catalog (e.g. IBM WatsonX) are dropped above
+    # before their live fetch runs; re-add them from live tool-calling models.
+    if enabled_providers:
+        all_providers.extend(
+            build_live_only_provider_entries(
+                enabled_providers,
+                {p["name"] for p in all_providers},
+                user_id,
+            )
+        )
+
     default_provider = None
     default_model = None
 
@@ -268,6 +301,7 @@ async def check_assistant_config(
         default_model = all_providers[0]["default_model"]
 
     return {
+        "enabled": enabled,
         "configured": len(enabled_providers) > 0,
         "configured_providers": enabled_providers,
         "providers": all_providers,
@@ -276,7 +310,7 @@ async def check_assistant_config(
     }
 
 
-@router.post("/assist")
+@router.post("/assist", dependencies=[Depends(require_agentic_experience)])
 async def assist(
     request: AssistantRequest,
     current_user: CurrentActiveUser,
@@ -287,6 +321,10 @@ async def assist(
     ctx = await _resolve_assistant_context(request, current_user.id, session)
 
     logger.info(f"Executing {LANGFLOW_ASSISTANT_FLOW} with {ctx.provider}/{ctx.model_name}")
+
+    # The assistant run below can wait on a model for minutes; don't hold the
+    # request transaction (and its pooled connection) open across it (#14445).
+    await release_db_transaction(session)
 
     return await execute_flow_with_validation(
         flow_filename=LANGFLOW_ASSISTANT_FLOW,
@@ -301,7 +339,7 @@ async def assist(
     )
 
 
-@router.post("/assist/stream")
+@router.post("/assist/stream", dependencies=[Depends(require_agentic_experience)])
 async def assist_stream(
     request: AssistantRequest,
     http_request: Request,
@@ -311,6 +349,11 @@ async def assist_stream(
     """Chat with the Langflow Assistant with streaming progress updates."""
     await _validate_flow_access(request.flow_id, current_user.id, session)
     ctx = await _resolve_assistant_context(request, current_user.id, session)
+
+    # Dependency teardown only runs after the SSE stream finishes, so without
+    # this commit the request transaction (and its pooled connection) would
+    # stay open for the assistant's whole streaming run (#14445).
+    await release_db_transaction(session)
 
     return StreamingResponse(
         execute_flow_with_validation_streaming(
@@ -324,10 +367,86 @@ async def assist_stream(
             model_name=ctx.model_name,
             api_key_var=ctx.api_key_name,
             is_disconnected=http_request.is_disconnected,
+            is_superuser=bool(current_user.is_superuser),
+            history_limit=request.history_limit,
+            iterations_limit=request.iterations_limit,
         ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
         },
+    )
+
+
+@router.post("/assist/run", dependencies=[Depends(require_agentic_experience)])
+async def assist_headless(
+    request: HeadlessAssistantRequest,
+    current_user: CurrentActiveUser,
+    session: DbSession,
+) -> StreamingResponse:
+    """Run the assistant headlessly: canvas changes are applied, not proposed.
+
+    ``/assist/stream`` leaves a canvas change as a proposal the user approves in
+    a UI card. A headless caller (the MCP ``run_assistant`` tool) has no card, so
+    its edits would be silently dropped — this route persists them through
+    ``run_assistant_and_persist`` and streams the same ``progress`` events,
+    ending in ``complete`` (or ``error``).
+    """
+    # Local import: assistant_runner imports this module's helpers, so a top-level
+    # import here would close the cycle at startup.
+    from langflow.agentic.utils.assistant_runner import run_assistant_and_persist
+
+    if request.flow_id:
+        await _validate_flow_access(request.flow_id, current_user.id, session)
+
+    async def _stream() -> AsyncIterator[str]:
+        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+        async def on_progress(event: dict) -> None:
+            await queue.put(event)
+
+        async def _drive() -> dict:
+            try:
+                return await run_assistant_and_persist(
+                    session=session,
+                    user_id=current_user.id,
+                    instruction=request.instruction,
+                    flow_id=request.flow_id,
+                    provider=request.provider,
+                    model_name=request.model_name,
+                    session_id=request.session_id,
+                    on_progress=on_progress,
+                )
+            finally:
+                await queue.put(None)
+
+        task = asyncio.create_task(_drive())
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                # Re-emit the assistant's own progress event verbatim: it already carries
+                # the step/attempt shape the SSE formatter would rebuild.
+                yield f"data: {json.dumps(event)}\n\n"
+            try:
+                result = await task
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Headless assistant run failed")
+                yield format_error_event(str(exc))
+                return
+            yield format_complete_event(result)
+        finally:
+            # Client disconnect cancels this generator mid-yield; without this the
+            # orphaned task keeps writing to the DB on a tearing-down session.
+            if not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+    return StreamingResponse(
+        _stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )

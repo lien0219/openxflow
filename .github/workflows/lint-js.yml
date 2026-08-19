@@ -8,6 +8,10 @@ on:
         required: false
         type: boolean
         default: false
+      ref:
+        description: "Git ref to checkout."
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       branch:
@@ -24,24 +28,25 @@ jobs:
     name: Run Biome
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.branch || github.ref }}
+          persist-credentials: false
+          ref: ${{ inputs.ref || inputs.branch || github.event.pull_request.head.sha || github.sha }}
           # Need full history so biome can diff against the PR base
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         id: setup-node
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Cache Node.js dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         id: npm-cache
         with:
           path: ~/.npm

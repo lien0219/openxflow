@@ -1,5 +1,5 @@
 import type { ReactFlowJsonObject } from "@xyflow/react";
-import type { ReactElement, ReactNode } from "react";
+import type { InputHTMLAttributes, ReactElement, ReactNode } from "react";
 import type { handleOnNewValueType } from "@/CustomNodes/hooks/use-handle-new-value";
 import type { InputOutput } from "../../constants/enums";
 import type {
@@ -39,6 +39,12 @@ export type InputComponentType = {
   placeholder?: string;
   className?: string;
   id?: string;
+  /**
+   * Scopes the rendered DOM id to a flow node so two nodes exposing the same
+   * field name do not collide (LE-2037). `data-testid` keeps using `id`.
+   */
+  nodeId?: string;
+  inputProps?: InputHTMLAttributes<HTMLInputElement>;
   blurOnEnter?: boolean;
   optionsIcon?: string;
   optionsPlaceholder?: string;
@@ -157,6 +163,7 @@ export type NodeInputFieldComponentType = {
   isToolMode?: boolean;
   isPrimaryInput?: boolean;
   displayHandle?: boolean;
+  minimizedHandleTop?: string;
 };
 
 export type IOJSONInputComponentType = {
@@ -307,6 +314,14 @@ export type ShadToolTipType = {
   delayDuration?: number;
   styleClasses?: string;
   avoidCollisions?: boolean;
+  /**
+   * Overrides Radix's automatic aria-describedby on the trigger. Pass a
+   * string to point at a specific description element, or `undefined` to
+   * suppress the description entirely (e.g. when the tooltip text just
+   * repeats the trigger's own aria-label and would otherwise be announced
+   * twice). Omit this prop to keep Radix's default behavior.
+   */
+  ariaDescribedBy?: string;
 };
 
 export type TextHighlightType = {
@@ -320,6 +335,10 @@ export type TextHighlightType = {
 export interface IVarHighlightType {
   name: string;
   addCurlyBraces?: boolean;
+  /** Bare identifier used to decide whether the name is reserved, when it differs from `name`. */
+  variableName?: string;
+  /** Tooltip shown when the name is reserved. Must come from i18n, never from user input. */
+  invalidTitle?: string;
 }
 
 export type IconComponentProps = {
@@ -332,6 +351,11 @@ export type IconComponentProps = {
   id?: string;
   skipFallback?: boolean;
   dataTestId?: string;
+  /** Icons are decorative (aria-hidden) by default; pass false to expose. */
+  ariaHidden?: boolean;
+  /** Accessible name for meaningful icons; implies ariaHidden=false. */
+  ariaLabel?: string;
+  title?: string;
 };
 
 export type InputProps = {
@@ -371,6 +395,11 @@ export type TriggerProps = {
   children: ReactNode;
   tooltipContent?: ReactNode;
   side?: "top" | "right" | "bottom" | "left";
+  // Forwarded onto the underlying trigger button. Used when the trigger acts
+  // as a toggle (e.g. the admin active/superuser controls) so it is announced
+  // as a named toggle button instead of nesting an interactive role inside it.
+  ariaLabel?: string;
+  ariaPressed?: boolean;
 };
 
 export interface languageMap {
@@ -452,6 +481,7 @@ export type loginInputStateType = {
 };
 
 export type patchUserInputStateType = {
+  currentPassword: string;
   password: string;
   cnfPassword: string;
   profilePicture: string;
@@ -620,8 +650,6 @@ export type nodeToolbarPropsType = {
   numberOfOutputHandles: number;
   showNode: boolean;
   name?: string;
-  openAdvancedModal?: boolean;
-  onCloseAdvancedModal?: (close: boolean) => void;
   isOutdated: boolean;
   isUserEdited: boolean;
   hasBreakingChange: boolean;
@@ -650,6 +678,9 @@ export type modalHeaderType = {
   children: ReactNode;
   description?: string | JSX.Element | null;
   clampDescription?: number;
+  className?: string;
+  titleClassName?: string;
+  descriptionClassName?: string;
 };
 
 export type codeAreaModalPropsType = {

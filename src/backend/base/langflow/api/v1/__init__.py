@@ -1,3 +1,4 @@
+from langflow.api.v1.a2a import router as a2a_router
 from langflow.api.v1.api_key import router as api_key_router
 from langflow.api.v1.authz_audit import router as authz_audit_router
 from langflow.api.v1.authz_me import router as authz_me_router
@@ -8,6 +9,7 @@ from langflow.api.v1.authz_roles import router as authz_roles_router
 from langflow.api.v1.authz_shares import router as authz_shares_router
 from langflow.api.v1.authz_startup import router as authz_startup_router
 from langflow.api.v1.authz_teams import router as authz_teams_router
+from langflow.api.v1.catalog_policy import router as catalog_policy_router
 from langflow.api.v1.channel_admin import router as channel_admin_router
 from langflow.api.v1.channel_bindings import router as channel_bindings_router
 from langflow.api.v1.channel_management import router as channel_management_router
@@ -31,9 +33,11 @@ from langflow.api.v1.mcp_projects import router as mcp_projects_router
 from langflow.api.v1.memories import router as memories_router
 from langflow.api.v1.message_pages import router as message_pages_router
 from langflow.api.v1.model_options import router as model_options_router
+from langflow.api.v1.model_provider_policy import router as model_provider_policy_router
 from langflow.api.v1.models import router as models_router
 from langflow.api.v1.monitor import router as monitor_router
 from langflow.api.v1.openai_responses import router as openai_responses_router
+from langflow.api.v1.policy_bundle import router as policy_bundle_router
 from langflow.api.v1.projects import router as projects_router
 from langflow.api.v1.starter_projects import router as starter_projects_router
 from langflow.api.v1.store import router as store_router
@@ -43,6 +47,7 @@ from langflow.api.v1.validate import router as validate_router
 from langflow.api.v1.variable import router as variables_router
 
 __all__ = [
+    "a2a_router",
     "api_key_router",
     "authz_audit_router",
     "authz_me_router",
@@ -51,6 +56,7 @@ __all__ = [
     "authz_shares_router",
     "authz_startup_router",
     "authz_teams_router",
+    "catalog_policy_router",
     "channel_admin_router",
     "channel_bindings_router",
     "channel_management_router",
@@ -74,9 +80,11 @@ __all__ = [
     "memories_router",
     "message_pages_router",
     "model_options_router",
+    "model_provider_policy_router",
     "models_router",
     "monitor_router",
     "openai_responses_router",
+    "policy_bundle_router",
     "projects_router",
     "starter_projects_router",
     "store_router",

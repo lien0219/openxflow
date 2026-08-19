@@ -1,4 +1,7 @@
-from types import SimpleNamespace
+import importlib.util
+import socket
+import sys
+from types import ModuleType, SimpleNamespace
 from unittest import mock
 from uuid import uuid4
 
@@ -8,6 +11,24 @@ from httpx import AsyncClient
 from langflow.services.variable.constants import CREDENTIAL_TYPE, GENERIC_TYPE
 
 pytestmark = pytest.mark.no_blockbuster
+
+
+@pytest.fixture(autouse=True)
+def fake_langchain_google_genai(monkeypatch):
+    if importlib.util.find_spec("langchain_google_genai") is not None:
+        return
+
+    langchain_google_genai = ModuleType("langchain_google_genai")
+
+    class ChatGoogleGenerativeAI:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def invoke(self, *args, **kwargs):  # noqa: ARG002
+            return "test response"
+
+    langchain_google_genai.ChatGoogleGenerativeAI = ChatGoogleGenerativeAI
+    monkeypatch.setitem(sys.modules, "langchain_google_genai", langchain_google_genai)
 
 
 @pytest.fixture
@@ -40,6 +61,8 @@ async def test_create_variable(client: AsyncClient, generic_variable, logged_in_
     assert generic_variable["type"] == result["type"]
     assert generic_variable["default_fields"] == result["default_fields"]
     assert "id" in result
+    assert result["is_owner"] is True
+    assert result["can_manage_shares"] is True
     # GENERIC_TYPE variables should NOT be encrypted (stored as plaintext)
     assert generic_variable["value"] == result["value"]
 
@@ -140,14 +163,18 @@ async def test_read_variables(client: AsyncClient, generic_variable, credential_
     assert credential_variable["name"] in [r["name"] for r in result]
 
     # Assert that credentials are not decrypted and generic are decrypted
-    credential_vars = [r for r in result if r["type"] == CREDENTIAL_TYPE]
-    generic_vars = [r for r in result if r["type"] == GENERIC_TYPE]
+    credential_read = next(r for r in result if r["name"] == credential_variable["name"])
+    generic_read = next(r for r in result if r["name"] == generic_variable["name"])
 
     # Credential variables should remain encrypted (value should be different)
-    assert all(c["value"] != credential_variable["value"] for c in credential_vars)
+    assert credential_read["type"] == CREDENTIAL_TYPE
+    assert credential_read["value"] != credential_variable["value"]
+    assert credential_read["has_value"] is True
 
     # Generic variables should be decrypted (value should match original)
-    assert all(g["value"] == generic_variable["value"] for g in generic_vars)
+    assert generic_read["type"] == GENERIC_TYPE
+    assert generic_read["value"] == generic_variable["value"]
+    assert generic_read["has_value"] is True
 
 
 @pytest.mark.usefixtures("active_user")
@@ -410,14 +437,19 @@ async def test_create_variable__ollama_base_url_validation_failure(client: Async
         "default_fields": [],
     }
 
-    # Mock failed Ollama API call
-    with mock.patch("requests.get") as mock_get:
+    # Keep DNS deterministic so SSRF validation reaches the mocked Ollama API call.
+    public_address = [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 0))]
+    with (
+        mock.patch("socket.getaddrinfo", return_value=public_address),
+        mock.patch("requests.get") as mock_get,
+    ):
         mock_get.return_value.status_code = 404
         response = await client.post("api/v1/variables/", json=ollama_variable, headers=logged_in_headers)
         result = response.json()
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Invalid Ollama base URL" in result["detail"]
+        assert mock_get.called
 
 
 @pytest.mark.usefixtures("active_user")
@@ -596,7 +628,7 @@ async def test_delete_provider_credential_cleans_up_enabled_models(client: Async
         enable_response = await client.post(
             "api/v1/models/enabled_models",
             json=[
-                {"provider": "OpenAI", "model_id": "gpt-4-turbo-preview", "enabled": True},
+                {"provider": "OpenAI", "model_id": "gpt-4.1-mini", "enabled": True},
             ],
             headers=logged_in_headers,
         )
@@ -617,7 +649,7 @@ async def test_delete_provider_credential_cleans_up_enabled_models(client: Async
         import json
 
         enabled_models = json.loads(enabled_models_var["value"])
-        assert "gpt-4-turbo-preview" not in enabled_models
+        assert "gpt-4.1-mini" not in enabled_models
 
 
 @pytest.mark.usefixtures("active_user")
@@ -698,7 +730,7 @@ async def test_detect_env_vars_endpoint__rejects_missing_nodes(client: AsyncClie
             headers=logged_in_headers,
         )
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert "must be a JSON object with a 'nodes' list" in response.json()["detail"]
 
 
@@ -834,6 +866,27 @@ async def test_update_variable_cross_user_allowed_with_plugin(
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["name"] == "shared_update"
+
+
+@pytest.mark.usefixtures("active_user")
+async def test_update_shared_variable_metadata_never_returns_owner_value(
+    client: AsyncClient, generic_variable, logged_in_headers, patch_variable_authz
+):
+    generic_variable["value"] = "owner-plaintext"
+    saved = (await client.post("api/v1/variables/", json=generic_variable, headers=logged_in_headers)).json()
+    delegate_headers = await _create_user_and_headers(client, f"var_metadata_{uuid4().hex[:8]}")
+    patch_variable_authz(cross_user=True, enabled=True, allow=True)
+
+    response = await client.patch(
+        f"api/v1/variables/{saved['id']}",
+        json={"id": saved["id"], "name": "metadata_only"},
+        headers=delegate_headers,
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["value"] is None
+    assert response.json()["is_owner"] is False
+    assert response.json()["can_manage_shares"] is False
 
 
 @pytest.mark.usefixtures("active_user")
