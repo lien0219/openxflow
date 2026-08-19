@@ -6,6 +6,20 @@ import { PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/utils/utils";
 import { ModelOption, SelectedModel } from "../types";
 
+/**
+ * The trigger collapses into a single "Setup Provider" call to action — which
+ * already opens the provider manager, so no extra affordance belongs next to it.
+ */
+export const isSetupProviderState = ({
+  hasEnabledProviders,
+  showEmptyState,
+  optionCount,
+}: {
+  hasEnabledProviders: boolean;
+  showEmptyState: boolean;
+  optionCount: number;
+}) => !hasEnabledProviders && !showEmptyState && optionCount === 0;
+
 interface ModelTriggerProps {
   open: boolean;
   disabled: boolean;
@@ -17,6 +31,8 @@ interface ModelTriggerProps {
   id: string;
   refButton: RefObject<HTMLButtonElement | null>;
   showEmptyState?: boolean;
+  "aria-label"?: string;
+  ariaLabelledBy?: string;
 }
 
 const ModelTrigger = ({
@@ -30,6 +46,8 @@ const ModelTrigger = ({
   id,
   refButton,
   showEmptyState = false,
+  "aria-label": ariaLabel,
+  ariaLabelledBy,
 }: ModelTriggerProps) => {
   const { t } = useTranslation();
   const renderSelectedIcon = () => {
@@ -48,13 +66,21 @@ const ModelTrigger = ({
   // Check if we're in empty state mode (showEmptyState=true and no options)
   const isEmptyStateMode = showEmptyState && options.length === 0;
 
-  if (!hasEnabledProviders && !showEmptyState && options.length === 0) {
+  if (
+    isSetupProviderState({
+      hasEnabledProviders,
+      showEmptyState,
+      optionCount: options.length,
+    })
+  ) {
     return (
       <Button
         variant="outline"
         size="xs"
         className="dropdown-component-false-outline w-full justify-start gap-2 py-2 font-normal"
         onClick={onOpenManageProviders}
+        aria-label={!ariaLabelledBy ? ariaLabel : undefined}
+        aria-labelledby={ariaLabelledBy}
       >
         <ForwardedIconComponent
           name="BrainCircuit"
@@ -73,16 +99,19 @@ const ModelTrigger = ({
     <div className="flex w-full flex-col">
       <PopoverTrigger asChild>
         <Button
+          id={id}
           disabled={disabled}
           variant="primary"
           size="xs"
           role="combobox"
           ref={refButton}
           aria-expanded={open}
+          aria-label={!ariaLabelledBy ? ariaLabel : undefined}
+          aria-labelledby={ariaLabelledBy}
           data-testid={id}
           className={cn(
             "dropdown-component-false-outline py-2",
-            "no-focus-visible w-full justify-between font-normal disabled:bg-muted disabled:text-muted-foreground",
+            "focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2 w-full justify-between font-normal disabled:bg-muted disabled:text-muted-foreground",
           )}
         >
           <span

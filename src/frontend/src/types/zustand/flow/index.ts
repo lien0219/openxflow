@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noExplicitAny: pre-existing legacy flow-store types predate this rule; the HITL change only added typed fields
 import type {
   Connection,
   Node,
@@ -17,7 +18,9 @@ export type FlowPoolObjectType = {
   valid: boolean;
   messages: Array<ChatOutputType | ChatInputType> | [];
   data: {
+    // biome-ignore lint/suspicious/noExplicitAny: pre-existing loose store payload; not introduced by this PR (file touched only to add setNodesAndEdges)
     artifacts: any | ChatOutputType | ChatInputType;
+    // biome-ignore lint/suspicious/noExplicitAny: pre-existing loose store payload; not introduced by this PR (file touched only to add setNodesAndEdges)
     results: any | ChatOutputType | ChatInputType;
   };
   duration?: string;
@@ -33,7 +36,9 @@ export type FlowPoolObjectTypeNew = {
   timestamp: string;
   valid: boolean;
   data: {
+    // biome-ignore lint/suspicious/noExplicitAny: pre-existing loose store payload; not introduced by this PR (file touched only to add setNodesAndEdges)
     outputs?: any | ChatOutputType | ChatInputType;
+    // biome-ignore lint/suspicious/noExplicitAny: pre-existing loose store payload; not introduced by this PR (file touched only to add setNodesAndEdges)
     results: any | ChatOutputType | ChatInputType;
   };
   duration?: string;
@@ -62,6 +67,11 @@ export type ComponentsToUpdateType = {
   userEdited: boolean;
 };
 
+export type AutoSaveFlowType = ((flow?: FlowType) => void) & {
+  cancel: () => void;
+  flush: () => Promise<void> | void;
+};
+
 export type FlowStoreType = {
   dismissedNodes: string[];
   addDismissedNodes: (dismissedNodes: string[]) => void;
@@ -75,7 +85,7 @@ export type FlowStoreType = {
     [key: number]: number;
   }) => void;
   fitViewNode: (nodeId: string) => void;
-  autoSaveFlow: ((flow?: FlowType) => void) | undefined;
+  autoSaveFlow: AutoSaveFlowType | undefined;
   componentsToUpdate: ComponentsToUpdateType[];
   setComponentsToUpdate: (
     update:
@@ -118,7 +128,9 @@ export type FlowStoreType = {
   buildingFlowId: string | null;
   buildingSessionId: string | null;
   isPending: boolean;
+  awaitingInput: boolean;
   setIsBuilding: (isBuilding: boolean) => void;
+  setAwaitingInput: (awaitingInput: boolean) => void;
   setBuildStartTime: (time: number) => void;
   setBuildDuration: (duration: number) => void;
   setBuildingSession: (flowId: string | null, sessionId: string | null) => void;
@@ -146,6 +158,7 @@ export type FlowStoreType = {
   setEdges: (
     update: EdgeType[] | ((oldState: EdgeType[]) => EdgeType[]),
   ) => void;
+  setNodesAndEdges: (nodes: AllNodeType[], edges: EdgeType[]) => void;
   setNode: (
     id: string,
     update: AllNodeType | ((oldState: AllNodeType) => AllNodeType),
@@ -156,16 +169,20 @@ export type FlowStoreType = {
   deleteNode: (nodeId: string | Array<string>) => void;
   deleteEdge: (edgeId: string | Array<string>) => void;
   paste: (
+    // biome-ignore lint/suspicious/noExplicitAny: pre-existing loose store payload; not introduced by this PR (file touched only to add setNodesAndEdges)
     selection: { nodes: any; edges: any },
     position: { x: number; y: number; paneX?: number; paneY?: number },
   ) => void;
+  // biome-ignore lint/suspicious/noExplicitAny: pre-existing loose store payload; not introduced by this PR (file touched only to add setNodesAndEdges)
   lastCopiedSelection: { nodes: any; edges: any } | null;
   setLastCopiedSelection: (
+    // biome-ignore lint/suspicious/noExplicitAny: pre-existing loose store payload; not introduced by this PR (file touched only to add setNodesAndEdges)
     newSelection: { nodes: any; edges: any } | null,
     isCrop?: boolean,
   ) => void;
   cleanFlow: () => void;
   setFilterEdge: (newState) => void;
+  // biome-ignore lint/suspicious/noExplicitAny: pre-existing loose store payload; not introduced by this PR (file touched only to add setNodesAndEdges)
   getFilterEdge: any[];
   setFilterComponent: (newState) => void;
   getFilterComponent: string;

@@ -6,7 +6,12 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, cast
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelCallLimitMiddleware, ToolRetryMiddleware
+from langchain.agents.middleware import (
+    HumanInTheLoopMiddleware,
+    ModelCallLimitMiddleware,
+    ToolRetryMiddleware,
+)
+from langgraph.types import Command
 
 from lfx.components.models_and_agents.agent_helpers.graph_event_adapter import (
     adapt_graph_events_to_executor_shape,
@@ -20,9 +25,13 @@ from lfx.components.models_and_agents.agent_helpers.placeholder_corrective_middl
 from lfx.components.models_and_agents.agent_helpers.single_tool_call_middleware import (
     SingleToolCallMiddleware,
 )
-from lfx.components.models_and_agents.memory import MemoryComponent, aget_agent_chat_history
+from lfx.components.models_and_agents.agent_helpers.tool_approval import ToolApprovalMixin
+from lfx.components.models_and_agents.agent_helpers.tool_call_id_middleware import ToolCallIDMiddleware
+from lfx.components.models_and_agents.memory import MemoryComponent, _safe_graph_user_id, aget_agent_chat_history
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from langchain_core.tools import Tool
 
     from lfx.schema.log import OnTokenFunctionType, SendMessageFunctionType
@@ -30,7 +39,7 @@ if TYPE_CHECKING:
 from lfx.base.agents.agent import LCToolsAgentComponent
 from lfx.base.agents.callback import AgentAsyncHandler
 from lfx.base.agents.default_system_prompt import DEFAULT_SYSTEM_PROMPT_TEMPLATE
-from lfx.base.agents.events import ExceptionWithMessageError, process_agent_events
+from lfx.base.agents.events import AgentPausedError, ExceptionWithMessageError, process_agent_events
 from lfx.base.agents.token_callback import TokenUsageCallbackHandler
 from lfx.base.agents.utils import get_chat_output_sender_name
 from lfx.base.constants import STREAM_INFO_TEXT
@@ -50,7 +59,6 @@ from lfx.inputs.inputs import BoolInput, DropdownInput, ModelInput, StrInput
 from lfx.io import IntInput, MessageTextInput, MultilineInput, Output, SecretStrInput, TableInput
 from lfx.log.logger import logger
 from lfx.memory import delete_message
-from lfx.schema.content_block import ContentBlock
 from lfx.schema.data import Data
 from lfx.schema.dotdict import dotdict
 from lfx.schema.message import Message
@@ -141,7 +149,7 @@ def _suppress_send_message(component: Any):
         component.send_message = original
 
 
-class AgentComponent(ToolCallingAgentComponent):
+class AgentComponent(ToolApprovalMixin, ToolCallingAgentComponent):
     display_name: str = "Agent"
     description: str = "Define the agent's instructions, then enter a task to complete using tools."
     documentation: str = "https://docs.langflow.org/agents"
@@ -386,6 +394,7 @@ class AgentComponent(ToolCallingAgentComponent):
             watsonx_url=getattr(self, "base_url_ibm_watsonx", None),
             watsonx_project_id=getattr(self, "project_id", None),
             openai_compatible_base_url=getattr(self, "openai_compatible_base_url", None),
+            overrides=getattr(self, "_model_overrides", None),
         )
 
     async def get_agent_requirements(self):
@@ -498,7 +507,7 @@ class AgentComponent(ToolCallingAgentComponent):
             prompt = prompt.replace(placeholder, value)
         return prompt
 
-    def create_agent_runnable(self):
+    def create_agent_runnable(self, *, allow_interrupts: bool = True):
         """Build the LangGraph `CompiledStateGraph` via `langchain.agents.create_agent`.
 
         Replaces the legacy `AgentExecutor` runnable inherited from
@@ -546,12 +555,14 @@ class AgentComponent(ToolCallingAgentComponent):
                 )
                 raise NotImplementedError(msg) from exc
 
-        middleware = self._build_middleware(llm)
+        middleware = self._build_middleware(llm, allow_interrupts=allow_interrupts)
+        checkpointer = self._build_agent_checkpointer() if allow_interrupts else None
         return create_agent(
             model=llm,
             tools=tools,
             system_prompt=self.system_prompt or "",
             middleware=middleware or None,
+            checkpointer=checkpointer,
         )
 
     def _compute_recursion_limit(self) -> int:
@@ -565,12 +576,19 @@ class AgentComponent(ToolCallingAgentComponent):
         run_limit = max(1, int(raw)) if raw is not None else 15
         return run_limit * 2 + 5
 
-    def _build_middleware(self, llm: Any) -> list:
+    def _build_middleware(self, llm: Any, *, allow_interrupts: bool = True) -> list:
         # `llm` is passed in (rather than re-fetched via `self._get_llm()`)
         # because some providers do credential resolution / client instantiation
         # lazily on each call. The caller — `create_agent_runnable` — already
         # resolved it once for `bind_tools`, so reuse that instance here.
         middleware: list = []
+        # LangChain accepts missing IDs on AIMessage.tool_calls, but LangGraph's
+        # invalid-call path and ToolRetryMiddleware both require a string when
+        # they construct an error ToolMessage. Normalize at the model boundary
+        # so either recovery path can return the error to the model instead of
+        # crashing the flow.
+        if self.tools:
+            middleware.append(ToolCallIDMiddleware())
         max_iterations = getattr(self, "max_iterations", None)
         if max_iterations is not None:
             # `max_iterations` is a safety cap, not an "unlimited" toggle. A saved
@@ -598,6 +616,11 @@ class AgentComponent(ToolCallingAgentComponent):
         if is_watsonx_model(llm):
             middleware.append(SingleToolCallMiddleware())
             middleware.append(WatsonXPlaceholderMiddleware())
+        # Human-in-the-loop: attach only when a tool is gated AND interrupts are allowed
+        # (the structured-output path disables them), keeping ungated flows unchanged.
+        interrupt_on = self._gated_interrupt_on() if allow_interrupts else {}
+        if interrupt_on:
+            middleware.append(HumanInTheLoopMiddleware(interrupt_on=interrupt_on))
         return middleware
 
     async def run_agent(self, agent) -> Message:
@@ -632,19 +655,37 @@ class AgentComponent(ToolCallingAgentComponent):
         # for start/end overhead.
         recursion_limit = self._compute_recursion_limit()
 
+        agent_config: dict[str, Any] = {
+            "callbacks": [
+                AgentAsyncHandler(self.log),
+                token_usage_handler,
+                *self._get_shared_callbacks(),
+            ],
+            "recursion_limit": recursion_limit,
+        }
+        # The durable checkpointer keys on the per-run thread_id; it must be in the
+        # astream_events config (not just create_agent) for both initial run and resume.
+        thread_id = self._agent_thread_id()
+        get_pending_interrupt = None
+        stream_input: Any = input_dict
+        # A checkpointer is only present when the agent was built with interrupts enabled
+        # (the structured-output path builds without one); never probe its state otherwise.
+        interrupts_enabled = getattr(agent, "checkpointer", None) is not None
+        if interrupts_enabled and thread_id and self._gated_interrupt_on():
+            agent_config["configurable"] = {"thread_id": thread_id}
+            get_pending_interrupt = self._pending_interrupt_getter(agent, agent_config)
+            if self._has_candidate_decision(thread_id):
+                # The injected decision must match the pending interrupt's nonce, so read
+                # the interrupt first; a matched decision resumes the checkpointed thread.
+                value, interrupt_id = await self._read_pending_interrupt(agent, agent_config)
+                decision = self._injected_agent_decision(thread_id, interrupt_id)
+                if decision is not None:
+                    action_requests = (value or {}).get("action_requests") or []
+                    stream_input = Command(
+                        resume={"decisions": self._build_resume_decisions(decision, action_requests)}
+                    )
         stream = adapt_graph_events_to_executor_shape(
-            agent.astream_events(
-                input_dict,
-                config={
-                    "callbacks": [
-                        AgentAsyncHandler(self.log),
-                        token_usage_handler,
-                        *self._get_shared_callbacks(),
-                    ],
-                    "recursion_limit": recursion_limit,
-                },
-                version="v2",
-            )
+            agent.astream_events(stream_input, config=agent_config, version="v2")
         )
         try:
             result = await process_agent_events(
@@ -652,7 +693,16 @@ class AgentComponent(ToolCallingAgentComponent):
                 agent_message,
                 cast("SendMessageFunctionType", self.send_message),
                 on_token_callback,
+                get_pending_interrupt=get_pending_interrupt,
             )
+        except AgentPausedError as e:
+            # Why: retract the empty partial bubble (leaks as "[]"); the HITL card supersedes it, resume re-emits it.
+            paused_message = e.agent_message or agent_message
+            msg_id = paused_message.get_id()
+            if msg_id:
+                await delete_message(id_=msg_id)
+            await self._send_message_event(paused_message, category="remove_message")
+            return self._suspend_for_tool_approval(e.request, paused_message)
         except ExceptionWithMessageError as e:
             # Drop the half-stored partial message from the DB (only if it was
             # actually persisted) and tell the frontend to remove the stale bubble.
@@ -661,7 +711,10 @@ class AgentComponent(ToolCallingAgentComponent):
                 if msg_id:
                     await delete_message(id_=msg_id)
                 await self._send_message_event(e.agent_message, category="remove_message")
-            logger.error(f"ExceptionWithMessageError: {e}")
+            # exception(), not error(f"...{e}"): this class's str() interpolates the model's
+            # partial completion, and passing the exception rather than formatting it is what
+            # gives the exported record an error.type to triage on.
+            logger.exception("Agent run failed after a partial message was emitted")
             raise
 
         usage_data = token_usage_handler.get_usage()
@@ -693,14 +746,135 @@ class AgentComponent(ToolCallingAgentComponent):
             sender=MESSAGE_SENDER_AI,
             sender_name=sender_name,
             properties={"icon": "Bot", "state": "partial"},
-            content_blocks=[ContentBlock(title="Agent Steps", contents=[])],
+            # `text=""` sentinel so MessageTable's no_content check accepts
+            # an in-flight agent message whose content_blocks haven't been
+            # populated yet. Mirrors ChatInput's convention.
+            text="",
+            # Flat chronological event log; see lfx.base.agents.events.
+            content_blocks=[],
             session_id=session_id or uuid.uuid4(),
         )
 
-    async def message_response(self) -> Message:
+    def _selected_model_remediation_context(self) -> tuple[str | None, str | None, Any | None]:
+        """Return provider/name plus a connected model target, when present."""
         try:
+            selected = self._resolve_selected_model()
+            if isinstance(selected, list) and selected and isinstance(selected[0], dict):
+                return selected[0].get("provider"), selected[0].get("name"), None
+
+            from langchain_core.language_models import BaseLanguageModel
+
+            if isinstance(selected, BaseLanguageModel):
+                model_name = None
+                for attr in ("model_name", "model", "model_id"):
+                    value = getattr(selected, attr, None)
+                    if isinstance(value, str) and value:
+                        model_name = value
+                        break
+                return self._connected_model_provider(selected), model_name, selected
+        except (AttributeError, TypeError, ValueError, KeyError, ImportError):
+            pass
+        return None, None, None
+
+    def _connected_model_provider(self, model: Any) -> str | None:
+        """Resolve a connected model's provider from the source component.
+
+        Runtime model classes are not provider identities: OpenAI, OpenRouter,
+        and compatible endpoints can all produce ``ChatOpenAI``. The incoming
+        model edge preserves the source component, so prefer its explicit
+        provider override or selected-model metadata, then its provider display
+        name. If the Agent is used without graph provenance, leave the provider
+        unknown so provider-scoped remediations remain disabled.
+        """
+        vertex = getattr(self, "_vertex", None)
+        if vertex is None:
+            return None
+        source_id = vertex.get_incoming_edge_by_target_param("model")
+        if not source_id:
+            return None
+        source = vertex.graph.get_vertex(source_id)
+        component = getattr(source, "custom_component", None)
+        if component is None:
+            return None
+
+        candidate = getattr(component, "provider", None)
+
+        if not isinstance(candidate, str) or not candidate:
+            selected_model = getattr(component, "model", None)
+            if isinstance(selected_model, list) and selected_model and isinstance(selected_model[0], dict):
+                candidate = selected_model[0].get("provider")
+
+        if not isinstance(candidate, str) or not candidate:
+            candidate = getattr(component, "display_name", None)
+        if not isinstance(candidate, str) or not candidate:
+            return None
+
+        from lfx.base.models.unified_models.provider_queries import get_model_provider_metadata
+
+        provider_metadata = get_model_provider_metadata().get(candidate, {})
+        expected_class = provider_metadata.get("mapping", {}).get("model_class")
+        model_classes = {base.__name__ for base in type(model).__mro__}
+        return candidate if expected_class in model_classes else None
+
+    async def _run_agent_with_model_remediation(
+        self,
+        run_once: Callable[[], Awaitable[Message]],
+    ) -> Message:
+        """Run one Agent operation, retrying safe provider-validation failures.
+
+        Registered remediations must identify request-validation failures that
+        occur before tool execution. A failure that can happen after a tool runs
+        must instead retry at the model-call boundary to avoid repeating tool
+        side effects.
+        """
+        from lfx.base.models.model_remediation import apply_overrides_to_model, find_remediation, remember
+
+        provider, model_name, connected_model = self._selected_model_remediation_context()
+        applied: set[str] = set()
+        while True:
+            try:
+                result = await run_once()
+            except (ValueError, TypeError, KeyError):
+                await logger.aexception("Agent run failed")
+                raise
+            except Exception as exc:
+                # run_agent may wrap the provider error in ExceptionWithMessageError, whose
+                # str() carries the model's partial completion. Matching on it locally is fine;
+                # logging it is not, so the record below passes the exception instead.
+                error_text = f"{exc} {getattr(exc, '__cause__', '') or ''}"
+                remediation = find_remediation(error_text, provider, already_applied=applied)
+                if remediation is None:
+                    await logger.aexception("Agent run failed with no remediation available")
+                    raise
+                if connected_model is not None and not apply_overrides_to_model(connected_model, remediation.overrides):
+                    await logger.aerror(
+                        f"model.remediation.unapplied name={remediation.name} provider={provider} model={model_name}"
+                    )
+                    raise
+                applied.add(remediation.name)
+                if connected_model is None:
+                    self._model_overrides = {
+                        **(getattr(self, "_model_overrides", None) or {}),
+                        **remediation.overrides,
+                    }
+                else:
+                    # Connected outputs are shared objects across downstream flow
+                    # branches. The mutation is intentionally flow-scoped: sibling
+                    # branches holding this model will see the matched override too.
+                    await logger.adebug(
+                        f"model.remediation.shared_model name={remediation.name} provider={provider} model={model_name}"
+                    )
+                await logger.awarning(
+                    f"model.remediation.applied name={remediation.name} provider={provider} model={model_name}"
+                )
+            else:
+                if connected_model is None and getattr(self, "_model_overrides", None):
+                    remember(provider, model_name, self._model_overrides)
+                return result
+
+    async def message_response(self) -> Message:
+        async def _run_once() -> Message:
             llm_model, self.chat_history, self.tools = await self.get_agent_requirements()
-            # Set up and run agent
             self.set(
                 llm=llm_model,
                 tools=self.tools or [],
@@ -709,23 +883,11 @@ class AgentComponent(ToolCallingAgentComponent):
                 system_prompt=self._inject_dynamic_prompt_values(self.system_prompt),
             )
             agent = self.create_agent_runnable()
-            result = await self.run_agent(agent)
+            return await self.run_agent(agent)
 
-            # Store result for potential JSON output
-            self._agent_result = result
-
-        except (ValueError, TypeError, KeyError) as e:
-            await logger.aerror(f"{type(e).__name__}: {e!s}")
-            raise
-        except ExceptionWithMessageError as e:
-            await logger.aerror(f"ExceptionWithMessageError occurred: {e}")
-            raise
-        # Avoid catching blind Exception; let truly unexpected exceptions propagate
-        except Exception as e:
-            await logger.aerror(f"Unexpected error: {e!s}")
-            raise
-        else:
-            return result
+        result = await self._run_agent_with_model_remediation(_run_once)
+        self._agent_result = result
+        return result
 
     async def json_response(self) -> Data:
         """Produce structured Data via native LLM structured output, with prompt-based fallback.
@@ -741,7 +903,7 @@ class AgentComponent(ToolCallingAgentComponent):
         try:
             llm_model, self.chat_history, self.tools = await self.get_agent_requirements()
         except (ValueError, TypeError) as exc:
-            await logger.aerror(f"json_response.requirements_failed: {exc}")
+            await logger.aexception("json_response.requirements_failed")
             return Data(data={"content": "", "error": str(exc)})
 
         injected_system_prompt = self._inject_dynamic_prompt_values(getattr(self, "system_prompt", "") or "") or ""
@@ -750,16 +912,27 @@ class AgentComponent(ToolCallingAgentComponent):
         has_tools = bool(self.tools)
 
         async def _run_agent_for_fallback(augmented_prompt: str) -> str:
-            self.set(
-                llm=llm_model,
-                tools=self.tools or [],
-                chat_history=self.chat_history,
-                input_value=self.input_value,
-                system_prompt=augmented_prompt,
-            )
-            agent_runnable = self.create_agent_runnable()
+            first_attempt = True
+
+            async def _run_once() -> Message:
+                nonlocal first_attempt, llm_model
+                if first_attempt:
+                    first_attempt = False
+                else:
+                    llm_model, self.chat_history, self.tools = await self.get_agent_requirements()
+                self.set(
+                    llm=llm_model,
+                    tools=self.tools or [],
+                    chat_history=self.chat_history,
+                    input_value=self.input_value,
+                    system_prompt=augmented_prompt,
+                )
+                # Structured output cannot suspend mid-parse: disable tool-approval interrupts.
+                agent_runnable = self.create_agent_runnable(allow_interrupts=False)
+                return await self.run_agent(agent_runnable)
+
             with _suppress_send_message(self):
-                result = await self.run_agent(agent_runnable)
+                result = await self._run_agent_with_model_remediation(_run_once)
             return _extract_text_content(result)
 
         try:
@@ -779,7 +952,7 @@ class AgentComponent(ToolCallingAgentComponent):
             NotImplementedError,
             AttributeError,
         ) as exc:
-            await logger.aerror(f"json_response.orchestration_failed: {exc}")
+            await logger.aexception("json_response.orchestration_failed")
             return Data(data={"content": "", "error": str(exc)})
 
     async def get_memory_data(self):
@@ -792,6 +965,7 @@ class AgentComponent(ToolCallingAgentComponent):
             flow_id=getattr(self.graph, "flow_id", None),
             context_id=self.context_id,
             n_messages=self.n_messages,
+            user_id=_safe_graph_user_id(self),
         )
         return [
             message for message in messages if getattr(message, "id", None) != getattr(self.input_value, "id", None)

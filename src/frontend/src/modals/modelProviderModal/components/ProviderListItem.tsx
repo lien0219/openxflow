@@ -23,10 +23,12 @@ const ProviderListItem = ({
   const isActive = isEnabled || isConfigured;
 
   return (
-    <div
+    <button
+      type="button"
       data-testid={`provider-item-${provider.provider}`}
+      aria-pressed={isSelected}
       className={cn(
-        "flex items-center justify-between rounded-lg px-2 py-3 transition-colors hover:bg-muted/50 cursor-pointer",
+        "flex w-full items-center justify-between rounded-lg px-2 py-3 text-left transition-colors hover:bg-muted/50 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2",
         isSelected && "bg-muted/50",
       )}
       onClick={() => onSelect(provider)}
@@ -73,7 +75,7 @@ const ProviderListItem = ({
           )}
         />
       )}
-    </div>
+    </button>
   );
 };
 

@@ -17,29 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate the pull request
-        if: ${{ github.event_name == 'pull_request_target' }}
-        env:
-          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
-          PR_BODY: ${{ github.event.pull_request.body }}
-          PR_DRAFT: ${{ github.event.pull_request.draft }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          if [[ "$PR_DRAFT" == "true" || "$PR_AUTHOR_TYPE" == "Bot" ]]; then
-            echo "Skipping validation for draft or bot pull request."
-            exit 0
-          fi
-
-          conventional_pattern='^[a-z][a-z0-9-]*(\([^)]+\))?!?: .+$'
-          echo "PR title: $PR_TITLE"
-          if [[ ! "$PR_TITLE" =~ $conventional_pattern ]]; then
-            echo "PR title must follow Conventional Commits: type(scope): description"
-            exit 1
-          fi
-
-          if [[ -z "${PR_BODY//[[:space:]]/}" ]]; then
-            echo "PR body must not be empty."
-            exit 1
-          fi
+        id: validate
+        uses: Namchee/conventional-pr@v0.16.0
+        with:
+          access_token: ${{ secrets.GITHUB_TOKEN }}
+          issue: false
+          timeout: 15
 
   label:
     needs: validate-pr
@@ -47,6 +30,49 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.user.type != 'Bot' }}
     steps:
-      - uses: bcoe/conventional-release-labels@v1
+      - name: Apply conventional release label
+        uses: actions/github-script@v9
         with:
-          type_labels: '{"feat": "enhancement","fix": "bug","docs": "documentation","style": "style","refactor": "refactor","perf": "performance","test": "test","chore": "chore","build": "build"}'
+          script: |
+            const typeLabels = {
+              feat: "enhancement",
+              fix: "bug",
+              docs: "documentation",
+              style: "style",
+              refactor: "refactor",
+              perf: "performance",
+              test: "test",
+              chore: "chore",
+              build: "build",
+            };
+            const match = context.payload.pull_request.title.match(
+              /^([a-zA-Z]+)(?:\([^)]+\))?(!)?:\s*/,
+            );
+            if (!match || !typeLabels[match[1]]) {
+              return;
+            }
+
+            const configuredLabels = [...new Set(Object.values(typeLabels))];
+            const currentLabels = new Set(
+              context.payload.pull_request.labels.map((label) => label.name),
+            );
+            for (const label of configuredLabels) {
+              if (!currentLabels.has(label)) {
+                continue;
+              }
+              try {
+                await github.rest.issues.removeLabel({
+                  ...context.repo,
+                  issue_number: context.issue.number,
+                  name: label,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            await github.rest.issues.addLabels({
+              ...context.repo,
+              issue_number: context.issue.number,
+              labels: [typeLabels[match[1]]],
+            });

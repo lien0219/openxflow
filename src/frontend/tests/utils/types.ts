@@ -1,4 +1,16 @@
 import type { Page } from "@playwright/test";
+import type { ICheckerResult } from "accessibility-checker";
+
+export type A11yScanOptions = {
+  colorScheme?: "light" | "dark";
+};
+
+export type ExpectedServerError = {
+  method: string;
+  path: string;
+  status: number;
+  count: number;
+};
 
 /**
  * Page augmented with the `allowFlowErrors()` helper attached by
@@ -8,4 +20,9 @@ import type { Page } from "@playwright/test";
  */
 export type LangflowPage = Page & {
   allowFlowErrors: () => void;
+  expectServerError: (expectation: ExpectedServerError) => void;
+  runA11yScan: (
+    label: string,
+    options?: A11yScanOptions,
+  ) => Promise<ICheckerResult | null>;
 };

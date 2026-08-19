@@ -1,13 +1,27 @@
 """FastMCP server for Langflow Agentic tools.
 
 This module exposes template search and creation functions as MCP tools using FastMCP decorators.
+
+DEPRECATED as the external MCP surface: the HTTP mount at ``/api/v1/agentic/mcp``
+serves the single lfx toolkit (``lfx.mcp.server``, which includes
+``run_assistant``), where every tool call goes through the REST API with the
+caller's credentials. The per-user auto-configuration that used to register
+this stdio server was removed; the module remains only so previously
+configured entries keep working. Do not add new tools here — add them to
+``lfx.mcp.server`` so both transports pick them up.
 """
 
 import asyncio
+import os
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import Any
 from uuid import UUID
 
-from mcp.server.fastmcp import FastMCP
+from lfx.base.mcp.pydantic_compat import ensure_fastmcp_settings_ready
+from lfx.base.mcp.security import AGENTIC_USER_ID_ENV_VAR
+from lfx.log.logger import logger
+from mcp.server.fastmcp import Context, FastMCP
 
 from langflow.agentic.mcp.support import replace_none_and_null_with_empty_str
 from langflow.agentic.utils.assistant_runner import run_assistant_and_persist
@@ -42,6 +56,7 @@ from langflow.agentic.utils.template_search import (
 from langflow.services.deps import get_db_service, get_settings_service, session_scope
 
 _services_initialized = False
+_policy_refresh_started = False
 _services_init_lock = asyncio.Lock()
 
 
@@ -52,24 +67,84 @@ async def _ensure_services() -> None:
     ``initialize_services()`` (its startup/migration side effects are not
     safe to run twice).
     """
-    global _services_initialized  # noqa: PLW0603
-    if _services_initialized:
+    global _policy_refresh_started, _services_initialized  # noqa: PLW0603
+    if _services_initialized and _policy_refresh_started:
         return
     async with _services_init_lock:
-        if _services_initialized:
-            return
-        get_db_service()
-        from langflow.services.utils import initialize_services
+        if not _services_initialized:
+            get_db_service()
+            from langflow.services.utils import initialize_services
 
-        await initialize_services()
-        _services_initialized = True
+            await initialize_services()
+            # Mark service initialization immediately after it succeeds. If
+            # refresh startup fails, a later MCP call retries only that worker
+            # instead of repeating database migrations and registry setup.
+            _services_initialized = True
+
+        if not _policy_refresh_started:
+            from langflow.services.task.model_provider_policy_refresh import (
+                model_provider_policy_refresh_worker,
+            )
+
+            # Standalone stdio servers do not enter the FastAPI lifespan, but
+            # they are long-lived model consumers and must converge after an
+            # admin changes the install-wide provider ceiling.
+            await model_provider_policy_refresh_worker.start()
+            _policy_refresh_started = True
+
+
+async def _stop_policy_refresh() -> None:
+    """Stop the standalone refresh worker during MCP server shutdown."""
+    global _policy_refresh_started  # noqa: PLW0603
+    if not _policy_refresh_started:
+        return
+    from langflow.services.task.model_provider_policy_refresh import (
+        model_provider_policy_refresh_worker,
+    )
+
+    try:
+        await model_provider_policy_refresh_worker.stop()
+    finally:
+        _policy_refresh_started = False
+
+
+@asynccontextmanager
+async def _service_lifespan(_server: FastMCP) -> AsyncIterator[dict]:
+    """Pair lazy standalone service startup with refresh-worker teardown."""
+    try:
+        yield {}
+    finally:
+        await _stop_policy_refresh()
 
 
 # Initialize FastMCP server
-mcp = FastMCP("langflow-agentic")
+ensure_fastmcp_settings_ready()
+mcp = FastMCP("langflow-agentic", lifespan=_service_lifespan)
 
 DEFAULT_TEMPLATE_FIELDS = ["id", "name", "description", "tags", "endpoint_name", "icon"]
 DEFAULT_COMPONENT_FIELDS = ["name", "type", "display_name", "description"]
+
+
+def _bound_user_id() -> str:
+    """Return the authenticated user id Langflow bound to this agentic MCP server process.
+
+    SECURITY: Langflow injects ``AGENTIC_USER_ID_ENV_VAR`` at spawn time from the authenticated
+    request identity (see ``lfx.base.mcp.util.update_tools``); a tenant cannot supply it via a
+    stdio config because the key is in the MCP stdio env denylist. The flow/component tools are
+    scoped to this id. We FAIL CLOSED when it is absent so a server spawned without a bound
+    identity — a tenant-authored config that evaded injection, or a bare
+    ``python -m langflow.agentic.mcp`` run — cannot read or write ANY user's flows. This replaces
+    the previous caller-supplied ``user_id`` parameter, which let a caller pass another user's id
+    (or omit it for an unscoped, any-flow read).
+    """
+    user_id = os.getenv(AGENTIC_USER_ID_ENV_VAR)
+    if not user_id:
+        msg = (
+            f"Agentic MCP server is not bound to an authenticated user ({AGENTIC_USER_ID_ENV_VAR} "
+            "not set); refusing flow access."
+        )
+        raise ValueError(msg)
+    return user_id
 
 
 @mcp.tool()
@@ -169,19 +244,20 @@ def count_templates() -> int:
 @mcp.tool()
 async def create_flow_from_template(
     template_id: str,
-    user_id: str,
     folder_id: str | None = None,
 ) -> dict[str, Any]:
     """Create a new flow from a starter template and return its id and UI link.
 
+    The flow is owned by the authenticated user bound to this server.
+
     Args:
         template_id: ID field inside the starter template JSON file.
-        user_id: UUID string of the owner user.
         folder_id: Optional target folder UUID; default folder is used if omitted.
 
     Returns:
         Dict with keys: {"id": str, "link": str}
     """
+    user_id = _bound_user_id()
     async with session_scope() as session:
         return await create_flow_from_template_and_get_link(
             session=session,
@@ -357,17 +433,15 @@ async def get_components_by_type_tool(
 @mcp.tool()
 async def visualize_flow_graph(
     flow_id_or_name: str,
-    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Get both ASCII and text representations of a flow graph.
 
     This tool provides comprehensive visualization of a flow's graph structure,
     including an ASCII art diagram and a detailed text representation of all
-    vertices and edges.
+    vertices and edges. Scoped to the authenticated user bound to this server.
 
     Args:
         flow_id_or_name: Flow ID (UUID) or endpoint name to visualize.
-        user_id: Optional user ID to filter flows (UUID string).
 
     Returns:
         Dictionary containing:
@@ -385,22 +459,21 @@ async def visualize_flow_graph(
         >>> print(result["text_repr"])
         >>> print(f"Graph has {result['vertex_count']} vertices")
     """
-    return await get_flow_graph_representations(flow_id_or_name, user_id)
+    return await get_flow_graph_representations(flow_id_or_name, _bound_user_id())
 
 
 @mcp.tool()
 async def get_flow_ascii_diagram(
     flow_id_or_name: str,
-    user_id: str | None = None,
 ) -> str:
     """Get ASCII art diagram of a flow graph.
 
     Returns a visual ASCII representation of the flow's graph structure,
-    showing how components are connected.
+    showing how components are connected. Scoped to the authenticated user
+    bound to this server.
 
     Args:
         flow_id_or_name: Flow ID (UUID) or endpoint name.
-        user_id: Optional user ID to filter flows (UUID string).
 
     Returns:
         ASCII art string representation of the graph, or error message.
@@ -409,22 +482,21 @@ async def get_flow_ascii_diagram(
         >>> ascii_art = get_flow_ascii_diagram("my-flow-id")
         >>> print(ascii_art)
     """
-    return await get_flow_ascii_graph(flow_id_or_name, user_id)
+    return await get_flow_ascii_graph(flow_id_or_name, _bound_user_id())
 
 
 @mcp.tool()
 async def get_flow_text_representation(
     flow_id_or_name: str,
-    user_id: str | None = None,
 ) -> str:
     """Get text representation of a flow graph.
 
     Returns a structured text representation showing all vertices (components)
-    and edges (connections) in the flow.
+    and edges (connections) in the flow. Scoped to the authenticated user bound
+    to this server.
 
     Args:
         flow_id_or_name: Flow ID (UUID) or endpoint name.
-        user_id: Optional user ID to filter flows (UUID string).
 
     Returns:
         Text representation string with vertices and edges, or error message.
@@ -441,23 +513,21 @@ async def get_flow_text_representation(
           ChatInput --> OpenAIModel
           OpenAIModel --> ChatOutput
     """
-    return await get_flow_text_repr(flow_id_or_name, user_id)
+    return await get_flow_text_repr(flow_id_or_name, _bound_user_id())
 
 
 @mcp.tool()
 async def get_flow_structure_summary(
     flow_id_or_name: str,
-    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Get a summary of flow graph structure and metadata.
 
     Returns flow metadata including vertex and edge lists without the
     full visual representations. Useful for quickly understanding the
-    flow structure.
+    flow structure. Scoped to the authenticated user bound to this server.
 
     Args:
         flow_id_or_name: Flow ID (UUID) or endpoint name.
-        user_id: Optional user ID to filter flows (UUID string).
 
     Returns:
         Dictionary with flow metadata:
@@ -473,7 +543,7 @@ async def get_flow_structure_summary(
         >>> print(f"Flow '{summary['flow_name']}' has {summary['vertex_count']} components")
         >>> print(f"Components: {', '.join(summary['vertices'])}")
     """
-    return await get_flow_graph_summary(flow_id_or_name, user_id)
+    return await get_flow_graph_summary(flow_id_or_name, _bound_user_id())
 
 
 # Flow component operations tools
@@ -481,17 +551,16 @@ async def get_flow_structure_summary(
 async def get_flow_component_details(
     flow_id_or_name: str,
     component_id: str,
-    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Get detailed information about a specific component in a flow.
 
     Returns comprehensive details about a component including its type,
     template configuration, inputs, outputs, and all field definitions.
+    Scoped to the authenticated user bound to this server.
 
     Args:
         flow_id_or_name: Flow ID (UUID) or endpoint name.
         component_id: The component/vertex ID to retrieve (e.g., "ChatInput-abc123").
-        user_id: Optional user ID to filter flows (UUID string).
 
     Returns:
         Dictionary containing:
@@ -510,7 +579,7 @@ async def get_flow_component_details(
         >>> print(details["display_name"])
         >>> print(details["template"]["input_value"]["value"])
     """
-    return await get_component_details(flow_id_or_name, component_id, user_id)
+    return await get_component_details(flow_id_or_name, component_id, _bound_user_id())
 
 
 @mcp.tool()
@@ -518,17 +587,16 @@ async def get_flow_component_field_value(
     flow_id_or_name: str,
     component_id: str,
     field_name: str,
-    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Get the value of a specific field in a flow component.
 
     Retrieves the current value and metadata for a single field in a component.
+    Scoped to the authenticated user bound to this server.
 
     Args:
         flow_id_or_name: Flow ID (UUID) or endpoint name.
         component_id: The component/vertex ID.
         field_name: The name of the field to retrieve (e.g., "input_value", "temperature").
-        user_id: Optional user ID to filter flows (UUID string).
 
     Returns:
         Dictionary containing:
@@ -544,7 +612,7 @@ async def get_flow_component_field_value(
         >>> result = get_flow_component_field_value("my-flow", "ChatInput-abc", "input_value")
         >>> print(f"Current value: {result['value']}")
     """
-    return await get_component_field_value(flow_id_or_name, component_id, field_name, user_id)
+    return await get_component_field_value(flow_id_or_name, component_id, field_name, _bound_user_id())
 
 
 @mcp.tool()
@@ -553,19 +621,18 @@ async def update_flow_component_field(
     component_id: str,
     field_name: str,
     new_value: str,
-    user_id: str,
 ) -> dict[str, Any]:
     """Update the value of a specific field in a flow component.
 
     Updates a component field value and persists the change to the database.
-    This modifies the flow's JSON data structure.
+    This modifies the flow's JSON data structure. Scoped to the authenticated
+    user bound to this server (only the caller's own flows can be modified).
 
     Args:
         flow_id_or_name: Flow ID (UUID) or endpoint name.
         component_id: The component/vertex ID.
         field_name: The name of the field to update (e.g., "input_value", "temperature").
         new_value: The new value to set (type must match field type).
-        user_id: User ID (UUID string, required for authorization).
 
     Returns:
         Dictionary containing:
@@ -583,29 +650,27 @@ async def update_flow_component_field(
         ...     "ChatInput-abc",
         ...     "input_value",
         ...     "Hello, world!",
-        ...     user_id="user-123"
         ... )
         >>> if result["success"]:
         ...     print(f"Updated from {result['old_value']} to {result['new_value']}")
     """
-    return await update_component_field_value(flow_id_or_name, component_id, field_name, new_value, user_id)
+    return await update_component_field_value(flow_id_or_name, component_id, field_name, new_value, _bound_user_id())
 
 
 @mcp.tool()
 async def list_flow_component_fields(
     flow_id_or_name: str,
     component_id: str,
-    user_id: str | None = None,
 ) -> dict[str, Any]:
     """List all available fields in a flow component with their current values.
 
     Returns a comprehensive list of all fields in a component, including
-    their values, types, and metadata.
+    their values, types, and metadata. Scoped to the authenticated user bound
+    to this server.
 
     Args:
         flow_id_or_name: Flow ID (UUID) or endpoint name.
         component_id: The component/vertex ID.
-        user_id: Optional user ID to filter flows (UUID string).
 
     Returns:
         Dictionary containing:
@@ -623,17 +688,50 @@ async def list_flow_component_fields(
         >>> for field_name, field_info in result["fields"].items():
         ...     print(f"{field_name}: {field_info['value']} (type: {field_info['field_type']})")
     """
-    return await list_component_fields(flow_id_or_name, component_id, user_id)
+    return await list_component_fields(flow_id_or_name, component_id, _bound_user_id())
+
+
+def _make_progress_forwarder(ctx: Context | None) -> Callable[[dict[str, Any]], Awaitable[None]] | None:
+    """Bridge assistant ``progress`` SSE events to MCP progress/log notifications.
+
+    Best-effort on purpose: clients without progress support just ignore the
+    notifications, and a failed send must never break the tool call.
+    """
+    if ctx is None:
+        return None
+    step_count = 0
+
+    async def forward(event: dict[str, Any]) -> None:
+        nonlocal step_count
+        step_count += 1
+        message = str(event.get("message") or event.get("step") or "working")
+        try:
+            request_context = ctx.request_context
+            progress_token = request_context.meta.progressToken if request_context.meta else None
+            if progress_token is not None:
+                # Not ctx.report_progress: it omits related_request_id, which the
+                # stateless streamable-http transport needs to route onto the request stream.
+                await request_context.session.send_progress_notification(
+                    progress_token=progress_token,
+                    progress=float(step_count),
+                    message=message,
+                    related_request_id=ctx.request_id,
+                )
+            await ctx.info(message)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Could not forward assistant progress to the MCP client: {exc}")
+
+    return forward
 
 
 @mcp.tool()
 async def run_assistant(
     instruction: str,
-    user_id: str,
     flow_id: str | None = None,
     provider: str | None = None,
     model_name: str | None = None,
     session_id: str | None = None,
+    ctx: Context | None = None,
 ) -> dict[str, Any]:
     """Ask the Langflow Assistant to build, edit, or explain a flow.
 
@@ -644,14 +742,15 @@ async def run_assistant(
     Args:
         instruction: Natural-language request, e.g. "Build a flow with a
             Chat Input connected to a Chat Output". Max 2000 characters.
-        user_id: UUID string of the user the assistant acts for.
         flow_id: Optional UUID of an existing flow to edit. When omitted,
-            a new flow is created in the user's default folder.
+            a new flow is created in the bound user's default folder.
         provider: Optional model provider (e.g. "Ollama", "OpenAI").
             Defaults to the first configured provider.
         model_name: Optional model on that provider. Defaults to an
             available model (for Ollama, an installed one).
         session_id: Optional conversation id to keep multi-turn context.
+        ctx: Injected MCP context; each assistant progress step is forwarded
+            to the caller as an MCP progress notification and info log.
 
     Returns:
         Dictionary containing:
@@ -664,10 +763,10 @@ async def run_assistant(
     Example:
         >>> result = await run_assistant(
         ...     instruction="Build a simple chat flow",
-        ...     user_id="00000000-0000-0000-0000-000000000001",
         ... )
         >>> print(result["link"], result["flow_changed"])
     """
+    user_id = _bound_user_id()
     await _ensure_services()
     async with session_scope() as session:
         return await run_assistant_and_persist(
@@ -678,6 +777,7 @@ async def run_assistant(
             provider=provider,
             model_name=model_name,
             session_id=session_id,
+            on_progress=_make_progress_forwarder(ctx),
         )
 
 

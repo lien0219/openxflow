@@ -499,6 +499,46 @@ def test_apply_tweaks_code_override_prevention():
     assert node["data"]["node"]["template"]["param1"]["value"] == "new_value"
 
 
+def test_apply_tweaks_blocks_sql_connection_and_query():
+    """A run caller cannot repoint the stored SQL sink or replace its query."""
+    from unittest.mock import call, patch
+
+    from langflow.processing.process import apply_tweaks
+
+    node = {
+        "id": "SQLComponent-test",
+        "data": {
+            "type": "SQLComponent",
+            "node": {
+                "template": {
+                    "database_url": {"value": "postgresql://stored/db", "type": "str"},
+                    "query": {"value": "SELECT 1", "type": "str"},
+                    "include_columns": {"value": True, "type": "bool"},
+                }
+            },
+        },
+    }
+
+    with patch("langflow.processing.process.logger") as mock_logger:
+        apply_tweaks(
+            node,
+            {
+                "database_url": "sqlite:////etc/passwd",
+                "query": "DROP TABLE users",
+                "include_columns": False,
+            },
+        )
+
+    template = node["data"]["node"]["template"]
+    assert template["database_url"]["value"] == "postgresql://stored/db"
+    assert template["query"]["value"] == "SELECT 1"
+    assert template["include_columns"]["value"] is False
+    assert mock_logger.warning.call_args_list == [
+        call("Security: refusing to override protected field 'database_url' via tweaks."),
+        call("Security: refusing to override protected field 'query' via tweaks."),
+    ]
+
+
 def test_apply_tweaks_code_only_prevention():
     """Test that only code tweaks are prevented when trying to override code alone."""
     from unittest.mock import patch
@@ -601,17 +641,20 @@ def test_apply_tweaks_allows_benign_fields_on_code_execution_component():
                 "template": {
                     "name": {"value": "old_name", "type": "str"},
                     "description": {"value": "old desc", "type": "str"},
-                    "code": {"value": "print('safe')", "type": "str"},
+                    "python_code": {"value": "print('safe')", "type": "str"},
                 }
             },
         },
     }
-    apply_tweaks(node, {"name": "new_name", "description": "new desc", "code": "__import__('os').system('id')"})
+    apply_tweaks(
+        node,
+        {"name": "new_name", "description": "new desc", "python_code": "__import__('os').system('id')"},
+    )
 
-    # Benign metadata is applied; the executable 'code' field is still blocked.
+    # Benign metadata is applied; the executable 'python_code' field is still blocked.
     assert node["data"]["node"]["template"]["name"]["value"] == "new_name"
     assert node["data"]["node"]["template"]["description"]["value"] == "new desc"
-    assert node["data"]["node"]["template"]["code"]["value"] == "print('safe')"
+    assert node["data"]["node"]["template"]["python_code"]["value"] == "print('safe')"
 
 
 def test_apply_tweaks_blocks_removed_python_code_structured_tool_code():

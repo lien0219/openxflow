@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from lfx.base.mcp.constants import MAX_MCP_SERVER_NAME_LENGTH
 from lfx.base.mcp.util import sanitize_mcp_name
+from lfx.base.mcp.uvx import mcp_sdk_constraint_args
 from lfx.log import logger
 from lfx.services.deps import get_settings_service, session_scope
 from lfx.services.mcp_composer.service import (
@@ -33,7 +34,6 @@ from mcp.server.sse import SseServerTransport
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.api.utils import (
     CurrentActiveMCPUser,
@@ -67,13 +67,22 @@ from langflow.api.v1.schemas import (
     MCPSettings,
 )
 from langflow.services.auth.constants import AUTO_LOGIN_WARNING
+from langflow.services.auth.context import (
+    AUTH_METHOD_AUTO_LOGIN,
+    AuthCredentialContext,
+    clear_current_auth_context,
+    set_current_auth_context,
+)
 from langflow.services.auth.mcp_encryption import decrypt_auth_settings, encrypt_auth_settings
+from langflow.services.authorization import ProjectAction, ensure_project_permission
+from langflow.services.authorization.access_ceiling import clear_current_external_access_context
 from langflow.services.database.models import Flow, Folder
-from langflow.services.database.models.api_key.crud import check_key, create_api_key
+from langflow.services.database.models.api_key.crud import authenticate_api_key, create_api_key
 from langflow.services.database.models.api_key.model import ApiKeyCreate
 from langflow.services.database.models.user.crud import get_user_by_username
 from langflow.services.database.models.user.model import User
 from langflow.services.deps import get_service
+from langflow.services.rate_limit.service import get_last_forwarded_for_hop
 
 # Constants
 ALL_INTERFACES_HOST = "0.0.0.0"  # noqa: S104
@@ -82,7 +91,6 @@ router = APIRouter(prefix="/mcp/project", tags=["mcp_projects"])
 
 
 async def verify_project_auth(
-    db: AsyncSession,
     project_id: UUID,
     query_param: str | None,
     header_param: str | None,
@@ -93,17 +101,22 @@ async def verify_project_auth(
     This function provides authentication for MCP endpoints when using MCP Composer and no API key is provided,
     or checks if the API key is valid.
     """
+    # Mirror the service.py auth entrypoints: reset request-local credential metadata at entry so a
+    # later branch (e.g. the composer-token fast path) never inherits stale context from a prior call.
+    clear_current_auth_context()
+    # Defensive invariant: drop any stale external access ceiling so it can't carry into MCP project auth.
+    clear_current_external_access_context()
+
     settings_service = get_settings_service()
 
-    project = (await db.exec(select(Folder).where(Folder.id == project_id))).first()
-
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    auth_settings: AuthSettings | None = None
-    # Check if this project requires API key only authentication
-    if project.auth_settings:
-        auth_settings = AuthSettings(**project.auth_settings)
+    # Resolve project authentication policy before API-key authentication opens
+    # its owned transaction. Keep only scalar values after this scope exits.
+    async with session_scope() as db:
+        project = (await db.exec(select(Folder).where(Folder.id == project_id))).first()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        project_user_id = project.user_id
+        auth_settings = AuthSettings(**project.auth_settings) if project.auth_settings else None
 
     project_auth_type = auth_settings.auth_type if auth_settings else None
     if project_auth_type == "oauth" and composer_backend_token:
@@ -111,11 +124,22 @@ async def verify_project_auth(
             MCPComposerService, get_service(ServiceType.MCP_COMPOSER_SERVICE)
         )
         if mcp_composer_service.validate_backend_auth_token(str(project_id), composer_backend_token):
-            if project.user_id:
-                project_user = await db.get(User, project.user_id)
+            if project_user_id:
+                async with session_scope() as db:
+                    project_user = await db.get(User, project_user_id)
+                    if project_user:
+                        return project_user
+            raise HTTPException(status_code=404, detail="Project owner not found")
+
+    # Public MCP projects execute as their owning principal, never as the
+    # instance-wide superuser used by the legacy single-user fallback.
+    if project_auth_type == "none":
+        if project_user_id:
+            async with session_scope() as db:
+                project_user = await db.get(User, project_user_id)
                 if project_user:
                     return project_user
-            raise HTTPException(status_code=404, detail="Project owner not found")
+        raise HTTPException(status_code=404, detail="Project owner not found")
 
     # OAuth projects must present a valid API key at the Langflow transport endpoint: network-level
     # trust (loopback / same-host proxy) is unsafe because it cannot distinguish the local MCP
@@ -144,33 +168,33 @@ async def verify_project_auth(
             )
 
         # Validate the API key
-        user = await check_key(db, api_key)
-        if not user:
+        api_key_result = await authenticate_api_key(api_key)
+        if not api_key_result:
             raise HTTPException(status_code=401, detail="Invalid API key")
+        set_current_auth_context(AuthCredentialContext.from_api_key_result(api_key_result))
+        user = api_key_result.user
 
         # Verify user has access to the project
-        project_access = (
-            await db.exec(select(Folder).where(Folder.id == project_id, Folder.user_id == user.id))
-        ).first()
-
-        if not project_access:
+        if project_user_id != user.id:
             raise HTTPException(status_code=404, detail="Project not found")
 
         return user
 
-    return await _superuser_fallback(db, settings_service)
+    return await _superuser_fallback(settings_service)
 
 
-async def _superuser_fallback(db: AsyncSession, settings_service) -> User:
+async def _superuser_fallback(settings_service) -> User:
     """Resolve the configured superuser for unauthenticated MCP paths that allow fallback."""
     if not settings_service.auth_settings.SUPERUSER:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing superuser username in auth settings",
         )
-    result = await get_user_by_username(db, settings_service.auth_settings.SUPERUSER)
+    async with session_scope() as db:
+        result = await get_user_by_username(db, settings_service.auth_settings.SUPERUSER)
     if result:
         logger.warning(AUTO_LOGIN_WARNING)
+        set_current_auth_context(AuthCredentialContext(method=AUTH_METHOD_AUTO_LOGIN))
         return result
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -188,51 +212,47 @@ async def verify_project_auth_conditional(
     - MCP Composer enabled + API key auth: Only allow API keys
     - All other cases: Use standard MCP auth (JWT + API keys)
     """
-    async with session_scope() as session:
-        # Get project to check auth settings
-        project = (await session.exec(select(Folder).where(Folder.id == project_id))).first()
+    # Extract token
+    token: str | None = None
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[7:]
 
+    # Extract API keys
+    api_key_query_value = request.query_params.get("x-api-key")
+    api_key_header_value = request.headers.get("x-api-key")
+    composer_backend_token = request.headers.get(COMPOSER_BACKEND_AUTH_HEADER)
+
+    # The composer path performs its own short project-policy read before auth.
+    if get_settings_service().settings.mcp_composer_enabled:
+        return await verify_project_auth(
+            project_id,
+            api_key_query_value,
+            api_key_header_value,
+            composer_backend_token,
+        )
+
+    # Preserve the existing not-found-before-auth behavior, but close this read
+    # scope before API-key authentication opens its owned transaction.
+    async with session_scope() as session:
+        project = (await session.exec(select(Folder).where(Folder.id == project_id))).first()
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
+        project_user_id = project.user_id
 
-        # Extract token
-        token: str | None = None
-        auth_header = request.headers.get("authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header[7:]
+    # For all other cases, use standard MCP authentication (allows JWT + API keys).
+    # This session has not executed a query before API-key authentication.
+    from langflow.services.auth.utils import get_current_user_mcp
 
-        # Extract API keys
-        api_key_query_value = request.query_params.get("x-api-key")
-        api_key_header_value = request.headers.get("x-api-key")
-        composer_backend_token = request.headers.get(COMPOSER_BACKEND_AUTH_HEADER)
-
-        # Check if this project requires API key only authentication
-        if get_settings_service().settings.mcp_composer_enabled:
-            return await verify_project_auth(
-                session,
-                project_id,
-                api_key_query_value,
-                api_key_header_value,
-                composer_backend_token,
-            )
-
-        # For all other cases, use standard MCP authentication (allows JWT + API keys)
-        # Call the MCP auth function directly
-        from langflow.services.auth.utils import get_current_user_mcp
-
+    async with session_scope() as session:
         user = await get_current_user_mcp(
             token=token or "", query_param=api_key_query_value, header_param=api_key_header_value, db=session
         )
 
-        # Verify project access
-        project_access = (
-            await session.exec(select(Folder).where(Folder.id == project_id, Folder.user_id == user.id))
-        ).first()
+    if project_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-        if not project_access:
-            raise HTTPException(status_code=404, detail="Project not found")
-
-        return user
+    return user
 
 
 # Create project-specific context variable
@@ -546,6 +566,18 @@ async def update_project_mcp_settings(
             if not project:
                 raise HTTPException(status_code=404, detail="Project not found")
 
+            # Mutating flow MCP exposure + project MCP auth settings is a project
+            # WRITE: enforce so the external access ceiling (e.g. a "viewer")
+            # cannot change MCP settings. The owner with no ceiling fast-paths via
+            # owner-override; behavior is unchanged when the feature is off.
+            await ensure_project_permission(
+                current_user,
+                ProjectAction.WRITE,
+                project_id=project_id,
+                project_user_id=project.user_id,
+                workspace_id=project.workspace_id,
+            )
+
             # Track if MCP Composer needs to be started or stopped
             should_handle_mcp_composer = False
             should_start_composer = False
@@ -736,7 +768,21 @@ def is_local_ip(ip_str: str) -> bool:
 
 
 def get_client_ip(request: Request) -> str:
-    """Extract the client IP address from a FastAPI request.
+    """Resolve the client IP for the local-only install locality check.
+
+    ``X-Forwarded-For`` is client-controlled and must NOT be trusted by default:
+    trusting it lets a remote caller spoof a loopback address and defeat the
+    local-only restriction on :func:`install_mcp_config` (which writes MCP client
+    config to the host filesystem). By default we use the real TCP peer
+    (``request.client.host``), so a spoofed header has no effect.
+
+    Only when the operator has explicitly opted into a trusted proxy
+    (``rate_limit_trust_proxy``) do we consult ``X-Forwarded-For``, and then we
+    take the rightmost entry — the last hop added by the trusted proxy, which a
+    client cannot forge — mirroring ``langflow.services.rate_limit.service.get_client_ip``.
+    Every occurrence of the header is joined first, so a proxy that appends its
+    own line rather than extending the client's cannot leave the attacker's line
+    as the one we read.
 
     Args:
         request: FastAPI Request object
@@ -744,13 +790,14 @@ def get_client_ip(request: Request) -> str:
     Returns:
         str: The client's IP address
     """
-    # Check for X-Forwarded-For header (common when behind proxies)
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        # The client IP is the first one in the list
-        return forwarded_for.split(",")[0].strip()
+    # Only consult X-Forwarded-For when an operator has explicitly declared a
+    # trusted proxy; otherwise the header is attacker-controlled.
+    if get_settings_service().settings.rate_limit_trust_proxy:
+        last_hop = get_last_forwarded_for_hop(request)
+        if last_hop:
+            return last_hop
 
-    # If no proxy headers, use the client's direct IP
+    # Default: trust only the real TCP peer.
     if request.client:
         return request.client.host
 
@@ -837,6 +884,7 @@ async def install_mcp_config(
             settings = get_settings_service().settings
             command = "uvx"
             args = [
+                *mcp_sdk_constraint_args(),
                 f"mcp-composer{settings.mcp_composer_version}",
                 "--mode",
                 "http",
@@ -853,7 +901,7 @@ async def install_mcp_config(
             streamable_http_url = await get_project_streamable_http_url(project_id)
             legacy_sse_url = await get_project_sse_url(project_id)
             command = "uvx"
-            args = ["mcp-proxy"]
+            args = [*mcp_sdk_constraint_args(), "mcp-proxy"]
             # Check if we need to add Langflow API key headers
             # Necessary only when Project API Key Authentication is enabled
 
@@ -1576,6 +1624,9 @@ async def init_mcp_servers():
                                     project_user,
                                     session,
                                     raise_on_error=True,
+                                    # This savepoint owns the transaction; a commit inside
+                                    # would close it and break every later statement.
+                                    owns_transaction=False,
                                 )
 
                     if persist_reason == "auto_enable_apikey":

@@ -2,13 +2,19 @@ import secrets
 from enum import Enum
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from passlib.context import CryptContext
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from lfx.log.logger import logger
-from lfx.services.settings.constants import DEFAULT_SUPERUSER, DEFAULT_SUPERUSER_PASSWORD
+from lfx.services.settings.constants import (
+    DEFAULT_SUPERUSER,
+    DEFAULT_SUPERUSER_PASSWORD,
+    MINIMUM_SECRET_KEY_LENGTH,
+    SHORT_SECRET_KEY_WARNING,
+)
 from lfx.services.settings.utils import (
     derive_public_key_from_private,
     generate_rsa_key_pair,
@@ -16,6 +22,15 @@ from lfx.services.settings.utils import (
     write_public_key_to_file,
     write_secret_to_file,
 )
+
+ASCII_CONTROL_CHARACTER_LIMIT = 0x20
+ASCII_DELETE_CHARACTER = 0x7F
+
+
+def _warn_if_secret_key_is_short(value: str | SecretStr) -> None:
+    secret_value = value.get_secret_value() if isinstance(value, SecretStr) else value
+    if len(secret_value) < MINIMUM_SECRET_KEY_LENGTH:
+        logger.warning(SHORT_SECRET_KEY_WARNING)
 
 
 class JWTAlgorithm(str, Enum):
@@ -111,9 +126,9 @@ class AuthSettings(BaseSettings):
     # Store password as SecretStr to prevent accidental plaintext exposure
     SUPERUSER_PASSWORD: SecretStr = Field(default=DEFAULT_SUPERUSER_PASSWORD)
 
-    REFRESH_SAME_SITE: Literal["lax", "strict", "none"] = "none"
+    REFRESH_SAME_SITE: Literal["lax", "strict", "none"] = "lax"
     """The SameSite attribute of the refresh token cookie."""
-    REFRESH_SECURE: bool = True
+    REFRESH_SECURE: bool = False
     """The Secure attribute of the refresh token cookie."""
     REFRESH_HTTPONLY: bool = True
     """The HttpOnly attribute of the refresh token cookie."""
@@ -121,7 +136,7 @@ class AuthSettings(BaseSettings):
     """The SameSite attribute of the access token cookie."""
     ACCESS_SECURE: bool = False
     """The Secure attribute of the access token cookie."""
-    ACCESS_HTTPONLY: bool = False
+    ACCESS_HTTPONLY: bool = True
     """The HttpOnly attribute of the access token cookie."""
 
     COOKIE_DOMAIN: str | None = None
@@ -146,6 +161,124 @@ class AuthSettings(BaseSettings):
     )
     """Path to YAML configuration file for SSO settings. Contains provider-specific configuration."""
 
+    SSO_REDIRECT_URL: str | None = Field(
+        default=None,
+        description="Same-origin relative URL used after SSO authentication. Absolute URLs are rejected.",
+    )
+
+    # External trusted-identity settings.
+    # Used when an upstream identity layer (proxy, gateway, IdP) issues or
+    # validates a credential and Langflow needs to accept it and map it to
+    # a local user via SSOUserProfile (JIT provisioning).
+    EXTERNAL_AUTH_ENABLED: bool = Field(
+        default=False,
+        description="Enable trusted external request authentication and JIT local user mapping.",
+    )
+    EXTERNAL_AUTH_PROVIDER: str = Field(
+        default="external",
+        description="Stable provider key written to SSOUserProfile.sso_provider for external identities.",
+    )
+    EXTERNAL_AUTH_TOKEN_HEADER: str = Field(
+        default="Authorization",
+        description=(
+            "Header containing the external credential. The native Langflow JWT path is tried first; "
+            "if it fails, the external path is attempted as a fallback. Bearer-prefixed values are supported."
+        ),
+    )
+    EXTERNAL_AUTH_TOKEN_COOKIE: str | None = Field(
+        default=None,
+        description="Optional cookie name containing the external credential.",
+    )
+    EXTERNAL_AUTH_IDENTITY_RESOLVER: str | None = Field(
+        default=None,
+        description=(
+            "Optional 'module:attribute' import path for a custom resolver that converts the external "
+            "credential into an identity. Defaults to built-in JWT validation when unset."
+        ),
+    )
+    EXTERNAL_AUTH_TRUSTED_JWT_DECODE: bool = Field(
+        default=False,
+        description=(
+            "When True, decode the external JWT without verifying its signature. ONLY safe behind a trusted "
+            "upstream proxy that already validates the token. Off by default."
+        ),
+    )
+    EXTERNAL_AUTH_JWKS_URL: str | None = Field(
+        default=None,
+        description="JWKS URL used to verify external JWT signatures when trusted decode is disabled.",
+    )
+    EXTERNAL_AUTH_ISSUER: str | None = Field(
+        default=None,
+        description="Expected JWT issuer (iss). Leave empty to skip issuer validation.",
+    )
+    EXTERNAL_AUTH_AUDIENCE: str | None = Field(
+        default=None,
+        description="Expected JWT audience (aud). Comma-separated audiences are supported.",
+    )
+    EXTERNAL_AUTH_ALGORITHMS: str = Field(
+        default="RS256",
+        description="Comma-separated JWT algorithms accepted for external JWT validation.",
+    )
+    EXTERNAL_AUTH_SUBJECT_CLAIM: str = Field(
+        default="sub",
+        description="JWT claim used as the stable external user id.",
+    )
+    EXTERNAL_AUTH_USERNAME_CLAIM: str = Field(
+        default="preferred_username",
+        description="JWT claim preferred for the local Langflow username on JIT provisioning.",
+    )
+    EXTERNAL_AUTH_EMAIL_CLAIM: str = Field(
+        default="email",
+        description="JWT claim containing the user's email.",
+    )
+    EXTERNAL_AUTH_NAME_CLAIM: str = Field(
+        default="name",
+        description="JWT claim containing the user's display name.",
+    )
+    EXTERNAL_AUTH_GROUP_RECONCILE_INTERVAL_SECONDS: int = Field(
+        default=60,
+        ge=0,
+        description=(
+            "Minimum seconds between external group reconciliations for one unchanged directory state. "
+            "Bearer tokens arrive on every request, and reconciliation writes rows, takes policy locks and "
+            "appends an audit entry, so an unchanged (provider, subject, group set) is only reconciled once "
+            "per interval. A group set that differs from the last reconciled one always reconciles "
+            "immediately. Set to 0 to reconcile on every request."
+        ),
+    )
+    EXTERNAL_AUTH_ACCESS_CEILING_ENABLED: bool = Field(
+        default=False,
+        description=(
+            "Enable a coarse deny-only action ceiling for users authenticated by external trusted identity. "
+            "This is not an RBAC engine; it only caps actions above a mapped access level."
+        ),
+    )
+    EXTERNAL_AUTH_ACCESS_CLAIM: str | None = Field(
+        default=None,
+        description=(
+            "JWT claim used to derive the external access ceiling. Claim values are mapped through "
+            "EXTERNAL_AUTH_ACCESS_CLAIM_MAPPING."
+        ),
+    )
+    EXTERNAL_AUTH_ACCESS_CLAIM_MAPPING: str | None = Field(
+        default=None,
+        description=(
+            "JSON object or comma-separated value map from external claim values to one of: viewer, editor, admin. "
+            'Example: \'{"view":"viewer","edit":"editor"}\'. Built-in aliases cover common values.'
+        ),
+    )
+    EXTERNAL_AUTH_DEFAULT_ACCESS_LEVEL: str = Field(
+        default="viewer",
+        description="Fallback access level used when the access claim is missing or unmapped.",
+    )
+    EXTERNAL_AUTH_DISABLE_API_KEYS_FOR_EXTERNAL_USERS: bool = Field(
+        default=True,
+        description=(
+            "When the external access ceiling is enabled, reject Langflow API-key authentication for users mapped "
+            "through the configured external provider so API keys cannot bypass the JWT claim ceiling."
+        ),
+    )
+
     # Authorization (RBAC) feature flags — enforcement via authorization_service plugin
     AUTHZ_ENABLED: bool = Field(
         default=False,
@@ -160,9 +293,17 @@ class AuthSettings(BaseSettings):
         description=(
             "Write an AuthzAuditLog row for every authorization decision and share-administration "
             "action. Independent of AUTHZ_ENABLED — set this to True while enforcement is off to "
-            "observe traffic before flipping the AUTHZ_ENABLED flag. Defaults to False because the "
-            "fire-and-forget audit task opens its own DB session per row; on SQLite this can "
-            "contend with concurrent write transactions ('database is locked')."
+            "observe traffic before flipping the AUTHZ_ENABLED flag. The default pipeline is "
+            "best effort and may drop rows under sustained database failure or queue saturation."
+        ),
+    )
+    AUTHZ_AUDIT_DURABLE: bool = Field(
+        default=False,
+        description=(
+            "Require every accepted authorization audit call to wait for its database commit. "
+            "A full queue applies backpressure and persistence failures fail the triggering request "
+            "with a sanitized error. Disabled by default to preserve the non-blocking OSS behavior; "
+            "enable it before using authz_audit_log as a compliance or external-delivery source."
         ),
     )
     AUTHZ_AUDIT_RETENTION_DAYS: int = Field(
@@ -174,6 +315,17 @@ class AuthSettings(BaseSettings):
             "(append-only — the table will grow without bound; pair with an external archival "
             "or partitioning job). The default of 90 days bounds steady-state size for typical "
             "enterprise deployments."
+        ),
+    )
+    AUTHZ_AUDIT_CLEANUP_INTERVAL: int = Field(
+        default=86400,
+        ge=300,
+        description=(
+            "Seconds between scheduled ``authz_audit_log`` retention sweeps. A sweep runs once at "
+            "startup; thereafter a background worker prunes rows older than "
+            "AUTHZ_AUDIT_RETENTION_DAYS every interval so a long-running instance stays bounded "
+            "between restarts. The worker only runs when AUTHZ_AUDIT_ENABLED is True and "
+            "AUTHZ_AUDIT_RETENTION_DAYS > 0. Default 86400 (daily); minimum 300 (5 minutes)."
         ),
     )
 
@@ -192,7 +344,9 @@ class AuthSettings(BaseSettings):
 
         if not config_dir:
             logger.debug("No CONFIG_DIR provided, not saving secret key")
-            return value or secrets.token_urlsafe(32)
+            value = value or secrets.token_urlsafe(32)
+            _warn_if_secret_key_is_short(value)
+            return value
 
         secret_key_path = Path(config_dir) / "secret_key"
 
@@ -212,7 +366,82 @@ class AuthSettings(BaseSettings):
             write_secret_to_file(secret_key_path, value)
             logger.debug("Saved secret key")
 
+        _warn_if_secret_key_is_short(value)
         return value if isinstance(value, SecretStr) else SecretStr(value).get_secret_value()
+
+    @field_validator("EXTERNAL_AUTH_PROVIDER", mode="before")
+    @classmethod
+    def normalize_external_auth_provider(cls, value):
+        """Normalize the external provider key once at the config boundary.
+
+        Every consumer (JIT provisioning, the API-key floor in the auth service,
+        SSOUserProfile.sso_provider lookups) reads this value directly, so an
+        empty/whitespace value must resolve to the same canonical string here.
+        Otherwise the value written ("external") and the value compared against
+        ("") would diverge and silently disable a security floor.
+        """
+        if value is None:
+            return "external"
+        normalized = str(value).strip()
+        return normalized or "external"
+
+    @field_validator("SSO_REDIRECT_URL", mode="before")
+    @classmethod
+    def validate_sso_redirect_url(cls, value):
+        """Allow only same-origin relative URL references."""
+        if value is None:
+            return None
+
+        raw_url = str(value)
+        url = raw_url.strip()
+        if not url:
+            return None
+        if any(
+            ord(character) < ASCII_CONTROL_CHARACTER_LIMIT or ord(character) == ASCII_DELETE_CHARACTER
+            for character in raw_url
+        ):
+            msg = "SSO_REDIRECT_URL must not contain control characters."
+            raise ValueError(msg)
+
+        parsed = urlparse(url)
+        normalized_separators = url.replace("\\", "/")
+        if parsed.scheme or parsed.netloc or normalized_separators.startswith("//"):
+            msg = (
+                "SSO_REDIRECT_URL must be a same-origin relative path; "
+                "absolute and protocol-relative URLs are not allowed."
+            )
+            raise ValueError(msg)
+
+        return url
+
+    @field_validator("EXTERNAL_AUTH_JWKS_URL", mode="before")
+    @classmethod
+    def validate_external_auth_jwks_url(cls, value):
+        """Reject non-HTTPS JWKS URLs to stop a network MITM swapping signing keys.
+
+        An ``http://`` JWKS endpoint lets an on-path attacker substitute their own
+        keys and forge tokens. HTTPS is required; ``http`` is permitted only for
+        loopback hosts (localhost / 127.0.0.1 / ::1) to keep local development
+        usable.
+        """
+        if value is None:
+            return value
+        url = str(value).strip()
+        if not url:
+            return None
+
+        parsed = urlparse(url)
+        scheme = parsed.scheme.lower()
+        if scheme == "https":
+            return url
+        if scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
+            return url
+
+        msg = (
+            "EXTERNAL_AUTH_JWKS_URL must use https so a network attacker cannot swap the JWKS "
+            "signing keys and forge tokens. http is allowed only for localhost/127.0.0.1/::1."
+        )
+        raise ValueError(msg)
 
     @model_validator(mode="after")
     def setup_rsa_keys(self):

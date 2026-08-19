@@ -37,53 +37,54 @@ export const normalizeModelProviderStatus = (
   is_enabled: providerInfo.is_enabled || providerInfo.is_configured === true,
   icon: providerInfo.icon || getProviderIcon(providerInfo.provider),
 });
+export const getModelProvidersQueryOptions = (
+  params?: GetModelProvidersParams,
+) => {
+  const queryParams = new URLSearchParams();
+  if (params?.includeDeprecated) {
+    queryParams.append("include_deprecated", "true");
+  }
+  if (params?.includeUnsupported) {
+    queryParams.append("include_unsupported", "true");
+  }
+
+  const url = `${getURL("MODELS")}${
+    queryParams.toString() ? `?${queryParams.toString()}` : ""
+  }`;
+
+  return {
+    queryKey: [
+      "useGetModelProviders",
+      params?.includeDeprecated,
+      params?.includeUnsupported,
+    ] as const,
+    queryFn: async (): Promise<ModelProviderWithStatus[]> => {
+      const response = await api.get<ModelProviderInfo[]>(url);
+      return response.data.map(normalizeModelProviderStatus);
+    },
+    refetchOnWindowFocus: false,
+    staleTime: 1000 * 60 * 5,
+  };
+};
 
 export const useGetModelProviders: useQueryFunctionType<
   GetModelProvidersParams | undefined,
   ModelProviderWithStatus[]
 > = (params, options) => {
   const { query } = UseRequestProcessor();
+  const { queryKey, queryFn, refetchOnWindowFocus, staleTime } =
+    getModelProvidersQueryOptions(params);
 
-  const getModelProvidersFn = async (): Promise<ModelProviderWithStatus[]> => {
-    // Build query params
-    const queryParams = new URLSearchParams();
-    if (params?.includeDeprecated) {
-      queryParams.append("include_deprecated", "true");
-    }
-    if (params?.includeUnsupported) {
-      queryParams.append("include_unsupported", "true");
-    }
-
-    const url = `${getURL("MODELS")}${
-      queryParams.toString() ? `?${queryParams.toString()}` : ""
-    }`;
-
-    // Fetch the models with provider information including is_enabled status from server
-    // Let errors propagate so React Query can retry and preserve stale data
-    const response = await api.get<ModelProviderInfo[]>(url);
-    const providersData = response.data;
-
-    return providersData.map(normalizeModelProviderStatus);
-  };
-
-  const queryResult = query(
-    [
-      "useGetModelProviders",
-      params?.includeDeprecated,
-      params?.includeUnsupported,
-    ],
-    getModelProvidersFn,
-    {
-      refetchOnWindowFocus: false,
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      ...options,
-    },
-  );
+  const queryResult = query(queryKey, queryFn, {
+    refetchOnWindowFocus,
+    staleTime,
+    ...options,
+  });
 
   return queryResult;
 };
 
-// Helper function to map provider names to icon names
+// Helper function to map provider names to icon names when the API omits icon.
 const getProviderIcon = (providerName: string): string => {
   const iconMap: Record<string, string> = {
     OpenAI: "OpenAI",
@@ -93,12 +94,16 @@ const getProviderIcon = (providerName: string): string => {
     "Amazon Bedrock": "Bedrock",
     NVIDIA: "NVIDIA",
     Cohere: "Cohere",
-    "Azure OpenAI": "AzureOpenAI",
+    // Both Azure providers share the Azure brand icon asset (there is no
+    // AzureOpenAI icon module in the frontend icon registry).
+    "Azure OpenAI": "Azure",
+    "Azure AI Foundry": "Azure",
     SambaNova: "SambaNova",
     Ollama: "Ollama",
     "IBM WatsonX": "IBM",
     "IBM watsonx.ai": "IBM",
     OpenRouter: "OpenRouter",
+    "OpenAI Compatible": "Plug",
   };
 
   return iconMap[providerName] || "Bot";

@@ -3,7 +3,7 @@ import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDarkStore } from "@/stores/darkStore";
 import "@/style/ag-theme-shadcn.css"; // Custom CSS applied to the grid
-import type { ColDef } from "ag-grid-community";
+import type { CellKeyDownEvent, ColDef } from "ag-grid-community";
 import type { TableOptionsTypeAPI } from "@/types/api";
 import { suppressAutofillOnElement } from "@/utils/inputAutofill";
 import { cn } from "@/utils/utils";
@@ -11,8 +11,20 @@ import "ag-grid-community/styles/ag-grid.css"; // Mandatory CSS required by the 
 import "ag-grid-community/styles/ag-theme-quartz.css"; // Optional Theme applied to the grid
 import { AgGridReact, type AgGridReactProps } from "ag-grid-react";
 import cloneDeep from "lodash";
-import { type ElementRef, forwardRef, useRef, useState } from "react";
+import {
+  type ElementRef,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import TableOptions from "./components/TableOptions";
+import {
+  isDisabledPagingButton,
+  useAgGridAccessibilityPatch,
+} from "./hooks/use-ag-grid-accessibility-patch";
 import resetGrid from "./utils/reset-grid-columns";
 
 export interface TableComponentProps extends AgGridReactProps {
@@ -37,6 +49,7 @@ export interface TableComponentProps extends AgGridReactProps {
   addRow?: () => void;
   tableOptions?: TableOptionsTypeAPI;
   paginationInfo?: string;
+  tableLabel?: string;
 }
 
 const TableComponent = forwardRef<
@@ -44,13 +57,31 @@ const TableComponent = forwardRef<
   TableComponentProps
 >(
   (
-    { alertTitle, alertDescription, displayEmptyAlert = true, ...props },
+    {
+      alertTitle,
+      alertDescription,
+      displayEmptyAlert = true,
+      tableLabel,
+      ...props
+    },
     ref,
   ) => {
     const { t } = useTranslation();
     const resolvedAlertTitle = alertTitle ?? t("table.noDataTitle");
     const resolvedAlertDescription =
       alertDescription ?? t("table.noDataMessage");
+    const resolvedTableLabel = tableLabel ?? t("table.dataTable", "Data table");
+    const tableAccessibilityLabels = useMemo(
+      () => ({
+        startFocusBoundary: t("table.startFocusBoundary", {
+          tableLabel: resolvedTableLabel,
+        }),
+        endFocusBoundary: t("table.endFocusBoundary", {
+          tableLabel: resolvedTableLabel,
+        }),
+      }),
+      [resolvedTableLabel, t],
+    );
     const isSingleToggleRowEditable = (
       colField: string,
       // biome-ignore lint/suspicious/noExplicitAny: legacy
@@ -264,9 +295,14 @@ const TableComponent = forwardRef<
     // @ts-ignore
     const realRef: React.MutableRefObject<AgGridReact> =
       useRef<AgGridReact | null>(null);
+    const {
+      containerRef: tableContainerRef,
+      schedulePatch: scheduleGridAccessibilityPatch,
+    } = useAgGridAccessibilityPatch(tableAccessibilityLabels);
     const dark = useDarkStore((state) => state.dark);
     const initialColumnDefs = useRef(colDef);
     const [columnStateChange, setColumnStateChange] = useState(false);
+    const ariaLabel = props["aria-label"] as string | undefined;
     // Only use visible columns for the store reference
     const storeReference = props.columnDefs
       .filter((col) => !col.hide)
@@ -276,6 +312,8 @@ const TableComponent = forwardRef<
     const onGridReady = (params) => {
       // @ts-ignore
       realRef.current = params;
+      params.api.setGridAriaProperty("label", ariaLabel ?? resolvedTableLabel);
+      scheduleGridAccessibilityPatch();
       const updatedColumnDefs = [...colDef];
       params.api.setGridOption("columnDefs", updatedColumnDefs);
       const customInit = localStorage.getItem(storeReference);
@@ -302,6 +340,13 @@ const TableComponent = forwardRef<
       }, 1000);
       if (props.onGridReady) props.onGridReady(params);
     };
+
+    useEffect(() => {
+      realRef.current?.api?.setGridAriaProperty(
+        "label",
+        ariaLabel ?? resolvedTableLabel,
+      );
+    }, [ariaLabel, resolvedTableLabel]);
     const onColumnMoved = (params) => {
       const gridApi = params?.api ?? realRef.current?.api;
       const columns =
@@ -353,6 +398,172 @@ const TableComponent = forwardRef<
       });
       props.onCellEditingStarted?.(event);
     };
+    // Move focus to the nearest focusable element outside the grid in the given
+    // direction. Returns true when focus was moved. Used for the grid's boundary
+    // tab-out (see the keydown handler below).
+    const focusAdjacentElementOutsideGrid = useCallback(
+      (backwards: boolean) => {
+        const container = tableContainerRef.current;
+        if (!container) return false;
+        const treeGrid =
+          container.querySelector<HTMLElement>('[role="treegrid"]') ??
+          container;
+        const candidates = Array.from(
+          document.querySelectorAll<HTMLElement>(
+            [
+              "a[href]",
+              "button:not([disabled])",
+              "input:not([disabled])",
+              "select:not([disabled])",
+              "textarea:not([disabled])",
+              '[tabindex]:not([tabindex="-1"])',
+              '[contenteditable="true"]',
+            ].join(","),
+          ),
+        ).filter((element) => {
+          if (treeGrid.contains(element) || element.tabIndex < 0) return false;
+          if (element.hasAttribute("disabled")) return false;
+          if (element.getAttribute("aria-disabled") === "true") return false;
+          if (element.closest('[inert], [aria-hidden="true"]')) return false;
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        });
+        if (candidates.length === 0) return false;
+        const wantedPosition = backwards
+          ? Node.DOCUMENT_POSITION_PRECEDING
+          : Node.DOCUMENT_POSITION_FOLLOWING;
+        // Prefer the next control in tab direction. When the grid is the last
+        // (or first) focusable region on the page — e.g. Knowledge Bases has no
+        // controls after the table — wrap to the other end so focus never
+        // dead-stops on <body> (WCAG 2.1.2).
+        const target =
+          candidates.find((element) =>
+            Boolean(treeGrid.compareDocumentPosition(element) & wantedPosition),
+          ) ?? (backwards ? candidates[candidates.length - 1] : candidates[0]);
+        target.focus();
+        // AG Grid's focus service restores focus to the last focused cell on the
+        // next tick, so re-apply focus once the grid has settled.
+        requestAnimationFrame(() => target.focus());
+        return true;
+      },
+      [],
+    );
+    // AG Grid programmatically focuses a disabled paging button on tab-out
+    // (`allowFocusForNextGridCoreContainer`), which `tabindex="-1"` cannot
+    // prevent. Catch that focus and redirect it to the adjacent real control,
+    // inferring the tab direction from where focus came from. Scoped to the
+    // grid container — not the document — and only fires for disabled paging
+    // buttons, so it does not interfere with normal grid navigation.
+    useEffect(() => {
+      const container = tableContainerRef.current;
+      if (!container) return;
+      const handleFocusIn = (event: FocusEvent) => {
+        if (!(event.target instanceof HTMLElement)) return;
+        const pagingButton =
+          event.target.closest<HTMLElement>(".ag-paging-button");
+        if (!pagingButton || !isDisabledPagingButton(pagingButton)) return;
+        const from =
+          event.relatedTarget instanceof HTMLElement
+            ? event.relatedTarget
+            : null;
+        const backwards = from
+          ? Boolean(
+              pagingButton.compareDocumentPosition(from) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+            )
+          : false;
+        // Move focus on the next frame: focus changes made during a focusin
+        // dispatch are ignored by the browser, and AG Grid re-asserts the focus
+        // on the following tick, so we act after it has settled.
+        requestAnimationFrame(() => {
+          const active = document.activeElement;
+          const activePaging =
+            active instanceof HTMLElement
+              ? active.closest<HTMLElement>(".ag-paging-button")
+              : null;
+          if (!activePaging || !isDisabledPagingButton(activePaging)) return;
+          const moved = focusAdjacentElementOutsideGrid(backwards);
+          // Nothing focusable in that direction (every trailing control is
+          // disabled): don't strand focus on the non-operable button — blur it
+          // so the next Tab continues naturally.
+          if (!moved) activePaging.blur();
+        });
+      };
+      container.addEventListener("focusin", handleFocusIn);
+      return () => container.removeEventListener("focusin", handleFocusIn);
+    }, [focusAdjacentElementOutsideGrid]);
+    // AG Grid's official tab hook. It runs while the grid computes Tab
+    // navigation and, crucially, cooperates with the grid's focus service (the
+    // grid expects focus to leave and will not restore the cell). When there is
+    // no next cell (Tab off the grid boundary) we move focus out of the grid to
+    // the adjacent focusable element ourselves, so focus never dead-stops on
+    // <body> or on a disabled pagination button.
+    const tabToNextCell = (params) => {
+      const customResult = props.gridOptions?.tabToNextCell?.(params);
+      if (customResult !== undefined && customResult !== null) {
+        return customResult;
+      }
+      if (!params.nextCellPosition) {
+        focusAdjacentElementOutsideGrid(params.backwards);
+        return false;
+      }
+      return params.nextCellPosition;
+    };
+    const onCellKeyDown = (event: CellKeyDownEvent) => {
+      const keyboardEvent = event.event as KeyboardEvent | undefined;
+      const keyTarget =
+        keyboardEvent?.target instanceof HTMLElement
+          ? keyboardEvent.target
+          : undefined;
+      const isTextModalTriggerActivation =
+        keyTarget?.closest("[data-langflow-text-cell-trigger]") &&
+        (keyboardEvent?.key === "Enter" || keyboardEvent?.key === " ");
+
+      // When Radix restores focus after the dialog closes, focus lands on the
+      // actual trigger button. Let the button's native Enter/Space activation
+      // handle that case; clicking it again here would toggle the dialog twice.
+      if (isTextModalTriggerActivation) return;
+
+      props.onCellKeyDown?.(event);
+
+      if (
+        keyboardEvent?.defaultPrevented ||
+        (keyboardEvent?.key !== "Enter" && keyboardEvent?.key !== " ")
+      ) {
+        return;
+      }
+
+      const eventPath: EventTarget[] =
+        "eventPath" in event && Array.isArray(event.eventPath)
+          ? event.eventPath
+          : (keyboardEvent?.composedPath() ?? []);
+      const pathElements = eventPath.filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      const pathTrigger = pathElements.find((element) =>
+        element.hasAttribute("data-langflow-text-cell-trigger"),
+      );
+      const pathGridCell = pathElements.find(
+        (element) => element.getAttribute("role") === "gridcell",
+      );
+      const targetGridCell =
+        keyboardEvent?.target instanceof HTMLElement
+          ? keyboardEvent.target.closest<HTMLElement>('[role="gridcell"]')
+          : undefined;
+      const textModalTrigger =
+        pathTrigger ??
+        pathGridCell?.querySelector<HTMLElement>(
+          "[data-langflow-text-cell-trigger]",
+        ) ??
+        targetGridCell?.querySelector<HTMLElement>(
+          "[data-langflow-text-cell-trigger]",
+        );
+
+      if (!textModalTrigger || !keyboardEvent) return;
+
+      keyboardEvent.preventDefault();
+      textModalTrigger.click();
+    };
     if (props.rowData.length === 0 && displayEmptyAlert) {
       return (
         <div className="flex h-full w-full items-center justify-center rounded-md border">
@@ -387,6 +598,7 @@ const TableComponent = forwardRef<
 
     return (
       <div
+        ref={tableContainerRef}
         className={cn(
           dark ? "ag-theme-quartz-dark" : "ag-theme-quartz",
           "ag-theme-shadcn flex h-full flex-col",
@@ -412,8 +624,10 @@ const TableComponent = forwardRef<
           animateRows={false}
           gridOptions={{
             colResizeDefault: "shift",
+            ensureDomOrder: true,
             suppressColumnVirtualisation: false, // Enable column virtualization for better performance
             ...props.gridOptions,
+            tabToNextCell,
           }}
           onColumnResized={onColumnResized}
           columnDefs={colDef}
@@ -427,8 +641,17 @@ const TableComponent = forwardRef<
             }
           }}
           onGridReady={onGridReady}
+          onFirstDataRendered={(event) => {
+            scheduleGridAccessibilityPatch();
+            props.onFirstDataRendered?.(event);
+          }}
+          onPaginationChanged={(event) => {
+            scheduleGridAccessibilityPatch();
+            props.onPaginationChanged?.(event);
+          }}
           onColumnMoved={onColumnMoved}
           onCellEditingStarted={onCellEditingStarted}
+          onCellKeyDown={onCellKeyDown}
           onCellValueChanged={
             props.onCellValueChanged
               ? (e) => {
@@ -498,6 +721,10 @@ const TableComponent = forwardRef<
               );
               setColumnStateChange(true);
             }
+          }}
+          onRowDataUpdated={(e) => {
+            scheduleGridAccessibilityPatch();
+            props.onRowDataUpdated?.(e);
           }}
         />
         {!props.tableOptions?.hide_options && props.pagination && (

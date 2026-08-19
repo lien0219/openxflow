@@ -26,7 +26,6 @@ from lfx.base.agents.utils import data_to_messages, get_chat_output_sender_name,
 from lfx.components.models_and_agents import AgentComponent
 from lfx.log.logger import logger
 from lfx.memory import delete_message
-from lfx.schema.content_block import ContentBlock
 from lfx.schema.data import Data
 
 if TYPE_CHECKING:
@@ -381,7 +380,12 @@ class ALTKBaseAgentComponent(AgentComponent):
             sender=MESSAGE_SENDER_AI,
             sender_name=sender_name,
             properties={"icon": "Bot", "state": "partial"},
-            content_blocks=[ContentBlock(title="Agent Steps", contents=[])],
+            # `text=""` sentinel so MessageTable's no_content check accepts
+            # an in-flight agent message whose content_blocks haven't been
+            # populated yet. Mirrors ChatInput's convention.
+            text="",
+            # Flat chronological event log; see lfx.base.agents.events.
+            content_blocks=[],
             session_id=session_id or uuid.uuid4(),
         )
         try:
@@ -406,11 +410,13 @@ class ALTKBaseAgentComponent(AgentComponent):
                 if msg_id:
                     await delete_message(id_=msg_id)
             await self._send_message_event(e.agent_message, category="remove_message")
-            logger.error(f"ExceptionWithMessageError: {e}")
+            # exception(), not error(f"...{e}"): this class's str() interpolates the model's
+            # partial completion, and passing the exception rather than formatting it is what
+            # gives the exported record an error.type to triage on.
+            logger.exception("Agent run failed after a partial message was emitted")
             raise
-        except Exception as e:
-            # Log or handle any other exceptions
-            logger.error(f"Error: {e}")
+        except Exception:
+            logger.exception("Agent run failed")
             raise
 
         self.status = result

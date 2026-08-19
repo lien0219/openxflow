@@ -1,3 +1,5 @@
+import { useId } from "react";
+import { useTranslation } from "react-i18next";
 import type { To } from "react-router-dom";
 import { CustomBanner } from "@/customization/components/custom-banner";
 import { useCustomNavigate } from "@/customization/hooks/use-custom-navigate";
@@ -20,7 +22,9 @@ export default function PageLayout({
   betaIcon?: boolean;
   backTo?: To;
 }) {
+  const headingId = useId();
   const navigate = useCustomNavigate();
+  const { t } = useTranslation();
 
   return (
     <div
@@ -32,6 +36,8 @@ export default function PageLayout({
         data-theme-region="page-container"
       >
         <div
+          role="region"
+          aria-labelledby={headingId}
           className="flex flex-col gap-4 p-6 pt-0"
           data-theme-region="page-header"
         >
@@ -46,6 +52,7 @@ export default function PageLayout({
                       navigate(backTo);
                     }}
                     data-testid="back_page_button"
+                    aria-label={t("navigation.goBack")}
                   >
                     <ForwardedIconComponent
                       name="ChevronLeft"
@@ -54,6 +61,7 @@ export default function PageLayout({
                   </Button>
                 )}
                 <h2
+                  id={headingId}
                   className="text-2xl font-bold tracking-tight"
                   data-testid="mainpage_title"
                 >

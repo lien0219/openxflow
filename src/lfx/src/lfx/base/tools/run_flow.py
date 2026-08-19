@@ -20,6 +20,7 @@ from lfx.schema.dotdict import dotdict
 from lfx.services.cache.utils import CacheMiss
 from lfx.services.deps import get_shared_component_cache_service
 from lfx.template.field.base import Output
+from lfx.utils.flow_validation import is_protected_tweak_field
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -544,7 +545,11 @@ class RunFlowBaseComponent(Component):
                 graph=graph,
             )
 
-        except Exception:  # noqa: BLE001
+        except Exception as exc:
+            from lfx.run.hitl import NestedHITLUnsupportedError
+
+            if isinstance(exc, NestedHITLUnsupportedError):
+                raise
             msg = f"Error running flow: {self.flow_name_selected}"
             raise RuntimeError(msg) from None
 
@@ -763,6 +768,19 @@ class RunFlowBaseComponent(Component):
                 continue
             if not (node_tweaks := tweaks.get(vertex.id)):
                 continue
-            node_tweaks.pop("code", None)
-            vertex.update_raw_params(node_tweaks, overwrite=True)
+            template_data = vertex.data.get("node", {}).get("template", {})
+            component_type = vertex.data.get("type")
+            if not isinstance(template_data, dict):
+                continue
+            safe_tweaks = {}
+            for tweak_name, tweak_value in node_tweaks.items():
+                field = template_data.get(tweak_name)
+                if not isinstance(field, dict):
+                    continue
+                if is_protected_tweak_field(component_type, tweak_name, field.get("type", "")):
+                    logger.warning(f"Security: refusing to override protected field {tweak_name!r} via tweaks.")
+                    continue
+                safe_tweaks[tweak_name] = tweak_value
+            if safe_tweaks:
+                vertex.update_raw_params(safe_tweaks, overwrite=True)
         return graph

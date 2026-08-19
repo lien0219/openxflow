@@ -134,7 +134,8 @@ _MAX_ROLE_GRAPH_SIZE = 1024
 
 
 def is_managed_service_user(user: User) -> bool:
-    optins = user.optins if isinstance(user.optins, dict) else {}
+    optins = getattr(user, "optins", None)
+    optins = optins if isinstance(optins, dict) else {}
     return bool(optins.get("channel_service_identity"))
 
 

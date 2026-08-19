@@ -47,17 +47,18 @@ export function FlowBuilderWelcomeMount() {
   // placeholder. Delete that placeholder here so the user is left with a SINGLE
   // flow (the template they chose) instead of two. Guarded to only remove a
   // still-blank placeholder so we never discard a flow the user built on.
+  // Intentionally NOT guarded on ``isOpen``: the templates path dismisses the
+  // overlay synchronously at navigation (see ``dismissForNavigation``), so by
+  // the time this runs ``isOpen`` is already false and only ``openedForFlowId``
+  // is left to tell us there is a placeholder to reap.
   useEffect(() => {
     // The route changes before flowsManagerStore finishes loading the new
     // flow. Prefer it so the store's previous currentFlowId cannot close the
     // welcome during the initial navigation to its placeholder.
-    const activeFlowId = routeFlowId ?? currentFlowId;
-    if (
-      isOpen &&
-      openedForFlowId &&
-      activeFlowId &&
-      activeFlowId !== openedForFlowId
-    ) {
+    const activeFlowId = isOpen
+      ? (routeFlowId ?? currentFlowId)
+      : currentFlowId;
+    if (openedForFlowId && activeFlowId && activeFlowId !== openedForFlowId) {
       const placeholder = flows?.find((flow) => flow.id === openedForFlowId);
       const isBlankPlaceholder =
         !!placeholder && (placeholder.data?.nodes?.length ?? 0) === 0;

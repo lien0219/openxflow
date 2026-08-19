@@ -132,27 +132,18 @@ _MALFORMED_CASES: list[tuple[str, dict[str, Any]]] = [
     ("lfx", {**_VALID, "lfx": {"compat": []}}),
     # 8. lfx.compat wrong element type (must be a string, not int)
     ("lfx", {**_VALID, "lfx": {"compat": [1]}}),
-    # 9. bundles empty
-    ("bundles", {**_VALID, "bundles": []}),
+    # 9. provider entry missing the required ``metadata`` field. (Empty bundles
+    # is no longer schema-invalid: provider-only extensions ship no components,
+    # and "at least one of bundles/providers" is a model_validator the JSON
+    # Schema cannot express.)
+    ("providers", {**_VALID, "providers": [{"name": "X"}]}),
     # 10. bundles[0].path wrong type
     ("bundles", {**_VALID, "bundles": [{"name": "x", "path": 7}]}),
-    # 11. multi-bundle (must be encoded as maxItems in the published schema, not
-    # only as a model_validator that lives behind the JSON Schema export)
-    (
-        "bundles",
-        {
-            **_VALID,
-            "bundles": [
-                {"name": "a", "path": "a"},
-                {"name": "b", "path": "b"},
-            ],
-        },
-    ),
-    # 12. capabilities extra field
+    # 11. capabilities extra field
     ("capabilities", {**_VALID, "capabilities": {"requiresCredentials": True, "extra": 1}}),
-    # 13. id missing entirely
+    # 12. id missing entirely
     ("id", {k: v for k, v in _VALID.items() if k != "id"}),
-    # 14. deferred field set to a non-null value -- rejected via
+    # 13. deferred field set to a non-null value -- rejected via
     # ``additionalProperties: false`` rather than the older "expected null".
     ("(root)", {**_VALID, "services": {"foo": "bar"}}),
 ]
