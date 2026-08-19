@@ -8,6 +8,10 @@ on:
         required: false
         type: boolean
         default: false
+      ref:
+        description: "Git ref to checkout."
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       branch:
@@ -31,7 +35,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-          ref: ${{ inputs.branch || github.ref }}
+          ref: ${{ inputs.ref || inputs.branch || github.event.pull_request.head.sha || github.sha }}
           # Need full history so biome can diff against the PR base
           fetch-depth: 0
 

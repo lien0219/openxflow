@@ -2,6 +2,11 @@ name: Test Docs Build
 
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout."
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       branch:
@@ -21,7 +26,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.branch || github.ref }}
+          ref: ${{ inputs.ref || inputs.branch || github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -45,7 +50,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.branch || github.ref }}
+          ref: ${{ inputs.ref || inputs.branch || github.event.pull_request.head.sha || github.sha }}
 
       - name: Allow Chrome sandbox (Ubuntu 24.04 AppArmor restriction)
         # Ubuntu 24.04 runners restrict unprivileged user namespaces, which
