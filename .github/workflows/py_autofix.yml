@@ -1,4 +1,5 @@
 name: autofix.ci
+
 on:
   pull_request:
     paths:
@@ -7,23 +8,38 @@ on:
       - "scripts/build_component_index.py"
     types: [opened, synchronize, reopened, labeled]
 
-# autofix-ci/action uploads a diff artifact and the autofix.ci GitHub App applies
-# it with its own credentials, so no job here needs write access to the repo.
-permissions:
-  contents: read
+# Serialize generators that push to the same PR branch. Bot-triggered follow-up
+# runs use their own group so they cannot replace a pending user-triggered run.
+concurrency:
+  group: pr-generator-writes-${{ github.event.pull_request.number }}-${{ github.actor != 'github-actions[bot]' && 'writer' || github.run_id }}
+  cancel-in-progress: false
 
 env:
   PYTHON_VERSION: "3.13"
 
+permissions:
+  contents: read
+  pull-requests: read
 
+# AUTOFIX_TOKEN is optional. When absent (or on forks), jobs validate generated
+# files without writing. A configured PAT/App token may push and trigger checks
+# for the new PR head SHA; GITHUB_TOKEN is deliberately never used for pushes.
 jobs:
   lint:
     name: Run Ruff Check and Format
     if: github.event.action != 'labeled' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    env:
+      AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
     steps:
       - uses: actions/checkout@v7
-      - name: "Setup Environment"
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.AUTOFIX_TOKEN || github.token }}
+
+      - name: Setup Environment
         uses: astral-sh/setup-uv@v10.0.0
         with:
           version: latest-known
@@ -31,18 +47,49 @@ jobs:
           cache-dependency-glob: "uv.lock"
           python-version: ${{ env.PYTHON_VERSION }}
           prune-cache: false
-      - run: uv run ruff check --fix-only .
-      - run: uv run ruff format . --config pyproject.toml
-      - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a
 
+      - name: Apply Ruff fixes
+        run: |
+          uv run ruff check --fix-only .
+          uv run ruff format . --config pyproject.toml
+
+      - name: Commit Python autofixes
+        if: github.event.pull_request.head.repo.fork == false && env.AUTOFIX_TOKEN != ''
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet; then
+            echo "Python sources are already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: apply Python autofixes"
+          git push origin "HEAD:${HEAD_REF}"
+
+      - name: Validate Python formatting
+        if: github.event.pull_request.head.repo.fork || env.AUTOFIX_TOKEN == ''
+        run: git diff --exit-code
 
   update-starter-projects:
     name: Update Starter Projects
-    if: github.event.action != 'labeled' && github.actor != 'github-actions[bot]'
+    needs: lint
+    if: >-
+      github.event.action != 'labeled'
+      && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    env:
+      AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
     steps:
       - uses: actions/checkout@v7
-      - name: "Setup Environment"
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.AUTOFIX_TOKEN || github.token }}
+
+      - name: Setup Environment
         uses: astral-sh/setup-uv@v10.0.0
         with:
           version: latest-known
@@ -51,7 +98,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           prune-cache: false
 
-      - name: "Install dependencies"
+      - name: Install dependencies
         run: |
           uv sync
           uv pip install -e .
@@ -59,21 +106,50 @@ jobs:
       - name: Run starter projects update
         run: uv run python scripts/ci/update_starter_projects.py
 
-      - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a
+      - name: Commit refreshed starter projects
+        if: github.event.pull_request.head.repo.fork == false && env.AUTOFIX_TOKEN != ''
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet -- src/backend/base/langflow/initial_setup/starter_projects; then
+            echo "Starter projects are already current."
+            exit 0
+          fi
 
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/backend/base/langflow/initial_setup/starter_projects
+          git commit -m "chore: refresh starter projects"
+          git push origin "HEAD:${HEAD_REF}"
+
+      - name: Validate starter projects
+        if: github.event.pull_request.head.repo.fork || env.AUTOFIX_TOKEN == ''
+        run: git diff --exit-code -- src/backend/base/langflow/initial_setup/starter_projects
 
   update-component-index:
     name: Update Component Index
+    needs: [lint, update-starter-projects]
     if: >-
-      github.actor != 'github-actions[bot]'
+      always()
+      && github.actor != 'github-actions[bot]'
       && (github.event.action != 'labeled' || github.event.label.name == 'fix-index')
+      && (
+        (github.event.action != 'labeled'
+          && needs.lint.result == 'success'
+          && needs.update-starter-projects.result == 'success')
+        || (github.event.action == 'labeled' && github.event.label.name == 'fix-index')
+      )
     runs-on: ubuntu-latest
+    env:
+      AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
     steps:
       - uses: actions/checkout@v7
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          token: ${{ secrets.AUTOFIX_TOKEN || github.token }}
+
       - name: Merge base branch
         run: |
           git config user.name "github-actions[bot]"
@@ -81,22 +157,20 @@ jobs:
           git remote add upstream "${{ github.event.pull_request.base.repo.clone_url }}"
           git fetch --no-tags upstream "${{ github.base_ref }}"
           git merge upstream/${{ github.base_ref }} --no-edit || {
-            # Check which files have conflicts
             CONFLICTED=$(git diff --name-only --diff-filter=U)
 
-            # If any non-generated files conflict, bail out — needs manual resolution
             if echo "$CONFLICTED" | grep -v component_index.json | grep -q .; then
               echo "::error::Merge conflicts in non-generated files require manual resolution"
               git merge --abort
               exit 1
             fi
 
-            # Only component_index.json conflicts — resolve and finish merge
             git checkout --theirs src/lfx/src/lfx/_assets/component_index.json
             git add src/lfx/src/lfx/_assets/component_index.json
             GIT_EDITOR=true git merge --continue
           }
-      - name: "Setup Environment"
+
+      - name: Setup Environment
         uses: astral-sh/setup-uv@v10.0.0
         with:
           version: latest-known
@@ -105,7 +179,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           prune-cache: false
 
-      - name: "Install dependencies"
+      - name: Install dependencies
         run: uv sync --dev --project .
 
       - name: Build component index
@@ -113,4 +187,21 @@ jobs:
           LFX_DEV: "1"
         run: make build_component_index
 
-      - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a
+      - name: Commit refreshed component index
+        if: github.event.pull_request.head.repo.fork == false && env.AUTOFIX_TOKEN != ''
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet -- src/lfx/src/lfx/_assets/component_index.json; then
+            echo "Component index is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lfx/src/lfx/_assets/component_index.json
+          git commit -m "chore: refresh component index"
+          git push origin "HEAD:${HEAD_REF}"
+
+      - name: Validate component index
+        if: github.event.pull_request.head.repo.fork || env.AUTOFIX_TOKEN == ''
+        run: git diff --exit-code -- src/lfx/src/lfx/_assets/component_index.json

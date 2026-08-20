@@ -83,6 +83,7 @@ pinecone
 processing
 prototypes
 qdrant
+qwen
 redis
 sambanova
 scrapegraph

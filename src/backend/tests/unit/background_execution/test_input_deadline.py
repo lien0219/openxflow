@@ -12,12 +12,13 @@ negative budget so its ``input_deadline_at`` is already in the past.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
 from langflow.services.background_execution.live_bus import InMemoryLiveBus
 from langflow.services.background_execution.runner import HUMAN_INPUT_REQUIRED_EVENT, JobRunner
-from langflow.services.database.models.jobs.model import JobStatus
+from langflow.services.database.models.jobs.model import Job, JobStatus
 from lfx.workflow.adapters import StreamAdapterContext, get_stream_adapter
 
 
@@ -169,9 +170,27 @@ async def test_paused_time_does_not_count_against_compute_timeout(real_services_
     job_service = real_services_job_service
     user_id, job_id = await _suspend_a_job(job_service, request_id="req-pause", input_deadline_s=None)
 
+    # Make the persisted run much older than the compute budget without adding
+    # a wall-clock sleep. A resume must receive a fresh per-pass timeout.
+    from lfx.services.deps import session_scope
+
+    stale_created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    async with session_scope() as session:
+        job = await session.get(Job, job_id)
+        assert job is not None
+        job.created_timestamp = stale_created_at
+        session.add(job)
+
     settings = get_settings_service().settings
     original = settings.background_job_timeout
-    settings.background_job_timeout = 1.0
+    settings.background_job_timeout = 10.0
+    persisted = await job_service.get_job_by_job_id(job_id)
+    assert persisted is not None
+    persisted_created_at = persisted.created_timestamp
+    if persisted_created_at.tzinfo is None:
+        persisted_created_at = persisted_created_at.replace(tzinfo=timezone.utc)
+    assert persisted_created_at <= stale_created_at + timedelta(seconds=1)
+    assert datetime.now(timezone.utc) - persisted_created_at > timedelta(minutes=59)
     svc = BackgroundExecutionService(settings_service=get_settings_service(), frame_source_factory=_completing_factory)
     await svc.start()
     try:
