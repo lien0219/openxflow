@@ -95,7 +95,7 @@ jobs:
       - name: Confirm branch
         run: git branch --show-current
       - name: "Setup Environment"
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: true

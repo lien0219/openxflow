@@ -64,7 +64,7 @@ jobs:
           ref: ${{ inputs.nightly_tag_release }}
           persist-credentials: true
       - name: "Setup Environment"
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: true
@@ -159,7 +159,7 @@ jobs:
           ref: ${{ inputs.nightly_tag_release }}
           persist-credentials: true
       - name: "Setup Environment"
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: true
@@ -263,7 +263,7 @@ jobs:
           ref: ${{ inputs.nightly_tag_release}}
           persist-credentials: true
       - name: "Setup Environment"
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: true
@@ -411,7 +411,7 @@ jobs:
           name: dist-nightly-lfx
           path: src/lfx/dist
       - name: Setup Environment
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: false
@@ -440,7 +440,7 @@ jobs:
           name: dist-nightly-sdk
           path: src/sdk/dist
       - name: Setup Environment
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: false
@@ -469,7 +469,7 @@ jobs:
           name: dist-nightly-base
           path: src/backend/base/dist
       - name: Setup Environment
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: false
@@ -499,7 +499,7 @@ jobs:
           name: dist-nightly-bundles
           path: bundles-dist
       - name: Setup Environment
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: false
@@ -640,7 +640,7 @@ jobs:
           ref: ${{ inputs.nightly_tag_release }}
           persist-credentials: true
       - name: Setup Environment
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: false
@@ -763,7 +763,7 @@ jobs:
           name: dist-nightly-main
           path: dist
       - name: Setup Environment
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: false

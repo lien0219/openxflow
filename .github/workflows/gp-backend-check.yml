@@ -38,7 +38,7 @@ jobs:
         run: python scripts/gp/bake_note_keys.py
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: true

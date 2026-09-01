@@ -361,7 +361,7 @@ jobs:
           exit 1
 
       - name: "Setup Environment"
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: true
@@ -590,7 +590,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Setup Python environment
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: true
@@ -632,7 +632,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Setup Python environment
-        uses: astral-sh/setup-uv@v10.0.0
+        uses: astral-sh/setup-uv@v7
         with:
           version: latest-known
           enable-cache: true
