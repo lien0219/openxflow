@@ -1,6 +1,12 @@
 import { useQueryFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
+import {
+  appendProviderScope,
+  PROVIDER_POLICY_STALE_TIME_MS,
+  type ProviderScopeParams,
+  providerScopeQueryKey,
+} from "../../helpers/provider-scope";
 import { UseRequestProcessor } from "../../services/request-processor";
 
 export interface ModelProviderInfo {
@@ -12,31 +18,25 @@ export interface ModelProviderInfo {
   is_enabled: boolean;
   is_configured?: boolean;
   api_docs_url?: string;
+  /** Icon name from provider metadata (e.g. MODEL_PROVIDER_METADATA). */
   icon?: string;
+  /** Translation key used by OpenXFlow provider names such as Qwen. */
   display_name_key?: string;
+  /** True when the model list is discovered from the provider's endpoint
+   *  after credentials are configured (e.g. IBM WatsonX, OpenRouter, vLLM). */
+  live_discovery?: boolean;
 }
 
 export interface ModelProviderWithStatus extends ModelProviderInfo {
   icon?: string;
 }
 
-export interface GetModelProvidersParams {
+export interface GetModelProvidersParams extends ProviderScopeParams {
   includeDeprecated?: boolean;
   includeUnsupported?: boolean;
+  purpose?: "use" | "configure";
 }
 
-export const normalizeModelProviderStatus = (
-  providerInfo: ModelProviderInfo,
-): ModelProviderWithStatus => ({
-  ...providerInfo,
-  // A configured provider is available to catalog consumers even when the
-  // user has not explicitly toggled an individual model yet. Keeping these
-  // states separate on the backend is useful for model-management screens,
-  // but treating only `is_enabled` as availability caused knowledge-base
-  // embedding pickers to hide valid configured providers.
-  is_enabled: providerInfo.is_enabled || providerInfo.is_configured === true,
-  icon: providerInfo.icon || getProviderIcon(providerInfo.provider),
-});
 export const getModelProvidersQueryOptions = (
   params?: GetModelProvidersParams,
 ) => {
@@ -46,6 +46,10 @@ export const getModelProvidersQueryOptions = (
   }
   if (params?.includeUnsupported) {
     queryParams.append("include_unsupported", "true");
+  }
+  appendProviderScope(queryParams, params);
+  if (params?.purpose) {
+    queryParams.append("purpose", params.purpose);
   }
 
   const url = `${getURL("MODELS")}${
@@ -57,13 +61,20 @@ export const getModelProvidersQueryOptions = (
       "useGetModelProviders",
       params?.includeDeprecated,
       params?.includeUnsupported,
+      ...providerScopeQueryKey(params),
+      params?.purpose,
     ] as const,
     queryFn: async (): Promise<ModelProviderWithStatus[]> => {
       const response = await api.get<ModelProviderInfo[]>(url);
-      return response.data.map(normalizeModelProviderStatus);
+      return response.data.map((providerInfo) => ({
+        ...providerInfo,
+        // Prefer backend metadata icon so new providers don't need a frontend map
+        // entry; fall back to the legacy name→asset map, then Bot.
+        icon: providerInfo.icon || getProviderIcon(providerInfo.provider),
+      }));
     },
-    refetchOnWindowFocus: false,
-    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: true,
+    staleTime: PROVIDER_POLICY_STALE_TIME_MS,
   };
 };
 

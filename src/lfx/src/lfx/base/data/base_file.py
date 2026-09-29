@@ -12,7 +12,12 @@ from zipfile import ZipFile, is_zipfile
 import orjson
 import pandas as pd
 
-from lfx.base.data.storage_utils import get_file_size, parse_storage_path, read_file_bytes
+from lfx.base.data.storage_utils import (
+    StorageServiceUnavailableError,
+    get_file_size,
+    parse_storage_path,
+    read_file_bytes,
+)
 from lfx.custom.custom_component.component import Component
 from lfx.io import BoolInput, FileInput, HandleInput, Output, StrInput
 from lfx.schema.data import Data
@@ -21,9 +26,11 @@ from lfx.schema.message import Message
 from lfx.services.deps import get_settings_service, get_storage_service
 from lfx.utils.async_helpers import run_until_complete
 from lfx.utils.file_path_security import (
+    StorageNamespaceError,
     component_authenticated_user_scope,
     component_file_access_scopes,
     enforce_local_file_access,
+    validate_storage_key,
 )
 from lfx.utils.helpers import build_content_type_from_extension
 
@@ -352,7 +359,7 @@ class BaseFileComponent(Component, ABC):
             storage_service = get_storage_service()
             if storage_service is None:
                 msg = "Storage service is unavailable; could not delete processed S3 file."
-                raise RuntimeError(msg)
+                raise StorageServiceUnavailableError(msg)
             run_until_complete(storage_service.delete_file(namespace_id, file_name))
             return
 
@@ -772,6 +779,11 @@ class BaseFileComponent(Component, ABC):
                         resolved_path, scope_ids=component_file_access_scopes(self)
                     )
                     delete_after_processing = False
+                elif parse_storage_path(path_str):
+                    # Relative values are object keys ("<namespace>/<file_name>") handed to
+                    # ``storage_service.get_file`` at read time. The namespace selects another
+                    # principal's prefix, so it must belong to this graph.
+                    validate_storage_key(self, path_str)
                 resolved_files.append(
                     BaseFileComponent.BaseFile(data, resolved_path, delete_after_processing=delete_after_processing)
                 )
@@ -782,6 +794,10 @@ class BaseFileComponent(Component, ABC):
                     try:
                         resolved_path = Path(self.get_full_path(path_str))
                         self.log(f"Resolved storage path '{path_str}' to '{resolved_path}'")
+                    except StorageNamespaceError:
+                        # An out-of-scope namespace is an access denial, not a resolution
+                        # failure: never fall back to reading the raw string as a local path.
+                        raise
                     except (ValueError, AttributeError) as e:
                         # Fallback to resolve_path if get_full_path fails
                         self.log(f"get_full_path failed for '{path_str}': {e}, falling back to resolve_path")

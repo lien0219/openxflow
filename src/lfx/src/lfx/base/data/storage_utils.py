@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from lfx.services.deps import get_settings_service, get_storage_service
 from lfx.utils.async_helpers import run_until_complete
+from lfx.utils.file_path_security import enforce_local_file_access
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -22,6 +23,36 @@ if TYPE_CHECKING:
 
 # Constants for path parsing
 EXPECTED_PATH_PARTS = 2  # Path format: "flow_id/filename"
+
+
+class StorageServiceUnavailableError(RuntimeError):
+    """An object-storage read was requested, but no storage service is registered.
+
+    ``get_storage_service`` returns ``None`` whenever no ``StorageServiceFactory`` is
+    registered -- only ``langflow`` registers one, so a standalone ``lfx run`` / ``lfx serve``
+    never has one -- and ``lfx.services.deps.get_service`` also degrades to ``None`` when
+    resolution fails. The S3 branches in this module have no local file to fall back to, so
+    unlike ``ParameterHandler._resolve_storage_key`` they cannot keep going; they fail. This
+    type is what that failure looks like, instead of the ``AttributeError: 'NoneType' object
+    has no attribute 'get_file'`` that whichever attribute happened to be touched first would
+    otherwise raise.
+
+    It subclasses ``RuntimeError`` rather than ``ValueError``/``FileNotFoundError`` on
+    purpose: ``file_exists`` swallows those two, and a storage backend that was never
+    configured must not be reported to callers as a file that does not exist.
+    """
+
+
+def require_storage_service(storage_service: StorageService | None) -> StorageService:
+    """Return ``storage_service``, or raise if object storage is configured but unavailable."""
+    if storage_service is None:
+        msg = (
+            "storage_type is 's3' but no storage service is registered. Object storage is "
+            "provided by the langflow package; a standalone lfx run only supports "
+            "storage_type='local'."
+        )
+        raise StorageServiceUnavailableError(msg)
+    return storage_service
 
 
 def _is_existing_local_file(file_path: str) -> bool:
@@ -42,6 +73,26 @@ def _is_existing_local_file(file_path: str) -> bool:
         return path_obj.is_absolute() and path_obj.is_file()
     except OSError:
         return False
+
+
+def _confine_local_read(file_path: str, resolve_path: Callable[[str], str] | None = None) -> str:
+    """Apply local-file containment to the S3 branch's real-local-file short-circuit.
+
+    ``_is_existing_local_file`` is a deliberate escape hatch (#13798), but it must not become a
+    way to read server files that ``LANGFLOW_RESTRICT_LOCAL_FILE_ACCESS`` blocks on local
+    storage. The restriction is documented as a property of the built-in file-reading
+    components, not of the storage backend, so it has to hold on both branches.
+
+    When the caller supplies ``resolve_path`` (components pass a closure that runs
+    ``enforce_local_file_access`` with the authenticated user/flow scope) that resolver is
+    authoritative and full tenant isolation applies. Callers with no scope to offer fall back to
+    the storage-root floor: the path must stay under ``config_dir`` and must not be one of the
+    server-managed secret/key/DB files. Both are no-ops when the restriction is disabled, so the
+    default (unrestricted) #13798 behavior is unchanged.
+    """
+    if resolve_path is not None:
+        return resolve_path(file_path)
+    return str(enforce_local_file_access(file_path, allow_storage_root=True))
 
 
 def parse_storage_path(path: str) -> tuple[str, str] | None:
@@ -66,6 +117,29 @@ def parse_storage_path(path: str) -> tuple[str, str] | None:
     return parts[0], parts[1]
 
 
+def to_storage_path(file_path: str) -> str:
+    """Convert a storage backend key into the "flow_id/filename" form the helpers here expect.
+
+    ``StorageService.build_full_path`` returns backend keys (on S3 they carry the ``files/``
+    prefix), while ``parse_storage_path`` splits on the first slash and would read the prefix
+    as the flow_id. Local paths are returned unchanged.
+
+    Raises:
+        ValueError: under S3, if the path is absolute. A storage key never is, and passing one
+            on would reach the local-file escape hatch in ``get_file_size`` / ``read_file_bytes``.
+        StorageServiceUnavailableError: under S3, if no storage service is registered.
+    """
+    if get_settings_service().settings.storage_type != "s3":
+        return file_path
+
+    flow_id, file_name = require_storage_service(get_storage_service()).parse_file_path(file_path)
+    storage_path = f"{flow_id}/{file_name}"
+    if Path(storage_path).is_absolute():
+        msg = f"Not a storage key: {file_path}"
+        raise ValueError(msg)
+    return storage_path
+
+
 async def read_file_bytes(
     file_path: str,
     storage_service: StorageService | None = None,
@@ -76,20 +150,22 @@ async def read_file_bytes(
     Args:
         file_path: Path to the file (S3 key format "flow_id/filename" or local path)
         storage_service: Optional storage service instance (will get from deps if not provided)
-        resolve_path: Optional function to resolve relative paths to absolute paths
-                     (typically Component.resolve_path). Only used for local storage.
+        resolve_path: Optional function that resolves and confines a local path (components
+                     pass a closure around ``enforce_local_file_access``). Used for local
+                     storage, and for the S3 branch's real-local-file short-circuit.
 
     Returns:
         bytes: The file content
 
     Raises:
         FileNotFoundError: If the file doesn't exist
+        StorageServiceUnavailableError: under S3, if no storage service is registered
     """
     settings = get_settings_service().settings
 
     if settings.storage_type == "s3":
         if _is_existing_local_file(file_path):
-            return Path(file_path).read_bytes()
+            return Path(_confine_local_read(file_path, resolve_path)).read_bytes()
 
         parsed = parse_storage_path(file_path)
         if not parsed:
@@ -97,7 +173,7 @@ async def read_file_bytes(
             raise ValueError(msg)
 
         if storage_service is None:
-            storage_service = get_storage_service()
+            storage_service = require_storage_service(get_storage_service())
 
         flow_id, filename = parsed
         return await storage_service.get_file(flow_id, filename)
@@ -127,8 +203,9 @@ async def read_file_text(
         file_path: Path to the file (storage service path or local path)
         encoding: Text encoding to use
         storage_service: Optional storage service instance
-        resolve_path: Optional function to resolve relative paths to absolute paths
-                     (typically Component.resolve_path). Only used for local storage.
+        resolve_path: Optional function that resolves and confines a local path (components
+                     pass a closure around ``enforce_local_file_access``). Used for local
+                     storage, and for the S3 branch's real-local-file short-circuit.
         newline: Newline mode (None for default, "" for universal newlines like CSV).
                  When set to "", normalizes all line endings to \\n for consistency.
 
@@ -173,12 +250,15 @@ def get_file_size(file_path: str, storage_service: StorageService | None = None)
 
     Raises:
         FileNotFoundError: If the file doesn't exist
+        StorageServiceUnavailableError: under S3, if no storage service is registered
     """
     settings = get_settings_service().settings
 
     if settings.storage_type == "s3":
         if _is_existing_local_file(file_path):
-            return Path(file_path).stat().st_size
+            # Same containment floor as ``read_file_bytes``: without it this is a size/existence
+            # oracle (via ``file_exists``) for any server file under restriction.
+            return Path(_confine_local_read(file_path)).stat().st_size
 
         parsed = parse_storage_path(file_path)
         if not parsed:
@@ -186,7 +266,7 @@ def get_file_size(file_path: str, storage_service: StorageService | None = None)
             raise ValueError(msg)
 
         if storage_service is None:
-            storage_service = get_storage_service()
+            storage_service = require_storage_service(get_storage_service())
 
         flow_id, filename = parsed
         return run_until_complete(storage_service.get_file_size(flow_id, filename))
@@ -209,6 +289,11 @@ def file_exists(file_path: str, storage_service: StorageService | None = None) -
 
     Returns:
         bool: True if the file exists
+
+    Raises:
+        StorageServiceUnavailableError: under S3, if no storage service is registered. Only
+            "this file is not there" is answered with ``False``; a backend that was never
+            configured is a deployment fault and must not be reported as an absent file.
     """
     try:
         get_file_size(file_path, storage_service)
