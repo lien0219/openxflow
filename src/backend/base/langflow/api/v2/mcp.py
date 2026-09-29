@@ -50,6 +50,7 @@ def ensure_mcp_stdio_access(server_config: dict, current_user: CurrentActiveUser
     code_execution_restricted = (
         getattr(settings, "allow_custom_components", True) is False
         or getattr(settings, "custom_component_admin_only", False) is True
+        or getattr(settings, "block_code_interpreter_components", False) is True
     )
 
     if is_stdio and code_execution_restricted and getattr(current_user, "is_superuser", False) is not True:
@@ -311,6 +312,9 @@ async def get_servers(
                 mcp_stdio_client=mcp_stdio_client,
                 mcp_streamable_http_client=mcp_streamable_http_client,
                 request_variables=request_variables,
+                # These are read straight from the variable table above, so they are the
+                # DB-backed set the URL is allowed to resolve from.
+                url_variables=request_variables,
                 current_user_id=current_user.id,
             )
             server_info["mode"] = mode.lower()
@@ -378,7 +382,10 @@ async def get_server_endpoint(
     settings_service: Annotated[SettingsService, Depends(get_settings_service)],
 ):
     """Get a specific server."""
-    return await get_server(server_name, current_user, session, storage_service, settings_service)
+    server = await get_server(server_name, current_user, session, storage_service, settings_service)
+    if server is None:
+        raise HTTPException(status_code=404, detail="Server not found.")
+    return server
 
 
 def _derive_transport(config: dict) -> str | None:
@@ -463,6 +470,8 @@ async def update_server(
 
     result = await session.exec(select(MCPServer).where(MCPServer.user_id == user_id, MCPServer.name == server_name))
     existing = result.first()
+    if merge_existing and existing is None:
+        raise HTTPException(status_code=404, detail="Server not found.")
 
     for _ in range(_MAX_UPSERT_RETRIES):
         if check_existing and existing is not None:

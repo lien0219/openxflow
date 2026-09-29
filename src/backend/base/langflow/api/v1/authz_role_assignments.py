@@ -1,12 +1,19 @@
-"""CRUD API for production RBAC role assignments."""
+"""CRUD API for authz_role_assignment rows.
+
+Assignments bind a user to a role within an optional domain. The actual policy
+compilation (rule rows in the policy-rule table) is performed by the
+authorization plugin — OSS keeps the assignment table and invalidates the
+plugin's cache on write so the next ``enforce()`` picks up the change.
+"""
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from lfx.log.logger import logger
 from lfx.services.authorization import (
     AuthorizationMutation,
@@ -22,12 +29,12 @@ from langflow.api.v1.schemas.authz_role_assignments import (
     RoleAssignmentGrantSummary,
     RoleAssignmentRead,
 )
+from langflow.services.authorization.audit import AUDIT_EVENT_ACCESS, AUDIT_EVENT_MUTATION
 from langflow.services.authorization.bootstrap import (
     ensure_authorization_bootstrap,
     is_managed_service_user,
     resolve_role_permissions,
 )
-from langflow.services.authorization.invalidation import safe_invalidate_user
 from langflow.services.authorization.lifecycle import (
     acquire_identity_mutation_lock,
     safe_identity_mutation_committed,
@@ -39,11 +46,37 @@ from langflow.services.database.models.auth import AuthzRole, AuthzRoleAssignmen
 from langflow.services.database.models.user.model import User
 from langflow.services.deps import get_authorization_service
 
-router = APIRouter(prefix="/authz/role-assignments", tags=["Authorization"])
+router = APIRouter(prefix="/authz/role-assignments", tags=["Authorization"], include_in_schema=False)
 
+# See ``authz_roles._LIST_MAX_LIMIT`` — same bound, applied to assignments.
 _LIST_MAX_LIMIT = 200
 _LIST_DEFAULT_LIMIT = 100
 _ALLOWED_DOMAIN_TYPES = {"global", "organization", "org", "workspace", "project", "channel"}
+
+
+async def _audit_deny(*, user_id: UUID, action: str, obj: str, status_code: int, reason: str) -> None:
+    await audit_decision(
+        user_id=user_id,
+        action=action,
+        obj=obj,
+        result="deny",
+        details={"event": AUDIT_EVENT_ACCESS, "status_code": status_code, "reason": reason},
+    )
+
+
+async def _require_superuser(user, *, action: str, obj: str) -> None:
+    if not getattr(user, "is_superuser", False):
+        await _audit_deny(
+            user_id=user.id,
+            action=action,
+            obj=obj,
+            status_code=status.HTTP_403_FORBIDDEN,
+            reason="superuser_required",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superuser required to administer role assignments.",
+        )
 
 
 def _domain_context(domain_type: str, domain_id: UUID | None) -> tuple[str, dict[str, UUID]]:
@@ -59,6 +92,46 @@ def _domain_context(domain_type: str, domain_id: UUID | None) -> tuple[str, dict
     return f"{domain_type}:{domain_id}", {context_keys[domain_type]: domain_id}
 
 
+async def _require_assignment_domain_permission(
+    *,
+    current_user: User,
+    domain_type: str,
+    domain_id: UUID | None,
+    action: str = "assign",
+    audit_action: str = "role_assignment:create",
+) -> None:
+    if current_user.is_active and current_user.is_superuser:
+        return
+    normalized = domain_type.strip().lower()
+    if normalized not in _ALLOWED_DOMAIN_TYPES or (normalized == "global") != (domain_id is None):
+        await _audit_deny(
+            user_id=current_user.id,
+            action=audit_action,
+            obj="role_assignment:*",
+            status_code=status.HTTP_403_FORBIDDEN,
+            reason="scoped_domain_required",
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    authorization_service = get_authorization_service()
+    domain, context = _domain_context(normalized, domain_id)
+    if await authorization_service.is_enabled() and await authorization_service.enforce(
+        user_id=current_user.id,
+        domain=domain,
+        obj="rbac:*",
+        act=action,
+        context=context,
+    ):
+        return
+    await _audit_deny(
+        user_id=current_user.id,
+        action=audit_action,
+        obj="role_assignment:*",
+        status_code=status.HTTP_403_FORBIDDEN,
+        reason="permission_denied",
+    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+
 async def _require_assignment_admin(
     *,
     current_user: User,
@@ -66,79 +139,178 @@ async def _require_assignment_admin(
     domain_type: str,
     domain_id: UUID | None,
     session: DbSession,
-    action: str = "assign",
+    audit_action: str = "role_assignment:create",
 ) -> None:
-    """Allow superusers or least-privileged scoped RBAC administrators."""
+    await _require_assignment_domain_permission(
+        current_user=current_user,
+        domain_type=domain_type,
+        domain_id=domain_id,
+        audit_action=audit_action,
+    )
     if current_user.is_active and current_user.is_superuser:
         return
-
-    authz = get_authorization_service()
-    if not await authz.is_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Scoped role administration requires RBAC enforcement to be enabled.",
-        )
-
     domain, context = _domain_context(domain_type, domain_id)
-    can_administer = await authz.enforce(
-        user_id=current_user.id,
-        domain=domain,
-        obj="rbac:*",
-        act=action,
-        context=context,
-    )
-    if not can_administer:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
-
-    # A scoped administrator may only delegate permissions they already hold in
-    # the same domain. This prevents channel admins from promoting themselves or
-    # another user to organization/platform administrator.
-    delegated_permissions = await resolve_role_permissions(session, {role.id})
-    checks: list[tuple[str, str]] = []
-    for permission in sorted(delegated_permissions):
+    permissions = await resolve_role_permissions(session, {role.id})
+    checks = []
+    for permission in sorted(permissions):
         resource, separator, permission_action = permission.partition(":")
         if separator and resource and permission_action:
             checks.append((f"{resource}:*", permission_action))
-    if checks:
-        decisions = await authz.batch_enforce(
+    if checks and not all(
+        await get_authorization_service().batch_enforce(
             user_id=current_user.id,
             domain=domain,
             requests=checks,
             context=context,
         )
-        if not all(decisions):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="A role cannot delegate permissions beyond the operator's effective scope.",
-            )
+    ):
+        await _audit_deny(
+            user_id=current_user.id,
+            action=audit_action,
+            obj=f"role:{role.id}",
+            status_code=status.HTTP_403_FORBIDDEN,
+            reason="delegation_exceeds_scope",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A role cannot delegate permissions beyond the operator's effective scope.",
+        )
 
 
-async def _require_assignment_reader(
-    *,
-    current_user: User,
-    domain_type: str | None,
-    domain_id: UUID | None,
-) -> None:
+async def _require_assignment_reader(*, current_user: User, domain_type: str | None, domain_id: UUID | None) -> None:
     if current_user.is_active and current_user.is_superuser:
         return
     if domain_type is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="A scoped domain filter is required when reading another user's assignments.",
-        )
+        await _require_superuser(current_user, action="role_assignment:read", obj="role_assignment:*")
+        return
     normalized = domain_type.strip().lower()
-    if normalized not in _ALLOWED_DOMAIN_TYPES:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown domain type")
+    if normalized not in _ALLOWED_DOMAIN_TYPES or (normalized == "global") != (domain_id is None):
+        await _require_superuser(current_user, action="role_assignment:read", obj="role_assignment:*")
+        return
+    authorization_service = get_authorization_service()
     domain, context = _domain_context(normalized, domain_id)
-    authz = get_authorization_service()
-    if not await authz.is_enabled() or not await authz.enforce(
+    if not await authorization_service.is_enabled() or not await authorization_service.enforce(
         user_id=current_user.id,
         domain=domain,
         obj="rbac:*",
         act="read",
         context=context,
     ):
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:read",
+            obj="role_assignment:*",
+            status_code=status.HTTP_403_FORBIDDEN,
+            reason="permission_denied",
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+
+async def _require_assignment_permission_dependency(
+    request: Request,
+    current_user: CurrentActiveUser,
+    session: DbSession,
+) -> None:
+    """Check the target scope before FastAPI validates request parameters."""
+    if current_user.is_active and current_user.is_superuser:
+        return
+    if request.method == "POST":
+        try:
+            payload = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            payload = None
+        if not isinstance(payload, dict):
+            await _require_assignment_domain_permission(
+                current_user=current_user,
+                domain_type="",
+                domain_id=None,
+            )
+            return
+        domain_type = payload.get("domain_type")
+        raw_domain_id = payload.get("domain_id")
+        if not isinstance(domain_type, str):
+            await _require_assignment_domain_permission(
+                current_user=current_user,
+                domain_type="",
+                domain_id=None,
+            )
+            return
+        try:
+            domain_id = UUID(str(raw_domain_id)) if raw_domain_id is not None else None
+        except (TypeError, ValueError):
+            await _require_assignment_domain_permission(
+                current_user=current_user,
+                domain_type="",
+                domain_id=None,
+            )
+            return
+        await _require_assignment_domain_permission(
+            current_user=current_user,
+            domain_type=domain_type,
+            domain_id=domain_id,
+        )
+        try:
+            role_id = UUID(str(payload.get("role_id", "")))
+        except (TypeError, ValueError):
+            await _require_assignment_domain_permission(
+                current_user=current_user,
+                domain_type="",
+                domain_id=None,
+            )
+            return
+        role = await session.get(AuthzRole, role_id)
+        if role is None:
+            await _audit_deny(
+                user_id=current_user.id,
+                action="role_assignment:create",
+                obj="role_assignment:*",
+                status_code=status.HTTP_403_FORBIDDEN,
+                reason="role_not_found",
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+        await _require_assignment_admin(
+            current_user=current_user,
+            role=role,
+            domain_type=domain_type,
+            domain_id=domain_id,
+            session=session,
+        )
+        return
+
+    try:
+        assignment_id = UUID(str(request.path_params.get("assignment_id", "")))
+    except (TypeError, ValueError):
+        assignment_id = None
+    assignment = await session.get(AuthzRoleAssignment, assignment_id) if assignment_id else None
+    if assignment is None:
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:delete",
+            obj="role_assignment:*",
+            status_code=status.HTTP_404_NOT_FOUND,
+            reason="assignment_not_found",
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    role = await session.get(AuthzRole, assignment.role_id)
+    if role is None:
+        await _require_assignment_domain_permission(
+            current_user=current_user,
+            domain_type=assignment.domain_type,
+            domain_id=assignment.domain_id,
+            audit_action="role_assignment:delete",
+        )
+        return
+    await _require_assignment_admin(
+        current_user=current_user,
+        role=role,
+        domain_type=assignment.domain_type,
+        domain_id=assignment.domain_id,
+        session=session,
+        audit_action="role_assignment:delete",
+    )
+
+
+SCOPED_ASSIGNMENT_ADMIN = [Depends(_require_assignment_permission_dependency)]
 
 
 async def _assignment_reads(session, assignments: list[AuthzRoleAssignment]) -> list[RoleAssignmentRead]:
@@ -197,7 +369,16 @@ async def list_assignments(
     limit: Annotated[int, Query(ge=1, le=_LIST_MAX_LIMIT)] = _LIST_DEFAULT_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[RoleAssignmentRead]:
-    await ensure_authorization_bootstrap(session)
+    """List role assignments scoped to one user.
+
+    * Omitting ``user_id`` defaults to the caller — no superuser needed.
+    * Passing ``user_id == self.id`` is the same as omitting it.
+    * Passing a different ``user_id`` requires superuser; otherwise 403.
+
+    Results are always filtered by the resolved ``user_id``. Admins who need
+    cross-user lookups make one call per user. Paginated via ``limit`` /
+    ``offset`` (default 100, max 200).
+    """
     if user_id is None:
         user_id = current_user.id
     elif user_id != current_user.id:
@@ -206,12 +387,11 @@ async def list_assignments(
             domain_type=domain_type,
             domain_id=domain_id,
         )
-
     stmt = select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user_id)
     if role_id is not None:
         stmt = stmt.where(AuthzRoleAssignment.role_id == role_id)
     if domain_type is not None:
-        stmt = stmt.where(AuthzRoleAssignment.domain_type == domain_type.strip().lower())
+        stmt = stmt.where(AuthzRoleAssignment.domain_type == domain_type)
     if domain_id is not None:
         stmt = stmt.where(AuthzRoleAssignment.domain_id == domain_id)
     stmt = stmt.order_by(AuthzRoleAssignment.assigned_at.desc(), AuthzRoleAssignment.id).offset(offset).limit(limit)
@@ -219,14 +399,24 @@ async def list_assignments(
     return await _assignment_reads(session, list(rows))
 
 
-@router.post("", response_model=RoleAssignmentRead, status_code=status.HTTP_201_CREATED)
-@router.post("/", response_model=RoleAssignmentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=RoleAssignmentRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=SCOPED_ASSIGNMENT_ADMIN,
+)
+@router.post(
+    "/",
+    response_model=RoleAssignmentRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=SCOPED_ASSIGNMENT_ADMIN,
+)
 async def create_assignment(
     payload: RoleAssignmentCreate,
     current_user: CurrentActiveUser,
     session: DbSession,
 ) -> RoleAssignmentRead:
-    """Assign one role after scope and delegation checks."""
+    """Assign a role within the actor's scope and delegation authority."""
     await ensure_authorization_bootstrap(session)
     authorization_service = get_authorization_service()
     # Let authorization plugins acquire their transaction-scoped policy-write
@@ -241,14 +431,35 @@ async def create_assignment(
 
     user = await session.get(User, payload.user_id)
     if user is None:
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:create",
+            obj="role_assignment:*",
+            status_code=status.HTTP_404_NOT_FOUND,
+            reason="user_not_found",
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user_id not found")
     if is_managed_service_user(user):
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:create",
+            obj=f"user:{payload.user_id}",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            reason="managed_service_identity",
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Managed channel service identities cannot receive RBAC roles",
         )
     role = await session.get(AuthzRole, payload.role_id)
     if role is None:
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:create",
+            obj="role_assignment:*",
+            status_code=status.HTTP_404_NOT_FOUND,
+            reason="role_not_found",
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="role_id not found")
 
     domain_type = payload.domain_type.strip().lower()
@@ -257,17 +468,13 @@ async def create_assignment(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"domain_type must be one of {sorted(_ALLOWED_DOMAIN_TYPES)}",
         )
-    if domain_type == "global" and payload.domain_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="global role assignments must not include domain_id",
+    if (domain_type == "global") != (payload.domain_id is None):
+        detail = (
+            "global role assignments must not include domain_id"
+            if domain_type == "global"
+            else f"{domain_type} role assignments require domain_id"
         )
-    if domain_type != "global" and payload.domain_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"{domain_type} role assignments require domain_id",
-        )
-
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
     await _require_assignment_admin(
         current_user=current_user,
         role=role,
@@ -302,6 +509,13 @@ async def create_assignment(
             )
         ).first()
         if existing_manual is not None:
+            await _audit_deny(
+                user_id=current_user.id,
+                action="role_assignment:create",
+                obj="role_assignment:*",
+                status_code=status.HTTP_409_CONFLICT,
+                reason="manual_assignment_already_exists",
+            )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Manual assignment already exists for this user/role/domain",
@@ -331,6 +545,13 @@ async def create_assignment(
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:create",
+            obj="role_assignment:*",
+            status_code=status.HTTP_409_CONFLICT,
+            reason="assignment_conflict",
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Assignment already exists for this user/role/domain",
@@ -338,14 +559,16 @@ async def create_assignment(
     if effective_assignment_created:
         await safe_identity_mutation_committed(authorization_service, mutation)
     await session.refresh(assignment)
-    await safe_invalidate_user(get_authorization_service(), payload.user_id, op="role_assignment:create")
     await audit_decision(
         user_id=current_user.id,
         action="role_assignment:create",
-        obj=f"user:{payload.user_id}",
+        obj=f"role_assignment:{assignment.id}",
         result="allow",
         details={
+            "event": AUDIT_EVENT_MUTATION,
             "assignment_id": str(assignment.id),
+            "subject_type": "user",
+            "user_id": str(payload.user_id),
             "role_id": str(payload.role_id),
             "role_name": role.name,
             "domain_type": domain_type,
@@ -367,13 +590,14 @@ async def create_assignment(
     response_model=RoleAssignmentRead,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_204_NO_CONTENT: {"description": "Manual assignment fully revoked."}},
+    dependencies=SCOPED_ASSIGNMENT_ADMIN,
 )
 async def delete_assignment(
     assignment_id: UUID,
     current_user: CurrentActiveUser,
     session: DbSession,
 ) -> RoleAssignmentRead | Response:
-    """Revoke a role assignment after the same delegation checks used on create."""
+    """Remove a manual grant, returning the assignment when another source preserves it."""
     await ensure_authorization_bootstrap(session)
     authorization_service = get_authorization_service()
     await acquire_identity_mutation_lock(
@@ -382,6 +606,11 @@ async def delete_assignment(
         kind=AuthorizationMutationKind.ROLE_ASSIGNMENT_DELETED,
         entity_id=assignment_id,
     )
+
+    # Re-read the assignment and all provenance under row locks on dialects
+    # that support SELECT FOR UPDATE after the plugin's lock-only preflight.
+    # Validation remains reserved for an actual effective-row deletion,
+    # preserving existing hook semantics when only a manual source is removed.
     assignment = await session.get(
         AuthzRoleAssignment,
         assignment_id,
@@ -389,21 +618,32 @@ async def delete_assignment(
         with_for_update=True,
     )
     if assignment is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    # Superusers retain the official direct-revocation path and do not need a
-    # second role lookup. Scoped administrators must still prove delegation
-    # against the role currently bound to the assignment.
-    if not (current_user.is_active and current_user.is_superuser):
-        role = await session.get(AuthzRole, assignment.role_id)
-        if role is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-        await _require_assignment_admin(
-            current_user=current_user,
-            role=role,
-            domain_type=assignment.domain_type,
-            domain_id=assignment.domain_id,
-            session=session,
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:delete",
+            obj=f"role_assignment:{assignment_id}",
+            status_code=status.HTTP_404_NOT_FOUND,
+            reason="assignment_not_found",
         )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    role = await session.get(AuthzRole, assignment.role_id)
+    if role is None:
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:delete",
+            obj=f"role_assignment:{assignment_id}",
+            status_code=status.HTTP_404_NOT_FOUND,
+            reason="role_not_found",
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    await _require_assignment_admin(
+        current_user=current_user,
+        role=role,
+        domain_type=assignment.domain_type,
+        domain_id=assignment.domain_id,
+        session=session,
+        audit_action="role_assignment:delete",
+    )
     grants = (
         await session.exec(
             select(AuthzRoleAssignmentGrant)
@@ -414,6 +654,13 @@ async def delete_assignment(
     ).all()
     manual_grant = next((grant for grant in grants if grant.source_kind == "manual"), None)
     if grants and manual_grant is None:
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:delete",
+            obj=f"role_assignment:{assignment_id}",
+            status_code=status.HTTP_409_CONFLICT,
+            reason="idp_assignment_delete_forbidden",
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="IdP-derived assignments cannot be deleted through the manual assignment API",
@@ -425,10 +672,13 @@ async def delete_assignment(
         await audit_decision(
             user_id=current_user.id,
             action="role_assignment:delete_manual_source",
-            obj=f"user:{assignment.user_id}",
+            obj=f"role_assignment:{assignment_id}",
             result="allow",
             details={
+                "event": AUDIT_EVENT_MUTATION,
                 "assignment_id": str(assignment_id),
+                "subject_type": "user",
+                "user_id": str(assignment.user_id),
                 "role_id": str(assignment.role_id),
                 "domain_type": assignment.domain_type,
                 "domain_id": str(assignment.domain_id) if assignment.domain_id else None,
@@ -471,14 +721,16 @@ async def delete_assignment(
     await stage_identity_mutation(authorization_service, session, mutation)
     await session.commit()
     await safe_identity_mutation_committed(authorization_service, mutation)
-    await safe_invalidate_user(get_authorization_service(), user_id, op="role_assignment:delete")
     await audit_decision(
         user_id=current_user.id,
         action="role_assignment:delete",
-        obj=f"user:{user_id}",
+        obj=f"role_assignment:{assignment_id}",
         result="allow",
         details={
+            "event": AUDIT_EVENT_MUTATION,
             "assignment_id": str(assignment_id),
+            "subject_type": "user",
+            "user_id": str(user_id),
             "role_id": str(role_id),
             "domain_type": domain_type,
             "domain_id": str(domain_id) if domain_id else None,
