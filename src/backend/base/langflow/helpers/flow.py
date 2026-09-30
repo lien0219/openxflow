@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import keyword
 import re
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
@@ -414,12 +414,20 @@ async def run_flow(
     target_flow_id = flow_id or graph_flow_id
     target_flow_name = flow_name or (getattr(graph, "flow_name", None) if graph is not None else None)
 
-    async with scoped_model_provider_policy_for_target_flow(
-        user_id=user_id,
-        flow_id=target_flow_id,
-        flow_name=target_flow_name,
-    ) as target_flow:
+    async with AsyncExitStack() as stack:
+        target_flow = None
+        if target_flow_id or target_flow_name:
+            target_flow = await stack.enter_async_context(
+                scoped_model_provider_policy_for_target_flow(
+                    user_id=user_id,
+                    flow_id=target_flow_id,
+                    flow_name=target_flow_name,
+                )
+            )
         if graph is None:
+            if target_flow is None:
+                msg = "Flow ID or Flow Name is required"
+                raise ValueError(msg)
             graph = await _build_graph_from_authorized_flow(
                 flow=target_flow,
                 flow_id=str(target_flow.id),

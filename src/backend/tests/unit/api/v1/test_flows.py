@@ -256,10 +256,13 @@ def test_flow_unique_constraint_error_rejects_unknown_sqlite_table():
 
 async def test_create_flow_real_competing_sqlite_writer_is_retried(client: AsyncClient, logged_in_headers, monkeypatch):
     """A real second SQLite connection holding the write lock triggers a create retry."""
+    import asyncio
+    import sqlite3
+    import threading
+
     from langflow.api.v1 import flows as flows_module
-    from langflow.services.database.models.folder.model import Folder
-    from langflow.services.deps import session_scope
-    from sqlalchemy import text
+    from langflow.services.database.lock_retry import is_database_lock_error
+    from lfx.services.sqlite_runtime import sqlite_database_path
 
     original_new_flow = flows_module._new_flow
     attempts = {"count": 0}
@@ -268,14 +271,39 @@ async def test_create_flow_real_competing_sqlite_writer_is_retried(client: Async
     async def create_after_competing_write(**kwargs):
         attempts["count"] += 1
         if attempts["count"] == 1:
-            async with session_scope() as competing_session:
-                competing_session.add(Folder(name=f"create-competing-write-{uuid.uuid4()}", user_id=None))
-                await competing_session.flush()
-                # The competing connection now holds SQLite's write lock. Make
-                # the route connection report the real lock immediately; the
-                # failed attempt unwinds this context and releases the writer.
-                await kwargs["session"].exec(text("PRAGMA busy_timeout = 0"))
-                return await original_new_flow(**kwargs)
+            database_url = str(kwargs["session"].get_bind().url)
+            database_path = sqlite_database_path(database_url)
+            assert database_path is not None
+
+            route_connection = await kwargs["session"].connection()
+            await route_connection.exec_driver_sql("PRAGMA busy_timeout = 0")
+            writer_acquired = threading.Event()
+            release_writer = threading.Event()
+
+            def hold_sqlite_write_lock():
+                connection = sqlite3.connect(str(database_path), timeout=0)
+                try:
+                    connection.execute("BEGIN IMMEDIATE")
+                    writer_acquired.set()
+                    if not release_writer.wait(timeout=10):
+                        msg = "Timed out waiting to release the competing SQLite writer"
+                        raise TimeoutError(msg)
+                finally:
+                    connection.rollback()
+                    connection.close()
+
+            writer_task = asyncio.create_task(asyncio.to_thread(hold_sqlite_write_lock))
+            try:
+                assert await asyncio.to_thread(writer_acquired.wait, 5), "Competing SQLite writer did not acquire lock"
+                try:
+                    return await original_new_flow(**kwargs)
+                except Exception as exc:
+                    if is_database_lock_error(exc):
+                        release_writer.set()
+                    raise
+            finally:
+                release_writer.set()
+                await writer_task
         return await original_new_flow(**kwargs)
 
     monkeypatch.setattr(flows_module, "_new_flow", create_after_competing_write)

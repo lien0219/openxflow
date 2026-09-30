@@ -97,12 +97,14 @@ async def real_services_job_service(real_services_db_url: str) -> AsyncGenerator
         await db_service.run_migrations()
         yield JobService()
     finally:
-        manager.services.pop(ServiceType.DATABASE_SERVICE, None)
-        with contextlib.suppress(Exception):
-            await db_service.teardown()
-        settings_service.settings.database_url = original_url
-        if original_db_service is not None:
-            manager.services[ServiceType.DATABASE_SERVICE] = original_db_service
+        try:
+            with contextlib.suppress(Exception):
+                await db_service.teardown()
+        finally:
+            manager.services.pop(ServiceType.DATABASE_SERVICE, None)
+            settings_service.settings.database_url = original_url
+            if original_db_service is not None:
+                manager.services[ServiceType.DATABASE_SERVICE] = original_db_service
 
 
 @pytest.fixture
