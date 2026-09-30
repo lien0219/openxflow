@@ -99,9 +99,7 @@ jobs:
           prune-cache: false
 
       - name: Install dependencies
-        run: |
-          uv sync
-          uv pip install -e .
+        run: uv sync --locked
 
       - name: Run starter projects update
         run: uv run python scripts/ci/update_starter_projects.py
@@ -180,7 +178,7 @@ jobs:
           prune-cache: false
 
       - name: Install dependencies
-        run: uv sync --dev --project .
+        run: uv sync --locked --dev --project .
 
       - name: Build component index
         env:
