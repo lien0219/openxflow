@@ -22,7 +22,13 @@ BYPASS_ENV_VAR = "LANGFLOW_DANGEROUSLY_ALLOW_MULTI_WORKER_WITHOUT_SHARED_QUEUE"
 
 
 def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("LANGFLOW_WORKERS", "LANGFLOW_JOB_QUEUE_TYPE", "LANGFLOW_EVENT_DELIVERY", BYPASS_ENV_VAR):
+    for name in (
+        "LANGFLOW_WORKERS",
+        "LANGFLOW_JOB_QUEUE_TYPE",
+        "LANGFLOW_EVENT_DELIVERY",
+        "LANGFLOW_DATABASE_URL",
+        BYPASS_ENV_VAR,
+    ):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -52,6 +58,7 @@ def test_bypass_does_not_change_event_delivery(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("LANGFLOW_WORKERS", "4")
     monkeypatch.setenv("LANGFLOW_JOB_QUEUE_TYPE", "asyncio")
     monkeypatch.setenv("LANGFLOW_EVENT_DELIVERY", "polling")
+    monkeypatch.setenv("LANGFLOW_DATABASE_URL", "postgresql://user:password@localhost/openxflow")
     monkeypatch.setenv(BYPASS_ENV_VAR, "true")
 
     settings = Settings()
