@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 
-export const APP_NAME = "Langflow";
+export const APP_NAME = "OpenXFlow";
 
 /**
  * Builds the tab title for a page. Titles that already carry the product name
- * (e.g. the "Langflow API Keys" settings page) are used as-is so the tab does
- * not read "Langflow API Keys | Langflow".
+ * (e.g. the "OpenXFlow API Keys" settings page) are used as-is so the tab does
+ * not read "OpenXFlow API Keys | OpenXFlow".
  */
 export function formatDocumentTitle(title?: string | null): string {
   const pageTitle = title?.trim();

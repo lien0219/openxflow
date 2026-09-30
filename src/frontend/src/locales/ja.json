@@ -2416,5 +2416,15 @@
   "edge.ariaLabel": "{{source}} から {{target}} への接続",
   "slider.strict": "厳格",
   "slider.permissive": "寛容",
-  "playground.workflowWarning": "ワークフローの警告"
+  "playground.workflowWarning": "ワークフローの警告",
+  "page.homeTitle": "最初のAIワークフローを作成",
+  "page.homeDescription": "モデル、プロンプト、ナレッジソース、ツールをビジュアルコンポーネントでつなぎ、AIアプリケーションをすばやく作成して実行できます。",
+  "page.homeCreateFlow": "フローを作成",
+  "page.homeImportFlow": "フローをインポート",
+  "page.homeDropFlow": "またはフローファイルをここにドロップ",
+  "page.homeStartFromTemplate": "テンプレートから開始",
+  "page.homeDocumentation": "ドキュメント",
+  "page.homeReportIssue": "問題を報告",
+  "modelProviders.providerNameDeepSeek": "DeepSeek",
+  "modelProviders.providerNameQwen": "Qwen"
 }

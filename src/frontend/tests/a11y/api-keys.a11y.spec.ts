@@ -102,7 +102,7 @@ async function openApiKeysRoute(
   await page.goto("/settings/api-keys");
   await disableAnimations(page);
   await expect(page.getByTestId("settings_menu_header")).toContainText(
-    "Langflow API Keys",
+    "OpenXFlow API Keys",
     { timeout: TIMEOUTS.standard },
   );
   await page
@@ -338,7 +338,7 @@ test.describe("API keys route accessibility", () => {
             ?.getAttribute("aria-label") ?? null,
       );
       expect(treegridName, "table should expose one named treegrid").toBe(
-        "Langflow API Keys",
+        "OpenXFlow API Keys",
       );
       const cellAndHeaderTabStops = tabOrder.filter(
         (item) => item.role === "gridcell" || item.role === "columnheader",
@@ -567,7 +567,7 @@ test.describe("API keys route accessibility", () => {
       await openApiKeysRoute(page);
       await expect(page.getByText("A11y Primary Key")).toBeVisible();
       await expect(
-        page.getByTestId("sidebar-nav-Langflow API Keys"),
+        page.getByTestId("sidebar-nav-OpenXFlow API Keys"),
       ).toBeVisible();
 
       await page.runA11yScan("settings-api-keys-mobile-data-rich");

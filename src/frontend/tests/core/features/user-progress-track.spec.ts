@@ -76,8 +76,9 @@ async function gettingStartedActionsTestFn(
     timeout: 100000,
   });
 
+  // One of the three equally weighted checklist actions is complete.
   await expect(page.getByTestId("get_started_progress_percentage")).toHaveText(
-    "50%",
+    "33%",
   );
   await expect(page.getByTestId("search-store-input")).toBeVisible();
 
