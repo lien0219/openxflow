@@ -17,9 +17,9 @@ from __future__ import annotations
 import contextlib
 import os
 import tempfile
-from pathlib import Path
 from typing import TYPE_CHECKING
 
+import anyio
 import pytest
 
 if TYPE_CHECKING:
@@ -60,7 +60,7 @@ async def real_services_db_url(request: pytest.FixtureRequest) -> AsyncGenerator
             yield f"sqlite+aiosqlite:///{db_path}"
         finally:
             for suffix in ("", "-wal", "-shm", "-journal"):
-                Path(db_path + suffix).unlink(missing_ok=True)
+                await anyio.Path(db_path + suffix).unlink(missing_ok=True)
     else:
         raw = os.environ.get("LANGFLOW_TEST_DATABASE_URI")
         if not raw:
@@ -79,32 +79,57 @@ async def real_services_job_service(real_services_db_url: str) -> AsyncGenerator
     themselves apply on both engines.
     """
     from langflow.services.database.factory import DatabaseServiceFactory
-    from langflow.services.deps import get_settings_service
+    from langflow.services.deps import get_db_service, get_settings_service, session_scope
     from langflow.services.jobs.service import JobService
     from lfx.services.manager import get_service_manager
     from lfx.services.schema import ServiceType
+    from lfx.services.settings.service import SettingsService
+    from lfx.services.sqlite_runtime import ensure_sqlite_process_safety, release_sqlite_process_safety
 
     manager = get_service_manager()
-    settings_service = get_settings_service()
-    original_url = settings_service.settings.database_url
-    original_db_service = manager.services.pop(ServiceType.DATABASE_SERVICE, None)
-
-    settings_service.settings.database_url = real_services_db_url
-    db_service = DatabaseServiceFactory().create(settings_service)
-    manager.services[ServiceType.DATABASE_SERVICE] = db_service
+    base_settings_service = get_settings_service()
+    settings_service = SettingsService(
+        settings=base_settings_service.settings.model_copy(update={"database_url": real_services_db_url}),
+        auth_settings=base_settings_service.auth_settings,
+    )
+    original_db_service = manager.services.get(ServiceType.DATABASE_SERVICE)
+    db_service = None
+    sqlite_process_lock = None
 
     try:
+        db_service = DatabaseServiceFactory().create(settings_service)
+        manager.services[ServiceType.DATABASE_SERVICE] = db_service
+
+        assert settings_service.settings.database_url == real_services_db_url
+        assert db_service.database_url == real_services_db_url
+        assert get_db_service() is db_service
+        assert get_db_service().database_url == real_services_db_url
+
+        async with session_scope() as session:
+            connection = await session.connection()
+            assert connection.engine is db_service.engine
+
         await db_service.run_migrations()
+        if real_services_db_url.startswith("sqlite"):
+            assert await anyio.Path(db_service.engine.url.database).is_file()
+            sqlite_process_lock = ensure_sqlite_process_safety(real_services_db_url, 1, owner=db_service)
         yield JobService()
     finally:
         try:
-            with contextlib.suppress(Exception):
+            if db_service is not None:
                 await db_service.teardown()
         finally:
-            manager.services.pop(ServiceType.DATABASE_SERVICE, None)
-            settings_service.settings.database_url = original_url
             if original_db_service is not None:
                 manager.services[ServiceType.DATABASE_SERVICE] = original_db_service
+            elif manager.services.get(ServiceType.DATABASE_SERVICE) is db_service:
+                manager.services.pop(ServiceType.DATABASE_SERVICE, None)
+            if db_service is not None and real_services_db_url.startswith("sqlite"):
+                probe_owner = object()
+                probe_lock = ensure_sqlite_process_safety(real_services_db_url, 1, owner=probe_owner)
+                release_sqlite_process_safety(real_services_db_url, owner=probe_owner)
+                if sqlite_process_lock is not None:
+                    assert probe_lock is not None
+                    assert probe_lock is not sqlite_process_lock
 
 
 @pytest.fixture

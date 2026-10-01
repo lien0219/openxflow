@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import uuid
 from uuid import UUID
@@ -2193,8 +2194,6 @@ async def test_delete_flow_non_lock_failure_returns_sanitized_500(client: AsyncC
 async def test_delete_flow_real_competing_sqlite_writer_is_retried(client: AsyncClient, logged_in_headers, monkeypatch):
     """A real second SQLite connection holding the write lock triggers a retry."""
     from langflow.api.v1 import flows as flows_module
-    from langflow.services.database.models.folder.model import Folder
-    from langflow.services.deps import session_scope
     from sqlalchemy import text
 
     create_response = await client.post(
@@ -2209,14 +2208,14 @@ async def test_delete_flow_real_competing_sqlite_writer_is_retried(client: Async
     async def delete_after_competing_commit(session, target_flow_id):
         attempts["count"] += 1
         if attempts["count"] == 1:
-            async with session_scope() as competing_session:
-                competing_session.add(Folder(name=f"delete-competing-write-{uuid.uuid4()}", user_id=None))
-                await competing_session.flush()
-                # The second connection now holds SQLite's write lock. Disable
-                # waiting on the route connection so its real DELETE reports
-                # the lock immediately and exercises the retry boundary.
-                await session.exec(text("PRAGMA busy_timeout = 0"))
+            await session.exec(text("PRAGMA busy_timeout = 0"))
+            competing_connection = sqlite3.connect(session.bind.url.database, timeout=1, isolation_level=None)
+            try:
+                competing_connection.execute("BEGIN IMMEDIATE")
                 return await original_delete(session, target_flow_id)
+            finally:
+                competing_connection.rollback()
+                competing_connection.close()
         return await original_delete(session, target_flow_id)
 
     monkeypatch.setattr(flows_module, "cascade_delete_flow", delete_after_competing_commit)

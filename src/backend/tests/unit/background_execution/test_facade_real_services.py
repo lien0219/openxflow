@@ -218,6 +218,8 @@ async def test_stop_waits_for_an_active_orphan_sweep(real_services_job_service, 
     service = BackgroundExecutionService(settings_service=SimpleNamespace(settings=settings))
     try:
         await service.start()
+        watchdog_task = service._orphan_task
+        assert watchdog_task is not None
         await asyncio.wait_for(sweep_started.wait(), timeout=5)
         stopping = asyncio.create_task(service.stop())
         await asyncio.sleep(0)
@@ -226,6 +228,8 @@ async def test_stop_waits_for_an_active_orphan_sweep(real_services_job_service, 
         release_sweep.set()
         await asyncio.wait_for(stopping, timeout=5)
         assert sweep_completed.is_set()
+        assert watchdog_task.done()
+        assert watchdog_task not in asyncio.all_tasks()
     finally:
         release_sweep.set()
         await service.teardown()

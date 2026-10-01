@@ -306,7 +306,7 @@ def _configure_sqlite_session(
     database_url, workers, write_wait_seconds = _database_runtime_values(db_service)
     if not is_sqlite_url(database_url):
         return
-    ensure_sqlite_process_safety(database_url, workers)
+    ensure_sqlite_process_safety(database_url, workers, owner=db_service)
     if writable:
         install_sqlite_session_guard(
             session,
@@ -317,9 +317,12 @@ def _configure_sqlite_session(
 
 
 @asynccontextmanager
-async def session_scope() -> AsyncGenerator[AsyncSession, None]:
+async def session_scope(
+    db_service: DatabaseServiceProtocol | None = None,
+) -> AsyncGenerator[AsyncSession, None]:
     """Manage an async write session with commit, rollback, and SQLite coordination."""
-    db_service = get_db_service()
+    if db_service is None:
+        db_service = get_db_service()
     async with db_service._with_session() as session:  # noqa: SLF001
         _configure_sqlite_session(db_service, session, writable=True)
         try:
