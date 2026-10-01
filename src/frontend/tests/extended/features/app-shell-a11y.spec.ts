@@ -12,7 +12,7 @@ import { TIMEOUTS } from "../../utils/constants/timeouts";
  *   while a modal is open (a nested `<main>` breaks landmark navigation).
  *
  * Before the app-shell fix all three fail: every route rendered the generic
- * "Langflow" title, `lang` stayed `en` for every locale, and the templates
+ * product title, `lang` stayed `en` for every locale, and the templates
  * modal added a second `<main>` on top of the page's own.
  */
 
@@ -27,16 +27,16 @@ import { TIMEOUTS } from "../../utils/constants/timeouts";
  * header tab, which the Deployments test below covers.
  */
 const ROUTE_TITLES = [
-  { path: "/flows", title: "Flows | Langflow" },
-  { path: "/mcp", title: "MCP Server | Langflow" },
-  { path: "/assets/files", title: "Files | Langflow" },
-  { path: "/assets/knowledge-bases", title: "Knowledge | Langflow" },
-  { path: "/settings/general", title: "General | Langflow" },
-  { path: "/settings/global-variables", title: "Global Variables | Langflow" },
-  { path: "/settings/api-keys", title: "Langflow API Keys" },
-  { path: "/settings/mcp-servers", title: "MCP Servers | Langflow" },
-  { path: "/settings/shortcuts", title: "Shortcuts | Langflow" },
-  { path: "/settings/messages", title: "Messages | Langflow" },
+  { path: "/flows", title: "Flows | OpenXFlow" },
+  { path: "/mcp", title: "MCP Server | OpenXFlow" },
+  { path: "/assets/files", title: "Files | OpenXFlow" },
+  { path: "/assets/knowledge-bases", title: "Knowledge | OpenXFlow" },
+  { path: "/settings/general", title: "General | OpenXFlow" },
+  { path: "/settings/global-variables", title: "Global Variables | OpenXFlow" },
+  { path: "/settings/api-keys", title: "OpenXFlow API Keys" },
+  { path: "/settings/mcp-servers", title: "MCP Servers | OpenXFlow" },
+  { path: "/settings/shortcuts", title: "Shortcuts | OpenXFlow" },
+  { path: "/settings/messages", title: "Messages | OpenXFlow" },
 ] as const;
 
 test(
@@ -66,21 +66,35 @@ test(
   "switching to the Deployments tab retitles the page without a route change",
   { tag: ["@release", "@workspace"] },
   async ({ page }) => {
+    await page.route("**/api/v1/config*", async (route) => {
+      const response = await route.fetch();
+      const config = await response.json();
+      await route.fulfill({
+        response,
+        json: {
+          ...config,
+          feature_flags: {
+            ...config.feature_flags,
+            wxo_deployments: true,
+          },
+        },
+      });
+    });
     await awaitBootstrapTest(page, { skipModal: true });
     await page.goto("/flows");
-    await expect(page).toHaveTitle("Flows | Langflow", {
+    await expect(page).toHaveTitle("Flows | OpenXFlow", {
       timeout: TIMEOUTS.standard,
     });
 
     // Flows and Deployments share /flows; only the header tab differs.
     await page.getByTestId("deployments-btn").click();
     await expect(page).toHaveURL(/\/flows\/?$/);
-    await expect(page).toHaveTitle("Deployments | Langflow", {
+    await expect(page).toHaveTitle("Deployments | OpenXFlow", {
       timeout: TIMEOUTS.standard,
     });
 
     await page.getByTestId("flows-btn").click();
-    await expect(page).toHaveTitle("Flows | Langflow", {
+    await expect(page).toHaveTitle("Flows | OpenXFlow", {
       timeout: TIMEOUTS.standard,
     });
   },
@@ -99,7 +113,7 @@ test(
     await expect(async () => {
       const flowName = (await page.getByTestId("flow_name").innerText()).trim();
       expect(flowName.length).toBeGreaterThan(0);
-      await expect(page).toHaveTitle(`${flowName} | Langflow`, {
+      await expect(page).toHaveTitle(`${flowName} | OpenXFlow`, {
         timeout: 2000,
       });
     }).toPass({ timeout: TIMEOUTS.standard });

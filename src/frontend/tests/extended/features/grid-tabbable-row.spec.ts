@@ -54,6 +54,16 @@ function buildMessages(count: number) {
   }));
 }
 
+function buildMessagesPage(count: number) {
+  return {
+    items: buildMessages(count),
+    page: 1,
+    page_size: count,
+    total: count,
+    total_pages: 1,
+  };
+}
+
 /** Rows the grid currently exposes as keyboard tab stops. Must never be empty. */
 async function getTabbableRowIndexes(page: LangflowPage): Promise<string[]> {
   return page.evaluate(() =>
@@ -93,10 +103,13 @@ test(
   "messages grid keeps a tabbable row while the rows around it are virtualized away",
   { tag: ["@release", "@workspace"] },
   async ({ page }, testInfo) => {
-    await page.route("**/api/v1/monitor/messages*", async (route: Route) => {
-      if (route.request().method() !== "GET") return route.continue();
-      await route.fulfill({ json: buildMessages(MOCK_MESSAGE_COUNT) });
-    });
+    await page.route(
+      "**/api/v1/monitor/messages/page*",
+      async (route: Route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        await route.fulfill({ json: buildMessagesPage(MOCK_MESSAGE_COUNT) });
+      },
+    );
 
     await page.goto("/settings/messages");
     await page
@@ -145,10 +158,13 @@ test(
   "messages grid stays keyboard-enterable and arrow-navigable after scrolling",
   { tag: ["@release", "@workspace"] },
   async ({ page }) => {
-    await page.route("**/api/v1/monitor/messages*", async (route: Route) => {
-      if (route.request().method() !== "GET") return route.continue();
-      await route.fulfill({ json: buildMessages(MOCK_MESSAGE_COUNT) });
-    });
+    await page.route(
+      "**/api/v1/monitor/messages/page*",
+      async (route: Route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        await route.fulfill({ json: buildMessagesPage(MOCK_MESSAGE_COUNT) });
+      },
+    );
 
     await page.goto("/settings/messages");
     await page

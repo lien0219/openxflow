@@ -66,12 +66,7 @@ export const getModelProvidersQueryOptions = (
     ] as const,
     queryFn: async (): Promise<ModelProviderWithStatus[]> => {
       const response = await api.get<ModelProviderInfo[]>(url);
-      return response.data.map((providerInfo) => ({
-        ...providerInfo,
-        // Prefer backend metadata icon so new providers don't need a frontend map
-        // entry; fall back to the legacy name→asset map, then Bot.
-        icon: providerInfo.icon || getProviderIcon(providerInfo.provider),
-      }));
+      return response.data.map(normalizeModelProviderStatus);
     },
     refetchOnWindowFocus: true,
     staleTime: PROVIDER_POLICY_STALE_TIME_MS,
@@ -119,3 +114,11 @@ const getProviderIcon = (providerName: string): string => {
 
   return iconMap[providerName] || "Bot";
 };
+
+export const normalizeModelProviderStatus = (
+  providerInfo: ModelProviderInfo,
+): ModelProviderWithStatus => ({
+  ...providerInfo,
+  is_enabled: providerInfo.is_enabled || Boolean(providerInfo.is_configured),
+  icon: providerInfo.icon || getProviderIcon(providerInfo.provider),
+});

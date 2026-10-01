@@ -1,8 +1,10 @@
 import asyncio
 import sqlite3
+import subprocess
+import sys
 import threading
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -17,6 +19,7 @@ from lfx.services.settings.groups.database import DatabaseSettings
 from lfx.services.sqlite_runtime import (
     SQLiteNestedWriteError,
     SQLiteWriteCoordinator,
+    ensure_sqlite_process_safety,
     release_sqlite_process_safety,
     validate_sqlite_worker_count,
 )
@@ -93,6 +96,126 @@ def test_sqlite_rejects_multiple_workers(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LANGFLOW_WORKERS", "2")
     with pytest.raises(ValueError, match="LANGFLOW_WORKERS=1"):
         DatabaseSettings()
+
+
+def test_sqlite_process_lock_is_reference_counted_across_service_owners(tmp_path) -> None:
+    database_path = tmp_path / "shared.db"
+    database_url = f"sqlite+aiosqlite:///{database_path}"
+    first_owner = object()
+    second_owner = object()
+    probe = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "from lfx.services.sqlite_runtime import SQLiteProcessLock\n"
+        "try:\n"
+        "    lock = SQLiteProcessLock.acquire(Path(sys.argv[1]), wait_seconds=0.1)\n"
+        "except RuntimeError:\n"
+        "    raise SystemExit(23)\n"
+        "lock.close()\n"
+    )
+
+    def child_exit_code() -> int:
+        result = subprocess.run(
+            [sys.executable, "-c", probe, str(database_path)],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
+        return result.returncode
+
+    lock = ensure_sqlite_process_safety(database_url, 1, owner=first_owner)
+    assert lock is not None
+    assert ensure_sqlite_process_safety(database_url, 1, owner=first_owner) is lock
+    assert ensure_sqlite_process_safety(database_url, 1, owner=second_owner) is lock
+
+    try:
+        release_sqlite_process_safety(database_url, owner=first_owner)
+        assert child_exit_code() == 23
+
+        release_sqlite_process_safety(database_url, owner=second_owner)
+        assert child_exit_code() == 0
+
+        reacquired_owner = object()
+        assert ensure_sqlite_process_safety(database_url, 1, owner=reacquired_owner) is not None
+        release_sqlite_process_safety(database_url, owner=reacquired_owner)
+    finally:
+        release_sqlite_process_safety(database_url, owner=first_owner)
+        release_sqlite_process_safety(database_url, owner=second_owner)
+
+
+def test_postgres_does_not_acquire_sqlite_process_lock() -> None:
+    owner = object()
+
+    assert ensure_sqlite_process_safety("postgresql+psycopg://localhost/db", 4, owner=owner) is None
+    release_sqlite_process_safety("postgresql+psycopg://localhost/db", owner=owner)
+
+
+@pytest.mark.asyncio
+async def test_database_migrations_and_teardown_use_the_owned_service(tmp_path) -> None:
+    from langflow.services.database.factory import DatabaseServiceFactory
+    from langflow.services.deps import get_settings_service
+    from lfx.services.manager import get_service_manager
+    from lfx.services.schema import ServiceType
+    from lfx.services.settings.service import SettingsService
+
+    manager = get_service_manager()
+    base_settings_service = get_settings_service()
+    base_settings = base_settings_service.settings
+    original_db_service = manager.services.get(ServiceType.DATABASE_SERVICE)
+    unrelated_path = tmp_path / "manager.db"
+    unrelated_url = f"sqlite+aiosqlite:///{unrelated_path}"
+    factory = DatabaseServiceFactory()
+    created_services = []
+    torn_down_services = set()
+    unrelated_service = None
+
+    try:
+        unrelated_settings = SettingsService(
+            settings=base_settings.model_copy(update={"database_url": unrelated_url}),
+            auth_settings=base_settings_service.auth_settings,
+        )
+        unrelated_service = factory.create(unrelated_settings)
+        manager.services[ServiceType.DATABASE_SERVICE] = unrelated_service
+
+        for index in range(2):
+            database_path = tmp_path / f"owned-{index}.db"
+            database_url = f"sqlite+aiosqlite:///{database_path}"
+            service_settings = SettingsService(
+                settings=base_settings.model_copy(update={"database_url": database_url}),
+                auth_settings=base_settings_service.auth_settings,
+            )
+            db_service = factory.create(service_settings)
+            created_services.append(db_service)
+
+            assert manager.services[ServiceType.DATABASE_SERVICE] is unrelated_service
+            await db_service.run_migrations()
+
+            assert database_path.is_file()
+            assert not unrelated_path.exists()
+            owned_lock = ensure_sqlite_process_safety(database_url, 1, owner=db_service)
+            assert owned_lock is not None
+
+            await db_service.teardown()
+            torn_down_services.add(db_service)
+
+            probe_owner = object()
+            reacquired_lock = ensure_sqlite_process_safety(database_url, 1, owner=probe_owner)
+            release_sqlite_process_safety(database_url, owner=probe_owner)
+            assert reacquired_lock is not None
+            assert reacquired_lock is not owned_lock
+    finally:
+        for db_service in created_services:
+            if db_service not in torn_down_services:
+                with suppress(Exception):
+                    await db_service.teardown()
+            release_sqlite_process_safety(db_service.database_url, owner=db_service)
+        if unrelated_service is not None:
+            await unrelated_service.engine.dispose()
+        if original_db_service is None:
+            if manager.services.get(ServiceType.DATABASE_SERVICE) is unrelated_service:
+                manager.services.pop(ServiceType.DATABASE_SERVICE, None)
+        else:
+            manager.services[ServiceType.DATABASE_SERVICE] = original_db_service
 
 
 class _FailedSession:

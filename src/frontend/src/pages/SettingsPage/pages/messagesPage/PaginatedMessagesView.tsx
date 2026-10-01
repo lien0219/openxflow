@@ -143,7 +143,7 @@ export default function PaginatedMessagesView() {
       <div className="min-h-0 flex-1">
         {isFetching && rows.length === 0 ? (
           <div className="flex h-full w-full items-center justify-center">
-            <Loading />
+            <Loading aria-label={t("common.loading")} role="status" />
           </div>
         ) : (
           <TableComponent
@@ -168,6 +168,7 @@ export default function PaginatedMessagesView() {
             rowSelection="multiple"
             suppressRowClickSelection
             pagination={false}
+            tableLabel={t("messages.title", { defaultValue: "Messages" })}
             columnDefs={columns}
             rowData={rows}
           />

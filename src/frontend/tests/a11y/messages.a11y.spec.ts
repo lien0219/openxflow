@@ -34,12 +34,22 @@ const populatedMessages: MessageRow[] = [
   },
 ];
 
+function messagePage(messages: MessageRow[]) {
+  return {
+    items: messages,
+    page: 1,
+    page_size: 20,
+    total: messages.length,
+    total_pages: messages.length > 0 ? 1 : 0,
+  };
+}
+
 async function mockMessages(page: LangflowPage, messages: MessageRow[]) {
   await page.route(
-    /\/api\/v1\/monitor\/messages(\?.*)?$/,
+    /\/api\/v1\/monitor\/messages\/page(\?.*)?$/,
     async (route: Route) => {
       if (route.request().method() === "GET") {
-        await route.fulfill({ json: messages });
+        await route.fulfill({ json: messagePage(messages) });
         return;
       }
 
@@ -263,14 +273,14 @@ test.describe("Messages settings route accessibility", () => {
         releaseResponse = resolve;
       });
       await page.route(
-        /\/api\/v1\/monitor\/messages(\?.*)?$/,
+        /\/api\/v1\/monitor\/messages\/page(\?.*)?$/,
         async (route: Route) => {
           if (route.request().method() !== "GET") {
             await route.continue();
             return;
           }
           await responseGate;
-          await route.fulfill({ json: populatedMessages });
+          await route.fulfill({ json: messagePage(populatedMessages) });
         },
       );
       await awaitBootstrapTest(page, { skipModal: true });
