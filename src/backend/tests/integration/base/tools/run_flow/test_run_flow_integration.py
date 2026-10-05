@@ -105,7 +105,7 @@ class TestRunFlowEndToEnd:
             await client.delete(f"api/v1/folders/{folder_id}", headers=logged_in_headers)
 
     @pytest.mark.asyncio
-    async def test_run_flow_with_inputs_and_outputs(self, active_user):
+    async def test_run_flow_with_inputs_and_outputs(self, client, logged_in_headers, active_user):
         """Test running a flow with inputs and capturing outputs."""
         user_id = str(active_user.id)
         session_id = "test_session"
@@ -117,27 +117,44 @@ class TestRunFlowEndToEnd:
         # Connect components in a simple flow
         graph = Graph(start=chat_input, end=text_output)
 
-        # Execute run_flow with real graph
-        inputs = [{"components": [chat_input.get_id()], "input_value": "Hello, world!", "type": "chat"}]
-
-        result = await run_flow(
-            user_id=user_id,
-            session_id=session_id,
-            inputs=inputs,
-            graph=graph,
-            output_type="any",  # Get all outputs
+        # Persist the target flow so execution is authorized against a real flow owner.
+        graph_dict = graph.dump(name="Run Flow Input Output", description="Flow for run_flow integration testing")
+        flow = FlowCreate(**graph_dict)
+        response = await client.post(
+            "api/v1/flows/",
+            json=flow.model_dump(mode="json"),
+            headers=logged_in_headers,
         )
+        assert response.status_code == 201
+        flow_data = response.json()
+        flow_id = flow_data["id"]
+        assert flow_data["user_id"] == str(active_user.id)
 
-        # Verify graph properties were set correctly
-        assert graph.session_id == session_id
-        assert graph.user_id == user_id
+        try:
+            # Execute run_flow with real graph and the persisted target identity.
+            inputs = [{"components": [chat_input.get_id()], "input_value": "Hello, world!", "type": "chat"}]
 
-        # Verify result structure
-        assert len(result) > 0, "Expected at least one output from flow execution"
+            result = await run_flow(
+                user_id=user_id,
+                session_id=session_id,
+                inputs=inputs,
+                flow_id=flow_id,
+                graph=graph,
+                output_type="any",  # Get all outputs
+            )
 
-        # Verify the flow actually executed (has outputs)
-        first_result = result[0]
-        assert hasattr(first_result, "outputs"), "Expected RunOutputs object with outputs attribute"
+            # Verify graph properties were set correctly
+            assert graph.session_id == session_id
+            assert graph.user_id == user_id
+
+            # Verify result structure
+            assert len(result) > 0, "Expected at least one output from flow execution"
+
+            # Verify the flow actually executed (has outputs)
+            first_result = result[0]
+            assert hasattr(first_result, "outputs"), "Expected RunOutputs object with outputs attribute"
+        finally:
+            await client.delete(f"api/v1/flows/{flow_id}", headers=logged_in_headers)
 
 
 class TestRunFlowComponentWithTools:
