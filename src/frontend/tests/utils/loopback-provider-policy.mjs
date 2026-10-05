@@ -17,7 +17,11 @@ export const LOOPBACK_MODEL = {
 };
 
 const API_KEY_FIELDS = ["api_key", "openai_api_key"];
-const BASE_URL_FIELDS = ["openai_api_base", "base_url"];
+const BASE_URL_FIELDS = [
+  "openai_compatible_base_url",
+  "openai_api_base",
+  "base_url",
+];
 
 function isRecord(value) {
   return typeof value === "object" && value !== null;
@@ -66,6 +70,10 @@ function withLoopbackFields(nodeTemplate) {
       ...nodeTemplate.model,
       value: [LOOPBACK_MODEL],
       options: loopbackModelOptions(nodeTemplate.model.options),
+    };
+    next.openai_compatible_base_url = {
+      ...(nodeTemplate.openai_compatible_base_url ?? {}),
+      value: LOOPBACK_OPENAI_BASE_URL,
     };
   }
 
@@ -139,6 +147,12 @@ export function isNodeLoopbackConfigured(node) {
           model.name === LOOPBACK_MODEL.name &&
           model.provider === LOOPBACK_MODEL.provider,
       )
+    ) {
+      return false;
+    }
+    if (
+      nodeTemplate.openai_compatible_base_url?.value !==
+      LOOPBACK_OPENAI_BASE_URL
     ) {
       return false;
     }

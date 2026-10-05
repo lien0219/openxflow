@@ -427,6 +427,121 @@ async def test_heartbeat_stopped_before_suspend_preserves_request_id(real_servic
     assert (job.job_metadata or {}).get("pending_request_id") == "req-hb"
 
 
+@pytest.mark.real_services
+@pytest.mark.no_blockbuster
+async def test_runner_drains_active_heartbeat_before_return(real_services_job_service, monkeypatch) -> None:
+    """Runner shutdown waits for an in-flight heartbeat database write."""
+    job_service = real_services_job_service
+    job_id, flow_id = uuid4(), uuid4()
+    await job_service.create_job(job_id=job_id, flow_id=flow_id, user_id=uuid4())
+
+    heartbeat_started = asyncio.Event()
+    heartbeat_stopping = asyncio.Event()
+    release_heartbeat = asyncio.Event()
+    heartbeat_finished = asyncio.Event()
+    original_heartbeat = job_service.heartbeat
+
+    async def gated_heartbeat(gated_job_id, owner):
+        heartbeat_started.set()
+        await release_heartbeat.wait()
+        await original_heartbeat(gated_job_id, owner)
+        heartbeat_finished.set()
+
+    monkeypatch.setattr(job_service, "heartbeat", gated_heartbeat)
+
+    async def source(**_kwargs):
+        yield _frame("end", {})
+
+    adapter = get_stream_adapter("langflow", StreamAdapterContext(run_id=str(job_id), thread_id="t"))
+    runner = JobRunner(
+        job_service=job_service,
+        live_bus=InMemoryLiveBus(),
+        adapter=adapter,
+        frame_source=source,
+        owner="worker-drain-test",
+        heartbeat_interval_s=30,
+    )
+    heartbeat_tasks = []
+    start_heartbeat = runner._start_heartbeat
+
+    def capture_heartbeat_task(*args, **kwargs):
+        task = start_heartbeat(*args, **kwargs)
+        heartbeat_tasks.append(task)
+        return task
+
+    monkeypatch.setattr(runner, "_start_heartbeat", capture_heartbeat_task)
+
+    original_stop_heartbeat = runner._stop_heartbeat
+
+    async def observe_heartbeat_stop(*args, **kwargs):
+        heartbeat_stopping.set()
+        return await original_stop_heartbeat(*args, **kwargs)
+
+    monkeypatch.setattr(runner, "_stop_heartbeat", observe_heartbeat_stop)
+    run_task = asyncio.create_task(runner.run(job_id=job_id, source_kwargs={}))
+    try:
+        await asyncio.wait_for(heartbeat_started.wait(), timeout=5)
+        await asyncio.wait_for(heartbeat_stopping.wait(), timeout=5)
+        completed, _ = await asyncio.wait({run_task}, timeout=0.05)
+        assert not completed, "runner returned while its heartbeat still used the database"
+    finally:
+        release_heartbeat.set()
+        if not run_task.done():
+            await asyncio.wait_for(run_task, timeout=5)
+
+    assert heartbeat_finished.is_set()
+    assert heartbeat_tasks
+    assert heartbeat_tasks[0].done()
+
+
+@pytest.mark.real_services
+@pytest.mark.no_blockbuster
+async def test_runner_drains_database_cleanup_before_propagating_cancel(real_services_job_service, monkeypatch) -> None:
+    """Cancellation cannot leave shielded cleanup using a closed database loop."""
+    job_service = real_services_job_service
+    job_id, flow_id = uuid4(), uuid4()
+    await job_service.create_job(job_id=job_id, flow_id=flow_id, user_id=uuid4())
+
+    cleanup_started = asyncio.Event()
+    release_cleanup = asyncio.Event()
+    cleanup_finished = asyncio.Event()
+
+    async def source(**_kwargs):
+        yield _frame("end", {})
+
+    adapter = get_stream_adapter("langflow", StreamAdapterContext(run_id=str(job_id), thread_id="t"))
+    runner = JobRunner(
+        job_service=job_service,
+        live_bus=InMemoryLiveBus(),
+        adapter=adapter,
+        frame_source=source,
+    )
+    original_reconcile = runner._reconcile_stop
+
+    async def gated_reconcile(gated_job_id):
+        cleanup_started.set()
+        try:
+            await release_cleanup.wait()
+            return await original_reconcile(gated_job_id)
+        finally:
+            cleanup_finished.set()
+
+    monkeypatch.setattr(runner, "_reconcile_stop", gated_reconcile)
+    run_task = asyncio.create_task(runner.run(job_id=job_id, source_kwargs={}))
+    try:
+        await asyncio.wait_for(cleanup_started.wait(), timeout=5)
+        run_task.cancel()
+        await asyncio.sleep(0.05)
+        assert not run_task.done(), "runner returned while shielded cleanup still used the database"
+    finally:
+        release_cleanup.set()
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait_for(run_task, timeout=5)
+
+    assert cleanup_finished.is_set()
+    assert run_task.cancelled()
+
+
 def _narrowed_run_source(started: list[str]):
     """A two-node run whose per-vertex frames are suppressed.
 

@@ -186,6 +186,55 @@ async def test_redis_fallback_watchdog_reconciles_orphans_without_restart(real_s
         await service.stop()
 
 
+async def test_stop_waits_for_an_active_orphan_sweep(real_services_job_service, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from langflow.services.background_execution import service as service_module
+    from langflow.services.background_execution.service import BackgroundExecutionService
+    from langflow.services.deps import get_settings_service
+
+    sweep_started = asyncio.Event()
+    release_sweep = asyncio.Event()
+    sweep_completed = asyncio.Event()
+
+    async def gated_sweep(**kwargs):
+        sweep_started.set()
+        await release_sweep.wait()
+        await real_services_job_service.sweep_orphans(**kwargs)
+        sweep_completed.set()
+
+    monkeypatch.setattr(
+        service_module,
+        "get_job_service",
+        lambda: SimpleNamespace(sweep_orphans=gated_sweep),
+    )
+    settings = get_settings_service().settings.model_copy(
+        update={
+            "job_queue_type": "redis",
+            "background_watchdog_interval_s": 0.01,
+        }
+    )
+    service = BackgroundExecutionService(settings_service=SimpleNamespace(settings=settings))
+    try:
+        await service.start()
+        watchdog_task = service._orphan_task
+        assert watchdog_task is not None
+        await asyncio.wait_for(sweep_started.wait(), timeout=5)
+        stopping = asyncio.create_task(service.stop())
+        await asyncio.sleep(0)
+        assert not stopping.done(), "stop() returned while the orphan sweep was still active"
+
+        release_sweep.set()
+        await asyncio.wait_for(stopping, timeout=5)
+        assert sweep_completed.is_set()
+        assert watchdog_task.done()
+        assert watchdog_task not in asyncio.all_tasks()
+    finally:
+        release_sweep.set()
+        await service.teardown()
+
+
 def _echo_input_factory(*, request, **_kwargs):
     """Frame source that echoes ``request['input_value']`` into a durable event.
 
@@ -675,6 +724,7 @@ async def test_restart_and_scaled_hydration_restore_encrypted_overrides(real_ser
             if recovered.status == JobStatus.COMPLETED:
                 break
             await asyncio.sleep(0.05)
+        await asyncio.wait_for(restart._executor._queue.join(), timeout=10)
     finally:
         await restart.stop()
 
@@ -768,7 +818,11 @@ async def test_startup_keeps_ambiguous_crypto_failures_queued_and_replays_after_
         frame_source_factory=_echo_input_factory,
         backend=backend,
     )
-    job_id = await submitter.submit(flow_id=flow_id, request=request, user=_StubUser(user_id))
+    try:
+        job_id = await submitter.submit(flow_id=flow_id, request=request, user=_StubUser(user_id))
+        await asyncio.wait_for(submitter._executor._queue.join(), timeout=10)
+    finally:
+        await submitter.teardown()
     original = await job_service.get_job_by_job_id(job_id)
     original_metadata = dict(original.job_metadata)
 
@@ -816,6 +870,7 @@ async def test_startup_keeps_ambiguous_crypto_failures_queued_and_replays_after_
             if replayed.status == JobStatus.COMPLETED:
                 break
             await asyncio.sleep(0.05)
+        await asyncio.wait_for(restored._executor._queue.join(), timeout=10)
     finally:
         await restored.stop()
 

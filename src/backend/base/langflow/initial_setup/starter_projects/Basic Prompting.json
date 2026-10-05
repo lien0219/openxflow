@@ -624,11 +624,11 @@
                 "dependencies": [
                   {
                     "name": "orjson",
-                    "version": "3.12.0"
+                    "version": "3.11.9"
                   },
                   {
                     "name": "fastapi",
-                    "version": "0.141.1"
+                    "version": "0.139.2"
                   },
                   {
                     "name": "lfx",

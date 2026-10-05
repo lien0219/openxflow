@@ -726,24 +726,28 @@ const TableComponent = forwardRef<
             props.onRowDataUpdated?.(e);
           }}
         />
-        {!props.tableOptions?.hide_options && props.pagination && (
-          <TableOptions
-            tableOptions={props.tableOptions}
-            stateChange={columnStateChange}
-            paginationInfo={props.paginationInfo}
-            hasSelection={realRef.current?.api?.getSelectedRows()?.length > 0}
-            duplicateRow={props.onDuplicate ? props.onDuplicate : undefined}
-            deleteRow={props.onDelete ? props.onDelete : undefined}
-            addRow={props.addRow ? props.addRow : undefined}
-            resetGrid={() => {
-              resetGrid(realRef, initialColumnDefs);
-              setTimeout(() => {
-                setColumnStateChange(false);
-                localStorage.removeItem(storeReference);
-              }, 100);
-            }}
-          />
-        )}
+        {!props.tableOptions?.hide_options &&
+          (props.pagination ||
+            props.onDelete ||
+            props.onDuplicate ||
+            props.addRow) && (
+            <TableOptions
+              tableOptions={props.tableOptions}
+              stateChange={columnStateChange}
+              paginationInfo={props.paginationInfo}
+              hasSelection={realRef.current?.api?.getSelectedRows()?.length > 0}
+              duplicateRow={props.onDuplicate ? props.onDuplicate : undefined}
+              deleteRow={props.onDelete ? props.onDelete : undefined}
+              addRow={props.addRow ? props.addRow : undefined}
+              resetGrid={() => {
+                resetGrid(realRef, initialColumnDefs);
+                setTimeout(() => {
+                  setColumnStateChange(false);
+                  localStorage.removeItem(storeReference);
+                }, 100);
+              }}
+            />
+          )}
       </div>
     );
   },

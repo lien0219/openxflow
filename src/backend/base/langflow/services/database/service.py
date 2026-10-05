@@ -18,6 +18,7 @@ from alembic.config import Config
 from lfx.log.logger import logger
 from lfx.observability import instrument_database
 from lfx.services.deps import session_scope
+from lfx.services.sqlite_runtime import release_sqlite_process_safety
 from sqlalchemy import event, inspect
 from sqlalchemy.dialects import sqlite as dialect_sqlite
 from sqlalchemy.engine import Engine, make_url
@@ -687,7 +688,7 @@ class DatabaseService(Service):
                 self.try_downgrade_upgrade_until_success(alembic_cfg)
 
     async def run_migrations(self, *, fix=False) -> None:
-        async with session_scope() as session:
+        async with session_scope(self) as session:
             should_initialize_alembic = not await get_current_alembic_heads(session)
             if should_initialize_alembic:
                 await logger.adebug("Alembic not initialized")
@@ -869,12 +870,14 @@ class DatabaseService(Service):
     async def teardown(self) -> None:
         await logger.adebug("Tearing down database")
         try:
-            settings_service = get_settings_service()
             # When AUTO_LOGIN is off, remove the unused default superuser (see teardown_superuser).
-            async with session_scope() as session:
-                await teardown_superuser(settings_service, session)
+            async with session_scope(self) as session:
+                await teardown_superuser(self.settings_service, session)
         except Exception:
             await logger.aexception("Error tearing down database")
             raise
         finally:
-            await self.engine.dispose()
+            try:
+                await self.engine.dispose()
+            finally:
+                release_sqlite_process_safety(self.database_url, owner=self)
