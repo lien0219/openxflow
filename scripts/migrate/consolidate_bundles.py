@@ -69,7 +69,7 @@ PROVIDER_DEPS: dict[str, list[str]] = {
     "clickhouse": ["clickhouse-connect==0.7.19", _LC_COMMUNITY],
     "couchbase": ["couchbase>=4.2.1", _LC_COMMUNITY],
     "milvus": ["langchain-milvus~=0.3.2"],
-    "mongodb": ["pymongo>=4.10.1", "langchain-mongodb>=0.11.0"],
+    "mongodb": ["pymongo>=4.18.2,<5.0.0", "langchain-mongodb>=0.11.0"],
     "pgvector": ["pgvector>=0.4.2", _LC_COMMUNITY],
     # Marker preserved from langflow-base: no py3.14 wheel yet; on 3.14 the
     # component degrades exactly as it does in today's published images.
@@ -164,6 +164,8 @@ PROVIDER_DEPS: dict[str, list[str]] = {
         # Temporary compatibility valve: newer releases require cryptography<49.
         "langchain-litellm==0.5.1; sys_platform != 'darwin' and python_version < '3.14'",
         "langchain-litellm==0.5.1; sys_platform == 'darwin' and platform_machine == 'arm64' and python_version < '3.14'",  # noqa: E501
+        "litellm>=1.103.1,<2.0.0,!=1.104.0rc1; sys_platform != 'darwin' and python_version < '3.14'",
+        "litellm>=1.103.1,<2.0.0,!=1.104.0rc1; sys_platform == 'darwin' and platform_machine == 'arm64' and python_version < '3.14'",  # noqa: E501
     ],
     # --- tranche 9: langwatch evaluator (pure httpx REST; the langwatch SDK extra
     # is for the tracing service, not this component) ---
@@ -197,7 +199,7 @@ TORCH_EXTRAS = frozenset({"cuga", "codeagents"})
 # generated aggregate extras because Langflow already installs them directly.
 COMPATIBILITY_EXTRAS = {
     "azure": ["lfx-azure>=0.1.0,<1.0.0"],
-    "google": ["lfx-google>=0.1.0,<1.0.0"],
+    "google": ["lfx-google>=0.2.5,<1.0.0"],
     "ollama": ["lfx-ollama>=0.1.0,<1.0.0"],
 }
 

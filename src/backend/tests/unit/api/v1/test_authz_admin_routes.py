@@ -39,8 +39,6 @@ class _FakeAsyncSession:
         self.deleted: list[Any] = []
         self.flushed = 0
         self.committed = 0
-        self.bootstrap_committed = 0
-        self._bootstrap_commit = False
         self.rolled_back = 0
         self.events: list[str] = []
         from langflow.services.authorization.bootstrap import SYSTEM_ROLE_DEFINITIONS
@@ -83,11 +81,7 @@ class _FakeAsyncSession:
 
     async def commit(self) -> None:
         self.events.append("commit")
-        if self._bootstrap_commit:
-            self.bootstrap_committed += 1
-            self._bootstrap_commit = False
-        else:
-            self.committed += 1
+        self.committed += 1
         if self._commit_raises is not None:
             raise self._commit_raises
 
@@ -108,7 +102,6 @@ class _FakeAsyncSession:
         if entity is AuthzRole and whereclause is None:
             return _ExecResult(self._system_roles)
         if entity is User and getattr(getattr(whereclause, "left", None), "key", None) == "is_active":
-            self._bootstrap_commit = True
             return _ExecResult([])
         if not self._exec_results:
             return _ExecResult([])
@@ -987,7 +980,6 @@ async def test_create_assignment_invalid_user_404(stub_authz):
         )
     assert excinfo.value.status_code == 404
     assert "user_id" in excinfo.value.detail
-    assert session.bootstrap_committed == 1
     assert session.committed == 0
 
 
@@ -1000,7 +992,7 @@ async def test_create_assignment_emits_lifecycle_for_target_user(stub_authz, aud
     from langflow.services.database.models.user.model import User
 
     authz = stub_authz()
-    target_user = SimpleNamespace(id=uuid4())
+    target_user = SimpleNamespace(id=uuid4(), is_active=True)
     role = SimpleNamespace(id=uuid4(), name="viewer")
     session = _FakeAsyncSession(
         {(User, target_user.id): target_user, (AuthzRole, role.id): role},
@@ -1044,7 +1036,7 @@ async def test_create_assignment_duplicate_manual_source_is_409(stub_authz):
 
     authz = stub_authz()
     actor = _make_user(is_superuser=True)
-    target_user = SimpleNamespace(id=uuid4())
+    target_user = SimpleNamespace(id=uuid4(), is_active=True)
     role = SimpleNamespace(id=uuid4(), name="viewer")
     assignment = AuthzRoleAssignment(user_id=target_user.id, role_id=role.id, assigned_by=actor.id)
     manual_grant = AuthzRoleAssignmentGrant(
@@ -1082,7 +1074,7 @@ async def test_create_assignment_adds_manual_source_to_idp_assignment_without_li
 
     authz = stub_authz()
     actor = _make_user(is_superuser=True)
-    target_user = SimpleNamespace(id=uuid4())
+    target_user = SimpleNamespace(id=uuid4(), is_active=True)
     role = SimpleNamespace(id=uuid4(), name="viewer")
     original_actor_id = uuid4()
     assignment = AuthzRoleAssignment(
@@ -1778,7 +1770,7 @@ async def test_create_assignment_succeeds_when_committed_hook_fails(failing_comm
     from langflow.services.database.models.user.model import User
 
     authz = failing_committed_hook_authz()
-    target_user = SimpleNamespace(id=uuid4())
+    target_user = SimpleNamespace(id=uuid4(), is_active=True)
     role = SimpleNamespace(id=uuid4(), name="viewer")
     session = _FakeAsyncSession(
         {(User, target_user.id): target_user, (AuthzRole, role.id): role},

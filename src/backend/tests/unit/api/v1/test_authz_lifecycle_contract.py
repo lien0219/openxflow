@@ -687,7 +687,7 @@ async def test_assignment_delete_validates_live_row_before_mutation_and_stage(mo
         events.append("audit")
 
     monkeypatch.setattr(authz_role_assignments, "get_authorization_service", lambda: service)
-    monkeypatch.setattr(authz_role_assignments, "ensure_authorization_bootstrap", AsyncMock())
+    monkeypatch.setattr(authz_role_assignments, "ensure_builtin_roles", AsyncMock(return_value={}))
     monkeypatch.setattr(authz_role_assignments, "audit_decision", audit)
 
     await authz_role_assignments.delete_assignment(
@@ -736,7 +736,7 @@ async def test_assignment_delete_policy_rejection_is_409_without_mutation(monkey
 
     service.validate_identity_mutation = reject
     monkeypatch.setattr(authz_role_assignments, "get_authorization_service", lambda: service)
-    monkeypatch.setattr(authz_role_assignments, "ensure_authorization_bootstrap", AsyncMock())
+    monkeypatch.setattr(authz_role_assignments, "ensure_builtin_roles", AsyncMock(return_value={}))
 
     with pytest.raises(HTTPException) as exc_info:
         await authz_role_assignments.delete_assignment(

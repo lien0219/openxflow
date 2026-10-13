@@ -31,7 +31,7 @@ from langflow.api.v1.schemas.authz_role_assignments import (
 )
 from langflow.services.authorization.audit import AUDIT_EVENT_ACCESS, AUDIT_EVENT_MUTATION
 from langflow.services.authorization.bootstrap import (
-    ensure_authorization_bootstrap,
+    ensure_builtin_roles,
     is_managed_service_user,
     resolve_role_permissions,
 )
@@ -52,6 +52,11 @@ router = APIRouter(prefix="/authz/role-assignments", tags=["Authorization"], inc
 _LIST_MAX_LIMIT = 200
 _LIST_DEFAULT_LIMIT = 100
 _ALLOWED_DOMAIN_TYPES = {"global", "organization", "org", "workspace", "project", "channel"}
+
+SCOPE_CONFLICT_DETAIL = (
+    "A role already exists for this user with this scope. "
+    "Please update the existing role or revoke it before assigning a new one."
+)
 
 
 async def _audit_deny(*, user_id: UUID, action: str, obj: str, status_code: int, reason: str) -> None:
@@ -343,7 +348,7 @@ async def _assignment_reads(session, assignments: list[AuthzRoleAssignment]) -> 
     ]
 
 
-def _assignment_match(payload: RoleAssignmentCreate, *, domain_type: str):
+def _scope_match(payload: RoleAssignmentCreate, *, domain_type: str):
     domain_match = (
         AuthzRoleAssignment.domain_id.is_(None)
         if payload.domain_id is None
@@ -351,10 +356,13 @@ def _assignment_match(payload: RoleAssignmentCreate, *, domain_type: str):
     )
     return (
         AuthzRoleAssignment.user_id == payload.user_id,
-        AuthzRoleAssignment.role_id == payload.role_id,
         AuthzRoleAssignment.domain_type == domain_type,
         domain_match,
     )
+
+
+def _assignment_match(payload: RoleAssignmentCreate, *, domain_type: str):
+    return (*_scope_match(payload, domain_type=domain_type), AuthzRoleAssignment.role_id == payload.role_id)
 
 
 @router.get("", response_model=list[RoleAssignmentRead])
@@ -417,7 +425,7 @@ async def create_assignment(
     session: DbSession,
 ) -> RoleAssignmentRead:
     """Assign a role within the actor's scope and delegation authority."""
-    await ensure_authorization_bootstrap(session)
+    roles = await ensure_builtin_roles(session)
     authorization_service = get_authorization_service()
     # Let authorization plugins acquire their transaction-scoped policy-write
     # lock before the first canonical identity read or write. An external
@@ -429,7 +437,11 @@ async def create_assignment(
         affected_user_ids=(payload.user_id,),
     )
 
-    user = await session.get(User, payload.user_id)
+    # Lock the target user's row (on dialects that support SELECT FOR UPDATE)
+    # so concurrent creates for the same user serialize: the one-role-per-scope
+    # check below is not backed by a unique index, so two requests could
+    # otherwise both find the scope free.
+    user = await session.get(User, payload.user_id, with_for_update=True)
     if user is None:
         await _audit_deny(
             user_id=current_user.id,
@@ -451,6 +463,15 @@ async def create_assignment(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Managed channel service identities cannot receive RBAC roles",
         )
+    if not user.is_active:
+        await _audit_deny(
+            user_id=current_user.id,
+            action="role_assignment:create",
+            obj="role_assignment:*",
+            status_code=status.HTTP_409_CONFLICT,
+            reason="user_inactive",
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot assign roles to an inactive user")
     role = await session.get(AuthzRole, payload.role_id)
     if role is None:
         await _audit_deny(
@@ -496,6 +517,37 @@ async def create_assignment(
     ).first()
     effective_assignment_created = assignment is None
     if assignment is None:
+        # A user holds one role per scope (domain type + target) so it is
+        # always clear which role is in effect there. Adding a manual source
+        # to a role the user already has adds no role, so only a new
+        # effective assignment is checked.
+        scope_holder = (
+            await session.exec(select(AuthzRoleAssignment).where(*_scope_match(payload, domain_type=domain_type)))
+        ).first()
+        if scope_holder is not None:
+            automatic_member = (
+                scope_holder.role_id == roles["member"].id
+                and scope_holder.assigned_by is None
+                and not (
+                    await session.exec(
+                        select(AuthzRoleAssignmentGrant).where(
+                            AuthzRoleAssignmentGrant.assignment_id == scope_holder.id
+                        )
+                    )
+                ).first()
+            )
+            if automatic_member:
+                await session.delete(scope_holder)
+                await session.flush()
+            else:
+                await _audit_deny(
+                    user_id=current_user.id,
+                    action="role_assignment:create",
+                    obj="role_assignment:*",
+                    status_code=status.HTTP_409_CONFLICT,
+                    reason="role_already_assigned_for_scope",
+                )
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=SCOPE_CONFLICT_DETAIL)
         assignment = candidate
         session.add(assignment)
         await session.flush()
@@ -598,7 +650,7 @@ async def delete_assignment(
     session: DbSession,
 ) -> RoleAssignmentRead | Response:
     """Remove a manual grant, returning the assignment when another source preserves it."""
-    await ensure_authorization_bootstrap(session)
+    await ensure_builtin_roles(session)
     authorization_service = get_authorization_service()
     await acquire_identity_mutation_lock(
         authorization_service,

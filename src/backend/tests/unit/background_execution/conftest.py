@@ -88,6 +88,7 @@ async def real_services_job_service(real_services_db_url: str) -> AsyncGenerator
 
     manager = get_service_manager()
     base_settings_service = get_settings_service()
+    original_env_url = os.environ.get("LANGFLOW_DATABASE_URL")
     settings_service = SettingsService(
         settings=base_settings_service.settings.model_copy(update={"database_url": real_services_db_url}),
         auth_settings=base_settings_service.auth_settings,
@@ -97,6 +98,8 @@ async def real_services_job_service(real_services_db_url: str) -> AsyncGenerator
     sqlite_process_lock = None
 
     try:
+        # Keep environment-backed validation and all session helpers on the test DB.
+        os.environ["LANGFLOW_DATABASE_URL"] = real_services_db_url
         db_service = DatabaseServiceFactory().create(settings_service)
         manager.services[ServiceType.DATABASE_SERVICE] = db_service
 
@@ -130,6 +133,10 @@ async def real_services_job_service(real_services_db_url: str) -> AsyncGenerator
                 if sqlite_process_lock is not None:
                     assert probe_lock is not None
                     assert probe_lock is not sqlite_process_lock
+            if original_env_url is None:
+                os.environ.pop("LANGFLOW_DATABASE_URL", None)
+            else:
+                os.environ["LANGFLOW_DATABASE_URL"] = original_env_url
 
 
 @pytest.fixture
