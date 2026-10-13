@@ -415,32 +415,56 @@ def install_sqlite_session_guard(
 
 
 _RUNTIME_LOCK_GUARD = threading.Lock()
-_RUNTIME_PROCESS_LOCKS: dict[Path, SQLiteProcessLock] = {}
+_RUNTIME_PROCESS_LOCKS: dict[Path, _RuntimeProcessLockEntry] = {}
+_DEFAULT_RUNTIME_LOCK_OWNER = object()
 
 
-def ensure_sqlite_process_safety(database_url: str | None, workers: int) -> SQLiteProcessLock | None:
-    """Validate worker count and acquire one process-lifetime lock per database."""
+@dataclass
+class _RuntimeProcessLockEntry:
+    process_lock: SQLiteProcessLock
+    owners: dict[int, object]
+
+
+def ensure_sqlite_process_safety(
+    database_url: str | None,
+    workers: int,
+    *,
+    owner: object | None = None,
+) -> SQLiteProcessLock | None:
+    """Validate workers and hold one process lock until its owners release it."""
     validate_sqlite_worker_count(database_url, workers)
     path = sqlite_database_path(database_url)
     if path is None:
         return None
     resolved = path.resolve()
+    lock_owner = _DEFAULT_RUNTIME_LOCK_OWNER if owner is None else owner
     with _RUNTIME_LOCK_GUARD:
-        existing = _RUNTIME_PROCESS_LOCKS.get(resolved)
-        if existing is not None:
-            return existing
-        process_lock = SQLiteProcessLock.acquire(resolved)
-        _RUNTIME_PROCESS_LOCKS[resolved] = process_lock
-        return process_lock
+        entry = _RUNTIME_PROCESS_LOCKS.get(resolved)
+        if entry is None:
+            entry = _RuntimeProcessLockEntry(
+                process_lock=SQLiteProcessLock.acquire(resolved),
+                owners={},
+            )
+            _RUNTIME_PROCESS_LOCKS[resolved] = entry
+        entry.owners[id(lock_owner)] = lock_owner
+        return entry.process_lock
 
 
-def release_sqlite_process_safety(database_url: str | None) -> None:
-    """Release a cached process lock, primarily for orderly teardown and tests."""
+def release_sqlite_process_safety(database_url: str | None, *, owner: object | None = None) -> None:
+    """Release one owner's process lock and its unused write coordinator."""
     path = sqlite_database_path(database_url)
     if path is None:
         return
     resolved = path.resolve()
+    lock_owner = _DEFAULT_RUNTIME_LOCK_OWNER if owner is None else owner
     with _RUNTIME_LOCK_GUARD:
-        process_lock = _RUNTIME_PROCESS_LOCKS.pop(resolved, None)
-    if process_lock is not None:
-        process_lock.close()
+        entry = _RUNTIME_PROCESS_LOCKS.get(resolved)
+        if entry is None or entry.owners.get(id(lock_owner)) is not lock_owner:
+            return
+        del entry.owners[id(lock_owner)]
+        if entry.owners:
+            return
+        _RUNTIME_PROCESS_LOCKS.pop(resolved, None)
+        with _COORDINATOR_GUARD:
+            _COORDINATORS.pop(str(resolved), None)
+        entry.process_lock.close()

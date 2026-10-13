@@ -132,6 +132,7 @@ export default defineConfig({
       env: {
         LANGFLOW_DATABASE_URL: "sqlite:///./temp",
         LANGFLOW_AUTO_LOGIN: "true",
+        LANGFLOW_SKIP_AUTH_AUTO_LOGIN: "true",
         LANGFLOW_SUPERUSER: "langflow",
         LANGFLOW_SUPERUSER_PASSWORD: "test-superuser-password", // pragma: allowlist secret
         LANGFLOW_DEACTIVATE_TRACING: "true",

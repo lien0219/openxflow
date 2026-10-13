@@ -120,6 +120,7 @@ class BackgroundExecutionService(Service):
         self._frame_source_factory = frame_source_factory
         self._deadline_task: asyncio.Task | None = None
         self._orphan_task: asyncio.Task | None = None
+        self._watchdog_stop_event: asyncio.Event | None = None
         self.set_ready()
 
     @property
@@ -155,19 +156,35 @@ class BackgroundExecutionService(Service):
         # Scaled mode: the external worker owns execution and its watchdogs.
         if self._scaled:
             return
+        if self._watchdog_stop_event is None or self._watchdog_stop_event.is_set():
+            self._watchdog_stop_event = asyncio.Event()
         await self._executor.start()
         self._start_deadline_watchdog()
         self._start_orphan_watchdog()
 
     async def stop(self) -> None:
         watchdogs = [task for task in (self._deadline_task, self._orphan_task) if task is not None]
-        for task in watchdogs:
-            task.cancel()
+        if self._watchdog_stop_event is not None:
+            self._watchdog_stop_event.set()
         self._deadline_task = None
         self._orphan_task = None
         if watchdogs:
             await asyncio.gather(*watchdogs, return_exceptions=True)
         await self._executor.stop()
+
+    async def _wait_for_watchdog_tick(self, interval: float) -> bool:
+        """Wait for a tick, or return True when shutdown was requested."""
+        stop_event = self._watchdog_stop_event
+        if stop_event is None:
+            await asyncio.sleep(interval)
+            return False
+        if stop_event.is_set():
+            return True
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            return stop_event.is_set()
+        return True
 
     def _start_deadline_watchdog(self) -> None:
         """Run the input-deadline sweep on the watchdog interval (only when the budget is set).
@@ -181,8 +198,7 @@ class BackgroundExecutionService(Service):
         interval = self._settings.background_watchdog_interval_s
 
         async def _loop() -> None:
-            while True:
-                await asyncio.sleep(interval)
+            while not await self._wait_for_watchdog_tick(interval):
                 with contextlib.suppress(Exception):
                     await self.sweep_input_deadlines()
 
@@ -204,8 +220,7 @@ class BackgroundExecutionService(Service):
         lease_ttl = self._settings.background_lease_ttl_s
 
         async def _loop() -> None:
-            while True:
-                await asyncio.sleep(interval)
+            while not await self._wait_for_watchdog_tick(interval):
                 try:
                     await get_job_service().sweep_orphans(lease_ttl_s=lease_ttl)
                 except asyncio.CancelledError:

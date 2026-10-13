@@ -7,6 +7,7 @@ non-SUSPENDED resumes are rejected before any signal/re-enqueue.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 from uuid import uuid4
@@ -68,9 +69,7 @@ async def _facade():
     from langflow.services.background_execution.service import BackgroundExecutionService
     from langflow.services.deps import get_settings_service
 
-    svc = BackgroundExecutionService(settings_service=get_settings_service(), frame_source_factory=_noop_factory)
-    await svc.start()
-    return svc
+    return BackgroundExecutionService(settings_service=get_settings_service(), frame_source_factory=_noop_factory)
 
 
 @pytest.mark.real_services
@@ -501,9 +500,11 @@ async def test_resume_continues_same_event_stream(real_services_job_service) -> 
     svc = await _facade_with(_resumed_add_message_factory)
     try:
         await svc.resume_job(job_id, _StubUser(user_id), request_id="req-seq", decision={"choice": "go"})
-        events = await _wait_for_seq_gt(job_service, job_id, pre_max)
+        await _wait_for_seq_gt(job_service, job_id, pre_max)
+        await asyncio.wait_for(svc._executor._queue.join(), timeout=10)
+        events = await job_service.read_events(job_id, after_seq=0)
     finally:
-        await svc.stop()
+        await svc.teardown()
 
     seqs = sorted(e.seq for e in events)
     assert seqs == list(range(1, len(seqs) + 1))  # gap-free, no reset
@@ -526,5 +527,6 @@ async def test_resume_does_not_leave_a_queued_row_for_the_sweep(real_services_jo
         # The sweep only re-enqueues QUEUED workflow rows; a resumed row must not appear there.
         queued_ids = await job_service.queued_workflow_job_ids()
         assert job_id not in queued_ids
+        await asyncio.wait_for(svc._executor._queue.join(), timeout=10)
     finally:
-        await svc.stop()
+        await svc.teardown()

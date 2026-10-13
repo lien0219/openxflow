@@ -60,13 +60,19 @@ test("targets unified model inputs and OpenAI components only", () => {
 
 test("applies the loopback model, key and base url", () => {
   const node = withLoopbackTemplate(
-    unifiedModelNode({ base_url: { value: "https://api.openai.com/v1" } }),
+    unifiedModelNode({
+      base_url: { value: "https://api.openai.com/v1" },
+    }),
   );
   const template = node.data.node.template;
 
   assert.deepEqual(template.model.value, [LOOPBACK_MODEL]);
   assert.equal(template.api_key.value, LOOPBACK_OPENAI_API_KEY);
   assert.equal(template.api_key.load_from_db, false);
+  assert.equal(
+    template.openai_compatible_base_url.value,
+    LOOPBACK_OPENAI_BASE_URL,
+  );
   assert.equal(template.base_url.value, LOOPBACK_OPENAI_BASE_URL);
 });
 
@@ -117,7 +123,9 @@ test("does not overwrite a model_name that is itself a ModelInput", () => {
 });
 
 test("round-trips through the configured predicate", () => {
-  const node = unifiedModelNode({ base_url: { value: "https://x/v1" } });
+  const node = unifiedModelNode({
+    base_url: { value: "https://x/v1" },
+  });
   assert.equal(isNodeLoopbackConfigured(node), false);
   assert.equal(isNodeLoopbackConfigured(withLoopbackTemplate(node)), true);
 });

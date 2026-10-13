@@ -2416,5 +2416,15 @@
   "edge.ariaLabel": "Kante von {{source}} zu {{target}}",
   "slider.strict": "Streng",
   "slider.permissive": "Tolerant",
-  "playground.workflowWarning": "Warnung zum Workflow"
+  "playground.workflowWarning": "Warnung zum Workflow",
+  "page.homeTitle": "Erstelle deinen ersten KI-Workflow",
+  "page.homeDescription": "Verbinde Modelle, Prompts, Wissensquellen und Tools mit visuellen Komponenten, um KI-Anwendungen zu erstellen und auszuführen.",
+  "page.homeCreateFlow": "Flow erstellen",
+  "page.homeImportFlow": "Flow importieren",
+  "page.homeDropFlow": "Oder ziehe eine Flow-Datei hierher",
+  "page.homeStartFromTemplate": "Mit einer Vorlage beginnen",
+  "page.homeDocumentation": "Dokumentation",
+  "page.homeReportIssue": "Problem melden",
+  "modelProviders.providerNameDeepSeek": "DeepSeek",
+  "modelProviders.providerNameQwen": "Qwen"
 }

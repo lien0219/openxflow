@@ -7,6 +7,13 @@ const PRESET_WEEK = "1 week from today";
 const PRESET_MONTH = "1 month from today";
 const PRESET_YEAR = "1 year from today";
 
+const toLocalDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 // Build props fresh per test to avoid shared mutable ref state.
 const makeProps = (overrides = {}) => ({
   modalProps: {
@@ -68,7 +75,7 @@ describe("FormKeyRender", () => {
     const setExpiresAt = jest.fn();
     const d = new Date();
     d.setDate(d.getDate() + 7);
-    const activeDate = d.toISOString().split("T")[0];
+    const activeDate = toLocalDateInputValue(d);
     render(
       <FormKeyRender {...makeProps({ expiresAt: activeDate, setExpiresAt })} />,
     );

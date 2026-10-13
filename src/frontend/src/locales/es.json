@@ -2416,5 +2416,15 @@
   "edge.ariaLabel": "Conexión de {{source}} a {{target}}",
   "slider.strict": "Estricto",
   "slider.permissive": "Permisivo",
-  "playground.workflowWarning": "Advertencia del flujo de trabajo"
+  "playground.workflowWarning": "Advertencia del flujo de trabajo",
+  "page.homeTitle": "Crea tu primer flujo de trabajo con IA",
+  "page.homeDescription": "Conecta modelos, prompts, fuentes de conocimiento y herramientas mediante componentes visuales para crear y ejecutar aplicaciones de IA.",
+  "page.homeCreateFlow": "Crear flujo",
+  "page.homeImportFlow": "Importar flujo",
+  "page.homeDropFlow": "O suelta aquí un archivo de flujo",
+  "page.homeStartFromTemplate": "Empezar con una plantilla",
+  "page.homeDocumentation": "Documentación",
+  "page.homeReportIssue": "Informar de un problema",
+  "modelProviders.providerNameDeepSeek": "DeepSeek",
+  "modelProviders.providerNameQwen": "Qwen"
 }

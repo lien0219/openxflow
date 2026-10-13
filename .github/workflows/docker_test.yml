@@ -20,7 +20,7 @@ permissions:
 jobs:
   test-docker-first:
     name: Test Docker images (first attempt)
-    runs-on: [self-hosted, linux, ARM64, langflow-ai-arm64-40gb-ephemeral]
+    runs-on: ubuntu-24.04-arm
     continue-on-error: true
     outputs:
       succeeded: ${{ steps.success.outputs.succeeded }}
@@ -42,7 +42,7 @@ jobs:
     name: Test Docker images (verify or retry)
     needs: test-docker-first
     if: ${{ always() && !cancelled() && needs.test-docker-first.outputs.succeeded != 'true' }}
-    runs-on: [self-hosted, linux, ARM64, langflow-ai-arm64-40gb-ephemeral]
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
         with:

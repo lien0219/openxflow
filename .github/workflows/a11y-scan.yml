@@ -8,6 +8,17 @@ on:
   schedule:
     # Run nightly at 02:00 UTC, after the nightly build window
     - cron: "0 2 * * *"
+  workflow_call:
+    inputs:
+      ref:
+        description: "(Optional) ref to checkout"
+        required: false
+        type: string
+      assert:
+        description: "Fail the run when scans differ from committed baselines"
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       ref:
@@ -64,8 +75,10 @@ jobs:
               echo "No release-* branch found in ${{ github.repository }}"
               exit 1
             fi
+          elif [ -n "${{ github.event.pull_request.head.sha }}" ]; then
+            REF="${{ github.event.pull_request.head.sha }}"
           else
-            REF="${{ github.ref }}"
+            REF="${{ github.sha }}"
           fi
           if ! [[ "$REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
             echo "Refusing to scan malformed ref: $REF"
@@ -154,7 +167,7 @@ jobs:
         shell: bash
         env:
           RUN_A11Y: "true"
-          RUN_A11Y_ASSERT: ${{ github.event_name == 'workflow_dispatch' && inputs.assert && 'true' || 'false' }}
+          RUN_A11Y_ASSERT: ${{ inputs.assert && 'true' || 'false' }}
           LANGFLOW_DEACTIVATE_TRACING: "true"
         run: |
           cd src/frontend

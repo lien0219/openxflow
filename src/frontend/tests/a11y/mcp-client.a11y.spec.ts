@@ -23,7 +23,7 @@ async function openMcpClientRoute(page: LangflowPage) {
   await page.goto("/settings/mcp-client");
   await disableAnimations(page);
   await expect(
-    page.getByRole("heading", { name: "Langflow MCP Client" }),
+    page.getByRole("heading", { name: "OpenXFlow MCP Client" }),
   ).toBeVisible({ timeout: TIMEOUTS.standard });
   await page
     .waitForLoadState("networkidle", { timeout: TIMEOUTS.medium })

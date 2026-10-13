@@ -1203,6 +1203,16 @@ class TestBundleSeparationOrchestrate:
         result = generate_requirements_from_flow(_make_flow(node), pin_versions=False)
         assert "langchain-openai" in result
 
+    def test_deepseek_resolves_to_langchain_openai(self):
+        """DeepSeek uses the OpenAI-compatible LangChain client at runtime."""
+        node = _make_node(
+            "LanguageModel",
+            "from lfx.base.models.model import LCModelComponent",
+            template_extra={"model": {"value": [{"provider": "DeepSeek", "name": "deepseek-v4-flash"}]}},
+        )
+        result = generate_requirements_from_flow(_make_flow(node), pin_versions=False)
+        assert "langchain-openai" in result
+
     def test_ibm_watsonx_catalog_casing_resolves(self):
         """The catalog persists ``provider="IBM WatsonX"`` (not the legacy ``IBM watsonx.ai``).
 

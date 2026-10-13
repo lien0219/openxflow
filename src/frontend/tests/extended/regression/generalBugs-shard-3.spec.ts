@@ -60,7 +60,7 @@ test(
     await openBlankFlow(page);
 
     await expect(page.getByTestId("playground-btn-flow")).toBeDisabled();
-    await expect(page.getByText("Langflow Chat")).toBeHidden();
+    await expect(page.getByText("OpenXFlow Chat")).toBeHidden();
 
     await addComponentFromSidebar(page, {
       search: TEXTS.searchChatOutput,

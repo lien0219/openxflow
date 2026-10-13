@@ -16,6 +16,10 @@ test.beforeEach(async ({ page }) => {
   await useMcpServerListWithoutToolCounts(page);
 });
 
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
 async function scrollMcpSidebarRowIntoView(page: Page, name: string) {
   const sidebar = page.getByRole("navigation", { name: "Components sidebar" });
   const mcpNavigationButton = page.getByTestId("sidebar-nav-mcp");
@@ -941,7 +945,7 @@ test(
 
     await page.getByTestId("dropdown_str_tool").click();
 
-    await expect(page.getByTestId("echo-0-option")).toBeVisible({
+    await expect(page.getByTestId("get_current_time-0-option")).toBeVisible({
       timeout: 30000,
     });
     await expect(page.getByTestId("fetch-0-option")).toHaveCount(0);

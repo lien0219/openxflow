@@ -118,7 +118,7 @@ if [[ "$base_healthy" != true ]]; then
 fi
 "$runtime" rm -f "$base_container" >/dev/null
 
-# Keep peak disk usage bounded on the 40 GB ARM runner.
+# Keep peak disk usage bounded on the ARM runner.
 cleanup
 
 "$runtime" build -t langflowai/langflow-frontend:latest-dev \

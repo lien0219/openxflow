@@ -108,6 +108,7 @@ _PROVIDER_PACKAGE_FALLBACKS: dict[str, set[str]] = {
     "Anthropic": {"langchain-anthropic"},
     "Azure AI Foundry": {"langchain-azure-ai"},
     "Azure OpenAI": {"langchain-openai"},
+    "DeepSeek": {"langchain-openai"},
     "Google Generative AI": {"langchain-google-genai"},
     "Groq": {"langchain-groq"},
     # Both spellings: "IBM WatsonX" is the unified-catalog string a flow persists

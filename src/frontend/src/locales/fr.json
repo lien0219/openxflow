@@ -2416,5 +2416,15 @@
   "edge.ariaLabel": "Connexion de {{source}} à {{target}}",
   "slider.strict": "Strict",
   "slider.permissive": "Permissif",
-  "playground.workflowWarning": "Avertissement du workflow"
+  "playground.workflowWarning": "Avertissement du workflow",
+  "page.homeTitle": "Créez votre premier workflow IA",
+  "page.homeDescription": "Reliez des modèles, des prompts, des sources de connaissances et des outils avec des composants visuels pour créer et exécuter des applications d’IA.",
+  "page.homeCreateFlow": "Créer un workflow",
+  "page.homeImportFlow": "Importer un workflow",
+  "page.homeDropFlow": "Ou déposez un fichier de workflow ici",
+  "page.homeStartFromTemplate": "Commencer avec un modèle",
+  "page.homeDocumentation": "Documentation",
+  "page.homeReportIssue": "Signaler un problème",
+  "modelProviders.providerNameDeepSeek": "DeepSeek",
+  "modelProviders.providerNameQwen": "Qwen"
 }
