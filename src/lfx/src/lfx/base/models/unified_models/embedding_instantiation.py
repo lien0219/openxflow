@@ -15,6 +15,8 @@ from .provider_queries import model_provider_metadata
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from lfx.services.model_provider_policy import ModelProviderPolicySnapshot
+
 
 _OPENAI_COMPATIBLE_EMBEDDING_CLASSES = {"OpenAIEmbeddings", "QwenEmbeddings"}
 
@@ -71,6 +73,7 @@ def get_embeddings(
     watsonx_truncate_input_tokens=None,
     watsonx_input_text=None,
     ollama_base_url=None,
+    provider_policy: ModelProviderPolicySnapshot | None = None,
 ) -> Any:
     """Instantiate embeddings and inject configured endpoints for compatible providers."""
     provider = None
@@ -102,4 +105,5 @@ def get_embeddings(
         watsonx_truncate_input_tokens=watsonx_truncate_input_tokens,
         watsonx_input_text=watsonx_input_text,
         ollama_base_url=ollama_base_url,
+        provider_policy=provider_policy,
     )

@@ -4,7 +4,7 @@ from unittest.mock import patch
 import aiofiles
 import anyio
 import pytest
-from langflow.services.event_manager import WebhookEventManager
+from langflow.services.event_manager import WebhookEventManager, webhook_event_manager
 
 
 @pytest.fixture(autouse=True)
@@ -85,22 +85,31 @@ async def test_webhook_endpoint_with_valid_api_key(client, added_webhook_test, c
     """Test that webhook works when valid API key is provided."""
     endpoint_name = added_webhook_test["endpoint_name"]
     endpoint = f"api/v1/webhook/{endpoint_name}"
+    flow_id = str(added_webhook_test["id"])
+    event_queue = await webhook_event_manager.subscribe(flow_id)
 
-    # Create a temporary file
-    async with aiofiles.tempfile.TemporaryDirectory() as tmp:
-        file_path = anyio.Path(tmp) / "test_file.txt"
-        payload = {"path": str(file_path)}
+    try:
+        # Keep the target directory alive until the background flow signals completion.
+        async with aiofiles.tempfile.TemporaryDirectory() as tmp:
+            file_path = anyio.Path(tmp) / "test_file.txt"
+            payload = {"path": str(file_path)}
 
-        # Should work with valid API key
-        response = await client.post(endpoint, headers={"x-api-key": created_api_key.api_key}, json=payload)
-        assert response.status_code == 202
+            response = await client.post(endpoint, headers={"x-api-key": created_api_key.api_key}, json=payload)
+            assert response.status_code == 202
 
-        # Wait for background task to complete (webhook returns 202 immediately)
-        await asyncio.sleep(2)
-        assert await file_path.exists(), f"File {file_path} does not exist"
+            with anyio.fail_after(60):
+                while True:
+                    event = await event_queue.get()
+                    if event["event"] == "end":
+                        assert event["data"]["success"], event["data"].get("error")
+                        break
 
-    file_does_not_exist = not await file_path.exists()
-    assert file_does_not_exist, f"File {file_path} still exists"
+            assert await file_path.exists(), f"File {file_path} does not exist"
+
+        file_does_not_exist = not await file_path.exists()
+        assert file_does_not_exist, f"File {file_path} still exists"
+    finally:
+        await webhook_event_manager.unsubscribe(flow_id, event_queue)
 
 
 async def test_webhook_endpoint_unauthorized_user_flow(client, added_webhook_test):
@@ -978,3 +987,41 @@ class TestWebhookEventsStreamAuth:
         # Should return 404 because the flow doesn't belong to User 2
         assert response.status_code == 404
         assert f"Flow identifier {endpoint_name} not found" in response.json()["detail"]
+
+
+def _enable_serving_required(monkeypatch):
+    """Turn on the serving end-user feature with identity REQUIRED, on the live settings."""
+    from lfx.services.deps import get_settings_service
+
+    settings = get_settings_service().settings
+    monkeypatch.setattr(settings, "serving_end_user_header", "X-End-User-Id")
+    monkeypatch.setattr(settings, "serving_trust_proxy_headers", True)
+    monkeypatch.setattr(settings, "serving_end_user_required", True)
+
+
+async def test_webhook_required_identity_absent_is_rejected_401(
+    client, added_webhook_test, created_api_key, monkeypatch
+):
+    """I3: a webhook with no identity is a SYNCHRONOUS 401 when identity is required.
+
+    The run executes in a fire-and-forget task that can't surface an error, so the gate must fire in
+    the endpoint before scheduling — otherwise a required-but-absent identity would 202 and be
+    silently dropped.
+    """
+    _enable_serving_required(monkeypatch)
+    endpoint = f"api/v1/webhook/{added_webhook_test['endpoint_name']}"
+    resp = await client.post(endpoint, headers={"x-api-key": created_api_key.api_key}, json={"k": "v"})
+    assert resp.status_code == 401, resp.text
+    assert resp.json()["detail"]["code"] == "END_USER_IDENTITY_REQUIRED"
+
+
+async def test_webhook_required_identity_present_is_accepted(client, added_webhook_test, created_api_key, monkeypatch):
+    # With the header present the gate passes and the run is scheduled as usual (202).
+    _enable_serving_required(monkeypatch)
+    endpoint = f"api/v1/webhook/{added_webhook_test['endpoint_name']}"
+    resp = await client.post(
+        endpoint,
+        headers={"x-api-key": created_api_key.api_key, "X-End-User-Id": "alice"},
+        json={"k": "v"},
+    )
+    assert resp.status_code == 202, resp.text

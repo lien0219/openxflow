@@ -7,6 +7,13 @@ const PRESET_WEEK = "1 week from today";
 const PRESET_MONTH = "1 month from today";
 const PRESET_YEAR = "1 year from today";
 
+const toLocalDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 // Build props fresh per test to avoid shared mutable ref state.
 const makeProps = (overrides = {}) => ({
   modalProps: {
@@ -68,7 +75,7 @@ describe("FormKeyRender", () => {
     const setExpiresAt = jest.fn();
     const d = new Date();
     d.setDate(d.getDate() + 7);
-    const activeDate = d.toISOString().split("T")[0];
+    const activeDate = toLocalDateInputValue(d);
     render(
       <FormKeyRender {...makeProps({ expiresAt: activeDate, setExpiresAt })} />,
     );
@@ -80,5 +87,27 @@ describe("FormKeyRender", () => {
     render(<FormKeyRender {...makeProps({ modalProps: undefined })} />);
     expect(screen.getByText(PRESET_WEEK)).toBeInTheDocument();
     expect(screen.getByText(PRESET_YEAR)).toBeInTheDocument();
+  });
+
+  it("describes the name input with the form-level server error", () => {
+    render(
+      <FormKeyRender {...makeProps({ serverError: "Something went wrong" })} />,
+    );
+    const error = screen.getByText("Something went wrong");
+    expect(error).toHaveAttribute("role", "alert");
+    expect(error).toHaveAttribute("id", "api-key-form-error");
+    const input = screen.getByPlaceholderText("Enter key name");
+    // The failure is the create action's, not the field's — described, not
+    // marked invalid.
+    expect(input).toHaveAttribute("aria-describedby", "api-key-form-error");
+    expect(input).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("renders no error wiring without a server error", () => {
+    render(<FormKeyRender {...makeProps()} />);
+    const input = screen.getByPlaceholderText("Enter key name");
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(input).not.toHaveAttribute("aria-describedby");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

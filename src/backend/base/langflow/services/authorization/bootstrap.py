@@ -10,7 +10,7 @@ from lfx.log.logger import logger
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
-from langflow.services.database.models.auth import AuthzRole, AuthzRoleAssignment
+from langflow.services.database.models.auth import AuthzRole, AuthzRoleAssignment, AuthzRoleAssignmentGrant
 from langflow.services.database.models.user.model import User
 
 if TYPE_CHECKING:
@@ -206,9 +206,10 @@ async def ensure_user_default_role(
 ) -> AuthzRoleAssignment | None:
     """Reconcile safe bootstrap assignments for one human user.
 
-    Bootstrap-created assignments use ``assigned_by=None``. This lets a later
-    superuser demotion remove only the automatic platform-admin grant while
-    preserving explicit administrator assignments created by another operator.
+    Bootstrap-created assignments use ``assigned_by=None`` and have no
+    provenance grant. This lets a later superuser demotion remove only the
+    automatic platform-admin grant while preserving explicit administrator and
+    IdP assignments whose source actor is not recorded on the effective row.
     """
     if not user.is_active or is_managed_service_user(user):
         return None
@@ -219,6 +220,17 @@ async def ensure_user_default_role(
     existing_assignments = (
         await session.exec(select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user.id))
     ).all()
+    assignment_ids = {assignment.id for assignment in existing_assignments}
+    sourced_assignment_ids: set[UUID] = set()
+    if assignment_ids:
+        grants = (
+            await session.exec(
+                select(AuthzRoleAssignmentGrant).where(
+                    AuthzRoleAssignmentGrant.assignment_id.in_(assignment_ids),
+                )
+            )
+        ).all()
+        sourced_assignment_ids = {grant.assignment_id for grant in grants}
 
     automatic_platform = next(
         (
@@ -228,6 +240,7 @@ async def ensure_user_default_role(
             and assignment.domain_type == "global"
             and assignment.domain_id is None
             and assignment.assigned_by is None
+            and assignment.id not in sourced_assignment_ids
         ),
         None,
     )
@@ -239,6 +252,7 @@ async def ensure_user_default_role(
             and assignment.domain_type == "global"
             and assignment.domain_id is None
             and assignment.assigned_by is None
+            and assignment.id not in sourced_assignment_ids
         ),
         None,
     )
@@ -264,7 +278,29 @@ async def ensure_user_default_role(
         if automatic_platform is not None:
             await session.delete(automatic_platform)
             changed = True
-        result = automatic_member
+        # A manually assigned global role owns the user's global scope. Do not
+        # recreate the bootstrap member role alongside it; the assignment API
+        # enforces one effective role per scope.
+        bootstrap_assignments = {
+            assignment.id for assignment in (automatic_platform, automatic_member) if assignment is not None
+        }
+        manual_global = next(
+            (
+                assignment
+                for assignment in existing_assignments
+                if assignment.domain_type == "global"
+                and assignment.domain_id is None
+                and assignment.id not in bootstrap_assignments
+            ),
+            None,
+        )
+        if manual_global is not None:
+            result = manual_global
+            if automatic_member is not None:
+                await session.delete(automatic_member)
+                changed = True
+        else:
+            result = automatic_member
         if result is None:
             result = AuthzRoleAssignment(
                 user_id=user.id,

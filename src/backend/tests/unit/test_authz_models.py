@@ -108,6 +108,112 @@ async def test_authz_role_assignment_persists(authz_async_session: AsyncSession)
 
 
 @pytest.mark.anyio
+async def test_default_role_reconciliation_preserves_idp_assignment_and_replaces_placeholder(
+    authz_async_session: AsyncSession,
+):
+    """A source-only global assignment owns the scope over the bootstrap member placeholder."""
+    from langflow.services.authorization.bootstrap import ensure_user_default_role
+
+    user = User(username="bootstrap_source_user", password=_TEST_PASSWORD, is_active=True)
+    platform_role = AuthzRole(name="bootstrap_platform", permissions=[])
+    member_role = AuthzRole(name="bootstrap_member", permissions=[])
+    source_role = AuthzRole(name="bootstrap_source", permissions=["flow:read"])
+    authz_async_session.add_all([user, platform_role, member_role, source_role])
+    await authz_async_session.flush()
+
+    placeholder = AuthzRoleAssignment(
+        user_id=user.id,
+        role_id=member_role.id,
+        domain_type="global",
+        assigned_by=None,
+    )
+    source_assignment = AuthzRoleAssignment(
+        user_id=user.id,
+        role_id=source_role.id,
+        domain_type="global",
+        assigned_by=None,
+    )
+    authz_async_session.add_all([placeholder, source_assignment])
+    await authz_async_session.flush()
+    authz_async_session.add(
+        AuthzRoleAssignmentGrant(
+            assignment_id=source_assignment.id,
+            source_kind="idp",
+            provider_id="entra",
+            external_group="corp-viewers",
+        )
+    )
+    await authz_async_session.flush()
+
+    result = await ensure_user_default_role(
+        authz_async_session,
+        user,
+        roles={"platform_admin": platform_role, "member": member_role},
+        commit=False,
+    )
+
+    assert result is not None
+    assert result.id == source_assignment.id
+    await authz_async_session.flush()
+    assignments = (
+        await authz_async_session.exec(select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user.id))
+    ).all()
+    assert [assignment.id for assignment in assignments] == [source_assignment.id]
+
+
+@pytest.mark.anyio
+async def test_default_role_reconciliation_does_not_reuse_sourced_member_assignment(
+    authz_async_session: AsyncSession,
+):
+    """An IdP grant keeps a member-named assignment distinct from the local placeholder."""
+    from langflow.services.authorization.bootstrap import ensure_user_default_role
+
+    user = User(username="bootstrap_member_source_user", password=_TEST_PASSWORD, is_active=True)
+    platform_role = AuthzRole(name="bootstrap_member_platform", permissions=[])
+    member_role = AuthzRole(name="bootstrap_member_source_role", permissions=[])
+    authz_async_session.add_all([user, platform_role, member_role])
+    await authz_async_session.flush()
+
+    source_assignment = AuthzRoleAssignment(
+        user_id=user.id,
+        role_id=member_role.id,
+        domain_type="global",
+        assigned_by=None,
+    )
+    authz_async_session.add(source_assignment)
+    await authz_async_session.flush()
+    authz_async_session.add(
+        AuthzRoleAssignmentGrant(
+            assignment_id=source_assignment.id,
+            source_kind="idp",
+            provider_id="entra",
+            external_group="corp-members",
+        )
+    )
+    await authz_async_session.flush()
+
+    result = await ensure_user_default_role(
+        authz_async_session,
+        user,
+        roles={"platform_admin": platform_role, "member": member_role},
+        commit=False,
+    )
+
+    assert result is not None
+    assert result.id == source_assignment.id
+    assert (
+        len(
+            (
+                await authz_async_session.exec(
+                    select(AuthzRoleAssignment).where(AuthzRoleAssignment.user_id == user.id)
+                )
+            ).all()
+        )
+        == 1
+    )
+
+
+@pytest.mark.anyio
 async def test_role_assignment_grants_preserve_independent_manual_and_idp_sources(
     authz_async_session: AsyncSession,
 ):

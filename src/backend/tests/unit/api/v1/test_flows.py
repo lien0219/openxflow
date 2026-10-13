@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import uuid
 from uuid import UUID
@@ -256,10 +257,13 @@ def test_flow_unique_constraint_error_rejects_unknown_sqlite_table():
 
 async def test_create_flow_real_competing_sqlite_writer_is_retried(client: AsyncClient, logged_in_headers, monkeypatch):
     """A real second SQLite connection holding the write lock triggers a create retry."""
+    import asyncio
+    import sqlite3
+    import threading
+
     from langflow.api.v1 import flows as flows_module
-    from langflow.services.database.models.folder.model import Folder
-    from langflow.services.deps import session_scope
-    from sqlalchemy import text
+    from langflow.services.database.lock_retry import is_database_lock_error
+    from lfx.services.sqlite_runtime import sqlite_database_path
 
     original_new_flow = flows_module._new_flow
     attempts = {"count": 0}
@@ -268,14 +272,39 @@ async def test_create_flow_real_competing_sqlite_writer_is_retried(client: Async
     async def create_after_competing_write(**kwargs):
         attempts["count"] += 1
         if attempts["count"] == 1:
-            async with session_scope() as competing_session:
-                competing_session.add(Folder(name=f"create-competing-write-{uuid.uuid4()}", user_id=None))
-                await competing_session.flush()
-                # The competing connection now holds SQLite's write lock. Make
-                # the route connection report the real lock immediately; the
-                # failed attempt unwinds this context and releases the writer.
-                await kwargs["session"].exec(text("PRAGMA busy_timeout = 0"))
-                return await original_new_flow(**kwargs)
+            database_url = str(kwargs["session"].get_bind().url)
+            database_path = sqlite_database_path(database_url)
+            assert database_path is not None
+
+            route_connection = await kwargs["session"].connection()
+            await route_connection.exec_driver_sql("PRAGMA busy_timeout = 0")
+            writer_acquired = threading.Event()
+            release_writer = threading.Event()
+
+            def hold_sqlite_write_lock():
+                connection = sqlite3.connect(str(database_path), timeout=0)
+                try:
+                    connection.execute("BEGIN IMMEDIATE")
+                    writer_acquired.set()
+                    if not release_writer.wait(timeout=10):
+                        msg = "Timed out waiting to release the competing SQLite writer"
+                        raise TimeoutError(msg)
+                finally:
+                    connection.rollback()
+                    connection.close()
+
+            writer_task = asyncio.create_task(asyncio.to_thread(hold_sqlite_write_lock))
+            try:
+                assert await asyncio.to_thread(writer_acquired.wait, 5), "Competing SQLite writer did not acquire lock"
+                try:
+                    return await original_new_flow(**kwargs)
+                except Exception as exc:
+                    if is_database_lock_error(exc):
+                        release_writer.set()
+                    raise
+            finally:
+                release_writer.set()
+                await writer_task
         return await original_new_flow(**kwargs)
 
     monkeypatch.setattr(flows_module, "_new_flow", create_after_competing_write)
@@ -1062,6 +1091,103 @@ async def test_create_flows_with_explicit_folder(client: AsyncClient, logged_in_
     assert isinstance(result, list), "The result must be a list"
     assert len(result) == amount_flows, "The result must have the same amount of flows"
     assert all(item["folder_id"] == project_id for item in result), "All flows must be created in the target folder"
+
+
+async def test_create_flows_rejects_absolute_fs_path_outside_allowed_directory(client: AsyncClient, logged_in_headers):
+    """Regression (H1-4006600): the batch route must apply the same fs_path containment check as siblings."""
+    malicious_name = f"batch-leak-{uuid.uuid4()}"
+    response = await client.post(
+        "api/v1/flows/batch/",
+        json={"flows": [{"name": malicious_name, "data": {}, "fs_path": "/etc/passwd"}]},
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "within" in response.json()["detail"].lower() or "outside" in response.json()["detail"].lower()
+
+    listed = await client.get("api/v1/flows/", headers=logged_in_headers)
+    persisted_names = {flow["name"] for flow in listed.json()}
+    assert malicious_name not in persisted_names
+
+
+async def test_create_flows_rejects_fs_path_directory_traversal(client: AsyncClient, logged_in_headers):
+    malicious_name = f"batch-traversal-{uuid.uuid4()}"
+    response = await client.post(
+        "api/v1/flows/batch/",
+        json={"flows": [{"name": malicious_name, "data": {}, "fs_path": "../../etc/passwd"}]},
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+async def test_create_flows_rejects_empty_fs_path(client: AsyncClient, logged_in_headers):
+    response = await client.post(
+        "api/v1/flows/batch/",
+        json={"flows": [{"name": f"batch-empty-{uuid.uuid4()}", "data": {}, "fs_path": ""}]},
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+async def test_create_flows_fs_path_preflight_is_atomic(client: AsyncClient, logged_in_headers):
+    """A malicious fs_path anywhere in the batch must reject the whole request before any row is persisted."""
+    allowed_name = f"batch-preflight-allowed-{uuid.uuid4()}"
+    malicious_name = f"batch-preflight-leak-{uuid.uuid4()}"
+    response = await client.post(
+        "api/v1/flows/batch/",
+        json={
+            "flows": [
+                {"name": allowed_name, "data": {}},
+                {"name": malicious_name, "data": {}, "fs_path": "/etc/passwd"},
+            ]
+        },
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    listed = await client.get("api/v1/flows/", headers=logged_in_headers)
+    persisted_names = {flow["name"] for flow in listed.json()}
+    assert allowed_name not in persisted_names
+    assert malicious_name not in persisted_names
+
+
+async def test_create_flows_accepts_relative_fs_path(client: AsyncClient, logged_in_headers):
+    flow_name = f"batch-relative-{uuid.uuid4()}"
+    response = await client.post(
+        "api/v1/flows/batch/",
+        json={"flows": [{"name": flow_name, "data": {}, "fs_path": "batch_flow.json"}]},
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    result = response.json()
+    assert len(result) == 1
+    assert result[0]["name"] == flow_name
+
+
+async def test_upload_project_zip_rejects_out_of_tenant_fs_path(client: AsyncClient, logged_in_headers):
+    """Regression (H1-4006600): the ZIP project-upload route reaches create_flows and must reject bad fs_path."""
+    import io
+    import json
+    import zipfile
+
+    flow_name = f"zip-leak-{uuid.uuid4()}"
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zf:
+        zf.writestr(
+            f"{flow_name}.json",
+            json.dumps({"name": flow_name, "description": "", "data": {}, "fs_path": "/etc/passwd"}),
+        )
+    zip_buffer.seek(0)
+
+    response = await client.post(
+        "api/v1/projects/upload/",
+        files={"file": ("evil.zip", zip_buffer.getvalue(), "application/zip")},
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    listed = await client.get("api/v1/flows/", headers=logged_in_headers)
+    persisted_names = {flow["name"] for flow in listed.json()}
+    assert flow_name not in persisted_names
 
 
 async def test_read_basic_examples(client: AsyncClient, logged_in_headers):
@@ -2068,8 +2194,6 @@ async def test_delete_flow_non_lock_failure_returns_sanitized_500(client: AsyncC
 async def test_delete_flow_real_competing_sqlite_writer_is_retried(client: AsyncClient, logged_in_headers, monkeypatch):
     """A real second SQLite connection holding the write lock triggers a retry."""
     from langflow.api.v1 import flows as flows_module
-    from langflow.services.database.models.folder.model import Folder
-    from langflow.services.deps import session_scope
     from sqlalchemy import text
 
     create_response = await client.post(
@@ -2084,14 +2208,14 @@ async def test_delete_flow_real_competing_sqlite_writer_is_retried(client: Async
     async def delete_after_competing_commit(session, target_flow_id):
         attempts["count"] += 1
         if attempts["count"] == 1:
-            async with session_scope() as competing_session:
-                competing_session.add(Folder(name=f"delete-competing-write-{uuid.uuid4()}", user_id=None))
-                await competing_session.flush()
-                # The second connection now holds SQLite's write lock. Disable
-                # waiting on the route connection so its real DELETE reports
-                # the lock immediately and exercises the retry boundary.
-                await session.exec(text("PRAGMA busy_timeout = 0"))
+            await session.exec(text("PRAGMA busy_timeout = 0"))
+            competing_connection = sqlite3.connect(session.bind.url.database, timeout=1, isolation_level=None)
+            try:
+                competing_connection.execute("BEGIN IMMEDIATE")
                 return await original_delete(session, target_flow_id)
+            finally:
+                competing_connection.rollback()
+                competing_connection.close()
         return await original_delete(session, target_flow_id)
 
     monkeypatch.setattr(flows_module, "cascade_delete_flow", delete_after_competing_commit)
@@ -2104,10 +2228,10 @@ async def test_delete_flow_real_competing_sqlite_writer_is_retried(client: Async
     assert read_response.status_code == status.HTTP_404_NOT_FOUND
 
 
-async def test_delete_flow_retry_is_idempotent_when_concurrent_delete_wins(
+async def test_delete_flow_retry_returns_not_found_when_concurrent_delete_wins(
     client: AsyncClient, logged_in_headers, monkeypatch
 ):
-    """A retry treats an already-deleted target as successful."""
+    """A retry must not claim to have deleted a flow removed by another request."""
     import sqlite3
 
     from langflow.api.v1 import flows as flows_module
@@ -2136,7 +2260,8 @@ async def test_delete_flow_retry_is_idempotent_when_concurrent_delete_wins(
 
     response = await client.delete(f"api/v1/flows/{flow_id}", headers=logged_in_headers)
 
-    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.text
+    assert response.json() == {"detail": "Flow not found"}
     assert attempts["count"] == 1
 
 

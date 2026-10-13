@@ -22,6 +22,7 @@ from langflow.services.authorization.audit import (
 from langflow.services.authorization.decorators import requires_flow_permission, requires_resource_permission
 from langflow.services.authorization.fetch import authorized_or_owner_scoped, deny_to_404
 from langflow.services.authorization.guards import (
+    capability_probe,
     ensure_deployment_permission,
     ensure_file_permission,
     ensure_flow_permission,
@@ -65,6 +66,7 @@ __all__ = [
     "apply_owned_or_visible_scope_prefilter",
     "audit_decision",
     "authorized_or_owner_scoped",
+    "capability_probe",
     "deny_to_404",
     "drain_pending_audit_writes",
     "ensure_deployment_permission",

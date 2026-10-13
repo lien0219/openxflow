@@ -3,6 +3,7 @@ import { FaGithub } from "react-icons/fa";
 import { DATASTAX_DOCS_URL, DOCS_URL, GITHUB_URL } from "@/constants/constants";
 import { useLogout } from "@/controllers/API/queries/auth";
 import { CustomAdminPageMenuItem } from "@/customization/components/custom-admin-page-menu-item";
+import { CustomHeaderMenuItemsTitle } from "@/customization/components/custom-header-menu-items-title";
 import { CustomProfileIcon } from "@/customization/components/custom-profile-icon";
 import { ENABLE_DATASTAX_LANGFLOW } from "@/customization/feature-flags";
 import { useCustomNavigate } from "@/customization/hooks/use-custom-navigate";
@@ -20,27 +21,25 @@ import {
 import ThemeButtons from "../ThemeButtons";
 
 export const AccountMenu = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const version = useDarkStore((state) => state.version);
   const latestVersion = useDarkStore((state) => state.latestVersion);
   const navigate = useCustomNavigate();
   const { mutate: mutationLogout } = useLogout();
   const hideLogoutButton = useUtilityStore((state) => state.hideLogoutButton);
-  const isChinese = i18n.resolvedLanguage?.startsWith("zh") ?? false;
+  const autoLogin = useAuthStore((state) => state.autoLogin);
 
-  const { isAdmin, autoLogin } = useAuthStore((state) => ({
-    isAdmin: state.isAdmin,
-    autoLogin: state.autoLogin,
-  }));
-
-  const handleLogout = () => mutationLogout();
+  const handleLogout = () => {
+    mutationLogout();
+  };
 
   const isLatestVersion = (() => {
     if (!version || !latestVersion) return false;
-    return (
-      stripReleaseStageFromVersion(version) ===
-      stripReleaseStageFromVersion(latestVersion)
-    );
+
+    const currentBaseVersion = stripReleaseStageFromVersion(version);
+    const latestBaseVersion = stripReleaseStageFromVersion(latestVersion);
+
+    return currentBaseVersion === latestBaseVersion;
   })();
 
   return (
@@ -53,66 +52,66 @@ export const AccountMenu = () => {
           <CustomProfileIcon />
         </div>
       </HeaderMenuToggle>
-      <HeaderMenuItems
-        position="right"
-        classNameSize="w-[400px] max-w-[calc(100vw-24px)]"
-      >
-        <div
-          className="divide-y divide-border/70"
-          data-theme-region="account-menu"
-        >
-          <div className="px-4 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <span
-                className="text-sm font-medium"
-                data-testid="menu_version_button"
-              >
-                {t("account.version")}
-              </span>
-              <div
-                className={cn(
-                  "text-xs",
-                  isLatestVersion
-                    ? "text-accent-emerald-foreground"
-                    : "text-accent-amber-foreground",
-                )}
-              >
-                {version}{" "}
-                {isLatestVersion
-                  ? t("account.latest")
-                  : t("account.updateAvailable")}
+      <HeaderMenuItems position="right" classNameSize="w-[272px]">
+        <div className="divide-y divide-foreground/10">
+          <CustomHeaderMenuItemsTitle />
+          <div>
+            <div className="h-[44px] items-center px-4 pt-3">
+              <div className="flex items-center justify-between">
+                <span
+                  data-testid="menu_version_button"
+                  id="menu_version_button"
+                  className="text-sm"
+                >
+                  {t("account.version")}
+                </span>
+                <div
+                  className={cn(
+                    "float-right text-xs",
+                    isLatestVersion && "text-accent-emerald-foreground",
+                    !isLatestVersion && "text-accent-amber-foreground",
+                  )}
+                >
+                  {version}{" "}
+                  {isLatestVersion
+                    ? t("account.latest")
+                    : t("account.updateAvailable")}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="py-1">
-            <HeaderMenuItemButton onClick={() => navigate("/settings")}>
-              <span data-testid="menu_settings_button">
+          <div>
+            <HeaderMenuItemButton
+              onClick={() => {
+                navigate("/settings");
+              }}
+            >
+              <span
+                data-testid="menu_settings_button"
+                id="menu_settings_button"
+              >
                 {t("account.settings")}
               </span>
             </HeaderMenuItemButton>
-            {isAdmin && !autoLogin && (
-              <HeaderMenuItemButton onClick={() => navigate("/admin")}>
-                <span data-testid="menu_admin_page_button">
-                  {t("account.adminPage")}
-                </span>
-              </HeaderMenuItemButton>
-            )}
 
             <CustomAdminPageMenuItem onNavigate={(path) => navigate(path)} />
             <HeaderMenuItemLink
               newPage
               href={ENABLE_DATASTAX_LANGFLOW ? DATASTAX_DOCS_URL : DOCS_URL}
             >
-              <span data-testid="menu_docs_button">{t("account.docs")}</span>
+              <span data-testid="menu_docs_button" id="menu_docs_button">
+                {t("account.docs")}
+              </span>
             </HeaderMenuItemLink>
           </div>
 
-          <div className="py-1">
+          <div>
             <HeaderMenuItemLink newPage href={GITHUB_URL}>
               <span
-                className="flex items-center gap-2"
                 data-testid="menu_github_button"
+                id="menu_github_button"
+                className="flex items-center gap-2"
               >
                 <FaGithub className="h-4 w-4" aria-hidden="true" />
                 {t("account.github")}
@@ -120,33 +119,15 @@ export const AccountMenu = () => {
             </HeaderMenuItemLink>
           </div>
 
-          <section
-            className="space-y-3 px-4 py-4"
-            aria-labelledby="theme-menu-title"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div
-                  id="theme-menu-title"
-                  className="text-sm font-semibold text-foreground"
-                >
-                  {t("account.theme")}
-                </div>
-                <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {isChinese
-                    ? "选择适合当前工作场景的界面风格"
-                    : "Choose a visual style for your workspace"}
-                </div>
-              </div>
-              <span className="rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">
-                6
-              </span>
+          <div className="flex items-center justify-between px-4 py-[6.5px] text-sm">
+            <span className="">{t("account.theme")}</span>
+            <div className="relative top-[1px] float-right">
+              <ThemeButtons />
             </div>
-            <ThemeButtons />
-          </section>
+          </div>
 
           {!autoLogin && !hideLogoutButton && (
-            <div className="py-1">
+            <div>
               <HeaderMenuItemButton onClick={handleLogout} icon="log-out">
                 {t("account.logout")}
               </HeaderMenuItemButton>

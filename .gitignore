@@ -173,6 +173,15 @@ coverage.xml
 .pytest_cache/
 .testmondata*
 
+# Local CI validation artifacts
+/.langflow-ci-e2e-config/
+/.langflow-ci-followup-config/
+/.langflow-ci-validation-config/
+/.pytest-temp-lfx-py314-followup/
+/src/frontend/playwright.ci-isolated.config.ts
+/src/frontend/playwright.ci-pr42-validation.config.ts
+/src/frontend/temp.openxflow.lock
+
 # Translations
 *.mo
 *.pot

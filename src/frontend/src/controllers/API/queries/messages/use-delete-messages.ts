@@ -1,3 +1,4 @@
+import type { UseMutationResult } from "@tanstack/react-query";
 import type { useMutationFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
@@ -23,15 +24,23 @@ export const useDeleteMessages: useMutationFunctionType<
     });
   };
 
-  const mutation = mutate(["useDeleteMessages"], deleteMessage, {
-    ...options,
-    onSettled: (data, error, variables, onMutateResult, context) => {
-      queryClient.invalidateQueries({
-        queryKey: ["useGetSessionsFromFlowQuery"],
-      });
-      options?.onSettled?.(data, error, variables, onMutateResult, context);
+  const mutation: UseMutationResult<void, Error, DeleteMessagesParams> = mutate(
+    ["useDeleteMessages"],
+    deleteMessage,
+    {
+      ...options,
+      onSettled: (...args) => {
+        // Deletions shift offsets; refresh loaded pages before requesting older rows.
+        queryClient.invalidateQueries({
+          queryKey: ["useGetMessagesQuery"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["useGetSessionsFromFlowQuery"],
+        });
+        options?.onSettled?.(...args);
+      },
     },
-  });
+  );
 
   return mutation;
 };

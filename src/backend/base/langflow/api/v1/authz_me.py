@@ -29,7 +29,7 @@ from langflow.services.database.models.user.model import User
 from langflow.services.database.models.variable.model import Variable
 from langflow.services.deps import get_authorization_service, get_settings_service
 
-router = APIRouter(prefix="/authz/me", tags=["Authorization"])
+router = APIRouter(prefix="/authz/me", tags=["Authorization"], include_in_schema=False)
 
 ResourceTypeLiteral = Literal[
     "flow",

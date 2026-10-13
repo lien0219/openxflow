@@ -7,7 +7,9 @@ non-SUSPENDED resumes are rejected before any signal/re-enqueue.
 
 from __future__ import annotations
 
+import asyncio
 import json
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -41,6 +43,14 @@ class _StubUser:
         self.id = user_id
 
 
+class _RecordingBackend:
+    def __init__(self) -> None:
+        self.enqueued: list[str] = []
+
+    async def enqueue(self, job_id: str) -> None:
+        self.enqueued.append(job_id)
+
+
 def _runner(job_service, job_id, source):
     adapter = get_stream_adapter("langflow", StreamAdapterContext(run_id=str(job_id), thread_id="t"))
     return JobRunner(job_service=job_service, live_bus=InMemoryLiveBus(), adapter=adapter, frame_source=source)
@@ -59,9 +69,7 @@ async def _facade():
     from langflow.services.background_execution.service import BackgroundExecutionService
     from langflow.services.deps import get_settings_service
 
-    svc = BackgroundExecutionService(settings_service=get_settings_service(), frame_source_factory=_noop_factory)
-    await svc.start()
-    return svc
+    return BackgroundExecutionService(settings_service=get_settings_service(), frame_source_factory=_noop_factory)
 
 
 @pytest.mark.real_services
@@ -161,6 +169,180 @@ async def test_stale_request_id_is_rejected(real_services_job_service) -> None:
     assert not [s for s in signals if s.signal_type == SignalType.RESUME]  # no signal written for a stale id
     job = await job_service.get_job_by_job_id(job_id)
     assert job.status == JobStatus.SUSPENDED  # untouched
+
+
+@pytest.mark.real_services
+@pytest.mark.no_blockbuster
+@pytest.mark.parametrize("damage", ["wrong-key", "null-token"])
+async def test_resume_checks_encrypted_overrides_before_claiming_or_writing_decision(
+    real_services_job_service,
+    damage,
+) -> None:
+    """Unavailable ciphertext leaves the paused run and its decision seam untouched."""
+    from cryptography.fernet import Fernet
+    from langflow.services.background_execution.service import (
+        BackgroundExecutionService,
+        RequestOverridesUnavailableError,
+    )
+    from langflow.services.deps import get_settings_service
+    from pydantic import SecretStr
+
+    job_service = real_services_job_service
+    settings_service = get_settings_service()
+    backend = _RecordingBackend()
+    user_id, flow_id = uuid4(), uuid4()
+    submitter = BackgroundExecutionService(
+        settings_service=settings_service,
+        frame_source_factory=_noop_factory,
+        backend=backend,
+    )
+    job_id = await submitter.submit(
+        flow_id=flow_id,
+        request={
+            "flow_id": str(flow_id),
+            "mode": "background",
+            "stream_protocol": "langflow",
+            "input_value": "pause",
+            "tweaks": {"Node-x": {"api_key": "resume-secret"}},  # pragma: allowlist secret
+        },
+        user=_StubUser(user_id),
+    )
+    await job_service.update_job_metadata(job_id, {"pending_request_id": "req-encrypted"})
+    await job_service.update_job_status(job_id, JobStatus.SUSPENDED)
+
+    resume_settings = settings_service
+    if damage == "wrong-key":
+        wrong_auth = settings_service.auth_settings.model_copy(
+            update={"SECRET_KEY": SecretStr(Fernet.generate_key().decode())}
+        )
+        resume_settings = SimpleNamespace(settings=settings_service.settings, auth_settings=wrong_auth)
+    else:
+        job = await job_service.get_job_by_job_id(job_id)
+        null_metadata = dict(job.job_metadata)
+        null_metadata["request_overrides"] = None
+        await job_service.update_job_metadata(job_id, null_metadata, replace=True)
+
+    resume_service = BackgroundExecutionService(
+        settings_service=resume_settings,
+        frame_source_factory=_noop_factory,
+    )
+    with pytest.raises(RequestOverridesUnavailableError, match="Background request overrides are unavailable"):
+        await resume_service.resume_job(
+            job_id,
+            _StubUser(user_id),
+            request_id="req-encrypted",
+            decision={  # pragma: allowlist secret
+                "choice": "approve",
+                "secret": "decision-must-not-be-written",  # pragma: allowlist secret
+            },
+        )
+
+    job = await job_service.get_job_by_job_id(job_id)
+    assert job.status == JobStatus.SUSPENDED
+    assert (job.job_metadata or {}).get("pending_request_id") == "req-encrypted"
+    assert await job_service.unconsumed_signals(job_id) == []
+    assert "decision-must-not-be-written" not in json.dumps(job.job_metadata)
+
+
+@pytest.mark.real_services
+@pytest.mark.no_blockbuster
+async def test_resume_rehydrates_original_encrypted_overrides(real_services_job_service) -> None:
+    """A successful HITL resume receives the same overrides as the initial run."""
+    from langflow.services.background_execution.service import BackgroundExecutionService
+    from langflow.services.deps import get_settings_service
+
+    job_service = real_services_job_service
+    settings_service = get_settings_service()
+    backend = _RecordingBackend()
+    user_id, flow_id = uuid4(), uuid4()
+    request = {
+        "flow_id": str(flow_id),
+        "mode": "background",
+        "stream_protocol": "langflow",
+        "input_value": "resume-with-overrides",
+        "tweaks": {"Node-x": {"api_key": "resume-replay-secret"}},  # pragma: allowlist secret
+    }
+    submitter = BackgroundExecutionService(
+        settings_service=settings_service,
+        frame_source_factory=_noop_factory,
+        backend=backend,
+    )
+    job_id = await submitter.submit(flow_id=flow_id, request=request, user=_StubUser(user_id))
+    await job_service.update_job_metadata(job_id, {"pending_request_id": "req-replay"})
+    await job_service.update_job_status(job_id, JobStatus.SUSPENDED)
+
+    captured: list[dict] = []
+
+    def _capture_factory(*, request, **_kwargs):
+        captured.append(request)
+        return _noop_factory()
+
+    resume_service = BackgroundExecutionService(
+        settings_service=settings_service,
+        frame_source_factory=_capture_factory,
+    )
+    try:
+        accepted = await resume_service.resume_job(
+            job_id,
+            _StubUser(user_id),
+            request_id="req-replay",
+            decision={"choice": "approve"},
+        )
+        assert accepted is True
+        # The factory is called synchronously while building the re-enqueued
+        # runner, before the executor starts consuming the resume checkpoint.
+        assert captured == [request]
+    finally:
+        await resume_service.stop()
+
+
+@pytest.mark.real_services
+@pytest.mark.no_blockbuster
+async def test_resume_accepts_legacy_empty_overrides(real_services_job_service) -> None:
+    """A suspended pre-fix v2 row drops empty override defaults and resumes safely."""
+    from langflow.services.background_execution.service import BackgroundExecutionService
+    from langflow.services.deps import get_settings_service
+
+    job_service = real_services_job_service
+    user_id, flow_id, job_id = uuid4(), uuid4(), uuid4()
+    safe_request = {
+        "flow_id": str(flow_id),
+        "mode": "background",
+        "stream_protocol": "langflow",
+        "input_value": "legacy-empty-resume",
+    }
+    await job_service.create_job(
+        job_id=job_id,
+        flow_id=flow_id,
+        user_id=user_id,
+        initial_metadata={
+            "request": {**safe_request, "globals": {}, "tweaks": {}},
+            "pending_request_id": "req-legacy-empty",
+        },
+    )
+    await job_service.update_job_status(job_id, JobStatus.SUSPENDED)
+
+    captured: list[dict] = []
+
+    def _capture_factory(*, request, **_kwargs):
+        captured.append(request)
+        return _noop_factory()
+
+    resume_service = BackgroundExecutionService(
+        settings_service=get_settings_service(),
+        frame_source_factory=_capture_factory,
+    )
+    try:
+        accepted = await resume_service.resume_job(
+            job_id,
+            _StubUser(user_id),
+            request_id="req-legacy-empty",
+            decision={"choice": "approve"},
+        )
+        assert accepted is True
+        assert captured == [safe_request]
+    finally:
+        await resume_service.stop()
 
 
 # --------------------------------------------------------------------------- #
@@ -318,9 +500,11 @@ async def test_resume_continues_same_event_stream(real_services_job_service) -> 
     svc = await _facade_with(_resumed_add_message_factory)
     try:
         await svc.resume_job(job_id, _StubUser(user_id), request_id="req-seq", decision={"choice": "go"})
-        events = await _wait_for_seq_gt(job_service, job_id, pre_max)
+        await _wait_for_seq_gt(job_service, job_id, pre_max)
+        await asyncio.wait_for(svc._executor._queue.join(), timeout=10)
+        events = await job_service.read_events(job_id, after_seq=0)
     finally:
-        await svc.stop()
+        await svc.teardown()
 
     seqs = sorted(e.seq for e in events)
     assert seqs == list(range(1, len(seqs) + 1))  # gap-free, no reset
@@ -343,5 +527,6 @@ async def test_resume_does_not_leave_a_queued_row_for_the_sweep(real_services_jo
         # The sweep only re-enqueues QUEUED workflow rows; a resumed row must not appear there.
         queued_ids = await job_service.queued_workflow_job_ids()
         assert job_id not in queued_ids
+        await asyncio.wait_for(svc._executor._queue.join(), timeout=10)
     finally:
-        await svc.stop()
+        await svc.teardown()
