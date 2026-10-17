@@ -8,6 +8,7 @@ from lfx.helpers.flow import (
     get_arg_names,
     get_flow_by_id_or_name,
     get_flow_inputs,
+    list_a2a_agents_by_flow_folder,
     list_flows,
     list_flows_by_flow_folder,
     list_flows_by_folder_id,
@@ -15,6 +16,7 @@ from lfx.helpers.flow import (
     run_flow,
 )
 from lfx.schema.schema import INPUT_FIELD_NAME
+from lfx.services.authorization.base import ExecutionPrincipal
 
 
 class TestGetFlowInputs:
@@ -120,6 +122,26 @@ class TestListFlowsByFlowFolder:
 
         assert result == []
 
+    @pytest.mark.asyncio
+    async def test_list_a2a_agents_forwards_to_backend_a2a_query(self, monkeypatch):
+        """The Langflow compatibility adapter must preserve the A2A-only filter."""
+        expected = [object()]
+
+        class BackendFlow:
+            async def list_a2a_agents_by_flow_folder(self, **kwargs):
+                assert kwargs == {
+                    "user_id": "user",
+                    "flow_id": "flow",
+                    "order_params": {"column": "updated_at", "direction": "desc"},
+                }
+                return expected
+
+        monkeypatch.setattr("lfx.helpers.flow._get_backend_flow_helpers", lambda: BackendFlow())
+
+        result = await list_a2a_agents_by_flow_folder(user_id="user", flow_id="flow")
+
+        assert result is expected
+
 
 class TestListFlowsByFolderId:
     """Test list_flows_by_folder_id function."""
@@ -210,6 +232,25 @@ class TestRunFlow:
         mock_graph.set_run_id.assert_called_once_with(UUID(run_id))
         assert mock_graph.session_id == session_id
         assert mock_graph.user_id == user_id
+
+    @pytest.mark.asyncio
+    async def test_run_flow_forwards_execution_principal_to_backend(self, monkeypatch):
+        """Nested backend runs retain the caller identity used for credential resolution."""
+        captured = {}
+        expected = [object()]
+        principal = ExecutionPrincipal(kind="user", user_id="caller")
+
+        class BackendFlow:
+            async def run_flow(self, **kwargs):
+                captured.update(kwargs)
+                return expected
+
+        monkeypatch.setattr("lfx.helpers.flow._get_backend_flow_helpers", lambda: BackendFlow())
+
+        result = await run_flow(user_id="user", graph=MagicMock(spec=Graph), execution_principal=principal)
+
+        assert result is expected
+        assert captured["execution_principal"] is principal
 
     @pytest.mark.asyncio
     async def test_run_flow_calls_graph_arun_with_inputs(self):

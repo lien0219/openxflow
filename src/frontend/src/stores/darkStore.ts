@@ -68,7 +68,9 @@ export const useDarkStore = create<DarkStoreType>((set) => ({
     }
   },
   discordCount: 0,
+  // Every community surface calls this on mount; skip once a count has loaded.
   refreshDiscordCount: () => {
+    if (get().discordCount) return;
     getDiscordCount().then((res) => {
       set(() => ({ discordCount: res }));
     });

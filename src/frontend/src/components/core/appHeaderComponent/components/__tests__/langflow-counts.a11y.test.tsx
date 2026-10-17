@@ -1,9 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import { LangflowCounts } from "../langflow-counts";
 
+const mockRefreshStars = jest.fn();
+const mockRefreshDiscordCount = jest.fn();
+
 jest.mock("@/stores/darkStore", () => ({
-  useDarkStore: (selector: (s: { stars: number }) => unknown) =>
-    selector({ stars: 1234 }),
+  useDarkStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      stars: 1234,
+      discordCount: 5678,
+      refreshStars: mockRefreshStars,
+      refreshDiscordCount: mockRefreshDiscordCount,
+    }),
 }));
 
 jest.mock("react-i18next", () => ({
@@ -11,6 +19,7 @@ jest.mock("react-i18next", () => ({
     t: (key: string) => {
       const map: Record<string, string> = {
         "header.goToGithub": "Go to GitHub repo",
+        "header.goToDiscord": "Go to Discord server",
       };
       return map[key] ?? key;
     },
@@ -40,6 +49,7 @@ jest.mock("@/shared/components/caseComponent", () => ({
 
 describe("LangflowCounts accessibility", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     render(<LangflowCounts />);
   });
 
@@ -61,6 +71,11 @@ describe("LangflowCounts accessibility", () => {
     });
     const svg = githubButton.querySelector("svg");
     expect(svg).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("should_fetch_counts_on_mount", () => {
+    expect(mockRefreshStars).toHaveBeenCalledTimes(1);
+    expect(mockRefreshDiscordCount).toHaveBeenCalledTimes(1);
   });
 
   it("should_hide_count_text_from_assistive_technology", () => {

@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { FaGithub } from "react-icons/fa";
-import { DATASTAX_DOCS_URL, DOCS_URL, GITHUB_URL } from "@/constants/constants";
+import { DATASTAX_DOCS_URL, DOCS_URL } from "@/constants/constants";
 import { useLogout } from "@/controllers/API/queries/auth";
-import { CustomAdminPageMenuItem } from "@/customization/components/custom-admin-page-menu-item";
+import { CustomAccountMenuCommunityLinks } from "@/customization/components/custom-account-menu-community-links";
+import { CustomAccountMenuNavigationItems } from "@/customization/components/custom-account-menu-navigation-items";
 import { CustomHeaderMenuItemsTitle } from "@/customization/components/custom-header-menu-items-title";
 import { CustomProfileIcon } from "@/customization/components/custom-profile-icon";
 import { ENABLE_DATASTAX_LANGFLOW } from "@/customization/feature-flags";
@@ -82,20 +82,9 @@ export const AccountMenu = () => {
           </div>
 
           <div>
-            <HeaderMenuItemButton
-              onClick={() => {
-                navigate("/settings");
-              }}
-            >
-              <span
-                data-testid="menu_settings_button"
-                id="menu_settings_button"
-              >
-                {t("account.settings")}
-              </span>
-            </HeaderMenuItemButton>
-
-            <CustomAdminPageMenuItem onNavigate={(path) => navigate(path)} />
+            <CustomAccountMenuNavigationItems
+              onNavigate={(path) => navigate(path)}
+            />
             <HeaderMenuItemLink
               newPage
               href={ENABLE_DATASTAX_LANGFLOW ? DATASTAX_DOCS_URL : DOCS_URL}
@@ -106,18 +95,7 @@ export const AccountMenu = () => {
             </HeaderMenuItemLink>
           </div>
 
-          <div>
-            <HeaderMenuItemLink newPage href={GITHUB_URL}>
-              <span
-                data-testid="menu_github_button"
-                id="menu_github_button"
-                className="flex items-center gap-2"
-              >
-                <FaGithub className="h-4 w-4" aria-hidden="true" />
-                {t("account.github")}
-              </span>
-            </HeaderMenuItemLink>
-          </div>
+          <CustomAccountMenuCommunityLinks />
 
           <div className="flex items-center justify-between px-4 py-[6.5px] text-sm">
             <span className="">{t("account.theme")}</span>

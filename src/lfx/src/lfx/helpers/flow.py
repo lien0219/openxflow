@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from lfx.graph.schema import RunOutputs
     from lfx.graph.vertex.base import Vertex
     from lfx.schema.data import Data
+    from lfx.services.authorization.base import ExecutionPrincipal
 
 
 def get_flow_inputs(graph: Graph) -> list[Vertex]:
@@ -100,7 +101,7 @@ async def list_flows_by_flow_folder(
     *,
     user_id: str | None = None,
     flow_id: str | None = None,
-    order_params: dict | None = {"column": "updated_at", "direction": "desc"},  # noqa: B006, ARG001
+    order_params: dict | None = {"column": "updated_at", "direction": "desc"},  # noqa: B006
 ) -> list[Data]:
     """Lists flows for the given user and in the same folder as the specified flow.
 
@@ -129,10 +130,21 @@ async def list_flows_by_flow_folder(
         ValueError: If user_id is not provided.
         ValueError: If Flow ID is not provided.
     """
-    return await _list_flows_in_flow_folder(user_id=user_id, flow_id=flow_id, a2a_only=False)
+    return await _list_flows_in_flow_folder(
+        user_id=user_id,
+        flow_id=flow_id,
+        order_params=order_params,
+        a2a_only=False,
+    )
 
 
-async def _list_flows_in_flow_folder(*, user_id: str | None, flow_id: str | None, a2a_only: bool) -> list[Data]:
+async def _list_flows_in_flow_folder(
+    *,
+    user_id: str | None,
+    flow_id: str | None,
+    order_params: dict | None,
+    a2a_only: bool,
+) -> list[Data]:
     """Stub mirror of ``langflow.helpers.flow._list_flows_in_flow_folder``.
 
     Validates its arguments the same way the real implementation does, then no-ops: in lfx
@@ -146,10 +158,8 @@ async def _list_flows_in_flow_folder(*, user_id: str | None, flow_id: str | None
         raise ValueError(msg)
     backend_flow = _get_backend_flow_helpers()
     if backend_flow is not None:
-        return await backend_flow.list_flows_by_flow_folder(
-            user_id=user_id,
-            flow_id=flow_id,
-        )
+        method = backend_flow.list_a2a_agents_by_flow_folder if a2a_only else backend_flow.list_flows_by_flow_folder
+        return await method(user_id=user_id, flow_id=flow_id, order_params=order_params)
 
     caller = "list_a2a_agents_by_flow_folder" if a2a_only else "list_flows_by_flow_folder"
     msg = f"{caller} called but lfx doesn't have database backend by default"
@@ -161,14 +171,19 @@ async def list_a2a_agents_by_flow_folder(
     *,
     user_id: str | None = None,
     flow_id: str | None = None,
-    order_params: dict | None = {"column": "updated_at", "direction": "desc"},  # noqa: B006, ARG001
+    order_params: dict | None = {"column": "updated_at", "direction": "desc"},  # noqa: B006
 ) -> list[Data]:
     """Stub: lfx has no database backend, so there are no A2A agents to list.
 
     The real implementation lives in ``langflow.helpers.flow`` and filters flows on
     ``a2a_enabled``. See :func:`list_flows_by_flow_folder` for the same lfx/langflow split.
     """
-    return await _list_flows_in_flow_folder(user_id=user_id, flow_id=flow_id, a2a_only=True)
+    return await _list_flows_in_flow_folder(
+        user_id=user_id,
+        flow_id=flow_id,
+        order_params=order_params,
+        a2a_only=True,
+    )
 
 
 async def list_flows_by_folder_id(
@@ -300,6 +315,7 @@ async def run_flow(
     run_id: str | None = None,
     session_id: str | None = None,
     graph: Graph | None = None,
+    execution_principal: ExecutionPrincipal | None = None,
 ) -> list[RunOutputs]:
     """Run a flow with given inputs.
 
@@ -313,6 +329,9 @@ async def run_flow(
         run_id: Optional run ID.
         session_id: Optional session ID.
         graph: Optional pre-loaded graph.
+        execution_principal: Identity the child graph resolves connections under.
+            A sub-flow inherits its parent's principal; without it the child would
+            carry ``ExecutionPrincipal.unknown()`` and deny every connection.
 
     Returns:
         List of run outputs.
@@ -332,6 +351,7 @@ async def run_flow(
             run_id=run_id,
             session_id=session_id,
             graph=graph,
+            execution_principal=execution_principal,
         )
 
     if graph is None:
@@ -345,6 +365,8 @@ async def run_flow(
         graph.session_id = session_id
     if user_id:
         graph.user_id = user_id
+    if execution_principal is not None:
+        graph.execution_principal = execution_principal
 
     if inputs is None:
         inputs = []

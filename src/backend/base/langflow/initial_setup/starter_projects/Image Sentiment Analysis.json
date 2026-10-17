@@ -94,6 +94,7 @@
             "lf_version": "1.10.0",
             "metadata": {
               "code_hash": "45974e6b1909",
+              "component_class_name": "ChatInput",
               "dependencies": {
                 "dependencies": [
                   {
@@ -366,6 +367,7 @@
             "lf_version": "1.10.0",
             "metadata": {
               "code_hash": "0aab1c78e1dc",
+              "component_class_name": "ChatOutput",
               "dependencies": {
                 "dependencies": [
                   {
@@ -668,7 +670,8 @@
                 "large language model"
               ],
               "model_provider_policy_mode": "delegate",
-              "module": "lfx.components.models_and_agents.language_model.LanguageModelComponent"
+              "module": "lfx.components.models_and_agents.language_model.LanguageModelComponent",
+              "component_class_name": "LanguageModelComponent"
             },
             "minimized": false,
             "output_types": [],
