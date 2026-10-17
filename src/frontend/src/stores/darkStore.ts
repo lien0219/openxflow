@@ -22,7 +22,7 @@ const setStoredValue = (key: string, value: string) => {
 const startedStars = Number(getStoredValue("githubStars")) || 0;
 const storedThemePreset = getStoredValue("themePreset");
 
-export const useDarkStore = create<DarkStoreType>((set) => ({
+export const useDarkStore = create<DarkStoreType>((set, get) => ({
   dark: (() => {
     const stored = getStoredValue("isDark");
     if (stored !== null) return stored === "true";

@@ -3045,5 +3045,13 @@
   "connections.add.allowBackgroundRunsHelp": "Slack 触发器以及触发器使用此连接运行的任何流程都需要此项：这些运行在无人登录时进行。你可以稍后将其关闭。",
   "connections.identity.user_delegated": "已登录的用户",
   "connections.identity.bot": "机器人",
-  "connections.identity.service": "服务账号"
+  "connections.identity.service": "服务账号",
+  "messages.searchPlaceholder": "搜索消息、发送者或会话 ID",
+  "messages.pagination.summary": "显示 {{total}} 条消息",
+  "messages.pagination.pageSize": "每页",
+  "messages.pagination.previous": "上一页",
+  "messages.pagination.page": "第 {{page}} / {{totalPages}} 页",
+  "messages.pagination.next": "下一页",
+  "common.search": "搜索",
+  "common.reset": "重置"
 }

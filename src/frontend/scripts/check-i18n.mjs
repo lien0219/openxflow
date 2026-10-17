@@ -5,11 +5,12 @@
  * 1. Scans all `.ts` / `.tsx` files under `src/` (recursive) for static
  *    translation keys used via
  *    `t("key")`, `t('key')`, `i18n.t("key")`, and `<Trans i18nKey="key" />`.
- *    Every static key must exist in `locales/en.json` (the fallback locale).
+ *    Every static key must exist in `locales/en.json` or a runtime English
+ *    translation table merged by `src/i18n.ts`.
  *    Keys built from template literals or variables cannot be resolved
  *    statically — they are skipped and counted as warnings.
  *    i18next plural keys are resolved: `t("store.results", { count })` is
- *    satisfied by `store.results_one` / `store.results_other` in en.json.
+ *    satisfied by `store.results_one` / `store.results_other` in the English resources.
  *
  * 2. Mirrors `src/locales/__tests__/locale-parity.test.ts`: every key in
  *    en.json must exist in each shipped locale, with the same set of
@@ -27,6 +28,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const DEFAULT_LOCALES = ["de", "es", "fr", "ja", "ko", "pt", "zh-Hans"];
 const PLURAL_SUFFIXES = ["_zero", "_one", "_two", "_few", "_many", "_other"];
+const RUNTIME_TRANSLATION_TABLES = [
+  "channelTranslations.ts",
+  "rbacTranslations.ts",
+];
 
 /** Walk a directory for .ts/.tsx files. */
 const collectSourceFiles = (dir, files = []) => {
@@ -58,6 +63,30 @@ const placeholders = (value) =>
     .join("|");
 
 /**
+ * Read the English keys from runtime translation tables that are merged into
+ * i18n resources by `src/i18n.ts` but intentionally live outside en.json.
+ */
+const collectRuntimeEnglishKeys = (localesDir) => {
+  const keys = new Set();
+  for (const file of RUNTIME_TRANSLATION_TABLES) {
+    let source;
+    try {
+      source = readFileSync(path.join(localesDir, file), "utf8");
+    } catch {
+      continue;
+    }
+    const englishBlock = source.match(
+      /const en\b[\s\S]*?=\s*\{([\s\S]*?)\n\};/,
+    );
+    if (!englishBlock) continue;
+    for (const match of englishBlock[1].matchAll(/^\s*"([^"]+)":/gm)) {
+      keys.add(match[1]);
+    }
+  }
+  return keys;
+};
+
+/**
  * Run both checks over a frontend tree.
  *
  * @param {object} options
@@ -79,7 +108,11 @@ export function analyzeI18n({
     JSON.parse(readFileSync(path.join(localesDir, file), "utf8"));
 
   const en = readJson("en.json");
-  const enKeys = new Set(Object.keys(en));
+  const jsonEnglishKeys = new Set(Object.keys(en));
+  const enKeys = new Set([
+    ...jsonEnglishKeys,
+    ...collectRuntimeEnglishKeys(localesDir),
+  ]);
   const keyExists = (key) =>
     enKeys.has(key) ||
     PLURAL_SUFFIXES.some((suffix) => enKeys.has(`${key}${suffix}`));
@@ -117,7 +150,7 @@ export function analyzeI18n({
     0,
   );
 
-  // --- Check 1: every static key used in code exists in en.json -------------
+  // --- Check 1: every static key exists in the English resources ------------
   const missing = [];
   for (const [key, uses] of [...usedKeys.entries()].sort()) {
     if (keyExists(key)) continue;
@@ -128,7 +161,7 @@ export function analyzeI18n({
   const parityProblems = [];
   for (const locale of locales) {
     const bundle = readJson(`${locale}.json`);
-    for (const key of enKeys) {
+    for (const key of jsonEnglishKeys) {
       if (!(key in bundle)) {
         parityProblems.push({ locale, key, reason: "missing key" });
       } else if (placeholders(en[key]) !== placeholders(bundle[key])) {
@@ -172,7 +205,7 @@ export function reportI18n(
 
   if (result.missing.length > 0) {
     out.stderr(
-      `\n✗ ${result.missing.length} key(s) used in code but missing from en.json:\n`,
+      `\n✗ ${result.missing.length} key(s) used in code but missing from English resources:\n`,
     );
     for (const { key, file, line } of result.missing) {
       out.stderr(`  ${file}:${line}  ${key}\n`);
@@ -190,7 +223,7 @@ export function reportI18n(
 
   if (result.ok) {
     out.stdout(
-      `✓ All used keys exist in en.json; all ${localeCount} locales are in parity (keys + placeholders).\n`,
+      `✓ All used keys exist in English resources; all ${localeCount} locales are in parity (keys + placeholders).\n`,
     );
     return 0;
   }

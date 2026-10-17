@@ -3045,5 +3045,13 @@
   "connections.add.allowBackgroundRunsHelp": "Needed for Slack triggers, and for any flow a trigger runs with this connection: those runs happen with no one signed in. You can turn it off later.",
   "connections.identity.user_delegated": "The signed-in user",
   "connections.identity.bot": "A bot",
-  "connections.identity.service": "A service account"
+  "connections.identity.service": "A service account",
+  "messages.searchPlaceholder": "Search messages, sender, or session ID",
+  "messages.pagination.summary": "Showing {{total}} messages",
+  "messages.pagination.pageSize": "Per page",
+  "messages.pagination.previous": "Previous",
+  "messages.pagination.page": "Page {{page}} of {{totalPages}}",
+  "messages.pagination.next": "Next",
+  "common.search": "Search",
+  "common.reset": "Reset"
 }

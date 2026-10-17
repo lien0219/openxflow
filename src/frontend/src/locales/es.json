@@ -3046,5 +3046,13 @@
   "connections.add.allowBackgroundRunsHelp": "Necesario para los disparadores de Slack y para cualquier flujo que un disparador ejecute con esta conexión: esas ejecuciones ocurren sin nadie con la sesión iniciada. Puedes desactivarlo más adelante.",
   "connections.identity.user_delegated": "El usuario que inició sesión",
   "connections.identity.bot": "Un bot",
-  "connections.identity.service": "Una cuenta de servicio"
+  "connections.identity.service": "Una cuenta de servicio",
+  "messages.searchPlaceholder": "Buscar mensajes, remitente o ID de sesión",
+  "messages.pagination.summary": "Se muestran {{total}} mensajes",
+  "messages.pagination.pageSize": "Por página",
+  "messages.pagination.previous": "Anterior",
+  "messages.pagination.page": "Página {{page}} de {{totalPages}}",
+  "messages.pagination.next": "Siguiente",
+  "common.search": "Buscar",
+  "common.reset": "Restablecer"
 }

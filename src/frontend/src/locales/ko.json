@@ -3046,5 +3046,13 @@
   "connections.add.allowBackgroundRunsHelp": "Slack Trigger에 필요하고, Trigger가 이 연결로 실행하는 모든 Flow에도 필요합니다. 이런 실행은 로그인한 사람 없이 이루어집니다. 나중에 끌 수 있습니다.",
   "connections.identity.user_delegated": "로그인한 사용자",
   "connections.identity.bot": "봇",
-  "connections.identity.service": "서비스 계정"
+  "connections.identity.service": "서비스 계정",
+  "messages.searchPlaceholder": "메시지, 발신자 또는 세션 ID 검색",
+  "messages.pagination.summary": "메시지 {{total}}개 표시",
+  "messages.pagination.pageSize": "페이지당",
+  "messages.pagination.previous": "이전",
+  "messages.pagination.page": "{{totalPages}}페이지 중 {{page}}페이지",
+  "messages.pagination.next": "다음",
+  "common.search": "검색",
+  "common.reset": "초기화"
 }

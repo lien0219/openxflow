@@ -6,5 +6,6 @@ export const FigraniumIcon = forwardRef<
   SVGSVGElement,
   React.SVGProps<SVGSVGElement> & { isDark?: boolean }
 >((props, ref) => {
-  return <SvgFigranium ref={ref} {...props} />;
+  const { isDark, ...svgProps } = props;
+  return <SvgFigranium ref={ref} isDark={isDark} {...svgProps} />;
 });

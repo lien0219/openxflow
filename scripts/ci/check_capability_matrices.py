@@ -90,6 +90,14 @@ TRIGGER_EXIT_CRITERIA = frozenset(str(number) for number in range(1, 10))
 TRIGGER_EXIT_CRITERIA_COLUMNS = 5
 UNFINISHED_FINDINGS_RE = re.compile(r"\b(?:TODO|TBD|to be written)\b", re.IGNORECASE)
 
+
+def _format_os_error(error: OSError) -> str:
+    """Render filesystem errors with a stable single-spaced path representation."""
+    if error.filename is not None and error.errno is not None and error.strerror:
+        return f"[Errno {error.errno}] {error.strerror}: '{error.filename}'"
+    return str(error)
+
+
 VALID_VALUES: dict[str, frozenset[str]] = {
     "provider": REQUIRED_PROVIDERS,
     "decision": frozenset({"include", "exclude", "defer"}),
@@ -544,7 +552,7 @@ def validate_matrix(matrix_path: Path, *, require_accepted: bool = False) -> lis
     try:
         matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
     except OSError as exc:
-        return [f"could not read capability matrix {matrix_path}: {exc}"]
+        return [f"could not read capability matrix {matrix_path}: {_format_os_error(exc)}"]
     except json.JSONDecodeError as exc:
         return [f"capability matrix {matrix_path} is not valid JSON: {exc}"]
     if not isinstance(matrix, dict):

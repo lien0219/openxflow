@@ -3046,5 +3046,13 @@
   "connections.add.allowBackgroundRunsHelp": "Necessário para os gatilhos do Slack e para qualquer fluxo que um gatilho execute com esta conexão: essas execuções acontecem sem ninguém conectado. Você pode desativar isso depois.",
   "connections.identity.user_delegated": "O usuário conectado",
   "connections.identity.bot": "Um bot",
-  "connections.identity.service": "Uma conta de serviço"
+  "connections.identity.service": "Uma conta de serviço",
+  "messages.searchPlaceholder": "Pesquisar mensagens, remetente ou ID da sessão",
+  "messages.pagination.summary": "Exibindo {{total}} mensagens",
+  "messages.pagination.pageSize": "Por página",
+  "messages.pagination.previous": "Anterior",
+  "messages.pagination.page": "Página {{page}} de {{totalPages}}",
+  "messages.pagination.next": "Próxima",
+  "common.search": "Pesquisar",
+  "common.reset": "Redefinir"
 }

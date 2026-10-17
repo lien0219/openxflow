@@ -79,6 +79,20 @@ test("accepts static t(), i18n.t() and <Trans i18nKey> keys present in en.json",
   assert.equal(result.staticCallCount, 5);
 });
 
+test("accepts keys from runtime translation tables merged by i18n.ts", () => {
+  const result = analyze(
+    {
+      "a.tsx": `t("channels.title");\nt("rbac.title");\n`,
+      "locales/channelTranslations.ts": `const en = {\n  "channels.title": "Channel Center",\n};\n`,
+      "locales/rbacTranslations.ts": `const en = {\n  "rbac.title": "Permissions",\n};\n`,
+    },
+    { en: {}, de: {}, fr: {} },
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.missing, []);
+});
+
 test("reports a static key that is missing from en.json, with file and line", () => {
   const result = analyze(
     { "a.tsx": `const x = 1;\nconst y = t("absent.key");\n` },
@@ -215,7 +229,10 @@ test("reportI18n exits 1 and names both failure kinds", () => {
 
   assert.equal(code, 1);
   const stderr = out.stderr.join("");
-  assert.match(stderr, /1 key\(s\) used in code but missing from en\.json/);
+  assert.match(
+    stderr,
+    /1 key\(s\) used in code but missing from English resources/,
+  );
   assert.match(stderr, /absent/);
   assert.match(stderr, /1 locale parity problem\(s\)/);
   assert.match(stderr, /fr\.json {2}one {2}\(missing key\)/);

@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import ntpath
+import posixpath
 import sys
 from pathlib import Path
 
@@ -74,7 +76,9 @@ def _evidence_path_error(entry: str) -> str | None:
     if not raw:
         return f"evidence entry has an empty path: {entry}"
     candidate = Path(raw)
-    if candidate.is_absolute():
+    # Evidence is repository-relative regardless of the host running the checker.
+    # Recognize both POSIX and Windows absolute spellings on either platform.
+    if candidate.is_absolute() or posixpath.isabs(raw) or ntpath.isabs(raw):
         return f"evidence path must be repository-relative, not absolute: {entry}"
     resolved = (REPO_ROOT / candidate).resolve()
     if REPO_ROOT not in resolved.parents:

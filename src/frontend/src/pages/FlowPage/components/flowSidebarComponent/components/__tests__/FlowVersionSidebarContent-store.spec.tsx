@@ -1,11 +1,17 @@
 import { act, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before imports
 // ---------------------------------------------------------------------------
 
 const invalidateQueriesMock = jest.fn();
+
+const clickElement = (element: Element | null) => {
+  if (element instanceof HTMLElement) {
+    element.click();
+  }
+};
+
 jest.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: invalidateQueriesMock }),
 }));
@@ -327,11 +333,7 @@ describe("FlowVersionSidebarContent store behavior", () => {
 
     const { unmount } = render(<FlowVersionSidebarContent flowId="flow-1" />);
     const entryRow = screen.getByText("v1").closest("[class*=cursor-pointer]");
-    if (entryRow) {
-      act(() => {
-        entryRow.click();
-      });
-    }
+    act(() => clickElement(entryRow));
 
     setStateMock.mockClear();
     unmount();
@@ -364,13 +366,8 @@ describe("FlowVersionSidebarContent store behavior", () => {
     render(<FlowVersionSidebarContent flowId="flow-1" />);
 
     // Click on a version entry to trigger selection
-    const user = userEvent.setup();
     const entryRow = screen.getByText("v1").closest("[class*=cursor-pointer]");
-    if (entryRow) {
-      act(() => {
-        entryRow.click();
-      });
-    }
+    act(() => clickElement(entryRow));
 
     // The processedPreview should trigger store sync
     // Since the mock useGetFlowVersionEntry always returns entryQueryData,
@@ -402,11 +399,7 @@ describe("FlowVersionSidebarContent store behavior", () => {
 
     // Click entry to trigger selection
     const entryRow = screen.getByText("v1").closest("[class*=cursor-pointer]");
-    if (entryRow) {
-      act(() => {
-        entryRow.click();
-      });
-    }
+    act(() => clickElement(entryRow));
 
     // Should NOT have set empty arrays in the store
     const emptyCalls = setStateMock.mock.calls.filter(
@@ -439,11 +432,7 @@ describe("FlowVersionSidebarContent store behavior", () => {
     render(<FlowVersionSidebarContent flowId="flow-1" />);
 
     const entryRow = screen.getByText("v1").closest("[class*=cursor-pointer]");
-    if (entryRow) {
-      act(() => {
-        entryRow.click();
-      });
-    }
+    act(() => clickElement(entryRow));
 
     expect(
       screen.getByText("This version's data could not be rendered for preview"),
@@ -461,11 +450,7 @@ describe("FlowVersionSidebarContent store behavior", () => {
 
     // Click version entry — this sets store nodes to version-node via layoutEffect
     const entryRow = screen.getByText("v1").closest("[class*=cursor-pointer]");
-    if (entryRow) {
-      act(() => {
-        entryRow.click();
-      });
-    }
+    act(() => clickElement(entryRow));
 
     setStateMock.mockClear();
     clearPreviewMock.mockClear();
@@ -474,11 +459,7 @@ describe("FlowVersionSidebarContent store behavior", () => {
     const draftRow = screen
       .getByText("Current")
       .closest("[class*=cursor-pointer]");
-    if (draftRow) {
-      act(() => {
-        draftRow.click();
-      });
-    }
+    act(() => clickElement(draftRow));
 
     // Should restore original draft nodes/edges (captured at mount), not the
     // preview data that was set into the store.

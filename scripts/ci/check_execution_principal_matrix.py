@@ -114,6 +114,14 @@ CONNECTION_RESOLUTION_BY_DEPENDENCY_PRINCIPAL = {
     "job_owner": {"job_owner_reresolved_non_interactive_opt_in"},
 }
 
+
+def _format_os_error(error: OSError) -> str:
+    """Render filesystem errors with a stable single-spaced path representation."""
+    if error.filename is not None and error.errno is not None and error.strerror:
+        return f"[Errno {error.errno}] {error.strerror}: '{error.filename}'"
+    return str(error)
+
+
 # Each family maps to a list of term-groups; every group must be satisfied by SOME
 # test reference whose function name contains all of its terms. A generic smoke
 # test cannot stand in for a rule this specific.
@@ -221,7 +229,7 @@ def validate_matrix(matrix_path: Path = DEFAULT_MATRIX, resolver_source: Path = 
     try:
         matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
     except OSError as exc:
-        return [f"could not read execution-principal matrix {matrix_path}: {exc}"]
+        return [f"could not read execution-principal matrix {matrix_path}: {_format_os_error(exc)}"]
     except json.JSONDecodeError as exc:
         return [f"execution-principal matrix {matrix_path} is not valid JSON: {exc}"]
     errors: list[str] = []

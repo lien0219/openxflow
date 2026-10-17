@@ -3046,5 +3046,13 @@
   "connections.add.allowBackgroundRunsHelp": "Erforderlich für Slack-Trigger und für jeden Flow, den ein Trigger mit dieser Verbindung ausführt: Diese Ausführungen erfolgen, ohne dass jemand angemeldet ist. Sie können dies später wieder deaktivieren.",
   "connections.identity.user_delegated": "Angemeldete Person",
   "connections.identity.bot": "Ein Bot",
-  "connections.identity.service": "Ein Dienstkonto"
+  "connections.identity.service": "Ein Dienstkonto",
+  "messages.searchPlaceholder": "Nachrichten, Absender oder Sitzungs-ID durchsuchen",
+  "messages.pagination.summary": "{{total}} Nachrichten angezeigt",
+  "messages.pagination.pageSize": "Pro Seite",
+  "messages.pagination.previous": "Zurück",
+  "messages.pagination.page": "{{page}} von {{totalPages}}",
+  "messages.pagination.next": "Weiter",
+  "common.search": "Suchen",
+  "common.reset": "Zurücksetzen"
 }
