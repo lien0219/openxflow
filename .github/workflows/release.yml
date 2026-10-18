@@ -1418,6 +1418,7 @@ jobs:
     name: Reserve final publication
     needs: [validate-tag, validate-tag-format, ci, test-cross-platform, release-inventory]
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.validate-tag.result == 'success' &&
@@ -1425,6 +1426,7 @@ jobs:
       needs.ci.result == 'success' &&
       (needs.test-cross-platform.result == 'success' || needs.test-cross-platform.result == 'skipped') &&
       (needs.release-inventory.result == 'success' || needs.release-inventory.result == 'skipped')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1448,6 +1450,7 @@ jobs:
   publish-base:
     name: Publish Langflow Base to PyPI
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1457,6 +1460,7 @@ jobs:
       (needs.release-inventory.result == 'success' || needs.release-inventory.result == 'skipped') &&
       needs.ci.result == 'success' &&
       (needs.publish-bundles.result == 'success' || needs.publish-bundles.result == 'skipped')
+      )
     needs: [reserve-final-release, build-base, test-cross-platform, release-inventory, ci, publish-bundles]
     runs-on: ubuntu-latest
     steps:
@@ -1482,6 +1486,7 @@ jobs:
     name: Publish Bundles to PyPI
     needs: [reserve-final-release, build-bundles, test-cross-platform, release-inventory, ci, publish-lfx]
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1492,6 +1497,7 @@ jobs:
       (needs.release-inventory.result == 'success' || needs.release-inventory.result == 'skipped') &&
       needs.ci.result == 'success' &&
       (needs.publish-lfx.result == 'success' || needs.publish-lfx.result == 'skipped')
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -1533,6 +1539,7 @@ jobs:
   publish-main:
     name: Publish Langflow Main to PyPI
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1543,6 +1550,7 @@ jobs:
       needs.ci.result == 'success' &&
       (needs.publish-bundles.result == 'success' || needs.publish-bundles.result == 'skipped') &&
       (needs.publish-base.result == 'success' || needs.publish-base.result == 'skipped')
+      )
     needs:
       [
         reserve-final-release,
@@ -1577,6 +1585,7 @@ jobs:
     name: Publish langflow-sdk to PyPI
     needs: [reserve-final-release, build-sdk, test-cross-platform, release-inventory, ci]
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1585,6 +1594,7 @@ jobs:
       needs.ci.result == 'success' &&
       (needs.release-inventory.result == 'success' || needs.release-inventory.result == 'skipped') &&
       (needs.test-cross-platform.result == 'success' || needs.test-cross-platform.result == 'skipped')
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -1613,6 +1623,7 @@ jobs:
     name: Publish LFX to PyPI
     needs: [reserve-final-release, build-lfx, test-cross-platform, release-inventory, ci, publish-sdk]
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1622,6 +1633,7 @@ jobs:
       (needs.release-inventory.result == 'success' || needs.release-inventory.result == 'skipped') &&
       needs.ci.result == 'success' &&
       (needs.publish-sdk.result == 'success' || needs.publish-sdk.result == 'skipped')
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Download LFX artifact
@@ -1645,6 +1657,7 @@ jobs:
   call_docker_build_base:
     name: Call Docker Build Workflow for Langflow Base
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1653,6 +1666,7 @@ jobs:
       needs.determine-base-version.result == 'success' &&
       (needs.release-inventory.result == 'success' || needs.release-inventory.result == 'skipped') &&
       (!inputs.release_package_base || needs.build-base.result == 'success')
+      )
     needs: [reserve-final-release, ci, determine-base-version, release-inventory, build-base]
     uses: ./.github/workflows/docker-build-v2.yml
     with:
@@ -1667,6 +1681,7 @@ jobs:
   call_docker_build_main:
     name: Call Docker Build Workflow for Langflow
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1676,6 +1691,7 @@ jobs:
       needs.release-inventory.result == 'success' &&
       (!inputs.release_package_main || needs.build-main.result == 'success') &&
       (!inputs.release_bundles || needs.build-bundles.result == 'success')
+      )
     needs: [reserve-final-release, ci, determine-main-version, release-inventory, build-main, build-bundles]
     uses: ./.github/workflows/docker-build-v2.yml
     with:
@@ -1689,7 +1705,7 @@ jobs:
 
   call_docker_build_main_backend:
     name: Call Docker Build Workflow for Langflow Backend
-    if: ${{ inputs.build_docker_main && !inputs.dry_run }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.build_docker_main && !inputs.dry_run) }}
     needs: [reserve-final-release, call_docker_build_main, determine-main-version]
     uses: ./.github/workflows/docker-build-v2.yml
     with:
@@ -1702,7 +1718,7 @@ jobs:
 
   call_docker_build_main_frontend:
     name: Call Docker Build Workflow for Langflow Frontend
-    if: ${{ inputs.build_docker_main && !inputs.dry_run }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.build_docker_main && !inputs.dry_run) }}
     needs: [reserve-final-release, call_docker_build_main, determine-main-version]
     uses: ./.github/workflows/docker-build-v2.yml
     with:
@@ -1716,6 +1732,7 @@ jobs:
   call_docker_build_main_ep:
     name: Call Docker Build Workflow for Langflow with Entrypoint
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1723,6 +1740,7 @@ jobs:
       needs.ci.result == 'success' &&
       needs.release-inventory.result == 'success' &&
       needs.call_docker_build_main.result == 'success'
+      )
     needs: [reserve-final-release, ci, release-inventory, call_docker_build_main, determine-main-version, build-main]
     uses: ./.github/workflows/docker-build-v2.yml
     with:
@@ -1737,6 +1755,7 @@ jobs:
   call_docker_build_main_all:
     name: Call Docker Build Workflow for langflow-all
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1744,6 +1763,7 @@ jobs:
       needs.ci.result == 'success' &&
       needs.release-inventory.result == 'success' &&
       needs.call_docker_build_main.result == 'success'
+      )
     needs: [reserve-final-release, ci, release-inventory, call_docker_build_main, determine-main-version, build-main]
     uses: ./.github/workflows/docker-build-v2.yml
     with:
@@ -1772,6 +1792,7 @@ jobs:
         validate-tag-format,
       ]
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       needs.reserve-final-release.result == 'success' &&
@@ -1785,6 +1806,7 @@ jobs:
        needs.determine-base-version.outputs.skipped == 'true') &&
       (needs.publish-main.result == 'success' || needs.publish-base.result == 'success') &&
       needs.validate-tag-format.result == 'success'
+      )
     steps:
       - name: Download main artifact
         if: ${{ inputs.release_package_main && needs.publish-main.result == 'success' }}

@@ -229,7 +229,7 @@ jobs:
   build-base:
     name: Build Base Package
     needs: [determine-base-version]
-    if: ${{ inputs.release_type == 'base' && needs.determine-base-version.outputs.skipped == 'false' }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.release_type == 'base' && needs.determine-base-version.outputs.skipped == 'false') }}
     strategy:
       fail-fast: false
       matrix:
@@ -317,7 +317,7 @@ jobs:
   build-main:
     name: Build Main Package
     needs: [determine-main-version]
-    if: ${{ inputs.release_type == 'main' && needs.determine-main-version.outputs.skipped == 'false' }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.release_type == 'main' && needs.determine-main-version.outputs.skipped == 'false') }}
     strategy:
       fail-fast: false
       matrix:
@@ -407,7 +407,7 @@ jobs:
   build-main-backend:
     name: Build Main Backend Package
     needs: [determine-main-version]
-    if: ${{ inputs.release_type == 'main-backend' && needs.determine-main-version.outputs.skipped == 'false' }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.release_type == 'main-backend' && needs.determine-main-version.outputs.skipped == 'false') }}
     strategy:
       fail-fast: false
       matrix:
@@ -485,7 +485,7 @@ jobs:
   build-main-frontend:
     name: Build Main Frontend Package
     needs: [determine-main-version]
-    if: ${{ inputs.release_type == 'main-frontend' && needs.determine-main-version.outputs.skipped == 'false' }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.release_type == 'main-frontend' && needs.determine-main-version.outputs.skipped == 'false') }}
     strategy:
       fail-fast: false
       matrix:
@@ -559,7 +559,7 @@ jobs:
   build-main-ep:
     name: Build Main EP Package
     needs: [determine-main-version]
-    if: ${{ inputs.release_type == 'main-ep' && needs.determine-main-version.outputs.skipped == 'false' }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.release_type == 'main-ep' && needs.determine-main-version.outputs.skipped == 'false') }}
     strategy:
       fail-fast: false
       matrix:
@@ -647,7 +647,7 @@ jobs:
   build-main-all:
     name: Build Main All Package
     needs: [determine-main-version]
-    if: ${{ inputs.release_type == 'main-all' && needs.determine-main-version.outputs.skipped == 'false' }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.release_type == 'main-all' && needs.determine-main-version.outputs.skipped == 'false') }}
     strategy:
       fail-fast: false
       matrix:
@@ -748,7 +748,7 @@ jobs:
         determine-main-version,
       ]
     runs-on: ubuntu-latest
-    if: ${{ always() && inputs.push_to_registry && (needs.build-base.result == 'success' || needs.build-main.result == 'success' || needs.build-main-backend.result == 'success' || needs.build-main-frontend.result == 'success' || needs.build-main-ep.result == 'success' || needs.build-main-all.result == 'success') }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (always() && inputs.push_to_registry && (needs.build-base.result == 'success' || needs.build-main.result == 'success' || needs.build-main-backend.result == 'success' || needs.build-main-frontend.result == 'success' || needs.build-main-ep.result == 'success' || needs.build-main-all.result == 'success')) }}
     steps:
       - name: Check out the code
         uses: actions/checkout@v7

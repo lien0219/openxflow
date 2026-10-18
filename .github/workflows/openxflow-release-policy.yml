@@ -1,0 +1,53 @@
+name: OpenXFlow Release Policy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/**"
+      - ".github/CODEOWNERS"
+      - "deploy/IMAGE_VERSION"
+      - "docker/**"
+      - "scripts/ci/**"
+      - "pyproject.toml"
+      - "uv.lock"
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: OpenXFlow release policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install policy dependencies
+        run: python -m pip install --disable-pip-version-check pytest pyyaml
+      - name: Run release contract and isolation tests
+        env:
+          PYTHONPATH: scripts/ci
+        run: python -m pytest scripts/ci/test_openxflow_release.py scripts/ci/test_openxflow_release_workflow.py scripts/ci/test_openxflow_workflow_isolation.py -q
+
+  image-rehearsal:
+    name: OpenXFlow image rehearsal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the production target without registry credentials
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/build_and_push.Dockerfile
+          target: full
+          platforms: linux/amd64
+          push: false
+          load: false
+          outputs: type=cacheonly
+          cache-from: type=gha,scope=openxflow-policy-full
+          cache-to: type=gha,mode=max,scope=openxflow-policy-full
+          provenance: false
+          sbom: false

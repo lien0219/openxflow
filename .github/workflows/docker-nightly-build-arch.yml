@@ -34,6 +34,7 @@ permissions:
 
 jobs:
   attempt-1:
+    if: github.repository == 'langflow-ai/langflow'
     name: First attempt
     runs-on: ${{ fromJSON(inputs.runner) }}
     continue-on-error: true
@@ -126,7 +127,7 @@ jobs:
   attempt-2:
     name: Retry after failure
     needs: attempt-1
-    if: ${{ always() && !cancelled() && needs.attempt-1.outputs.succeeded != 'true' }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (always() && !cancelled() && needs.attempt-1.outputs.succeeded != 'true') }}
     runs-on: ${{ fromJSON(inputs.runner) }}
     steps:
       - name: Check out the code

@@ -414,7 +414,7 @@ jobs:
   publish-nightly-lfx:
     name: Publish LFX Nightly to PyPI
     needs: [build-nightly-lfx, test-cross-platform, publish-nightly-sdk]
-    if: ${{ inputs.build_lfx }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.build_lfx) }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out the code
@@ -443,7 +443,7 @@ jobs:
   publish-nightly-sdk:
     name: Publish SDK Nightly to PyPI
     needs: [build-nightly-lfx, test-cross-platform]
-    if: ${{ inputs.build_lfx }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (inputs.build_lfx) }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out the code
@@ -472,7 +472,7 @@ jobs:
   publish-nightly-base:
     name: Publish Langflow Base Nightly to PyPI
     needs: [build-nightly-base, build-nightly-main, test-cross-platform, publish-nightly-bundles]
-    if: ${{ always() && needs.build-nightly-base.result == 'success' && needs.test-cross-platform.result == 'success' && (needs.publish-nightly-bundles.result == 'success' || needs.build-nightly-main.outputs.bundles-found != '1') }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (always() && needs.build-nightly-base.result == 'success' && needs.test-cross-platform.result == 'success' && (needs.publish-nightly-bundles.result == 'success' || needs.build-nightly-main.outputs.bundles-found != '1')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -502,7 +502,7 @@ jobs:
   publish-nightly-bundles:
     name: Publish Bundle Dependencies to PyPI
     needs: [build-nightly-main, test-cross-platform, publish-nightly-lfx]
-    if: ${{ always() && needs.build-nightly-main.result == 'success' && needs.build-nightly-main.outputs.bundles-found == '1' && needs.test-cross-platform.result == 'success' && (needs.publish-nightly-lfx.result == 'success' || inputs.build_lfx == false) }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (always() && needs.build-nightly-main.result == 'success' && needs.build-nightly-main.outputs.bundles-found == '1' && needs.test-cross-platform.result == 'success' && (needs.publish-nightly-lfx.result == 'success' || inputs.build_lfx == false)) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -766,7 +766,7 @@ jobs:
   publish-nightly-main:
     name: Publish Langflow Main Nightly to PyPI
     needs: [build-nightly-main, test-cross-platform, publish-nightly-base, check-nightly-main-pypi-dependencies]
-    if: ${{ always() && needs.build-nightly-main.result == 'success' && needs.test-cross-platform.result == 'success' && needs.publish-nightly-base.result == 'success' && needs.check-nightly-main-pypi-dependencies.result == 'success' }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (always() && needs.build-nightly-main.result == 'success' && needs.test-cross-platform.result == 'success' && needs.publish-nightly-base.result == 'success' && needs.check-nightly-main-pypi-dependencies.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -794,7 +794,7 @@ jobs:
 
   call_docker_build_base:
     name: Call Docker Build Workflow for Langflow Base
-    if: ${{ always() && inputs.build_docker_base }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (always() && inputs.build_docker_base) }}
     needs: [build-nightly-base, build-nightly-main]
     uses: ./.github/workflows/docker-nightly-build.yml
     with:
@@ -808,7 +808,7 @@ jobs:
 
   call_docker_build_main:
     name: Call Docker Build Workflow for Langflow
-    if: ${{ always() && inputs.build_docker_main }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (always() && inputs.build_docker_main) }}
     needs: [build-nightly-main, call_docker_build_base]
     uses: ./.github/workflows/docker-nightly-build.yml
     with:

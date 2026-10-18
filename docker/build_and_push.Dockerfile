@@ -4,7 +4,7 @@
 # Both public images are built from this checkout. Keep toolchain versions here
 # so the base and full targets cannot silently resolve different build tools.
 ARG UV_VERSION=0.10.4
-ARG PYTHON_IMAGE=registry.access.redhat.com/ubi10/python-314-minimal
+ARG PYTHON_IMAGE=registry.access.redhat.com/ubi10/python-314-minimal@sha256:3754d6dacac3177e62637420cadf7dcf438e390f664c527b0457a79653a47488
 ARG NODE_VERSION=24.21.0
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv-installer
@@ -39,9 +39,15 @@ RUN microdnf install -y \
     && ARCH=$(uname -m) \
     && if [ "$ARCH" = "x86_64" ]; then NODE_ARCH="x64"; \
        elif [ "$ARCH" = "aarch64" ]; then NODE_ARCH="arm64"; \
-       else NODE_ARCH="$ARCH"; fi \
+       else echo "Unsupported Node architecture: $ARCH" >&2; exit 1; fi \
+    && case "${NODE_VERSION}:${NODE_ARCH}" in \
+        24.21.0:x64) NODE_SHA256=fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6 ;; \
+        24.21.0:arm64) NODE_SHA256=6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2 ;; \
+        *) echo "No reviewed Node checksum for ${NODE_VERSION}:${NODE_ARCH}" >&2; exit 1 ;; \
+       esac \
     && curl -fsSLo /tmp/node.tar.xz \
         "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
+    && printf '%s  /tmp/node.tar.xz\n' "$NODE_SHA256" | sha256sum --check --strict \
     && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
     && rm -f /tmp/node.tar.xz \
     && microdnf clean all
@@ -76,7 +82,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM workspace-metadata AS full-dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --extra postgresql --no-default-groups --no-install-workspace
+    uv sync --frozen --extra postgresql --extra pgvector --no-default-groups --no-install-workspace
 
 ################################
 # FRONTEND BUILDER
@@ -84,14 +90,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ################################
 FROM builder-base AS frontend-builder
 
-COPY ./src/frontend /tmp/src/frontend
 WORKDIR /tmp/src/frontend
+COPY ./src/frontend/package.json ./src/frontend/package-lock.json ./
 
 # PUPPETEER_SKIP_DOWNLOAD: puppeteer (via accessibility-checker, test-only)
 # must not download Chrome here; the production image never runs it.
 RUN --mount=type=cache,target=/root/.npm \
-    PUPPETEER_SKIP_DOWNLOAD=true npm ci \
-    && ESBUILD_BINARY_PATH="" NODE_OPTIONS="--max-old-space-size=4096" JOBS=1 npm run build \
+    PUPPETEER_SKIP_DOWNLOAD=true npm ci
+
+COPY ./src/frontend /tmp/src/frontend
+RUN ESBUILD_BINARY_PATH="" NODE_OPTIONS="--max-old-space-size=4096" JOBS=1 npm run build \
     && mkdir -p /tmp/frontend-build \
     && cp -a build/. /tmp/frontend-build/
 
@@ -146,7 +154,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
             /app/src/backend/base/pyproject.toml; \
         sh /tmp/rewrite_langflow_base_constraint.sh "$BASE_VERSION" /app/pyproject.toml; \
     fi \
-    && uv sync --frozen --extra postgresql --no-default-groups --no-editable \
+    && uv sync --frozen --extra postgresql --extra pgvector --no-default-groups --no-editable \
     && uv pip check --python /app/.venv/bin/python \
     && /app/.venv/bin/python -c 'import importlib.metadata as m; names = {d.metadata["Name"].lower() for d in m.distributions()}; required = {"langflow", "langflow-base"}; missing = sorted(required - names); forbidden = sorted({"langflow-core", "torch", "torchvision"} & names); assert not missing, f"missing full distributions: {missing}"; assert not forbidden, f"forbidden distributions installed: {forbidden}"' \
     && if [ -n "$MAIN_VERSION" ]; then \
@@ -169,7 +177,7 @@ FROM full-builder AS full-bundles-builder
 # ``bundles`` installs the reviewed all-no-torch long-tail profile and the
 # standalone providers intentionally omitted from the default distribution.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --extra postgresql --extra bundles \
+    uv sync --frozen --extra postgresql --extra bundles --extra pgvector \
         --no-default-groups --no-editable \
     && python3.14 /tmp/install_release_wheels.py /tmp/release-artifacts \
         --python /app/.venv/bin/python \
@@ -185,6 +193,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM ${PYTHON_IMAGE} AS runtime
 
 USER root
+
+# Retain the upstream copyright and complete MIT permission notice in every target.
+COPY ./LICENSE /usr/share/licenses/openxflow/LICENSE
+
+ARG OPENXFLOW_VERSION="0.0.0"
+ARG OPENXFLOW_REVISION="unknown"
+ARG OPENXFLOW_CREATED="unknown"
+ARG OPENXFLOW_SOURCE="https://github.com/lien0219/openxflow"
+ARG OPENXFLOW_URL="https://github.com/lien0219/openxflow"
 
 RUN microdnf update -y \
     && microdnf install -y curl git gnupg libpq shadow-utils tar xz \
@@ -217,10 +234,17 @@ RUN mkdir -p /app/.npm /opt/app-root/src/.npm \
     && chown -R 1000:0 /app/.npm /opt/app-root/src/.npm \
     && chmod -R g+rwX /app/.npm /opt/app-root/src/.npm
 
-LABEL org.opencontainers.image.authors=['Langflow'] \
-      org.opencontainers.image.licenses=MIT \
-      org.opencontainers.image.url=https://github.com/langflow-ai/langflow \
-      org.opencontainers.image.source=https://github.com/langflow-ai/langflow
+LABEL org.opencontainers.image.title="OpenXFlow" \
+      org.opencontainers.image.description="OpenXFlow workflow automation platform" \
+      org.opencontainers.image.version="${OPENXFLOW_VERSION}" \
+      org.opencontainers.image.revision="${OPENXFLOW_REVISION}" \
+      org.opencontainers.image.created="${OPENXFLOW_CREATED}" \
+      org.opencontainers.image.source="${OPENXFLOW_SOURCE}" \
+      org.opencontainers.image.url="${OPENXFLOW_URL}" \
+      org.opencontainers.image.authors="OpenXFlow contributors; based on Langflow" \
+      org.opencontainers.image.licenses="MIT" \
+      com.openxflow.upstream.source="https://github.com/langflow-ai/langflow" \
+      com.openxflow.upstream.license="MIT"
 
 ENV PATH="/app/.venv/bin:$PATH" \
     HOME=/app/data \
@@ -246,7 +270,8 @@ CMD ["langflow", "run"]
 FROM runtime AS base
 
 COPY --from=base-builder --chown=1000:0 /app/.venv /app/.venv
-LABEL org.opencontainers.image.title=langflow-base
+LABEL org.opencontainers.image.title="OpenXFlow" \
+      com.openxflow.image.profile="base"
 
 ################################
 # FULL-BUNDLES IMAGE
@@ -255,7 +280,8 @@ LABEL org.opencontainers.image.title=langflow-base
 FROM runtime AS full-bundles
 
 COPY --from=full-bundles-builder --chown=1000:0 /app/.venv /app/.venv
-LABEL org.opencontainers.image.title=langflow-all
+LABEL org.opencontainers.image.title="OpenXFlow" \
+      com.openxflow.image.profile="full-bundles"
 
 ################################
 # DEFAULT IMAGE (default/final target)
@@ -264,4 +290,5 @@ LABEL org.opencontainers.image.title=langflow-all
 FROM runtime AS full
 
 COPY --from=full-builder --chown=1000:0 /app/.venv /app/.venv
-LABEL org.opencontainers.image.title=langflow
+LABEL org.opencontainers.image.title="OpenXFlow" \
+      com.openxflow.image.profile="full"

@@ -225,12 +225,14 @@ jobs:
     name: Publish Bundles to PyPI
     needs: [build-bundles, test-install]
     if: |
+      github.repository == 'langflow-ai/langflow' && (
       always() &&
       !cancelled() &&
       !inputs.dry_run &&
       needs.build-bundles.result == 'success' &&
       needs.build-bundles.outputs.bundles-found == '1' &&
       needs.test-install.result == 'success'
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

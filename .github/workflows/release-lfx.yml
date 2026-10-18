@@ -38,6 +38,7 @@ permissions:
 
 jobs:
   validate-version:
+    if: github.repository == 'langflow-ai/langflow'
     name: Validate Version
     runs-on: ubuntu-latest
     outputs:
@@ -136,6 +137,7 @@ jobs:
           uv run lfx serve --help
 
   release-lfx:
+    if: github.repository == 'langflow-ai/langflow'
     name: Build and Release LFX
     needs: [validate-version, run-tests]
     runs-on: ubuntu-latest
@@ -234,7 +236,7 @@ jobs:
   build-docker:
     name: Build Docker Images
     needs: [validate-version, run-tests]
-    if: github.event.inputs.build_docker == 'true'
+    if: ${{ github.repository == 'langflow-ai/langflow' && (github.event.inputs.build_docker == 'true') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -316,7 +318,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: [validate-version, release-lfx, build-docker]
-    if: always() && github.event.inputs.create_github_release == 'true' && needs.release-lfx.result == 'success'
+    if: ${{ github.repository == 'langflow-ai/langflow' && (always() && github.event.inputs.create_github_release == 'true' && needs.release-lfx.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

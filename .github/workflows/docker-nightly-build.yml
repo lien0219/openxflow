@@ -98,6 +98,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build-nightly:
+    if: github.repository == 'langflow-ai/langflow'
     name: Build nightly (${{ matrix.arch }})
     needs: validate
     strategy:
@@ -124,7 +125,7 @@ jobs:
   create-manifest:
     name: Create multi-architecture nightly manifest
     needs: [validate, build-nightly]
-    if: ${{ always() && !cancelled() && inputs.push_to_registry && needs.validate.result == 'success' && needs.build-nightly.result == 'success' }}
+    if: ${{ github.repository == 'langflow-ai/langflow' && (always() && !cancelled() && inputs.push_to_registry && needs.validate.result == 'success' && needs.build-nightly.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: Set manifest tags
