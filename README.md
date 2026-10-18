@@ -245,6 +245,24 @@ make run_cli
 make run_clic
 ```
 
+Official release packages and tagged source archives disable automatic login by default. Set `LANGFLOW_SUPERUSER_PASSWORD` before starting Langflow, then sign in with the username `langflow` (or your configured `LANGFLOW_SUPERUSER`). Development branches retain automatic login by default. See [authentication configuration](https://docs.langflow.org/api-keys-and-authentication#start-a-langflow-server-with-authentication-enabled).
+
+To start a source installation directly, run:
+```shell
+uv run langflow run
+```
+
+### Docker
+Set and export a strong password before starting the container (Bash):
+```shell
+read -rsp "Langflow administrator password: " LANGFLOW_SUPERUSER_PASSWORD; echo
+export LANGFLOW_SUPERUSER_PASSWORD
+docker run -p 7860:7860 -e LANGFLOW_SUPERUSER_PASSWORD langflowai/langflow:latest
+```
+Langflow is available at http://localhost:7860/. Sign in as `langflow` with the password you entered. Official Docker images require authentication by default.
+If you already have an auto-login installation, follow the [upgrade instructions](https://docs.langflow.org/api-keys-and-authentication#upgrade-from-auto-login) before switching defaults.
+For configuration options, see the [Docker deployment guide](https://docs.langflow.org/deployment-docker).
+
 ### 桌面端运行
 
 支持 Windows x64、macOS Apple Silicon arm64 和 macOS Intel x64。
@@ -329,8 +347,10 @@ make frontend
 
 ```bash
 make docker_build DOCKER=docker
-docker run --rm -p 7860:7860 langflow:1.10.2
+docker run --rm -p 7860:7860 -e LANGFLOW_SUPERUSER_PASSWORD=replace-with-a-strong-password langflow:1.13.0
 ```
+
+官方 release 镜像默认要求认证；已有自动登录安装升级前，请先查看[认证升级说明](https://docs.langflow.org/api-keys-and-authentication#upgrade-from-auto-login)。
 
 ## 项目结构
 

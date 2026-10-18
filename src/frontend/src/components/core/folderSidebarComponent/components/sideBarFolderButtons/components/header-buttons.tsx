@@ -35,6 +35,9 @@ export const HeaderButtons = ({
   const [isGithubStarred, setIsGithubStarred] = useState(
     userData?.optins?.github_starred,
   );
+  const [isDiscordJoined, setIsDiscordJoined] = useState(
+    userData?.optins?.discord_clicked,
+  );
 
   const { mutate: updateUser } = useUpdateUser();
 
@@ -42,6 +45,7 @@ export const HeaderButtons = ({
     if (userData) {
       setIsDismissedDialog(userData.optins?.dialog_dismissed);
       setIsGithubStarred(userData.optins?.github_starred);
+      setIsDiscordJoined(userData.optins?.discord_clicked);
     }
   }, [userData]);
 
@@ -61,17 +65,12 @@ export const HeaderButtons = ({
   return (
     <>
       {!hideGettingStartedProgress && !isDismissedDialog && userData && (
-        <>
-          <CustomGetStartedProgress
-            userData={userData!}
-            isGithubStarred={isGithubStarred ?? false}
-            handleDismissDialog={handleDismissDialog}
-          />
-
-          <div className="-mx-4 mt-1 w-[280px]">
-            <hr className="border-t-1 w-full" />
-          </div>
-        </>
+        <CustomGetStartedProgress
+          userData={userData}
+          isGithubStarred={isGithubStarred ?? false}
+          isDiscordJoined={isDiscordJoined ?? false}
+          handleDismissDialog={handleDismissDialog}
+        />
       )}
 
       <div className="flex shrink-0 items-center justify-between gap-2 pt-2">

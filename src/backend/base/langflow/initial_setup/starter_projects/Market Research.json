@@ -181,6 +181,7 @@
             "lf_version": "1.10.0",
             "metadata": {
               "code_hash": "45974e6b1909",
+              "component_class_name": "ChatInput",
               "dependencies": {
                 "dependencies": [
                   {
@@ -466,7 +467,8 @@
                 ],
                 "total_dependencies": 3
               },
-              "module": "lfx.components.input_output.chat_output.ChatOutput"
+              "module": "lfx.components.input_output.chat_output.ChatOutput",
+              "component_class_name": "ChatOutput"
             },
             "output_types": [],
             "outputs": [
@@ -747,7 +749,7 @@
                   },
                   {
                     "name": "langgraph",
-                    "version": "1.2.8"
+                    "version": "1.2.14"
                   },
                   {
                     "name": "lfx",
@@ -760,7 +762,8 @@
                 ],
                 "total_dependencies": 4
               },
-              "module": "lfx.components.models_and_agents.agent.AgentComponent"
+              "module": "lfx.components.models_and_agents.agent.AgentComponent",
+              "component_class_name": "AgentComponent"
             },
             "minimized": false,
             "output_types": [],
@@ -1484,6 +1487,7 @@
             "lf_version": "1.10.0",
             "metadata": {
               "code_hash": "7ab5fd0e0a10",
+              "component_class_name": "ParserComponent",
               "dependencies": {
                 "dependencies": [
                   {
@@ -1678,6 +1682,7 @@
             "lf_version": "1.10.0",
             "metadata": {
               "code_hash": "c87c265c9032",
+              "component_class_name": "StructuredOutputComponent",
               "dependencies": {
                 "dependencies": [
                   {
@@ -2208,7 +2213,8 @@
                 ],
                 "total_dependencies": 6
               },
-              "module": "lfx.components.data_source.web_search.WebSearchComponent"
+              "module": "lfx.components.data_source.web_search.WebSearchComponent",
+              "component_class_name": "WebSearchComponent"
             },
             "minimized": false,
             "output_types": [],

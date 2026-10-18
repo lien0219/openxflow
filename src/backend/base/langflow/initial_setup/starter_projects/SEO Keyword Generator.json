@@ -99,6 +99,7 @@
             "lf_version": "1.4.2",
             "metadata": {
               "code_hash": "e3714ffe5d15",
+              "component_class_name": "PromptComponent",
               "dependencies": {
                 "dependencies": [
                   {
@@ -420,7 +421,8 @@
                 ],
                 "total_dependencies": 3
               },
-              "module": "lfx.components.input_output.chat_output.ChatOutput"
+              "module": "lfx.components.input_output.chat_output.ChatOutput",
+              "component_class_name": "ChatOutput"
             },
             "output_types": [],
             "outputs": [
@@ -702,7 +704,7 @@
                   },
                   {
                     "name": "langgraph",
-                    "version": "1.2.8"
+                    "version": "1.2.14"
                   },
                   {
                     "name": "lfx",
@@ -715,7 +717,8 @@
                 ],
                 "total_dependencies": 4
               },
-              "module": "lfx.components.models_and_agents.agent.AgentComponent"
+              "module": "lfx.components.models_and_agents.agent.AgentComponent",
+              "component_class_name": "AgentComponent"
             },
             "minimized": false,
             "output_types": [],

@@ -16,6 +16,7 @@ const SUPPORTED_LANGUAGES = [
   "es",
   "fr",
   "ja",
+  "ko",
   "pt",
   "zh-Hans",
 ] as const;

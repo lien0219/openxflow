@@ -9,8 +9,10 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from langflow.services.authorization.actions import (
+    AdministrationAction,
     AuditAction,
     ChannelAction,
+    ConnectionAction,
     DeploymentAction,
     FileAction,
     FlowAction,
@@ -26,6 +28,9 @@ from langflow.services.authorization.actions import (
 )
 
 _RESOURCE_ACTIONS: dict[str, frozenset[str]] = {
+    "user": frozenset({a.value for a in UserAction} | {a.value for a in AdministrationAction}) | {"*"},
+    "team": frozenset({a.value for a in TeamAction} | {a.value for a in AdministrationAction}) | {"*"},
+    "role": frozenset({a.value for a in AdministrationAction}) | {"*"},
     "flow": frozenset({a.value for a in FlowAction}) | {"*"},
     "deployment": frozenset({a.value for a in DeploymentAction}) | {"*"},
     "project": frozenset({a.value for a in ProjectAction}) | {"*"},
@@ -33,11 +38,10 @@ _RESOURCE_ACTIONS: dict[str, frozenset[str]] = {
     "variable": frozenset({a.value for a in VariableAction}) | {"*"},
     "file": frozenset({a.value for a in FileAction}) | {"*"},
     "share": frozenset({a.value for a in ShareAction}) | {"*"},
+    "connection": frozenset({a.value for a in ConnectionAction}) | {"*"},
     "channel": frozenset({a.value for a in ChannelAction}) | {"*"},
     "audit": frozenset({a.value for a in AuditAction}) | {"*"},
     "rbac": frozenset({a.value for a in RbacAction}) | {"*"},
-    "team": frozenset({a.value for a in TeamAction}) | {"*"},
-    "user": frozenset({a.value for a in UserAction}) | {"*"},
     "provider_account": frozenset({a.value for a in ProviderAccountAction}) | {"*"},
     "voice": frozenset({a.value for a in VoiceAction}) | {"*"},
 }
@@ -93,12 +97,13 @@ class RoleCreate(BaseModel):
         description=(
             "Permission slugs in the canonical ``<resource>:<action>`` form — for "
             "example ``flow:read``, ``deployment:execute``, ``share:create``. "
-            "Resources must be one of flow, deployment, project, knowledge_base, "
+            "Resources must be one of user, team, role, flow, deployment, project, knowledge_base, "
             "variable, file, share, provider_account, voice, plus the narrow model-provider form "
             "``component:models/<provider-id>:read``. Actions are constrained per-resource (see "
             "``services/authorization/actions.py``): e.g. ``deploy`` is only valid "
             "on ``flow``, ``ingest`` only on ``knowledge_base``, ``update`` only on "
-            "``share``. ``*`` (all actions on that resource) is always accepted. "
+            "``share``. ``*`` is accepted only for resource vocabularies that expose it; "
+            "administration resources use the explicit ``manage`` action. "
             "A registered authorization plugin is responsible for compiling these "
             "into its policy format."
         ),
