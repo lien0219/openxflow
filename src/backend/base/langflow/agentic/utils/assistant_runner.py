@@ -58,7 +58,7 @@ async def _ensure_flow(session: AsyncSession, user_id: UUID, flow_id: str | None
     folder = await get_or_create_default_folder(session, user_id)
     new_flow = FlowCreate(
         name=DEFAULT_FLOW_NAME,
-        description="Created by the Langflow Assistant via MCP",
+        description="Created by the OpenXFlow Assistant via MCP",
         data={"nodes": [], "edges": []},
         folder_id=folder.id,
         user_id=user_id,

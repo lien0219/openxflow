@@ -84,7 +84,7 @@ class _WorkflowEventQueue:
 
     ``EventManager`` dispatches with ``put_nowait``, so a plain bounded
     ``asyncio.Queue`` would silently drop frames via ``QueueFull`` when the SSE
-    client falls behind. Ported from the langflow backend v2 stream wrapper: the
+    client falls behind. Ported from the OpenXFlow backend v2 stream wrapper: the
     first overflow flips the queue closed and enqueues a single ``error`` event
     followed by the terminal sentinel, so the consumer surfaces the failure and
     ends the stream cleanly.
@@ -267,7 +267,7 @@ def _terminal_node_ids(graph: Graph) -> list[str]:
 def _validate_output_ids(output_ids: list[str] | None, terminal_node_ids: list[str]) -> None:
     """Reject ``output_ids`` the flow does not produce, before running.
 
-    Mirrors the langflow backend v2 sync path: an unknown id is a 422 up front
+    Mirrors the OpenXFlow backend v2 sync path: an unknown id is a 422 up front
     rather than wasted compute followed by a completed response with no selected
     output. Validated against the flow's terminal (sink) nodes, the same set the
     converter resolves selections against.
@@ -293,7 +293,7 @@ async def run_workflow_sync(
 ) -> WorkflowExecutionResponse:
     """Run a flow to completion and build a v2 ``WorkflowExecutionResponse``.
 
-    Uses ``run_graph_internal`` (the same primitive the langflow backend sync
+    Uses ``run_graph_internal`` (the same primitive the OpenXFlow backend sync
     path uses) so the result is the aggregated ``RunOutputs`` shape the shared
     converter expects. Request-level ``globals`` are applied as request-scoped
     variables; unknown ``output_ids`` are rejected up front (422); component-level
@@ -471,7 +471,7 @@ def create_workflow_router(
 
     ``developer_api_guard`` controls the ``developer_api_enabled`` 403 guard. It
     defaults to ``True`` but is an opt-in that no production mount enables: both
-    the langflow backend and bare ``lfx serve`` pass ``False``, and the v2
+    the OpenXFlow backend and bare ``lfx serve`` pass ``False``, and the v2
     ``/workflows`` surface never carried a developer-API gate (byte-identical to
     today's behavior). Bare ``lfx serve`` also has no settings service to read,
     so the guard could not run there anyway.

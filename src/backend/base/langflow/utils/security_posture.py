@@ -15,7 +15,7 @@ from lfx.log.logger import logger
 # Kept as a module constant so tests can assert the exact remediation guidance
 # without pinning the full sentence.
 CUSTOM_COMPONENT_EXECUTION_WARNING = (
-    "SECURITY: Langflow is running in multi-user mode (LANGFLOW_AUTO_LOGIN=false) with "
+    "SECURITY: OpenXFlow is running in multi-user mode (LANGFLOW_AUTO_LOGIN=false) with "
     "custom components enabled for every user (LANGFLOW_ALLOW_CUSTOM_COMPONENTS=true, "
     "LANGFLOW_CUSTOM_COMPONENT_ADMIN_ONLY=false). Component code is executed on the server "
     "at flow-build time, so any active non-admin user can run arbitrary code on this host. "

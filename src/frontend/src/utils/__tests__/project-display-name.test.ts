@@ -19,6 +19,9 @@ const project = (
 });
 
 const t = (key: string, options?: Record<string, unknown>) => {
+  if (key === "assistant.title") {
+    return "OpenXFlow Assistant";
+  }
   if (key === "project.ownedBy") {
     return `${options?.name} — ${options?.owner}`;
   }
@@ -26,6 +29,12 @@ const t = (key: string, options?: Record<string, unknown>) => {
 };
 
 describe("getProjectDisplayName", () => {
+  it("rebrands the assistant without changing its persisted project name", () => {
+    const assistant = project({ name: "Langflow Assistant" });
+    expect(getProjectDisplayName(assistant, t)).toBe("OpenXFlow Assistant");
+    expect(assistant.name).toBe("Langflow Assistant");
+  });
+
   it("keeps an owned project's canonical name", () => {
     expect(getProjectDisplayName(project(), t)).toBe("Starter Project");
   });

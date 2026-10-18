@@ -53,7 +53,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
     # Guard against duplicate registration when langflow-sdk[testing] is also installed.
     # Both plugins expose the same --langflow-* options; only register them once.
-    remote = parser.getgroup("langflow", "Langflow remote integration testing options")
+    remote = parser.getgroup("langflow", "OpenXFlow remote integration testing options")
     _remote_opts = {
         "--langflow-env": {
             "dest": "langflow_env",
@@ -68,13 +68,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "dest": "langflow_url",
             "default": None,
             "metavar": "URL",
-            "help": "Base URL of the remote Langflow instance (overrides --langflow-env).",
+            "help": "Base URL of the remote OpenXFlow instance (overrides --langflow-env).",
         },
         "--langflow-api-key": {
             "dest": "langflow_api_key",
             "default": None,
             "metavar": "KEY",
-            "help": "API key for the remote Langflow instance.",
+            "help": "API key for the remote OpenXFlow instance.",
         },
         "--langflow-environments-file": {
             "dest": "langflow_environments_file",
@@ -100,12 +100,12 @@ def pytest_configure(config: pytest.Config) -> None:
     )
     config.addinivalue_line(
         "markers",
-        "integration: integration test that requires a live Langflow instance",
+        "integration: integration test that requires a live OpenXFlow instance",
     )
 
 
 _SKIP_NO_REMOTE = (
-    "No remote Langflow connection configured. "
+    "No remote OpenXFlow connection configured. "
     "Pass --langflow-url <URL> or --langflow-env <NAME> to run against a live instance."
 )
 
@@ -145,7 +145,7 @@ def _resolve_remote_client(request: pytest.FixtureRequest) -> Any | None:
 
         return get_client(env_name, config_file=_Path(env_file) if env_file else None)
     except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"Could not configure Langflow environment {env_name!r}: {exc}")
+        pytest.skip(f"Could not configure OpenXFlow environment {env_name!r}: {exc}")
 
 
 def _resolve_async_remote_client(request: pytest.FixtureRequest) -> Any | None:
@@ -177,7 +177,7 @@ def _resolve_async_remote_client(request: pytest.FixtureRequest) -> Any | None:
 
         return get_async_client(env_name, config_file=_Path(env_file) if env_file else None)
     except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"Could not configure Langflow environment {env_name!r}: {exc}")
+        pytest.skip(f"Could not configure OpenXFlow environment {env_name!r}: {exc}")
 
 
 def _get_marker_arg(request: pytest.FixtureRequest, name: str) -> Any:
@@ -226,7 +226,7 @@ def flow_runner(
         * ``LFX_ENV_FILE`` / ``LFX_TIMEOUT`` / ``LFX_FLOW_DIR``
 
     **Remote mode** (when ``--langflow-env`` or ``--langflow-url`` is supplied)
-        Calls the live Langflow API.  Requires ``langflow-sdk``.
+        Calls the live OpenXFlow API.  Requires ``langflow-sdk``.
 
         * ``--langflow-env <NAME>`` -- named environment from ``.lfx/environments.yaml``
         * ``--langflow-url <URL>`` -- direct URL

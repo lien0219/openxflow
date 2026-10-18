@@ -1,4 +1,4 @@
-"""Compatibility definitions for the ALTK integration retired in Langflow 1.13.0.
+"""Compatibility definitions for the ALTK integration retired in OpenXFlow 1.13.0.
 
 Keep the historical import paths available so saved component source can be
 inspected and updated without installing the retired SDK. Execution must never
@@ -15,7 +15,7 @@ from lfx.schema.data import Data
 from lfx.schema.message import Message
 
 ALTK_RETIREMENT_MESSAGE = (
-    "The ALTK integration was retired in Langflow 1.13.0. Replace this node with "
+    "The ALTK integration was retired in OpenXFlow 1.13.0. Replace this node with "
     "the Agent component and review its tools and validation requirements before "
     "running the flow. Existing ALTK configuration is preserved for reference."
 )

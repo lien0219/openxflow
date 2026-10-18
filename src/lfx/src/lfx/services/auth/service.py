@@ -1,4 +1,4 @@
-"""Default auth service for LFX (no database/JWT; use Langflow auth for full auth)."""
+"""Default auth service for LFX (no database/JWT; use OpenXFlow auth for full auth)."""
 
 from __future__ import annotations
 

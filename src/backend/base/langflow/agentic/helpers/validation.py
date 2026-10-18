@@ -360,7 +360,7 @@ def validate_component_code(code: str) -> ValidationResult:
                 is_valid=False,
                 code=code,
                 error=(
-                    f"Output name {_RESERVED_OUTPUT_NAME!r} is reserved by Langflow for the "
+                    f"Output name {_RESERVED_OUTPUT_NAME!r} is reserved by OpenXFlow for the "
                     "synthetic Tool sentinel that the wiring layer auto-generates when a "
                     "component is flipped to Tool Mode. Declaring it on your own Output "
                     "collides with that sentinel and the runtime will drop your tool. "
@@ -375,7 +375,7 @@ def validate_component_code(code: str) -> ValidationResult:
                 is_valid=False,
                 code=code,
                 error=(
-                    f"Output method {_RESERVED_OUTPUT_METHOD!r} is reserved by Langflow for "
+                    f"Output method {_RESERVED_OUTPUT_METHOD!r} is reserved by OpenXFlow for "
                     "the synthetic Tool sentinel. Defining your own method with that name "
                     "shadows the Component base implementation and breaks tool exposure. "
                     "Rename the method to describe its action (e.g. 'get_item', 'fetch_price')."

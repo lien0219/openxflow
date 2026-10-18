@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 
 DEFAULT_TARGET = "http://localhost:7860"
-"""Fallback Langflow server URL when neither ``--target`` nor ``LANGFLOW_HOST`` is set."""
+"""Fallback OpenXFlow server URL when neither ``--target`` nor ``LANGFLOW_HOST`` is set."""
 
 _HTTP_OK = 200
 """Named constant for the only status code we treat as a success."""
@@ -66,7 +66,7 @@ def reload_via_http(
     bundle_name: str,
     timeout: float = 30.0,
 ) -> ReloadHttpResponse:
-    """POST a reload request to the Langflow extension dev server.
+    """POST a reload request to the OpenXFlow extension dev server.
 
     Returns a :class:`ReloadHttpResponse` that the caller renders.  Network
     failures raise no exceptions out of this helper -- they surface as a
@@ -96,7 +96,7 @@ def reload_via_http(
                 "errors": [
                     {
                         "code": "reload-transport-error",
-                        "message": f"Could not reach Langflow server at {url}: {exc}",
+                        "message": f"Could not reach OpenXFlow server at {url}: {exc}",
                         "location": url,
                         "hint": (
                             "Start the dev server (e.g. `lfx run`) and pass --target / "
@@ -120,7 +120,7 @@ def reload_via_http(
                     "code": "reload-transport-error",
                     "message": f"Server returned non-JSON body (HTTP {response.status_code}): {response.text[:200]}",
                     "location": url,
-                    "hint": "Confirm the URL points at a Langflow server with the v1 API enabled.",
+                    "hint": "Confirm the URL points at an OpenXFlow server with the v1 API enabled.",
                 }
             ],
         }

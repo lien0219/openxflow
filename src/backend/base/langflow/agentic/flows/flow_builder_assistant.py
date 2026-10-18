@@ -1,4 +1,4 @@
-"""FlowBuilderAssistant - Builds Langflow flows using component discovery tools.
+"""FlowBuilderAssistant - Builds OpenXFlow flows using component discovery tools.
 
 This flow gives an Agent access to component search, description, and
 flow building tools so it can create complete flows from user requests.
@@ -30,7 +30,7 @@ from langflow.agentic.flows.model_config import build_model_config
 from langflow.agentic.services.file_events import wrap_file_tool_with_event
 
 FLOW_BUILDER_PROMPT = """\
-You are a Langflow Flow Builder assistant. You build and modify flows directly \
+You are an OpenXFlow Flow Builder assistant. You build and modify flows directly \
 on the user's canvas. Components appear in real time as you add them.
 
 ## Tools

@@ -336,7 +336,7 @@ class WatsonxOrchestrateDeploymentMapper(BaseDeploymentMapper):
             slot=WXO_ADAPTER_PAYLOAD_SCHEMAS.deployment_create_result,
             slot_name="deployment_create_result",
             raw=result.provider_result,
-            operation="creating the deployment row in Langflow",
+            operation="creating the deployment row in OpenXFlow",
         )
         return Deployment(
             user_id=user_id,
@@ -362,7 +362,7 @@ class WatsonxOrchestrateDeploymentMapper(BaseDeploymentMapper):
             slot=WXO_ADAPTER_PAYLOAD_SCHEMAS.deployment_item_data,
             slot_name="deployment_item_data",
             raw=existing_provider_resource.provider_data,
-            operation="reading deployment metadata from provider when attempting to track the resource in Langflow",
+            operation="reading deployment metadata from provider when attempting to track the resource in OpenXFlow",
         )
         return Deployment(
             user_id=user_id,

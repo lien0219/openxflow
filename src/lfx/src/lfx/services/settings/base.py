@@ -1,4 +1,4 @@
-"""Composed ``Settings`` class for Langflow.
+"""Composed ``Settings`` class for OpenXFlow.
 
 Fields live in per-group mixins under :mod:`lfx.services.settings.groups`.
 This module wires them together, configures env-var loading, and exposes the
@@ -102,7 +102,7 @@ class Settings(
     PathSettings,
     BaseSettings,
 ):
-    """Top-level Langflow settings.
+    """Top-level OpenXFlow settings.
 
     Composed from per-group mixins. See module docstring for the inheritance
     order rationale.

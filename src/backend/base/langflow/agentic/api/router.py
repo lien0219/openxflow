@@ -230,7 +230,7 @@ async def check_assistant_config(
     current_user: CurrentActiveUser,
     session: DbSession,
 ) -> dict:
-    """Check if the Langflow Assistant is properly configured.
+    """Check if the OpenXFlow Assistant is properly configured.
 
     Returns available providers with their configured status and available models, plus
     ``enabled``: whether ``agentic_experience`` gates the assistant off. Provider config and
@@ -340,7 +340,7 @@ async def assist(
     current_user: CurrentActiveUser,
     session: DbSession,
 ) -> dict:
-    """Chat with the Langflow Assistant."""
+    """Chat with the OpenXFlow Assistant."""
     flow = await _validate_flow_access(request.flow_id, current_user.id, session)
     with scoped_model_provider_policy_for_flow(
         flow,
@@ -377,7 +377,7 @@ async def assist_stream(
     current_user: CurrentActiveUser,
     session: DbSession,
 ) -> StreamingResponse:
-    """Chat with the Langflow Assistant with streaming progress updates."""
+    """Chat with the OpenXFlow Assistant with streaming progress updates."""
     flow = await _validate_flow_access(request.flow_id, current_user.id, session)
     with scoped_model_provider_policy_for_flow(
         flow,

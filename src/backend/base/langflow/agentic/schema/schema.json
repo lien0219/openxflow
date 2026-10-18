@@ -2,8 +2,8 @@
     "nudges": [
       {
         "id": "welcomeNudge",
-        "display_text": "Welcome to Langflow Assistant!",
-        "description": "Let’s help you start building your first Langflow app.",
+        "display_text": "Welcome to OpenXFlow Assistant!",
+        "description": "Let’s help you start building your first OpenXFlow app.",
         "type": "route",
         "trigger": {
           "action": "navigate",
@@ -18,7 +18,7 @@
       {
         "id": "createFlow",
         "display_text": "Create a New Flow",
-        "description": "Start a new Langflow project to design your agent pipeline.",
+        "description": "Start a new OpenXFlow project to design your agent pipeline.",
         "type": "route",
         "trigger": {
           "action": "navigate",
@@ -33,7 +33,7 @@
       {
         "id": "openComponent",
         "display_text": "Browse Components",
-        "description": "Explore and add new components to your Langflow workspace.",
+        "description": "Explore and add new components to your OpenXFlow workspace.",
         "type": "route",
         "trigger": {
           "action": "navigate",
@@ -48,7 +48,7 @@
       {
         "id": "openLanguageModelComponent",
         "display_text": "Open LanguageModelComponent",
-        "description": "Quickly view and configure the LanguageModelComponent in Langflow.",
+        "description": "Quickly view and configure the LanguageModelComponent in OpenXFlow.",
         "type": "route",
         "trigger": {
           "action": "navigate",
@@ -63,7 +63,7 @@
       {
         "id": "exploreTemplates",
         "display_text": "Explore Templates",
-        "description": "Jumpstart your project with pre-built Langflow templates.",
+        "description": "Jumpstart your project with pre-built OpenXFlow templates.",
         "type": "route",
         "trigger": {
           "action": "navigate",
@@ -77,7 +77,7 @@
       },
       {
         "id": "docsNudge",
-        "display_text": "Read Langflow Docs",
+        "display_text": "Read OpenXFlow Docs",
         "description": "Learn about nodes, connections, and advanced flow building.",
         "type": "button_preview",
         "trigger": {
@@ -93,12 +93,12 @@
       {
         "id": "feedbackPrompt",
         "display_text": "Share Feedback",
-        "description": "Have ideas or issues with your Langflow experience? Let’s improve together.",
+        "description": "Have ideas or issues with your OpenXFlow experience? Let’s improve together.",
         "type": "chat_input",
         "trigger": {
           "action": "send_message",
           "payload": {
-            "text": "I’d like to share feedback about my Langflow experience."
+            "text": "I’d like to share feedback about my OpenXFlow experience."
           }
         },
         "ui": {
@@ -109,4 +109,4 @@
       }
     ]
   }
-  
+

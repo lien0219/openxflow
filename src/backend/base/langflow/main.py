@@ -234,9 +234,9 @@ def get_lifespan(*, fix_migration=False, version=None):
 
         # Startup message
         if version:
-            await logger.adebug(f"Starting Langflow v{version}...")
+            await logger.adebug(f"Starting OpenXFlow v{version}...")
         else:
-            await logger.adebug("Starting Langflow...")
+            await logger.adebug("Starting OpenXFlow...")
 
         sync_flows_from_fs_task = None
         mcp_init_task = None
@@ -987,7 +987,7 @@ def get_lifespan(*, fix_migration=False, version=None):
 
                 # Step 4: Finalizing Shutdown
                 with shutdown_progress.step(4):
-                    await logger.adebug("Langflow shutdown complete")
+                    await logger.adebug("OpenXFlow shutdown complete")
 
                 # Show completion summary and farewell
                 shutdown_progress.print_shutdown_summary()
@@ -1014,7 +1014,7 @@ def create_app():
         # is created in the listener process, so the two never converge again by
         # accident." Both prior trigger attempts converged here.
         msg = (
-            "This process is a Langflow trigger listener and must not host the API. "
+            "This process is an OpenXFlow trigger listener and must not host the API. "
             "Run the API and 'langflow listeners' as separate processes."
         )
         raise RuntimeError(msg)
@@ -1028,7 +1028,7 @@ def create_app():
     settings = get_settings_service().settings
 
     app = FastAPI(
-        title="Langflow",
+        title="OpenXFlow",
         version=__version__,
         lifespan=lifespan,
         root_path=settings.root_path,

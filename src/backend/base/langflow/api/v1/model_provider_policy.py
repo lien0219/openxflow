@@ -92,7 +92,7 @@ def _build_policy_response(
 def _policy_unavailable() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Model-provider policy is not initialized. Apply the latest database migrations and restart Langflow.",
+        detail="Model-provider policy is not initialized. Apply the latest database migrations and restart OpenXFlow.",
     )
 
 

@@ -3,7 +3,7 @@
   "id": "lfx-datastax",
   "version": "0.2.0",
   "name": "DataStax",
-  "description": "DataStax component(s) as a standalone Langflow Extension Bundle.",
+  "description": "DataStax component(s) as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

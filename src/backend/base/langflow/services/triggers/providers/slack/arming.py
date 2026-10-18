@@ -109,7 +109,7 @@ async def resolve_arming(
     if is_app_token_connection(row):
         if context == "hosted":
             msg = (
-                "Hosted Langflow receives Slack events through the Events API; Socket Mode is not available "
+                "Hosted OpenXFlow receives Slack events through the Events API; Socket Mode is not available "
                 "because a Slack Marketplace app cannot use it. Choose a Slack app installation instead of an "
                 "app-level token connection."
             )
@@ -118,7 +118,7 @@ async def resolve_arming(
 
     if context == "desktop":
         msg = (
-            "Langflow Desktop receives Slack events over Socket Mode: Slack cannot deliver Events API requests to "
+            "OpenXFlow Desktop receives Slack events over Socket Mode: Slack cannot deliver Events API requests to "
             "a computer without a public address. Create an app-level token connection for your Slack app "
             "(Basic Information > App-Level Tokens, with the connections:write scope) and choose it here."
         )

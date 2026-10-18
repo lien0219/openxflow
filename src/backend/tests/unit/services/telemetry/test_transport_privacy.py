@@ -106,7 +106,7 @@ async def test_outbound_errors_are_removed_without_mutating_local_payload(
     assert not any(key.endswith("ErrorMessage") or key == "exceptionMessage" for key in body["properties"])
     for key, value in safe_fields.items():
         assert body["properties"][key] == value
-    assert body["properties"]["productTitle"] == "Langflow"
+    assert body["properties"]["productTitle"] == "OpenXFlow"
     assert body["userId"] == (user_id if identity_scheme == "current" else get_hashed_user_id(service.anonymous_id))
     after = payload.model_dump()
     before.pop("client_type")

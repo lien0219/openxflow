@@ -143,7 +143,7 @@ def _postgres_migration_lock(database_url: str):
     here (bounded, with progress logging) and then find the schema already at
     head.
 
-    No-op for non-PostgreSQL URLs. SQLite has no advisory locks (and Langflow
+    No-op for non-PostgreSQL URLs. SQLite has no advisory locks (and OpenXFlow
     runs single-process on it anyway).
     """
     if not database_url.startswith(("postgresql", "postgres")):
@@ -222,7 +222,7 @@ def check_sqlite_database_path(database_url: str) -> None:
     ``LANGFLOW_DATABASE_URL`` are resolved by SQLAlchemy against the current
     working directory at connect time. When the resolved parent directory is
     missing the raw ``sqlite3.OperationalError`` ("unable to open database file")
-    is opaque, so surface where Langflow actually tried to open the database and
+    is opaque, so surface where OpenXFlow actually tried to open the database and
     how a relative path was resolved. No-op for non-SQLite and in-memory URLs.
 
     Note: this only improves diagnostics; it does not change which URLs are
@@ -245,12 +245,12 @@ def check_sqlite_database_path(database_url: str) -> None:
         f"directories. "
     )
     if db_path.is_absolute():
-        msg += "Create the directory before starting Langflow, or point LANGFLOW_DATABASE_URL at an existing path."
+        msg += "Create the directory before starting OpenXFlow, or point LANGFLOW_DATABASE_URL at an existing path."
     else:
         msg += (
             f"The relative path '{db_path}' from LANGFLOW_DATABASE_URL was resolved against the current working "
             f"directory ('{Path.cwd()}'). Set LANGFLOW_DATABASE_URL to an absolute path "
-            f"(e.g. 'sqlite:///{resolved}'), or create the directory before starting Langflow."
+            f"(e.g. 'sqlite:///{resolved}'), or create the directory before starting OpenXFlow."
         )
     raise ValueError(msg)
 
@@ -481,7 +481,7 @@ class DatabaseService(Service):
     async def ensure_postgresql_version(self) -> None:
         """If the database is PostgreSQL, ensure it is version 15 or higher.
 
-        Langflow's schema uses UNIQUE NULLS DISTINCT, which is only supported in PostgreSQL 15+.
+        OpenXFlow's schema uses UNIQUE NULLS DISTINCT, which is only supported in PostgreSQL 15+.
         Logs the message and raises UnsupportedPostgreSQLVersionError if the version is too old.
         """
         if not self.database_url.startswith(("postgresql", "postgres")):

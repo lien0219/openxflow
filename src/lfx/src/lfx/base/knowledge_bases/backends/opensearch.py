@@ -1,16 +1,16 @@
 """OpenSearch k-NN vector-store backend.
 
 Wraps ``langchain_community.vectorstores.OpenSearchVectorSearch`` so
-Langflow Knowledge Bases can target a self-hosted or managed
+OpenXFlow Knowledge Bases can target a self-hosted or managed
 OpenSearch cluster (AWS OpenSearch Service, Aiven, OpenSearch
 Project, etc.) alongside the other native DB connectors. URL and
-auth credentials are resolved through Langflow's ``variable_service``
+auth credentials are resolved through OpenXFlow's ``variable_service``
 so ``backend_config`` only carries variable *names* — never raw
 secrets — and round-trips cleanly through the UI.
 
 ``backend_config`` fields:
 
-* ``url_variable`` — name of the Langflow variable holding the
+* ``url_variable`` — name of the OpenXFlow variable holding the
   cluster URL. Defaults to ``OPENSEARCH_URL``. Required.
 * ``username_variable`` — name of the variable holding the basic-auth
   user. Optional; defaults to ``OPENSEARCH_USERNAME``.
@@ -64,7 +64,7 @@ secrets — and round-trips cleanly through the UI.
 Optional dependencies: ``langchain-community`` ships the LangChain
 wrapper; ``opensearch-py`` ships the raw client used for count /
 stats / scan / delete-by-query. Both are imported lazily so
-Langflow installs without OpenSearch deps keep working.
+OpenXFlow installs without OpenSearch deps keep working.
 """
 
 from __future__ import annotations
@@ -147,7 +147,7 @@ def opensearch_env_configured() -> bool:
 async def validate_opensearch_url(url: str, url_variable: str, url_source: str) -> None:
     """Check a resolved cluster URL against both destination gates before it is dialed.
 
-    The URL comes from a tenant-controlled Langflow variable (``backend_config``
+    The URL comes from a tenant-controlled OpenXFlow variable (``backend_config``
     only names the variable), and the client built from it makes server-side
     connections whose outcome is echoed back by the test-connection route.
     Without validation a tenant can probe cloud-metadata (169.254.169.254),
@@ -173,7 +173,7 @@ async def validate_opensearch_url(url: str, url_variable: str, url_source: str) 
     additionally required to be one the operator approved. It runs first, and without a DNS
     lookup, so a refused destination is never resolved on the tenant's behalf.
     """
-    enforce_kb_destination(url, source=url_source, description=f"Langflow variable {url_variable!r}")
+    enforce_kb_destination(url, source=url_source, description=f"OpenXFlow variable {url_variable!r}")
     try:
         await asyncio.to_thread(validate_connector_url_for_ssrf, url)
     except SSRFProtectionError as exc:
@@ -282,7 +282,7 @@ def _refused_documents_left_out() -> Iterator[None]:
 
 
 class OpenSearchBackend(BaseVectorStoreBackend):
-    """OpenSearch k-NN as a Langflow KB backend."""
+    """OpenSearch k-NN as an OpenXFlow KB backend."""
 
     backend_type = BackendType.OPENSEARCH
 
@@ -373,15 +373,15 @@ class OpenSearchBackend(BaseVectorStoreBackend):
         """
         url_variable = self.backend_config.get("url_variable") or DEFAULT_URL_VARIABLE
         # The provenance decides whether the destination counts as operator-chosen:
-        # a Langflow variable is tenant-written, a process env var is not.
+        # an OpenXFlow variable is tenant-written, a process env var is not.
         url, url_source = await self.resolve_secret_with_source(url_variable)
         if not url:
             msg = (
-                f"OpenSearchBackend needs the {url_variable!r} Langflow variable "
+                f"OpenSearchBackend needs the {url_variable!r} OpenXFlow variable "
                 "(or env var of the same name) populated with the cluster URL."
             )
             raise ValueError(msg)
-        # The URL comes from a tenant-controlled Langflow variable, so the server must
+        # The URL comes from a tenant-controlled OpenXFlow variable, so the server must
         # not dial it blindly (CWE-918). Running the check here — inside
         # ensure_ready()'s one-shot hook — covers test_connection, ingestion, and
         # retrieval alike, so a KB created against a hostile variable stays blocked
@@ -533,7 +533,7 @@ class OpenSearchBackend(BaseVectorStoreBackend):
               [knn] filter doesn't support values of type: VALUE_NULL
 
         Dropping the kwarg lets the wrapper build the body without the
-        key, which is what every Langflow callsite that doesn't pass a
+        key, which is what every OpenXFlow callsite that doesn't pass a
         filter actually wants.
 
         Callers hand us the portable flat ``{key: value}`` filter shape

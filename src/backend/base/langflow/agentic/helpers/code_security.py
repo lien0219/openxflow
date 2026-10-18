@@ -23,7 +23,7 @@ DANGEROUS_CALLS: dict[str, str] = {
     "locals": "Use of locals() is forbidden in components",
     # Raw file access — components must use Langflow's File components,
     # not open arbitrary paths (e.g. /etc/passwd, SSH keys).
-    "open": "Use of open() is forbidden in components — use Langflow's File components",
+    "open": "Use of open() is forbidden in components — use OpenXFlow's File components",
     "breakpoint": "Use of breakpoint() is forbidden in components",
 }
 
@@ -106,7 +106,7 @@ def _is_blocked_attribute(attr: str | None) -> bool:
 # Secret/env exfiltration is the concrete threat — components must use
 # Langflow's variable/secret service, never raw process env.
 DANGEROUS_ATTRIBUTE_READS: list[tuple[str, str, str]] = [
-    ("os", "environ", "os.environ is forbidden — use Langflow's variable/secret service"),
+    ("os", "environ", "os.environ is forbidden — use OpenXFlow's variable/secret service"),
     ("os.path", "os", "os.path.os is forbidden in components"),
     ("sys", "modules", "sys.modules is forbidden in components"),
     # PyYAML loaders that resolve ``!!python/object*`` tags — arbitrary
@@ -161,7 +161,7 @@ DANGEROUS_ATTR_CALLS: list[tuple[str, str, str]] = [
     ("asyncio", "create_subprocess_shell", "asyncio.create_subprocess_shell() is forbidden"),
     ("asyncio.subprocess", "create_subprocess_exec", "asyncio.subprocess.create_subprocess_exec() is forbidden"),
     ("asyncio.subprocess", "create_subprocess_shell", "asyncio.subprocess.create_subprocess_shell() is forbidden"),
-    ("os", "system", "os.system() is forbidden — use Langflow's built-in integrations"),
+    ("os", "system", "os.system() is forbidden — use OpenXFlow's built-in integrations"),
     ("os", "popen", "os.popen() is forbidden"),
     ("os", "execl", "os.execl() is forbidden"),
     ("os", "execle", "os.execle() is forbidden"),
@@ -185,8 +185,8 @@ DANGEROUS_ATTR_CALLS: list[tuple[str, str, str]] = [
     ("os", "fork", "os.fork() is forbidden"),
     ("os", "forkpty", "os.forkpty() is forbidden"),
     ("os", "startfile", "os.startfile() is forbidden"),
-    ("os", "open", "os.open() is forbidden in components — use Langflow's File components"),
-    ("os", "write", "os.write() is forbidden in components — use Langflow's File components"),
+    ("os", "open", "os.open() is forbidden in components — use OpenXFlow's File components"),
+    ("os", "write", "os.write() is forbidden in components — use OpenXFlow's File components"),
     ("os", "remove", "os.remove() is forbidden in components"),
     ("os", "rmdir", "os.rmdir() is forbidden in components"),
     ("os", "unlink", "os.unlink() is forbidden in components"),
@@ -198,7 +198,7 @@ DANGEROUS_ATTR_CALLS: list[tuple[str, str, str]] = [
     # File-descriptor redirection wires a socket to a shell (reverse shell).
     ("os", "dup2", "os.dup2() is forbidden in components"),
     ("os", "dup", "os.dup() is forbidden in components"),
-    ("os", "getenv", "os.getenv() is forbidden — use Langflow's variable/secret service"),
+    ("os", "getenv", "os.getenv() is forbidden — use OpenXFlow's variable/secret service"),
     ("os", "putenv", "os.putenv() is forbidden in components"),
     ("shutil", "rmtree", "shutil.rmtree() is forbidden"),
     ("shutil", "move", "shutil.move() is forbidden in components"),
@@ -206,16 +206,16 @@ DANGEROUS_ATTR_CALLS: list[tuple[str, str, str]] = [
     # Raw file access through stdlib equivalents of the blocked bare open().
     # io.StringIO/BytesIO and codecs.encode/decode stay allowed; only the
     # filesystem entry points are forbidden.
-    ("io", "open", "io.open() is forbidden in components — use Langflow's File components"),
-    ("io", "open_code", "io.open_code() is forbidden in components — use Langflow's File components"),
-    ("codecs", "open", "codecs.open() is forbidden in components — use Langflow's File components"),
+    ("io", "open", "io.open() is forbidden in components — use OpenXFlow's File components"),
+    ("io", "open_code", "io.open_code() is forbidden in components — use OpenXFlow's File components"),
+    ("codecs", "open", "codecs.open() is forbidden in components — use OpenXFlow's File components"),
     # FileIO is the raw constructor behind open(): io.FileIO(path) opens the file
     # directly - read, write or append - without going through open(). Its
     # buffered/text wrappers (BufferedReader, TextIOWrapper, ...) take an
     # already-open raw object rather than a path, so blocking the constructor
     # closes those routes too. StringIO/BytesIO touch no filesystem and stay
     # allowed, as do codecs.encode/decode.
-    ("io", "FileIO", "io.FileIO() is forbidden in components — use Langflow's File components"),
+    ("io", "FileIO", "io.FileIO() is forbidden in components — use OpenXFlow's File components"),
     # PyYAML unsafe deserialization entry points (``!!python/object*`` tags).
     ("yaml", "unsafe_load", "yaml.unsafe_load() is forbidden — use yaml.safe_load()"),
     ("yaml", "unsafe_load_all", "yaml.unsafe_load_all() is forbidden — use yaml.safe_load_all()"),

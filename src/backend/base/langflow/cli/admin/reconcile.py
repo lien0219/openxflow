@@ -48,7 +48,7 @@ class _Plan:
 
 
 class AdminReconciler:
-    """Converge a Langflow deployment on one strict ``AdminState`` manifest."""
+    """Converge an OpenXFlow deployment on one strict ``AdminState`` manifest."""
 
     def __init__(self, client: AdminClient, *, environ: Mapping[str, str] | None = None) -> None:
         self.client = client
@@ -259,7 +259,7 @@ class AdminReconciler:
                 msg = f"Assignment references unknown team {assignment.subject.name!r}"
                 raise ManifestResolutionError(msg)
             if assignment.subject.type == "team" and not self._team_assignments_available():
-                msg = "This Langflow target does not advertise team-role assignment support"
+                msg = "This OpenXFlow target does not advertise team-role assignment support"
                 raise ManifestResolutionError(msg)
 
         for desired in _roles_in_parent_order(state.roles):

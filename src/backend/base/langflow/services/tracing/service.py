@@ -293,7 +293,7 @@ class TracingService(Service):
         if self.deactivated:
             return
         try:
-            project_name = project_name or os.getenv("LANGCHAIN_PROJECT", "Langflow")
+            project_name = project_name or os.getenv("LANGCHAIN_PROJECT", "OpenXFlow")
             trace_context = TraceContext(
                 run_id,
                 run_name,
@@ -518,7 +518,7 @@ class TracingService(Service):
     @property
     def project_name(self):
         if self.deactivated:
-            return os.getenv("LANGCHAIN_PROJECT", "Langflow")
+            return os.getenv("LANGCHAIN_PROJECT", "OpenXFlow")
         trace_context = trace_context_var.get()
         if trace_context is None:
             msg = "called project_name but no trace context found"

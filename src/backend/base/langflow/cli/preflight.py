@@ -152,7 +152,7 @@ async def probe_database(settings_service: SettingsService) -> CheckResult:
     """Require a reachable PostgreSQL application database.
 
     In prod the database must be PostgreSQL: SQLite is single-node, not shared
-    across replicas, and unsupported for production Langflow, so a SQLite (or
+    across replicas, and unsupported for production OpenXFlow, so a SQLite (or
     otherwise non-Postgres) ``LANGFLOW_DATABASE_URL`` fails the check *before*
     any connection is attempted. When the URL is Postgres, a throwaway
     connection is opened and closed to prove reachability.
@@ -313,7 +313,7 @@ class _VectorExtensionMissingError(Exception):
 async def probe_pgvector(_settings_service: SettingsService) -> CheckResult:
     """Verify pgVector: connection string present, reachable, and extension installed.
 
-    pgVector is a mandated, Langflow-owned production dependency, so this is an
+    pgVector is a mandated, OpenXFlow-owned production dependency, so this is an
     active probe rather than a presence check.
     """
     from lfx.base.knowledge_bases.backends.postgres import (
@@ -469,7 +469,7 @@ async def probe_opensearch() -> CheckResult | None:
 async def probe_vector_backend(settings_service: SettingsService) -> CheckResult:
     """Require at least one *reachable* vector-store backend in prod.
 
-    pgVector is Langflow's default production vector store, but a deployment that
+    pgVector is OpenXFlow's default production vector store, but a deployment that
     provisions OpenSearch instead should boot without a pgVector connection
     string (new KBs then default to OpenSearch — see ``resolve_default_kb_backend``).
     Every backend configured via the server environment is actively probed

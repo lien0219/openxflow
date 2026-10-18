@@ -39,15 +39,15 @@ _GUIDANCE = {
         "Your original data is preserved."
     ),
     "automatic_upgrade_disabled": (
-        "Enable LANGFLOW_KNOWLEDGE_BASE_AUTO_MIGRATE and restart Langflow to upgrade local data."
+        "Enable LANGFLOW_KNOWLEDGE_BASE_AUTO_MIGRATE and restart OpenXFlow to upgrade local data."
     ),
     "single_host_required": (
-        "Stop all old instances, then run one Langflow worker on the host with the original "
+        "Stop all old instances, then run one OpenXFlow worker on the host with the original "
         "local data. Distributed deployments need administrator recovery."
     ),
-    "legacy_workers_running": "Stop the other Langflow instance using this data, then retry the upgrade.",
+    "legacy_workers_running": "Stop the other OpenXFlow instance using this data, then retry the upgrade.",
     "local_filesystem_required": (
-        "Copy the original data to a local filesystem and run one Langflow worker there. "
+        "Copy the original data to a local filesystem and run one OpenXFlow worker there. "
         "Shared filesystems require administrator recovery."
     ),
     "remote_source_requires_migration": "Migrate the remote collection to a configured pgVector or OpenSearch store.",

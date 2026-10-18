@@ -1,4 +1,4 @@
-"""Helpers for building spec-valid A2A agent cards from Langflow flows.
+"""Helpers for building spec-valid A2A agent cards from OpenXFlow flows.
 
 The typed models come from ``a2a.compat.v0_3.types`` (pydantic). Do NOT import
 from ``a2a.types`` — in a2a-sdk 1.x those are protobuf messages that serialize
@@ -187,7 +187,7 @@ async def build_agent_card(flow: Flow, *, rpc_url: str, session: AsyncSession) -
     overrides = flow.a2a_card_overrides if isinstance(flow.a2a_card_overrides, dict) else {}
     name = _override_str(overrides, "name") or flow.name
     description = _override_str(overrides, "description") or flow.description or f"A2A agent for flow {flow.name}"
-    # No per-flow version field exists on Flow; fall back to the langflow version.
+    # No per-flow version field exists on Flow; fall back to the OpenXFlow version.
     version = _override_str(overrides, "version") or get_version_info()["version"]
 
     # Builds the graph from flow.data and injects a session_id property. A flow
@@ -205,7 +205,7 @@ async def build_agent_card(flow: Flow, *, rpc_url: str, session: AsyncSession) -
         id=str(flow.id),
         name=name,
         description=description,
-        tags=_override_str_list(overrides, "tags") or ["langflow"],
+        tags=_override_str_list(overrides, "tags") or ["openxflow"],
         examples=_override_str_list(overrides, "examples"),
         input_modes=["application/json"],
         output_modes=["application/json"],

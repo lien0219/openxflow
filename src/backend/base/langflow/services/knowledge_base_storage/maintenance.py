@@ -230,7 +230,7 @@ def _process_matches(identity: dict) -> bool:
 
 
 def remaining_legacy_workers(*, excluded_pids: set[int] | None = None) -> list[int]:
-    """Report actual unselected Langflow entry points before and after downtime."""
+    """Report actual unselected OpenXFlow entry points before and after downtime."""
     excluded = {os.getpid(), *(excluded_pids or set())}
     return [
         process.pid for process in psutil.process_iter() if process.pid not in excluded and _legacy_process(process)
@@ -251,7 +251,7 @@ def create_receipt(*, root: Path, database: Path, receipt: Path, previous_worker
         msg = "The deployment manager must stop all previous workers first"
         raise MaintenanceRequiredError(msg)
     if remaining := remaining_legacy_workers():
-        msg = f"Langflow workers remain (PIDs {remaining}). Use their deployment manager to stop them"
+        msg = f"OpenXFlow workers remain (PIDs {remaining}). Use their deployment manager to stop them"
         raise MaintenanceRequiredError(msg)
     receipt.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     if receipt.exists() or receipt.is_symlink():

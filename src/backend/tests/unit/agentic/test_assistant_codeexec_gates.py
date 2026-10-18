@@ -72,7 +72,7 @@ def test_assistant_execution_denies_non_admin_when_custom_code_is_admin_only(pat
         response = TestClient(app).post(path, json=body)
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "The Langflow Assistant is restricted to administrators on this server."
+    assert response.json()["detail"] == "The OpenXFlow Assistant is restricted to administrators on this server."
 
 
 def test_assistant_execution_allows_non_admin_when_policy_off():

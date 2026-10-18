@@ -107,7 +107,7 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> Any:
         raise ValueError(msg)
     if name in _excluded_tools():
         msg = (
-            f"Tool '{name}' requires the Langflow Assistant, which is disabled on this server "
+            f"Tool '{name}' requires the OpenXFlow Assistant, which is disabled on this server "
             "(LANGFLOW_AGENTIC_EXPERIENCE is not enabled). The other tools remain available."
         )
         raise ValueError(msg)

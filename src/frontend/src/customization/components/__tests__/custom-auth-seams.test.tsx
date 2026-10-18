@@ -27,7 +27,7 @@ describe("OSS auth customization seams", () => {
   it("renders the OSS product name as the login brand", () => {
     render(<CustomLoginBrandTitle />);
 
-    expect(screen.getByText("Langflow")).toBeInTheDocument();
+    expect(screen.getByText("OpenXFlow")).toBeInTheDocument();
   });
 
   it("passes signup prompt children through", () => {

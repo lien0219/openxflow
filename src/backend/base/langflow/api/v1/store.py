@@ -162,7 +162,7 @@ async def get_tags():
         # every app boot, so an unreachable upstream must not read as a fault of this
         # server. Tags only decorate a filter, so degrade to none and keep 500 for
         # failures that ARE ours.
-        await logger.awarning(f"Langflow Store unreachable; serving no tags: {exc}")
+        await logger.awarning(f"OpenXFlow Store unreachable; serving no tags: {exc}")
         return []
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

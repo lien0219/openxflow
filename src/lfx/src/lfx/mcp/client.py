@@ -1,4 +1,4 @@
-"""Async HTTP client for Langflow REST API.
+"""Async HTTP client for OpenXFlow REST API.
 
 Adapted from the CLI's sync Backend class, using httpx.AsyncClient
 for non-blocking operations inside the MCP server.
@@ -48,7 +48,7 @@ def _global_var_headers() -> dict[str, str]:
 
 
 class LangflowClient:
-    """Async HTTP client for Langflow's REST API.
+    """Async HTTP client for OpenXFlow's REST API.
 
     Auth sends both headers on every request:
     - Authorization: Bearer <access_token or api_key>
@@ -97,7 +97,7 @@ class LangflowClient:
         if request_origin != server_origin:
             # HTTPX strips Authorization across origins, but retains custom
             # headers, including global variables containing provider keys.
-            msg = "Refusing to forward global variable overrides outside the Langflow server origin"
+            msg = "Refusing to forward global variable overrides outside the OpenXFlow server origin"
             raise RuntimeError(msg)
 
     async def close(self) -> None:

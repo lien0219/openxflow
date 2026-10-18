@@ -20,5 +20,5 @@ async def test_retrieval_requires_a_user_before_opening_application_services():
 async def test_retrieval_requires_langflow_application_services():
     component = KnowledgeBaseComponent(knowledge_base="saved_knowledge", _user_id=uuid4())
 
-    with pytest.raises(RuntimeError, match="requires Langflow's application services"):
+    with pytest.raises(RuntimeError, match="requires OpenXFlow's application services"):
         await component.retrieve_data()

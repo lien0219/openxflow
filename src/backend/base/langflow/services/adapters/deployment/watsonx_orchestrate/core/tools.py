@@ -115,12 +115,15 @@ def verify_langflow_owned(tool: dict[str, Any], *, tool_id: str) -> None:
     """Raise ``InvalidContentError`` if the tool lacks ``binding.langflow``.
 
     Call before any mutating operation on an existing tool to ensure
-    Langflow created it.  Tools created manually in the wxO console or
+    OpenXFlow created it.  Tools created manually in the wxO console or
     by other integrations will not have this marker.
     """
     binding = tool.get("binding")
     if not isinstance(binding, dict) or "langflow" not in binding:
-        msg = f"Cannot modify tool '{tool_id}': it does not have a Langflow binding and may not be managed by Langflow."
+        msg = (
+            f"Cannot modify tool '{tool_id}': it does not have an OpenXFlow binding "
+            "and may not be managed by OpenXFlow."
+        )
         raise InvalidContentError(message=msg)
 
 
@@ -184,7 +187,7 @@ async def update_existing_tool_connection_bindings(
 
 
 def extract_langflow_artifact_from_zip(artifact_zip_bytes: bytes, *, snapshot_id: str) -> dict[str, Any]:
-    """Read and parse the Langflow flow JSON from a wxO snapshot artifact zip."""
+    """Read and parse the OpenXFlow flow JSON from a wxO snapshot artifact zip."""
     try:
         with zipfile.ZipFile(io.BytesIO(artifact_zip_bytes), "r") as zip_artifact:
             json_members = [name for name in zip_artifact.namelist() if name.lower().endswith(".json")]
@@ -310,7 +313,7 @@ def create_wxo_flow_tool(
     if not flow_definition.get("last_tested_version"):
         detected_version = (get_version_info() or {}).get("version")
         if not detected_version:
-            msg = "Unable to determine running Langflow version for snapshot creation."
+            msg = "Unable to determine running OpenXFlow version for snapshot creation."
             raise InvalidContentError(message=msg)
         flow_definition["last_tested_version"] = detected_version
 

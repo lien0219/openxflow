@@ -3,7 +3,7 @@
   "id": "lfx-ibm",
   "version": "0.3.0",
   "name": "IBM",
-  "description": "IBM components (Db2 Vector Store, watsonx.ai LLM and embeddings, watsonx.data Presto and MCP) as a standalone Langflow Extension Bundle.",
+  "description": "IBM components (Db2 Vector Store, watsonx.ai LLM and embeddings, watsonx.data Presto and MCP) as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

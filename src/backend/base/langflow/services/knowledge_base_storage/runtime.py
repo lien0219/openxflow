@@ -214,11 +214,11 @@ def storage_unavailable_message(state: str) -> str:
     if state == "migrating":
         return (
             "This knowledge or memory base is upgrading automatically. Wait for the upgrade to "
-            "finish, then try again. Progress is shown in Langflow."
+            "finish, then try again. Progress is shown in OpenXFlow."
         )
     return (
         "This knowledge or memory base needs a storage upgrade. Your original data is "
-        "preserved. Open the upgrade notice in Langflow, or contact your administrator."
+        "preserved. Open the upgrade notice in OpenXFlow, or contact your administrator."
     )
 
 

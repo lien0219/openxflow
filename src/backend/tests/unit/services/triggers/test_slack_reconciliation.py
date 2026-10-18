@@ -240,7 +240,7 @@ async def test_desktop_explains_why_the_events_api_is_unavailable(trigger_owner,
 
     row = await _save(owned_flow, trigger_owner, _node(connection=f"slack/{await _connection_name(connection_id)}"))
 
-    assert "Langflow Desktop receives Slack events over Socket Mode" in row.last_error
+    assert "OpenXFlow Desktop receives Slack events over Socket Mode" in row.last_error
     assert "app-level token" in row.last_error
 
 

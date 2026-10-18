@@ -17,7 +17,7 @@ class ChromaMigrationRequiredError(RuntimeError):
     def __init__(self) -> None:
         """Describe the supported migration path while preserving original Chroma data."""
         super().__init__(
-            "Chroma support was retired in Langflow 1.13. This store requires migration. "
+            "Chroma support was retired in OpenXFlow 1.13. This store requires migration. "
             "For a local Knowledge Base, check the automatic upgrade migration status. "
             "For a standalone Chroma/Local DB node or Chroma Cloud store, migrate its data "
             "to a supported Knowledge Base and reconnect the flow. Original data is retained. "

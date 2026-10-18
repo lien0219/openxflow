@@ -3,7 +3,7 @@
   "id": "lfx-confluent",
   "version": "0.2.0",
   "name": "IBM Confluent",
-  "description": "IBM Confluent components (Kafka producer/consumer, Tableflow Iceberg reader, Real-Time Context Engine MCP tools) as a standalone Langflow Extension Bundle.",
+  "description": "IBM Confluent components (Kafka producer/consumer, Tableflow Iceberg reader, Real-Time Context Engine MCP tools) as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

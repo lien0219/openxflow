@@ -3,7 +3,7 @@
   "id": "lfx-valkey",
   "version": "0.2.0",
   "name": "Valkey",
-  "description": "Valkey component(s) as a standalone Langflow Extension Bundle.",
+  "description": "Valkey component(s) as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

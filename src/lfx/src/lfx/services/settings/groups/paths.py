@@ -5,10 +5,10 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class PathSettings(BaseModel):
-    """Filesystem paths Langflow reads from and writes to."""
+    """Filesystem paths OpenXFlow reads from and writes to."""
 
     config_dir: str | None = None
-    """Base directory for Langflow data (db, logs, caches)."""
+    """Base directory for OpenXFlow data (db, logs, caches)."""
 
     knowledge_bases_dir: str | None = "~/.langflow/knowledge_bases"
     """The directory to store knowledge bases."""
@@ -32,7 +32,7 @@ class PathSettings(BaseModel):
 
     The ``knowledge_base`` table is the sole authority for KB metadata; the on-disk
     ``embedding_metadata.json`` sidecar is no longer written or read by any steady-state
-    code path. This reconcile exists only to adopt directories left by a Langflow version
+    code path. This reconcile exists only to adopt directories left by an OpenXFlow version
     that predates that change, so it is off by default and pays no boot cost.
 
     Set ``LANGFLOW_KB_DISK_RECONCILE_ENABLED=true`` to re-enable it at startup, or run it

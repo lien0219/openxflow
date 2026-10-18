@@ -29,13 +29,13 @@ console = Console()
 _ENVIRONMENTS_YAML = """\
 # .lfx/environments.yaml
 #
-# Configure your Langflow instances here.
+# Configure your OpenXFlow instances here.
 # Safe to commit — API keys are NEVER stored in this file.
 # The api_key_env value is the NAME of an environment variable that holds
 # the actual API key; set that variable in your shell or CI secrets.
 #
 # Quick start:
-#   1. Open Langflow → Settings → API Keys → Create a new key
+#   1. Open OpenXFlow → Settings → API Keys → Create a new key
 #   2. export LANGFLOW_LOCAL_API_KEY=<your key>
 #   3. lfx export --env local --flow-id <uuid> --output-dir flows/
 
@@ -57,7 +57,7 @@ defaults:
 """
 
 _TEST_FLOWS_PY = '''\
-"""Integration tests for Langflow flows.
+"""Integration tests for OpenXFlow flows.
 
 Run against a local instance (started with ``lfx serve``):
 
@@ -85,14 +85,14 @@ def test_flow_responds(flow_runner):
 @pytest.mark.integration
 def test_flow_output_quality(flow_runner):
     """Example: assert on the content of the response."""
-    result = flow_runner("my-flow-endpoint", "What is Langflow?")
+    result = flow_runner("my-flow-endpoint", "What is OpenXFlow?")
     text = result.first_text_output()
     assert text is not None
     assert len(text) > 20, f"Response seems too short: {text!r}"
 '''
 
 _GITIGNORE = """\
-# Langflow credentials -- never commit API keys
+# OpenXFlow credentials -- never commit API keys
 # (langflow-environments.toml may contain literal keys; .lfx/environments.yaml is safe to commit)
 langflow-environments.toml
 """
@@ -249,7 +249,7 @@ def init_command(
     if example:
         console.print("  3. [bold]lfx validate flows/hello-world.json[/bold]  (check the starter flow)")
         console.print("  4. [bold]lfx serve flows/hello-world.json[/bold]     (run it locally)")
-        console.print("  5. [bold]lfx push --dir flows/ --env local[/bold]    (deploy to Langflow)")
+        console.print("  5. [bold]lfx push --dir flows/ --env local[/bold]    (deploy to OpenXFlow)")
     else:
         console.print("  3. [bold]lfx create my-flow --template hello-world[/bold]")
         console.print("  4. [bold]lfx push --dir flows/ --env local[/bold]")

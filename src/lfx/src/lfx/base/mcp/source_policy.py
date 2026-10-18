@@ -2,7 +2,7 @@
 
 Approved MCP launchers such as ``uvx`` and ``npx`` still install code before
 starting a server. Their registry/configuration controls therefore belong to
-Langflow's execution boundary, not to tenant-authored server configuration.
+OpenXFlow's execution boundary, not to tenant-authored server configuration.
 This module keeps that command-aware policy small and dependency-free so it can
 be enforced both when the REST model is written and immediately before spawn.
 """
@@ -93,7 +93,7 @@ NPX_SAFE_BOOLEAN_FLAGS = frozenset(
 )
 
 # Explicit ``--package`` mode decouples installation from command selection, so
-# only package-owned executables verified by Langflow may be selected. Packages
+# only package-owned executables verified by OpenXFlow may be selected. Packages
 # without an entry here remain usable through the safer direct ``npx PACKAGE``
 # form, where npx derives the executable from that package's metadata.
 NPX_SAFE_PACKAGE_ENTRYPOINTS: dict[str, frozenset[str]] = {
@@ -503,9 +503,9 @@ def _validate_npx_package_selection(args: list[str], allowed_packages: frozenset
 
 
 def _sdk_constraint_exemption() -> str | None:
-    """Return the requirement Langflow itself injects as ``uvx --with``, if enabled.
+    """Return the requirement OpenXFlow itself injects as ``uvx --with``, if enabled.
 
-    Langflow prepends ``--with <mcp_sdk_constraint>`` to every MCP server it launches
+    OpenXFlow prepends ``--with <mcp_sdk_constraint>`` to every MCP server it launches
     through uvx. Exempting that exact specifier keeps operator package allowlists
     working without every deployment adding ``mcp``; any other ``--with`` requirement
     is still validated against the allowlist.

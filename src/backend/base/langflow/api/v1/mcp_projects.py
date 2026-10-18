@@ -1643,7 +1643,7 @@ async def register_project_with_composer(project: Folder):
 
         settings = get_settings_service().settings
         if not settings.host or not settings.port:
-            error_msg = "Langflow host and port must be set in settings to register project with MCP Composer"
+            error_msg = "OpenXFlow host and port must be set in settings to register project with MCP Composer"
             raise ValueError(error_msg)
 
         if not project.id:
@@ -1822,7 +1822,7 @@ async def get_or_start_mcp_composer(auth_config: dict, project_name: str, projec
     # Prepare current auth config for comparison
     settings = get_settings_service().settings
     if not settings.host or not settings.port:
-        error_msg = "Langflow host and port must be set in settings to register project with MCP Composer"
+        error_msg = "OpenXFlow host and port must be set in settings to register project with MCP Composer"
         raise ValueError(error_msg)
 
     streamable_http_url = await get_project_local_streamable_http_url(project_id)

@@ -135,11 +135,11 @@ async def _assert_hardware_acceleration() -> None:
     except Exception as e:
         logger.debug("Could not obtain exec-sandbox accelerator decision", exc_info=True)
         msg = (
-            "LANGFLOW_SANDBOX_BACKEND=exec-sandbox is configured but Langflow could not "
+            "LANGFLOW_SANDBOX_BACKEND=exec-sandbox is configured but OpenXFlow could not "
             "determine which QEMU accelerator exec-sandbox would select "
             f"({type(e).__name__}: {e}). Refusing to run rather than risk TCG software "
             "emulation, which is not a supported security boundary. If this exec-sandbox "
-            "version changed its probe API, this Langflow version does not support it; "
+            "version changed its probe API, this OpenXFlow version does not support it; "
             "LANGFLOW_SANDBOX_ALLOW_SOFTWARE_EMULATION=true bypasses this gate for "
             "trusted/development workloads only."
         )
@@ -263,7 +263,7 @@ class _ExecSandboxExecutor:
         # The warm pool is deliberately NOT configured: upstream pre-boots N
         # VMs for EVERY language (python/javascript/raw) at a fixed default
         # memory size, ignoring per-run memory_mb on warm hits, and network-
-        # enabled runs bypass the pool entirely. Langflow only runs Python
+        # enabled runs bypass the pool entirely. OpenXFlow only runs Python
         # with an operator-tunable memory limit, so the upstream pool contract
         # does not fit; revisit if exec-sandbox grows a per-language,
         # memory-keyed pool.
@@ -312,7 +312,7 @@ class _ExecSandboxExecutor:
 
         The loop thread is a daemon, so without this the process would exit
         without ever running Scheduler.__aexit__ and guest VMs could outlive
-        Langflow. atexit runs while daemon threads are still alive, so the
+        OpenXFlow. atexit runs while daemon threads are still alive, so the
         coroutine can complete on the sandbox loop; a short timeout and
         blanket suppress keep a wedged VM from hanging process exit. Safe to
         call repeatedly and mid-process.

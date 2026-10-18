@@ -142,7 +142,7 @@ def _integration_policy_managed_externally() -> bool:
 
     A host that never registered an integration policy service (standalone lfx,
     partial test harnesses) owns nothing externally, so a missing service is
-    "Langflow-owned" rather than a 500 on the administration read path.
+    "OpenXFlow-owned" rather than a 500 on the administration read path.
     """
     try:
         service = get_integration_policy_service()
@@ -182,7 +182,7 @@ def _response(snapshot: PolicyBundleSnapshot, *, managed_externally: bool = Fals
 def _unavailable() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Policy bundle is not initialized. Apply the latest database migrations and restart Langflow.",
+        detail="Policy bundle is not initialized. Apply the latest database migrations and restart OpenXFlow.",
     )
 
 

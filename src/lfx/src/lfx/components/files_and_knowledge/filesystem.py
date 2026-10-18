@@ -800,7 +800,7 @@ class FileSystemToolComponent(Component):
                 f"Cannot create shared workspace at {shared_root}: "
                 f"{exc.strerror or exc}. "
                 f"Check that LANGFLOW_FS_TOOL_BASE_DIR ({config.base_dir}) is writable "
-                f"by the Langflow process user."
+                f"by the OpenXFlow process user."
             )
             raise PermissionError(msg) from exc
 
@@ -837,7 +837,7 @@ class FileSystemToolComponent(Component):
                 f"Cannot create user namespace at {user_root}: "
                 f"{exc.strerror or exc}. "
                 f"Check that LANGFLOW_FS_TOOL_BASE_DIR ({config.base_dir}) is writable "
-                f"by the Langflow process user."
+                f"by the OpenXFlow process user."
             )
             raise PermissionError(msg) from exc
 

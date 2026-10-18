@@ -197,7 +197,7 @@ flowchart TB
 | 前端 | React 19、TypeScript、Vite、Tailwind CSS、Zustand、XYFlow |
 | 后端 | Python 3.10–3.14、FastAPI、SQLModel / SQLAlchemy、Alembic |
 | 桌面端 | Electron、electron-builder、Windows NSIS、macOS DMG |
-| 工作流 | Langflow 图执行引擎、LFX |
+| 工作流 | OpenXFlow 图执行引擎、LFX |
 | Agent | LangChain 生态、工具调用、结构化输出 |
 | 协议 | REST API、Webhook、MCP |
 | 数据存储 | SQLite、可选 PostgreSQL、文件存储 |
@@ -245,7 +245,7 @@ make run_cli
 make run_clic
 ```
 
-Official release packages and tagged source archives disable automatic login by default. Set `LANGFLOW_SUPERUSER_PASSWORD` before starting Langflow, then sign in with the username `langflow` (or your configured `LANGFLOW_SUPERUSER`). Development branches retain automatic login by default. See [authentication configuration](https://docs.langflow.org/api-keys-and-authentication#start-a-langflow-server-with-authentication-enabled).
+Official release packages and tagged source archives disable automatic login by default. Set `LANGFLOW_SUPERUSER_PASSWORD` before starting OpenXFlow, then sign in with the username `langflow` (or your configured `LANGFLOW_SUPERUSER`). Development branches retain automatic login by default. See [authentication configuration](https://docs.langflow.org/api-keys-and-authentication#start-a-langflow-server-with-authentication-enabled).
 
 To start a source installation directly, run:
 ```shell
@@ -255,11 +255,11 @@ uv run langflow run
 ### Docker
 Set and export a strong password before starting the container (Bash):
 ```shell
-read -rsp "Langflow administrator password: " LANGFLOW_SUPERUSER_PASSWORD; echo
+read -rsp "OpenXFlow administrator password: " LANGFLOW_SUPERUSER_PASSWORD; echo
 export LANGFLOW_SUPERUSER_PASSWORD
 docker run -p 7860:7860 -e LANGFLOW_SUPERUSER_PASSWORD langflowai/langflow:latest
 ```
-Langflow is available at http://localhost:7860/. Sign in as `langflow` with the password you entered. Official Docker images require authentication by default.
+OpenXFlow is available at http://localhost:7860/. Sign in as `langflow` with the password you entered. Official Docker images require authentication by default.
 If you already have an auto-login installation, follow the [upgrade instructions](https://docs.langflow.org/api-keys-and-authentication#upgrade-from-auto-login) before switching defaults.
 For configuration options, see the [Docker deployment guide](https://docs.langflow.org/deployment-docker).
 

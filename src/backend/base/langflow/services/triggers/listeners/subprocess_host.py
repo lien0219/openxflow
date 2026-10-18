@@ -200,7 +200,7 @@ class ListenerSubprocess:
             )
         self._next_spawn_at = time.monotonic() + delay
         logger.warning(
-            "Langflow listeners child exited with %s after %.0fs (%s consecutive); restarting in %.0fs. "
+            "OpenXFlow listeners child exited with %s after %.0fs (%s consecutive); restarting in %.0fs. "
             "The child logs its own reason on this process's stderr.",
             exit_code,
             lifetime or 0.0,
@@ -219,7 +219,7 @@ class ListenerSubprocess:
         try:
             await asyncio.wait_for(asyncio.to_thread(process.wait), timeout=GRACE_PERIOD_S)
         except (TimeoutError, asyncio.TimeoutError):
-            await logger.awarning("Langflow listeners child did not exit in %.0fs; killing it", GRACE_PERIOD_S)
+            await logger.awarning("OpenXFlow listeners child did not exit in %.0fs; killing it", GRACE_PERIOD_S)
             with contextlib.suppress(ProcessLookupError, OSError):
                 process.kill()
             with contextlib.suppress(Exception):
@@ -240,6 +240,6 @@ def start_listener_subprocess_if_enabled() -> ListenerSubprocess | None:
         host = ListenerSubprocess()
         host.start()
     except Exception as exc:  # noqa: BLE001 - boot must not depend on the listener child
-        logger.warning("Langflow listeners subprocess did not start: %s", type(exc).__name__)
+        logger.warning("OpenXFlow listeners subprocess did not start: %s", type(exc).__name__)
         return None
     return host

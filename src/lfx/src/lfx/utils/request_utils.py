@@ -1,6 +1,6 @@
 from lfx.services.deps import get_settings_service
 
-DEFAULT_USER_AGENT = "Langflow"
+DEFAULT_USER_AGENT = "OpenXFlow"
 
 
 def get_user_agent():

@@ -6,7 +6,7 @@ components share one behaviour for four things the SDK does not give us:
 * **Lazy credentials.** ``google-api-python-client`` wants a
   ``google.oauth2.credentials.Credentials``. The one built here carries only the
   access token minted by the connection lease: it has no refresh token and no
-  client secret, so the SDK can never refresh behind Langflow's back. Expiry is
+  client secret, so the SDK can never refresh behind OpenXFlow's back. Expiry is
   handled proactively by :class:`~lfx.integrations.models.CredentialLease` and
   reactively by the single ``get_token_after_auth_error`` retry below.
 * **Blocking I/O.** The Google client is synchronous. Both discovery-client
@@ -98,7 +98,7 @@ _SCOPE_REASONS = frozenset(
 # mistyped ID, so a Drive 404 keeps resource-not-found and names both causes.
 _DRIVE_API_PATH = "/drive/"
 _DRIVE_FILE_BOUNDARY = (
-    "Langflow can access only Drive files created by or opened with this app (the drive.file scope). "
+    "OpenXFlow can access only Drive files created by or opened with this app (the drive.file scope). "
     "Connecting the account does not grant access to all Drive files, and file selection with Google "
     "Picker is not available in this release."
 )

@@ -348,7 +348,7 @@ def docling_worker(
 
     except ModuleNotFoundError:
         msg = (
-            "Docling is an optional dependency of Langflow. "
+            "Docling is an optional dependency of OpenXFlow. "
             "Install with `uv pip install 'langflow[docling]'` "
             "or refer to the documentation"
         )

@@ -12,9 +12,9 @@ const isProduction = process.env.NODE_ENV === "production";
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "Langflow Documentation",
+  title: "OpenXFlow Documentation",
   tagline:
-    "Langflow is a low-code app builder for RAG and multi-agent AI applications.",
+    "OpenXFlow is an open-source platform for building AI workflows and applications.",
   favicon: "img/favicon.ico",
   url: "https://docs.langflow.org",
   baseUrl: process.env.BASE_URL ? process.env.BASE_URL : "/",
@@ -507,9 +507,10 @@ const config = {
       navbar: {
         hideOnScroll: false,
         logo: {
-          alt: "Langflow",
-          src: "img/lf-docs-light.svg",
-          srcDark: "img/lf-docs-dark.svg",
+          alt: "OpenXFlow",
+          title: "OpenXFlow",
+          src: "img/openxflow-icon.svg",
+          srcDark: "img/openxflow-icon.svg",
         },
         items: [
           {
@@ -519,7 +520,7 @@ const config = {
           // right
           {
             position: "right",
-            href: "https://github.com/langflow-ai/langflow",
+            href: "https://github.com/lien0219/openxflow",
             className: "header-github-link",
             target: "_blank",
             rel: null,
@@ -529,7 +530,7 @@ const config = {
             'data-channel': 'docs',
             'data-element-id': 'social-github',
             'data-namespace': 'header',
-            'data-platform-title': 'Langflow'
+            'data-platform-title': 'OpenXFlow'
           },
           {
             position: "right",
@@ -543,7 +544,7 @@ const config = {
             'data-channel': 'docs',
             'data-element-id': 'social-twitter',
             'data-namespace': 'header',
-            'data-platform-title': 'Langflow'
+            'data-platform-title': 'OpenXFlow'
           },
           {
             position: "right",
@@ -557,7 +558,7 @@ const config = {
             'data-channel': 'docs',
             'data-element-id': 'social-discord',
             'data-namespace': 'header',
-            'data-platform-title': 'Langflow'
+            'data-platform-title': 'OpenXFlow'
           },
         ],
       },
@@ -593,7 +594,7 @@ const config = {
             items: [
               {
                 html: `<div class="footer-links">
-                  <span>© ${new Date().getFullYear()} Langflow</span>
+                  <span>© ${new Date().getFullYear()} OpenXFlow</span>
                   <span id="preferenceCenterContainer"> ·&nbsp; <a href="#" onclick="if(typeof window !== 'undefined' && window.truste && window.truste.eu && window.truste.eu.clickListener) { window.truste.eu.clickListener(); } return false;" style="cursor: pointer;">Manage Privacy Choices</a></span>
                   </div>`,
               },

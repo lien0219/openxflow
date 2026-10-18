@@ -263,7 +263,7 @@ async def resolve_backend_selection(
     cluster and returned nothing, with no error anywhere.
 
     Reads no filesystem, so it behaves identically on a replica whose local disk
-    never held the KB directory. KB directories written by a Langflow version that
+    never held the KB directory. KB directories written by an OpenXFlow version that
     predates the row are adopted by ``langflow reconcile-kb-from-disk``, not by an
     implicit fallback here.
 

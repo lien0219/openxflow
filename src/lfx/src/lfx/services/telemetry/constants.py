@@ -8,24 +8,24 @@ IBM_PRODUCT_PROPERTIES: Final = {
     "productCodeType": "WWPC",
     "productPlanName": "opensource",
     "productPlanType": "freemium",
-    "productTitle": "Langflow",
+    "productTitle": "OpenXFlow",
 }
 
 IBM_COMMON_EVENT_MAP: Final[dict[str, tuple[str, str | None]]] = {
-    "version": ("Started Process", "Langflow"),
-    "run": ("Ran Process", "Langflow Flow"),
-    "deployment": ("Ran Process", "Langflow Deployment"),
-    "integration_action": ("Ran Process", "Langflow Integration"),
-    "deployment_provider": ("Ran Process", "Langflow Deployment Provider"),
-    "deployment_run": ("Ran Process", "Langflow Deployment"),
-    "shutdown": ("Ended Process", "Langflow"),
+    "version": ("Started Process", "OpenXFlow"),
+    "run": ("Ran Process", "OpenXFlow Flow"),
+    "deployment": ("Ran Process", "OpenXFlow Deployment"),
+    "integration_action": ("Ran Process", "OpenXFlow Integration"),
+    "deployment_provider": ("Ran Process", "OpenXFlow Deployment Provider"),
+    "deployment_run": ("Ran Process", "OpenXFlow Deployment"),
+    "shutdown": ("Ended Process", "OpenXFlow"),
     "email": ("UI Interaction", None),
-    "playground": ("Ran Process", "Langflow Playground"),
-    "component": ("Ran Process", "Langflow Component"),
-    "component_inputs": ("Ran Process", "Langflow Component Input"),
-    "component_index": ("Ran Process", "Langflow Component Index"),
-    "exception": ("Ended Process", "Langflow Exception"),
-    "mcp_tool": ("Ran Process", "Langflow MCP Tool"),
+    "playground": ("Ran Process", "OpenXFlow Playground"),
+    "component": ("Ran Process", "OpenXFlow Component"),
+    "component_inputs": ("Ran Process", "OpenXFlow Component Input"),
+    "component_index": ("Ran Process", "OpenXFlow Component Index"),
+    "exception": ("Ended Process", "OpenXFlow Exception"),
+    "mcp_tool": ("Ran Process", "OpenXFlow MCP Tool"),
 }
 
 
@@ -33,6 +33,6 @@ def get_ibm_common_event(path: str | None) -> tuple[str, str | None, str]:
     legacy_event = path or "version"
     event, process_type = IBM_COMMON_EVENT_MAP.get(
         legacy_event,
-        ("Ran Process", f"Langflow {legacy_event.replace('_', ' ').title()}"),
+        ("Ran Process", f"OpenXFlow {legacy_event.replace('_', ' ').title()}"),
     )
     return event, process_type, legacy_event

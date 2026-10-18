@@ -1,6 +1,6 @@
 """Rules for manually entered Slack credentials, and the app-level token in particular.
 
-Slack issues three kinds of token and Langflow stores two of them manually:
+Slack issues three kinds of token and OpenXFlow stores two of them manually:
 
 * a **bot token** (``xoxb-``), which the "as app" actions call the Web API with -
   on Desktop, where there is no bot OAuth, it is pasted in;
@@ -45,7 +45,7 @@ APP_TOKEN_SCOPE = "connections:write"  # noqa: S105 - an OAuth scope name, not a
 
 
 class ManualCredentialError(ValueError):
-    """A manually entered credential that Langflow will not store."""
+    """A manually entered credential that OpenXFlow will not store."""
 
 
 def is_app_token_connection(row: Connection) -> bool:
@@ -80,7 +80,7 @@ def prepare_manual_credential(payload: ConnectionCreate, *, context: str) -> Con
 
     if context == "hosted":
         msg = (
-            "Slack app-level tokens are for Socket Mode, which hosted Langflow does not offer: a Slack app "
+            "Slack app-level tokens are for Socket Mode, which hosted OpenXFlow does not offer: a Slack app "
             "listed in the Slack Marketplace cannot use it. Hosted Slack triggers receive events through the "
             "Events API instead."
         )

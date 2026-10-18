@@ -65,7 +65,7 @@ async def test_outbound_errors_are_removed(tmp_path, monkeypatch, payload, path,
     assert not any(key.endswith("ErrorMessage") or key in {"exceptionMessage", "error"} for key in body["properties"])
     for key, value in safe_fields.items():
         assert body["properties"][key] == value
-    assert body["properties"]["productTitle"] == "Langflow"
+    assert body["properties"]["productTitle"] == "OpenXFlow"
     assert payload.model_dump() == before
 
 

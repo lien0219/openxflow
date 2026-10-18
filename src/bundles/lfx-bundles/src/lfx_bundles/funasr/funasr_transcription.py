@@ -34,7 +34,7 @@ class FunASRTranscriptionComponent(Component):
             display_name="FunASR Base URL",
             value="http://127.0.0.1:8000/v1",
             info=(
-                "Base URL or full /audio/transcriptions endpoint. When Langflow SSRF protection is enabled, "
+                "Base URL or full /audio/transcriptions endpoint. When OpenXFlow SSRF protection is enabled, "
                 "add the self-hosted FunASR host to LANGFLOW_SSRF_ALLOWED_HOSTS."
             ),
             required=True,

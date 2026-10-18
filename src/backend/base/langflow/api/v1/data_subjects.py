@@ -229,7 +229,7 @@ async def retry_request(request_id: UUID, current_user: CurrentActiveUser, sessi
 # An export and a search answer a GET and add a row to the audit log, so a paused instance refuses them.
 @router.get("/requests/{request_id}/export", dependencies=[Depends(changes_the_instance)])
 async def export_request(request_id: UUID, current_user: CurrentActiveUser, session: DbSession):
-    """Download what Langflow holds about the subject, while the request is still open."""
+    """Download what OpenXFlow holds about the subject, while the request is still open."""
     await _require_admin(current_user)
     request = await _load_request(session, request_id)
     if request.status not in {s.value for s in OPEN_STATUSES} or request.status == DataSubjectRequestStatus.ERASING:
@@ -273,7 +273,7 @@ async def find_end_users(
 
 @router.post("/find", response_model=DryRunSummary)
 async def find_subject(ref: DataSubjectRef, current_user: CurrentActiveUser, session: DbSession) -> DryRunSummary:
-    """Count what Langflow holds about a subject, without creating a request."""
+    """Count what OpenXFlow holds about a subject, without creating a request."""
     await _require_admin(current_user)
     try:
         if ref.subject_type == DataSubjectType.BUILDER:

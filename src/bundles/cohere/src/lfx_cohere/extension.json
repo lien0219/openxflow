@@ -3,7 +3,7 @@
   "id": "lfx-cohere",
   "version": "0.2.0",
   "name": "Cohere",
-  "description": "Cohere component(s) as a standalone Langflow Extension Bundle.",
+  "description": "Cohere component(s) as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

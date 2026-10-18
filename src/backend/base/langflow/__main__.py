@@ -76,7 +76,7 @@ try:
     from lfx.cli.commands import serve_command
     from lfx.cli.run import run as lfx_run
 
-    lfx_app = typer.Typer(name="lfx", help="Langflow Executor commands")
+    lfx_app = typer.Typer(name="lfx", help="OpenXFlow Executor commands")
     lfx_app.command(name="serve", help="Serve a flow as an API", no_args_is_help=True)(serve_command)
     lfx_app.command(name="run", help="Run a flow directly", no_args_is_help=True)(lfx_run)
 
@@ -268,7 +268,7 @@ def multi_worker_bypass_warning(num_workers: int) -> str:
 
     return (
         f"{MULTI_WORKER_BYPASS_ENV_VAR}=true: starting with {num_workers} workers and the "
-        "default in-memory job queue. THIS CONFIGURATION IS UNSUPPORTED WITH THE LANGFLOW UI "
+        "default in-memory job queue. THIS CONFIGURATION IS UNSUPPORTED WITH THE OpenXFlow UI "
         "AND WITH MCP OVER SSE. Every behavior that needs state shared across workers is "
         "degraded:\n"
         "  * The v1 /build editor and playground flows do not work. Build queues live in one "
@@ -342,7 +342,7 @@ def ensure_multi_worker_safe(num_workers: int) -> None:
         "  * Configure a shared job queue: LANGFLOW_JOB_QUEUE_TYPE=redis. Works "
         "for every event_delivery mode.\n"
         "  * Run with --workers 1. Single worker, no cross-worker routing.\n"
-        f"  * If this deployment never uses the Langflow UI or MCP over SSE, set "
+        f"  * If this deployment never uses the OpenXFlow UI or MCP over SSE, set "
         f"{MULTI_WORKER_BYPASS_ENV_VAR}=true to boot anyway and accept per-worker "
         "behavior. Unsupported; read the startup warning it prints first.\n"
         "Note: event_delivery=direct works in multi-worker because the POST "
@@ -495,7 +495,7 @@ def run(
         show_default=False,
     ),
 ) -> None:
-    """Run Langflow."""
+    """Run OpenXFlow."""
     if env_file:
         if is_settings_service_initialized():
             err = (
@@ -517,7 +517,7 @@ def run(
     verbose = log_level == "debug"
     progress = create_langflow_progress(verbose=verbose)
 
-    # Step 0: Initializing Langflow
+    # Step 0: Initializing OpenXFlow
     with progress.step(0):
         logger.debug(f"Loading config from file: '{env_file}'" if env_file else "No env_file provided.")
         set_var_for_macos_issue()
@@ -619,7 +619,7 @@ def run(
         with progress.step(5):
             pass  # Starter projects are added during app startup
 
-    # Step 6: Launching Langflow
+    # Step 6: Launching OpenXFlow
     if use_direct_uvicorn():
         # LANGFLOW_GUNICORN_PRELOAD is a Gunicorn-only knob: it triggers fork-safe
         # master-process preload so workers inherit state via copy-on-write. On
@@ -861,6 +861,7 @@ def stylize_text(text: str, to_style: str, *, is_prerelease: bool) -> str:
 
 
 def print_banner(host: str, port: int, protocol: str) -> None:
+    display_name = "OpenXFlow"
     notices = []
     package_names = []  # Track package names for pip install instructions
     is_pre_release = False  # Track if any package is a pre-release
@@ -869,12 +870,14 @@ def print_banner(host: str, port: int, protocol: str) -> None:
     # Use langflow.utils.version to get the version info
     version_info = get_version_info()
     langflow_version = version_info["version"]
-    package_name = version_info["package"]
+    display_name = version_info["package"]
+    package_name = display_name.replace("OpenXFlow", "Langflow")
     is_pre_release |= langflow_is_pre_release(langflow_version)  # Update pre-release status
 
     notice = build_version_notice(langflow_version, package_name)
+    notice = notice.replace(package_name, display_name)
 
-    notice = stylize_text(notice, package_name, is_prerelease=is_pre_release)
+    notice = stylize_text(notice, display_name, is_prerelease=is_pre_release)
     if notice:
         notices.append(notice)
     package_names.append(package_name)
@@ -888,7 +891,7 @@ def print_banner(host: str, port: int, protocol: str) -> None:
 
     [f"[bold]{notice}[/bold]" for notice in notices if notice]
     styled_package_name = stylize_text(
-        package_name, package_name, is_prerelease=any("pre-release" in notice for notice in notices)
+        display_name, display_name, is_prerelease=any("pre-release" in notice for notice in notices)
     )
 
     title = f"[bold]Welcome to {styled_package_name}[/bold]\n"
@@ -908,22 +911,22 @@ def print_banner(host: str, port: int, protocol: str) -> None:
         status_icon = "🟢"
 
     info_text = (
-        f"{github_icon} GitHub: Star for updates {arrow} https://github.com/langflow-ai/langflow\n"
+        f"{github_icon} GitHub: Star for updates {arrow} https://github.com/lien0219/openxflow\n"
         f"{discord_icon} Discord: Join for support {arrow} https://discord.com/invite/EqksyE2EX9"
     )
     telemetry_text = (
         (
-            "We collect anonymous usage data to improve Langflow.\n"
+            "We collect anonymous usage data to improve OpenXFlow.\n"
             "To opt out, set: [bold]DO_NOT_TRACK=true[/bold] in your environment."
         )
         if os.getenv("DO_NOT_TRACK", os.getenv("LANGFLOW_DO_NOT_TRACK", "False")).lower() != "true"
         else (
-            "We are [bold]not[/bold] collecting anonymous usage data to improve Langflow.\n"
+            "We are [bold]not[/bold] collecting anonymous usage data to improve OpenXFlow.\n"
             "To contribute, set: [bold]DO_NOT_TRACK=false[/bold] in your environment."
         )
     )
     access_host = get_best_access_host(host, port)
-    access_link = f"[bold]{status_icon} Open Langflow {arrow}[/bold] [link={protocol}://{access_host}:{port}]{protocol}://{access_host}:{port}[/link]"
+    access_link = f"[bold]{status_icon} OpenXFlow {arrow}[/bold] [link={protocol}://{access_host}:{port}]{protocol}://{access_host}:{port}[/link]"
 
     message = f"{title}\n{info_text}\n\n{telemetry_text}\n\n{access_link}"
 
@@ -934,21 +937,21 @@ def print_banner(host: str, port: int, protocol: str) -> None:
     except UnicodeEncodeError:
         # Fallback to a simpler banner without emojis for Windows systems with encoding issues
         fallback_message = (
-            f"Welcome to {package_name}\n\n"
-            "* GitHub: https://github.com/langflow-ai/langflow\n"
+            "Welcome to OpenXFlow\n\n"
+            "* GitHub: https://github.com/lien0219/openxflow\n"
             "# Discord: https://discord.com/invite/EqksyE2EX9\n\n"
             f"{telemetry_text}\n\n"
-            f"[OK] Open Langflow -> {protocol}://{access_host}:{port}"
+            f"[OK] OpenXFlow -> {protocol}://{access_host}:{port}"
         )
         try:
             console.print()  # Add line break before fallback banner
             console.print(Panel.fit(fallback_message, border_style="#7528FC", padding=(1, 2)))
         except UnicodeEncodeError:
             # Last resort: use logger instead of print
-            logger.info(f"Welcome to {package_name}")
-            logger.info("GitHub: https://github.com/langflow-ai/langflow")
+            logger.info("Welcome to OpenXFlow")
+            logger.info("GitHub: https://github.com/lien0219/openxflow")
             logger.info("Discord: https://discord.com/invite/EqksyE2EX9")
-            logger.info(f"Open Langflow: {protocol}://{access_host}:{port}")
+            logger.info(f"OpenXFlow: {protocol}://{access_host}:{port}")
 
 
 @app.command()
@@ -1199,14 +1202,14 @@ def convert_sqlite_to_postgres(
         "for a program that runs this command. Logs go to stderr.",
     ),
 ) -> None:
-    """Copy every row of a Langflow SQLite database into Postgres.
+    """Copy every row of an OpenXFlow SQLite database into Postgres.
 
-    Stop Langflow before running this. The source must already be on the latest
-    schema (start this Langflow version against it once). The copy runs in one
+    Stop OpenXFlow before running this. The source must already be on the latest
+    schema (start this OpenXFlow version against it once). The copy runs in one
     transaction and is checked table by table, so it either lands whole or not at
     all, and running it again is safe. Nothing in the source is changed.
 
-    SQLite never enforced Langflow's foreign keys, so deletes can leave rows that
+    SQLite never enforced OpenXFlow's foreign keys, so deletes can leave rows that
     point at nothing. They are refused, naming each key, unless --drop-orphans.
 
     A command line is visible to other users of the machine. Set the URLs in
@@ -1471,7 +1474,7 @@ async def _relocate_files(
 
 
 async def _refuse_a_database_not_at_this_versions_head(*, as_json: bool = False) -> None:
-    """Exit unless the database is at this Langflow's migration head.
+    """Exit unless the database is at this OpenXFlow's migration head.
 
     This version's queries need this version's schema, and migrating is the server's
     job, so a database at any other revision is left as it is.
@@ -1487,8 +1490,8 @@ async def _refuse_a_database_not_at_this_versions_head(*, as_json: bool = False)
     if current != expected:
         message = (
             f"the database is at migration revision {', '.join(sorted(current)) or 'none'}, "
-            f"and this Langflow expects {', '.join(sorted(expected))}. This command does not migrate the database. "
-            "Run it with the Langflow version that matches the database."
+            f"and this OpenXFlow expects {', '.join(sorted(expected))}. This command does not migrate the database. "
+            "Run it with the OpenXFlow version that matches the database."
         )
         if as_json:
             emit("error", code="schema_mismatch", message=message)
@@ -1520,7 +1523,7 @@ def relocation_lines(result) -> list[str]:
 
 
 async def _schema_mismatch() -> str | None:
-    """Say why the database is not at this Langflow's schema, or None when it is."""
+    """Say why the database is not at this OpenXFlow's schema, or None when it is."""
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
@@ -1535,9 +1538,9 @@ async def _schema_mismatch() -> str | None:
     if found == expected:
         return None
     return (
-        f"The database is at revision {', '.join(sorted(found)) or 'none'} and this Langflow expects "
+        f"The database is at revision {', '.join(sorted(found)) or 'none'} and this OpenXFlow expects "
         f"{', '.join(sorted(expected))}. This command does not migrate the database: run it with the "
-        "Langflow version that matches the database, or upgrade the database first."
+        "OpenXFlow version that matches the database, or upgrade the database first."
     )
 
 
@@ -1645,7 +1648,7 @@ def migration_preflight(
     ),
     target_version: str = typer.Option(
         "",
-        help="Langflow version the target image runs, such as 1.13.0. Refuses a target older than this Langflow. "
+        help="OpenXFlow version the target image runs, such as 1.13.0. Refuses a target older than this OpenXFlow. "
         "--target-revision is exact and wins when both are given.",
     ),
     target_secret_key_file: Path | None = typer.Option(
@@ -1820,7 +1823,7 @@ def show_version(*, value: bool):
         default = "DEV"
         raw_info = get_version_info()
         version = raw_info.get("version", default) if raw_info else default
-        typer.echo(f"langflow {version}")
+        typer.echo(f"OpenXFlow {version}")
         raise typer.Exit
 
 

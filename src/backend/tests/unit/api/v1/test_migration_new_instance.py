@@ -1632,7 +1632,7 @@ async def test_a_destination_at_another_revision_is_not_read_and_the_check_says_
     assert [(row["name"], row["there"]["status"], row["same"]) for row in kept["report"]["checks"]] == [
         ("schema", "fail", False)
     ]
-    assert kept["report"]["checks"][0]["there"]["summary"].startswith("database is at f00dfeedf00d and this Langflow")
+    assert kept["report"]["checks"][0]["there"]["summary"].startswith("database is at f00dfeedf00d and this OpenXFlow")
     assert (kept["status"], kept["report"]["ok"], _states(migration)[CHECK]) == (
         "done",
         False,

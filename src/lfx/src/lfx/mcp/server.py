@@ -103,9 +103,9 @@ async def _telemetry_lifespan(_server: FastMCP) -> AsyncIterator[dict]:
 
 ensure_fastmcp_settings_ready()
 mcp = FastMCP(
-    "langflow-mcp",
+    "openxflow-mcp",
     instructions=(
-        "Langflow MCP server -- build and run AI flows on a Langflow instance.\n"
+        "OpenXFlow MCP server -- build and run AI flows on an OpenXFlow instance.\n"
         "\n"
         "Typical workflow:\n"
         "  1. login (or set LANGFLOW_API_KEY env var)\n"
@@ -249,13 +249,13 @@ def _extract_vertex_error(build_data: dict[str, Any]) -> str:
 @mcp.tool()
 @_tracked
 async def login(username: str, password: str, server_url: str | None = None) -> dict[str, str]:
-    """Authenticate with a Langflow server. Call this first.
+    """Authenticate with an OpenXFlow server. Call this first.
 
     Credentials are stored and reused for all subsequent calls.
 
     Args:
-        username: Langflow username.
-        password: Langflow password.
+        username: OpenXFlow username.
+        password: OpenXFlow password.
         server_url: Server URL (defaults to LANGFLOW_SERVER_URL env var or http://localhost:7860).
     """
     # Only close the client owned by this session (contextvar). The shared
@@ -1622,13 +1622,13 @@ async def run_assistant(
     session_id: str | None = None,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
-    """Ask the Langflow Assistant to build, edit, or explain a flow.
+    """Ask the OpenXFlow Assistant to build, edit, or explain a flow.
 
     The assistant runs server-side with its full agent loop (component search,
     flow build, canvas edits); this tool consumes it through the REST API with
     the caller's own credentials, so identity needs no extra argument. Any
     resulting canvas change is persisted to the flow and immediately visible
-    in the Langflow UI.
+    in the OpenXFlow UI.
 
     Args:
         instruction: Natural-language request, e.g. "Build a flow with a Chat

@@ -3,7 +3,7 @@
   "id": "lfx-serpingapi",
   "version": "0.1.0",
   "name": "Serping API",
-  "description": "Serping API Google SERP web-search component as a standalone Langflow Extension Bundle.",
+  "description": "Serping API Google SERP web-search component as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

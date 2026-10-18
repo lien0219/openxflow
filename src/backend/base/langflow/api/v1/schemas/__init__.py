@@ -374,7 +374,7 @@ class SimplifiedAPIRequest(BaseModel):
         description=(
             "Optional end-user identifier forwarded to tracing providers (e.g. Langfuse) "
             "as the trace's user_id. Does not affect authentication or authorization — the "
-            "API key owner remains the effective Langflow user."
+            "API key owner remains the effective OpenXFlow user."
         ),
     )
 

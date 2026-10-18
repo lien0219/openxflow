@@ -6,7 +6,7 @@ decides which Slack transport the trigger runs on from the connection it names
 (an OAuth bot installation receives the Events API, an app-level token connection
 holds a Socket Mode socket), and at run time the node hands the firing event to
 the rest of the flow. The flow never names a transport, so the same flow JSON
-runs on hosted Langflow, a self-managed instance, and Langflow Desktop.
+runs on hosted OpenXFlow, a self-managed instance, and OpenXFlow Desktop.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def trigger_connection_input(*, capabilities: tuple[str, ...]) -> ConnectionRefI
         required=False,
         info=(
             "Either a Slack app installation (hosted, or self-managed with a public URL: events arrive through "
-            "the Slack Events API) or an app-level token connection (Langflow Desktop, or an instance Slack "
+            "the Slack Events API) or an app-level token connection (OpenXFlow Desktop, or an instance Slack "
             "cannot reach: events arrive over Socket Mode). Required before the trigger can be armed."
         ),
     )

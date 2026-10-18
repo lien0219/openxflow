@@ -3,7 +3,7 @@
   "id": "lfx-serply",
   "version": "0.1.0",
   "name": "Serply",
-  "description": "Serply SERP API web-search component as a standalone Langflow Extension Bundle.",
+  "description": "Serply SERP API web-search component as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

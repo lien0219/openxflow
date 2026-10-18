@@ -132,7 +132,7 @@ class TestSourceChecks:
         report = convert_sqlite_to_postgres(f"sqlite:///{empty}", self.UNREACHABLE_TARGET)
 
         assert not report.ok
-        assert any("no Langflow schema" in p and "VACUUM INTO" in p for p in report.problems)
+        assert any("no OpenXFlow schema" in p and "VACUUM INTO" in p for p in report.problems)
         assert [p.code for p in report.problems] == ["source_not_langflow"]
 
     def test_source_at_another_revision_is_refused(self, sqlite_source):
@@ -905,7 +905,7 @@ class TestCommandOutput:
         assert events[:-2] == [CHECKING, PREPARING_TARGET]
         assert error["code"] == "target_not_empty"
         assert error["message"].startswith("target database is at revision ffffffffffff")
-        assert "another Langflow version" in error["message"]
+        assert "another OpenXFlow version" in error["message"]
         assert "convert into an empty database" in error["message"]
         assert report["problems"] == [{"code": "target_not_empty", "message": error["message"]}]
 

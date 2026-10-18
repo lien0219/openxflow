@@ -173,7 +173,7 @@ _DEFAULT_OPENSEARCH_CONFIG = {
 
 
 class KnowledgeComponent(Component):
-    """One component for both writing into and reading from a Langflow knowledge base.
+    """One component for both writing into and reading from an OpenXFlow knowledge base.
 
     A ``TabInput`` switches between ingestion and retrieval. The
     ``update_build_config`` / ``update_outputs`` hooks hide the inputs
@@ -182,7 +182,7 @@ class KnowledgeComponent(Component):
     """
 
     display_name = "Knowledge"
-    description = "Ingest into or retrieve from a Langflow knowledge base."
+    description = "Ingest into or retrieve from an OpenXFlow knowledge base."
     icon = "database"
     name = "Knowledge"
 
@@ -284,7 +284,7 @@ class KnowledgeComponent(Component):
                 "data": {
                     "node": {
                         "name": "create_knowledge_base",
-                        "description": "Create new knowledge in Langflow.",
+                        "description": "Create new knowledge in OpenXFlow.",
                         "display_name": "Create new Knowledge Base",
                         "field_order": [
                             "01_new_kb_name",
@@ -303,7 +303,7 @@ class KnowledgeComponent(Component):
                                 display_name="Choose Embedding Model",
                                 info=(
                                     "Select the embedding model to use for this knowledge base. "
-                                    "Langflow uses the configured credentials for that model provider."
+                                    "OpenXFlow uses the configured credentials for that model provider."
                                 ),
                                 required=True,
                                 model_type="embedding",
@@ -1757,7 +1757,7 @@ class KnowledgeComponent(Component):
         except ModuleNotFoundError as exc:
             if exc.name != "langflow":
                 raise
-            msg = "Knowledge Base retrieval requires Langflow's application services. Run this flow in Langflow."
+            msg = "Knowledge Base retrieval requires OpenXFlow's application services. Run this flow in OpenXFlow."
             raise RuntimeError(msg) from None
 
         async with session_scope() as db:

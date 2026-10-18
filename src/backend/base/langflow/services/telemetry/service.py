@@ -130,7 +130,7 @@ class TelemetryService(Service):
             if process_type is not None:
                 payload_dict["processType"] = process_type
             else:
-                payload_dict.update({"action": "registered", "name": "Email", "namespace": "Langflow"})
+                payload_dict.update({"action": "registered", "name": "Email", "namespace": "OpenXFlow"})
             body = {
                 "anonymousId": event_anonymous_id,
                 "event": event,

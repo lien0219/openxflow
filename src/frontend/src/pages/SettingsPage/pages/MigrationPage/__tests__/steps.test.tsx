@@ -302,7 +302,7 @@ describe("Where your data goes", () => {
     [
       "pgvector_package_missing",
       "This server has no pgvector package. Install langflow[pgvector].",
-      "This Langflow server doesn't have the pgvector package. Install it, restart Langflow, then test again.",
+      "This OpenXFlow server doesn't have the pgvector package. Install it, restart OpenXFlow, then test again.",
     ],
   ])(
     "says under Knowledge bases why they can't be copied there: %s",
@@ -382,7 +382,7 @@ describe("Where your data goes", () => {
     // The note above it says where the knowledge bases go, so the refusal is what to do, and no more.
     const refusal = screen.getByRole("alert");
     expect(refusal.firstElementChild).toHaveTextContent(
-      /^Set PGVECTOR_CONNECTION_STRING on this server to that database and restart Langflow, then test again\.$/,
+      /^Set PGVECTOR_CONNECTION_STRING on this server to that database and restart OpenXFlow, then test again\.$/,
     );
     expect(refusal).toHaveTextContent("PGVECTOR_CONNECTION_STRING is not set");
   });
@@ -1687,7 +1687,7 @@ describe("Copy the database", () => {
   it.each([
     [
       "secrets_missing",
-      "Langflow no longer holds the passwords and keys of the new instance. Enter them again in 'Where your data goes'.",
+      "OpenXFlow no longer holds the passwords and keys of the new instance. Enter them again in 'Where your data goes'.",
     ],
     ["run_active", "Another step is running. Wait for it to finish."],
     // A step above opened again in another tab, and this page has not read that yet.
@@ -2430,7 +2430,7 @@ describe("Copy knowledge bases and files", () => {
       .map((item) => item.textContent);
     expect(lines).toEqual([
       "cat.txt (u-1)The bucket already holds a different file with this name. Nothing is overwritten.",
-      "a\\b.txt (u-1)This file's stored name has a backslash or \"..\" in it, which Langflow's file storage refuses, so it can't be copied.",
+      "a\\b.txt (u-1)This file's stored name has a backslash or \"..\" in it, which OpenXFlow's file storage refuses, so it can't be copied.",
       "gone.txt (u-1)Nothing is stored for this name, so there is nothing to copy. It will show as missing.",
       "big.bin (u-1)Can't write to the bucket. Check 'Where your data goes', then try again.Details, big.binSlowDown",
     ]);
@@ -2556,7 +2556,7 @@ describe("Copy knowledge bases and files", () => {
       screen.getByText(/^This instance uses PostgreSQL, so it switches/),
     ).toBeInTheDocument();
     const line =
-      "This instance already uses PostgreSQL, so its knowledge bases are copied to the store this server reads them from. Set PGVECTOR_CONNECTION_STRING on this server to that database and restart Langflow, then copy again.";
+      "This instance already uses PostgreSQL, so its knowledge bases are copied to the store this server reads them from. Set PGVECTOR_CONNECTION_STRING on this server to that database and restart OpenXFlow, then copy again.";
 
     // Nothing ran, and the step says why it will not.
     expect(screen.getByRole("alert")).toHaveTextContent(line);
@@ -3784,7 +3784,7 @@ describe("Check the copy", () => {
       screen.getByRole("button", { name: "Check the copy" }),
     );
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Langflow no longer holds the passwords and keys of the new instance. Enter them again in 'Where your data goes'.",
+      "OpenXFlow no longer holds the passwords and keys of the new instance. Enter them again in 'Where your data goes'.",
     );
     unmount();
 

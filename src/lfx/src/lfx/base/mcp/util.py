@@ -855,7 +855,7 @@ async def get_flow_snake_case(
         from langflow.services.database.models.flow.model import Flow
         from sqlmodel import select
     except ImportError as e:
-        msg = "Langflow Flow model is not available. This feature requires the full Langflow installation."
+        msg = "OpenXFlow Flow model is not available. This feature requires the full OpenXFlow installation."
         raise ImportError(msg) from e
 
     uuid_user_id = UUID(user_id) if isinstance(user_id, str) else user_id
@@ -2217,7 +2217,7 @@ class MCPStdioClient(_PooledSessionClient):
         safe_env = _validate_mcp_stdio_env(env)
         if AGENTIC_MCP_MODULE in command or any(AGENTIC_MCP_MODULE in arg for arg in args):
             if not current_user_id:
-                msg = "The Langflow agentic MCP server requires an authenticated user context and cannot be used here."
+                msg = "The OpenXFlow agentic MCP server requires an authenticated user context and cannot be used here."
                 raise ValueError(msg)
             # Bind the trusted identity only after validating the tenant-controlled
             # environment. Supplying this key in the config is rejected above.
@@ -2939,7 +2939,7 @@ async def update_tools(
 
         is_agentic_server = AGENTIC_MCP_MODULE in command or any(AGENTIC_MCP_MODULE in arg for arg in args)
         if is_agentic_server and not current_user_id:
-            msg = "The Langflow agentic MCP server requires an authenticated user context and cannot be used here."
+            msg = "The OpenXFlow agentic MCP server requires an authenticated user context and cannot be used here."
             raise ValueError(msg)
         # `command` is a structured executable field, not a shell fragment. Keeping it
         # intact preserves legitimate executable paths that contain spaces.

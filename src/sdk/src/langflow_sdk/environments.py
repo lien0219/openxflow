@@ -1,7 +1,7 @@
 """Environment configuration for langflow-sdk.
 
 Loads named environment definitions from a TOML file so teams can switch
-between Langflow instances (dev / staging / production) without code changes.
+between OpenXFlow instances (dev / staging / production) without code changes.
 
 Config file lookup order
 ------------------------
@@ -47,7 +47,7 @@ _USER_PATH = Path.home() / ".config" / "langflow" / "environments.toml"
 _EXAMPLE_CONFIG = """\
 # langflow-environments.toml
 #
-# Define named Langflow environments.  The api_key_env field is the *name*
+# Define named OpenXFlow environments.  The api_key_env field is the *name*
 # of an environment variable that holds the API key for that instance.
 #
 # [environments.staging]

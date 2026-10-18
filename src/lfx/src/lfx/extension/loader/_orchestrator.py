@@ -1,7 +1,7 @@
 """Load orchestration: turn a directory tree into a :class:`LoadResult`.
 
 This module wires the discovery + detection layers together and exposes the
-two public entry points the rest of Langflow consumes:
+two public entry points the rest of OpenXFlow consumes:
 
     - :func:`load_extension` for an installed Extension (or filesystem dev
       checkout) that ships a v0 manifest.  Loads at the ``official`` slot.
@@ -502,7 +502,7 @@ def load_extension(
                 content=str(declared),
                 hint=(
                     f"Update the manifest's lfx.compat to include "
-                    f'"{BUNDLE_API_VERSION!s}", or install a Langflow whose '
+                    f'"{BUNDLE_API_VERSION!s}", or install an OpenXFlow whose '
                     f"BUNDLE_API_VERSION matches the bundle's declared compat."
                 ),
             )

@@ -21,7 +21,7 @@ class SecuritySettings(BaseModel):
 
     # SSRF Protection
     ssrf_protection_enabled: bool = True
-    """If set to True, Langflow will enable SSRF (Server-Side Request Forgery) protection.
+    """If set to True, OpenXFlow will enable SSRF (Server-Side Request Forgery) protection.
     When enabled, blocks requests to private IP ranges, localhost, and cloud metadata endpoints.
     When False, no URL validation is performed, allowing requests to any destination
     including internal services, private networks, and cloud metadata endpoints.
@@ -101,7 +101,7 @@ class SecuritySettings(BaseModel):
 
     A destination resolved from a process environment variable is already operator-controlled
     and does not need to be listed: an operator who sets OPENSEARCH_URL on the server keeps
-    working with no configuration change. Only values written through the Langflow variables
+    working with no configuration change. Only values written through the OpenXFlow variables
     UI/API, or posted in a request body (Chroma's cloud_host), consult this list. Chroma Cloud's
     fixed default host is not tenant input and is always permitted.
 
@@ -333,7 +333,7 @@ class SecuritySettings(BaseModel):
     serving_end_user_header: str | None = None
     """Name of the trusted request header that carries the end-user identity on the serving plane
     (e.g. ``X-End-User-Id``). The value is an opaque, deterministic per-user string minted and
-    injected by the authenticated gateway; Langflow does not parse or validate it, it only uses it
+    injected by the authenticated gateway; OpenXFlow does not parse or validate it, it only uses it
     as the per-user memory/state scope key.
 
     UNSET (the default) means the feature is OFF: no end-user identity is read and every serving

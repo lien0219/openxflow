@@ -78,7 +78,7 @@ def build_schema() -> dict[str, Any]:
     )
     schema["$schema"] = JSON_SCHEMA_DIALECT
     schema["$id"] = EXTENSION_SCHEMA_URL
-    schema["title"] = "Langflow Extension Manifest (v1)"
+    schema["title"] = "OpenXFlow Extension Manifest (v1)"
 
     deferred_names = _public_deferred_names()
     deferred_docs: dict[str, str] = {}
@@ -96,7 +96,7 @@ def build_schema() -> dict[str, Any]:
     schema["x-deferred-fields"] = deferred_docs
 
     schema["description"] = (
-        "Schema for the v0 Langflow Extension manifest. "
+        "Schema for the v0 OpenXFlow Extension manifest. "
         "Reserved field names that are deferred to a future milestone "
         "are absent from this schema and are listed under ``x-deferred-fields``; "
         "manifests that set them are rejected via ``additionalProperties: false``. "

@@ -412,7 +412,7 @@ def test_connection_configuration_failures_use_usage_exit_code_for_multistep_com
     for command in commands:
         result = runner.invoke(app, command)
         assert result.exit_code == 2, result.output
-        assert "Langflow URL is required" in result.output
+        assert "OpenXFlow URL is required" in result.output
 
 
 def test_diff_uses_exit_three_when_drift_exists(monkeypatch, tmp_path: Path) -> None:

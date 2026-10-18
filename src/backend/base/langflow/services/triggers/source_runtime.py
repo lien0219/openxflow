@@ -30,7 +30,7 @@ def source_failure_detail(exc: BaseException) -> str:
     if isinstance(exc, ConnectionUnresolvedError) and is_local_configuration_failure(exc):
         return (
             f"{type(exc).__name__} ({exc.reason}). The source worker must use the same LANGFLOW_SECRET_KEY and "
-            "LANGFLOW_CONNECTION_OAUTH_REGISTRATIONS as the Langflow API"
+            "LANGFLOW_CONNECTION_OAUTH_REGISTRATIONS as the OpenXFlow API"
         )
     return type(exc).__name__
 

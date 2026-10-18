@@ -33,7 +33,7 @@ from langflow.cli.admin.reconcile import AdminReconciler, ManifestResolutionErro
 
 OutputFormat = Literal["table", "json"]
 
-admin_app = typer.Typer(no_args_is_help=True, help="Administer Langflow users, teams, roles, and assignments.")
+admin_app = typer.Typer(no_args_is_help=True, help="Administer OpenXFlow users, teams, roles, and assignments.")
 users_app = typer.Typer(no_args_is_help=True, help="Manage users.")
 teams_app = typer.Typer(no_args_is_help=True, help="Manage teams.")
 members_app = typer.Typer(no_args_is_help=True, help="Manage team membership.")
@@ -60,8 +60,8 @@ class AdminInvocation:
 @admin_app.callback()
 def administration_options(
     ctx: typer.Context,
-    url: Annotated[str | None, typer.Option("--url", help="Langflow base URL.")] = None,
-    api_key: Annotated[str | None, typer.Option("--api-key", help="Langflow API key.")] = None,
+    url: Annotated[str | None, typer.Option("--url", help="OpenXFlow base URL.")] = None,
+    api_key: Annotated[str | None, typer.Option("--api-key", help="OpenXFlow API key.")] = None,
     profile: Annotated[str | None, typer.Option("--profile", help="Named non-secret target profile.")] = None,
     profile_file: Annotated[
         Path,

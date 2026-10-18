@@ -1,8 +1,8 @@
-"""Copy a Langflow SQLite database into Postgres.
+"""Copy an OpenXFlow SQLite database into Postgres.
 
 No dump tool crosses the two engines: ``pg_dump`` cannot read SQLite, and
 SQLite's ``.dump`` emits DDL Postgres rejects. So this builds the Postgres schema
-with Langflow's own alembic migrations and then moves rows, converting each
+with OpenXFlow's own alembic migrations and then moves rows, converting each
 value to the type the Postgres column declares.
 
 It refuses rather than guesses. Nothing is written until the whole source has
@@ -96,7 +96,7 @@ def convert_sqlite_to_postgres(
     on_progress: Callable[[str, int, int | None, str | None], None] | None = None,
     on_table: Callable[[TableCopy], None] | None = None,
 ) -> ConversionReport:
-    """Copy every row of a SQLite Langflow database into a Postgres database.
+    """Copy every row of an OpenXFlow SQLite database into a Postgres database.
 
     The target may be empty or a previous run of this conversion. Returns a
     report; ``report.ok`` is False and nothing is committed when anything was
@@ -134,8 +134,8 @@ def convert_sqlite_to_postgres(
             report.problems.append(
                 Problem(
                     "source_not_langflow",
-                    "source database has no Langflow schema. If it is a copy, make it with sqlite3's .backup or "
-                    "VACUUM INTO: Langflow runs SQLite in WAL mode, and a plain cp can come out empty",
+                    "source database has no OpenXFlow schema. If it is a copy, make it with sqlite3's .backup or "
+                    "VACUUM INTO: OpenXFlow runs SQLite in WAL mode, and a plain cp can come out empty",
                 )
             )
             return report
@@ -143,8 +143,8 @@ def convert_sqlite_to_postgres(
             report.problems.append(
                 Problem(
                     "source_not_at_head",
-                    f"source database is at revision {source_revision}, this Langflow expects {head}; "
-                    "start this Langflow version against the SQLite database once so it migrates, then convert",
+                    f"source database is at revision {source_revision}, this OpenXFlow expects {head}; "
+                    "start this OpenXFlow version against the SQLite database once so it migrates, then convert",
                 )
             )
             return report
@@ -178,8 +178,8 @@ def convert_sqlite_to_postgres(
                 report.problems.append(
                     Problem(
                         "target_not_empty",
-                        f"target database is at revision {_revision(target)}, which this Langflow cannot migrate "
-                        f"({exc}), so it was last used by another Langflow version; convert into an empty database",
+                        f"target database is at revision {_revision(target)}, which this OpenXFlow cannot migrate "
+                        f"({exc}), so it was last used by another OpenXFlow version; convert into an empty database",
                     )
                 )
                 return report
@@ -220,7 +220,7 @@ def convert_sqlite_to_postgres(
 
 
 def upgrade_to_head(database_url: str) -> None:
-    """Build or migrate a database's schema with Langflow's own alembic migrations."""
+    """Build or migrate a database's schema with OpenXFlow's own alembic migrations."""
     config = Config(stdout=io.StringIO())
     config.set_main_option("script_location", str(_script_location()))
     config.set_main_option("sqlalchemy.url", _async_url(database_url).replace("%", "%%"))
@@ -257,7 +257,7 @@ def coerce_value(value: Any, column_type: sa.types.TypeEngine) -> Any:
     if isinstance(column_type, sa.DateTime):
         parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
         if column_type.timezone and parsed.tzinfo is None:
-            # Langflow writes UTC. SQLite drops the offset, so restore it.
+            # OpenXFlow writes UTC. SQLite drops the offset, so restore it.
             parsed = parsed.replace(tzinfo=timezone.utc)
         elif not column_type.timezone and parsed.tzinfo is not None:
             # Rows written through raw SQL can keep an offset. Postgres would convert it to
@@ -419,7 +419,7 @@ def _enum_type(column_type: sa.types.TypeEngine | None) -> sa.Enum | None:
 
 
 def _enum_label(value: Any, model_type: sa.types.TypeEngine | None) -> Any:
-    """The enum label Langflow reads ``value`` as.
+    """The enum label OpenXFlow reads ``value`` as.
 
     Trace and span rows written before 1.9.2 hold enum names in any case, and
     SQLite rows were never rewritten. The model's column type maps those on
@@ -479,7 +479,7 @@ def _invalid_enum_values(conn: sa.Connection, models: Mapping[str, sa.Table]) ->
 def _orphan_rows(conn: sa.Connection, models: Mapping[str, sa.Table]) -> list[OrphanRows]:
     """Rows whose foreign key points at a row that is gone, per key.
 
-    Langflow never turns SQLite's foreign keys on, so ON DELETE never fires there:
+    OpenXFlow never turns SQLite's foreign keys on, so ON DELETE never fires there:
     clearing a flow's traces leaves its spans, deleting a user leaves their role
     assignments. Postgres rejects such a row partway through the copy, after the
     target was migrated, so they are found here. A CASCADE key counts every row it

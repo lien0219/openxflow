@@ -93,7 +93,7 @@ def validate_relocation_target_config(target_backend_type: str, target_backend_c
         )
         raise ValueError(msg)
     if target_backend_type == "chroma":
-        msg = "--to chroma is not a relocation target: this Langflow no longer stores knowledge bases in Chroma"
+        msg = "--to chroma is not a relocation target: this OpenXFlow no longer stores knowledge bases in Chroma"
         raise ValueError(msg)
     if target_backend_type == "opensearch" and target_backend_config.get("index_name"):
         msg = "--target-config cannot set index_name: relocation needs a separate OpenSearch index for each KB"
@@ -328,20 +328,20 @@ async def _relocate_one(
 def _storage_not_ready(record: KnowledgeBaseRecord) -> str | None:
     """Why the row's store cannot be read yet, or None when it can.
 
-    A Langflow 1.13 server upgrades local Chroma knowledge bases to SQLite at
+    An OpenXFlow 1.13 server upgrades local Chroma knowledge bases to SQLite at
     startup. Until a row's upgrade finishes, it still names Chroma or its storage
     is not ready, and relocate-kb does not read Chroma.
     """
     state = record.storage_state
     if record.backend_type == "chroma" and (record.backend_config or {}).get("mode", "local") != "local":
         return (
-            "it is a Chroma Cloud knowledge base, which this Langflow can neither read nor upgrade, "
+            "it is a Chroma Cloud knowledge base, which this OpenXFlow can neither read nor upgrade, "
             "so it cannot be moved from here; its data is still in Chroma Cloud"
         )
     if record.backend_type == "chroma" or state in ("migrating", "needs_attention"):
         return (
             f"its storage upgrade to SQLite has not finished (backend {record.backend_type}, storage_state {state}); "
-            "start this Langflow version once with a single worker and wait until "
+            "start this OpenXFlow version once with a single worker and wait until "
             "/healthz?require_storage_ready=true returns 200, or retry the upgrade from the storage status API "
             "(/api/v1/knowledge-base-storage/status), then re-run"
         )

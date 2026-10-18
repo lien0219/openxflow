@@ -121,7 +121,7 @@ async def resolve_arming(session: AsyncSession, *, kind: str, owner_id: UUID, co
     context = deployment_context()
     if kind == "google.gmail":
         if context == "hosted":
-            msg = "Gmail triggers are unavailable on hosted Langflow pending restricted-scope verification."
+            msg = "Gmail triggers are unavailable on hosted OpenXFlow pending restricted-scope verification."
             raise ValueError(msg)
         binding = await session.get(ConnectionOAuth, row.id)
         if binding is None:

@@ -11,7 +11,7 @@ from lfx.utils.constants import MESSAGE_SENDER_AI, MESSAGE_SENDER_NAME_AI
 
 class MessageStoreComponent(Component):
     display_name = "Message Store"
-    description = "Stores a chat message or text into Langflow tables or an external memory."
+    description = "Stores a chat message or text into OpenXFlow tables or an external memory."
     icon = "message-square-text"
     name = "StoreMessage"
     legacy = True
@@ -25,7 +25,7 @@ class MessageStoreComponent(Component):
             name="memory",
             display_name="External Memory",
             input_types=["Memory"],
-            info="The external memory to store the message. If empty, it will use the Langflow tables.",
+            info="The external memory to store the message. If empty, it will use the OpenXFlow tables.",
         ),
         MessageTextInput(
             name="sender",

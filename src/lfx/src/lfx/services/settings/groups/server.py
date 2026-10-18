@@ -19,9 +19,9 @@ class ServerSettings(BaseModel):
     required services). 'dev' (the default) skips those checks. Set via the
     LANGFLOW_DEPLOYMENT_PROFILE environment variable or the --deployment-profile CLI option."""
     host: str = "localhost"
-    """The host on which Langflow will run."""
+    """The host on which OpenXFlow will run."""
     port: int = 7860
-    """The port on which Langflow will run."""
+    """The port on which OpenXFlow will run."""
     runtime_port: int | None = Field(default=None, exclude=True)
     """TEMPORARY: The port detected at runtime after checking for conflicts.
     This field is system-managed only and will be removed in future versions
@@ -29,9 +29,9 @@ class ServerSettings(BaseModel):
     workers: int = 1
     """The number of workers to run."""
     log_level: str = "critical"
-    """The log level for Langflow."""
+    """The log level for OpenXFlow."""
     log_file: str | None = "logs/langflow.log"
-    """The path to log file for Langflow."""
+    """The path to log file for OpenXFlow."""
     alembic_log_file: str = "alembic/alembic.log"
     """The path to log file for Alembic for SQLAlchemy."""
     alembic_log_to_stdout: bool = False
@@ -39,9 +39,9 @@ class ServerSettings(BaseModel):
     frontend_path: str | None = None
     """The path to the frontend directory containing build files. This is for development purposes only."""
     open_browser: bool = False
-    """If set to True, Langflow will open the browser on startup."""
+    """If set to True, OpenXFlow will open the browser on startup."""
     backend_only: bool = False
-    """If set to True, Langflow will not serve the frontend."""
+    """If set to True, OpenXFlow will not serve the frontend."""
     ssl_cert_file: str | None = None
     """Path to the SSL certificate file on the local system."""
     ssl_key_file: str | None = None
@@ -127,7 +127,7 @@ class ServerSettings(BaseModel):
     @classmethod
     def set_user_agent(cls, value):
         if not value:
-            value = "Langflow"
+            value = "OpenXFlow"
         os.environ["USER_AGENT"] = value
         logger.debug(f"Setting user agent to {value}")
         return value

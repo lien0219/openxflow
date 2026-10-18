@@ -148,7 +148,7 @@ def _give_up_later(task_id: str, place: _Place) -> None:
 
 
 class FlowAgentExecutor(AgentExecutor):
-    """Runs a Langflow flow for one A2A ``message/send`` and reports a terminal Task."""
+    """Runs an OpenXFlow flow for one A2A ``message/send`` and reports a terminal Task."""
 
     def __init__(self, run_flow: RunFlow, resume_flow: ResumeFlow) -> None:
         self._run_flow = run_flow

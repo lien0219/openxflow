@@ -59,7 +59,7 @@ async def verify_schema() -> None:
         except Exception as exc:
             msg = (
                 f"The trigger tables are missing or unreadable ({model.__tablename__}). "
-                "The listener process never migrates: start (or upgrade) the Langflow API "
+                "The listener process never migrates: start (or upgrade) the OpenXFlow API "
                 "against this database first, then start the listeners."
             )
             raise RuntimeError(msg) from exc
@@ -107,7 +107,7 @@ async def warn_on_unrefreshable_connections() -> list[str]:
     await logger.awarning(
         "This listener holds %s OAuth-backed connection(s) whose registrations it cannot see (%s). Their access "
         "tokens cannot be refreshed here. Set LANGFLOW_CONNECTION_OAUTH_REGISTRATIONS to the same value the "
-        "Langflow API runs with; until then the affected triggers stay armed and retry.",
+        "OpenXFlow API runs with; until then the affected triggers stay armed and retry.",
         sum(1 for row in bindings if row.registration_id in set(missing)),
         ", ".join(missing),
     )
@@ -145,10 +145,10 @@ async def run_listeners(*, stop_event: asyncio.Event | None = None) -> None:
         # below exists to avoid.
         supervisor.start()
         await health.start()
-        await logger.ainfo("Langflow listeners started (holder %s)", supervisor.holder)
+        await logger.ainfo("OpenXFlow listeners started (holder %s)", supervisor.holder)
         await stopping.wait()
     finally:
-        await logger.ainfo("Langflow listeners stopping")
+        await logger.ainfo("OpenXFlow listeners stopping")
         with contextlib.suppress(Exception):
             await health.stop()
         with contextlib.suppress(Exception):

@@ -72,7 +72,7 @@ class ALTKAgentComponent(ALTKBaseAgentComponent):
     """Retired node retained for saved-flow compatibility and migration guidance."""
 
     display_name: str = "ALTK Agent"
-    description: str = "ALTK was retired in Langflow 1.13.0. Replace this node with the Agent component."
+    description: str = "ALTK was retired in OpenXFlow 1.13.0. Replace this node with the Agent component."
     documentation: str = "https://docs.langflow.org/bundles-altk"
     icon = "zap"
     beta = True

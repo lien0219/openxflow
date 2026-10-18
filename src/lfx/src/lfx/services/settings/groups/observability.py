@@ -5,9 +5,9 @@ class ObservabilitySettings(BaseModel):
     """Metrics exposure and historical record retention."""
 
     prometheus_enabled: bool = False
-    """If set to True, Langflow will expose Prometheus metrics."""
+    """If set to True, OpenXFlow will expose Prometheus metrics."""
     prometheus_port: int = 9090
-    """The port on which Langflow will expose Prometheus metrics. 9090 is the default port."""
+    """The port on which OpenXFlow will expose Prometheus metrics. 9090 is the default port."""
 
     background_metrics_interval: int = Field(default=15, gt=0)
     """Seconds between background-execution DB-derived metric collector ticks.

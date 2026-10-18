@@ -20,10 +20,10 @@ def _get_version_info():
         ValueError: If the package is not found from the list of package names.
     """
     package_options = [
-        ("langflow", "Langflow"),
-        ("langflow-base", "Langflow"),
-        ("langflow-nightly", "Langflow Nightly"),
-        ("langflow-base-nightly", "Langflow Nightly"),
+        ("langflow", "OpenXFlow"),
+        ("langflow-base", "OpenXFlow"),
+        ("langflow-nightly", "OpenXFlow Nightly"),
+        ("langflow-base-nightly", "OpenXFlow Nightly"),
     ]
     __version__ = None
     for pkg_name, display_name in package_options:

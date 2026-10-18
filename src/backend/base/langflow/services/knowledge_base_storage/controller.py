@@ -450,7 +450,7 @@ async def upgrade(
                 excluded_pids={process.pid for process in _family(supervisor["pid"])}
             )
             if remaining:
-                msg = f"Unselected Langflow workers remain (PIDs {remaining}). Stop their deployments before upgrading"
+                msg = f"Unselected OpenXFlow workers remain (PIDs {remaining}). Stop their deployments before upgrading"
                 raise _error(msg)
             # Fail before downtime for a busy target port or unreadable metadata.
             with socket.socket() as listener:

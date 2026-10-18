@@ -123,7 +123,7 @@ it("lets an administrator retry the bound migration and reports scheduling failu
   mutate.mockImplementation((_params, options) => options.onError());
   render(<StorageUpgradePanel kbId="kb-id" />, { wrapper: wrapper() });
   expect(
-    screen.getByText(/Stop the other Langflow instance/),
+    screen.getByText(/Stop the other OpenXFlow instance/),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /retry upgrade/i }));
   expect(mutate).toHaveBeenCalledWith(

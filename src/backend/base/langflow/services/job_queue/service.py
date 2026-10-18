@@ -1074,7 +1074,7 @@ class RedisJobQueueService(JobQueueService):
             await logger.aerror(
                 f"RedisJobQueueService: cannot reach Redis at {self.connection_target} — {exc}. "
                 "Build events will NOT be delivered. "
-                "Set LANGFLOW_JOB_QUEUE_TYPE=asyncio or start Redis before running Langflow."
+                "Set LANGFLOW_JOB_QUEUE_TYPE=asyncio or start Redis before running OpenXFlow."
             )
 
     async def stop(self) -> None:

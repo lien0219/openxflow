@@ -173,15 +173,15 @@ router = APIRouter(prefix="/deployments", tags=["Deployments"], include_in_schem
 
 DeploymentProviderAccountIdQuery = Annotated[
     UUID,
-    Query(description="Langflow DB provider-account UUID (`deployment_provider_account.id`)."),
+    Query(description="OpenXFlow DB provider-account UUID (`deployment_provider_account.id`)."),
 ]
 DeploymentProviderAccountIdPath = Annotated[
     UUID,
-    Path(description="Langflow DB provider-account UUID (`deployment_provider_account.id`)."),
+    Path(description="OpenXFlow DB provider-account UUID (`deployment_provider_account.id`)."),
 ]
 DeploymentIdPath = Annotated[
     UUID,
-    Path(description="Langflow DB deployment UUID (`deployment.id`)."),
+    Path(description="OpenXFlow DB deployment UUID (`deployment.id`)."),
 ]
 ProjectIdQuery = Annotated[
     UUID | None,
@@ -189,7 +189,7 @@ ProjectIdQuery = Annotated[
 ]
 DeploymentIdQuery = Annotated[
     UUID,
-    Query(description="Langflow DB deployment UUID (`deployment.id`)."),
+    Query(description="OpenXFlow DB deployment UUID (`deployment.id`)."),
 ]
 IncludeProviderDeleteQuery = Annotated[
     bool,
@@ -198,7 +198,7 @@ IncludeProviderDeleteQuery = Annotated[
             "When true (default), deletes the deployment resource (e.g., agent) on the provider, "
             "then removes the local DB row. Other provider-managed resources "
             "(for example, tools and connections) are NOT deleted. "
-            "When false, only the local Langflow DB row is removed; "
+            "When false, only the local OpenXFlow DB row is removed; "
             "nothing is changed on the provider."
         ),
     ),
@@ -301,7 +301,7 @@ async def _delete_local_deployment_row(
     When ``include_provider`` was true on the route, the provider resource is
     already gone (or was already missing) before this helper runs. Either way,
     if the first DB commit fails, retry the local delete once after a rollback
-    so we do not strand a stale Langflow row.
+    so we do not strand a stale OpenXFlow row.
 
     Requires exactly one row deleted (PK + owner scope). A zero-row delete
     means the local row was already gone or the owner scope was wrong — raise
@@ -335,7 +335,7 @@ async def _delete_local_deployment_row(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=(
-                    "Failed to delete the tracked deployment in Langflow. "
+                    "Failed to delete the tracked deployment in OpenXFlow. "
                     "It may already have been deleted from the provider. "
                     "Retry the delete request."
                 ),
@@ -598,7 +598,7 @@ async def create_deployment(
         if existing_deployment is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"The agent '{existing_resource_key}' is already managed by Langflow. "
+                detail=f"The agent '{existing_resource_key}' is already managed by OpenXFlow. "
                 "Update it to make changes, or delete the existing deployment first.",
             )
         with handle_adapter_errors(mapper=deployment_mapper), deployment_provider_scope(provider_id):
@@ -712,7 +712,7 @@ async def list_deployments(
         bool,
         Query(
             description=(
-                "When true, list deployments directly from the provider (bypassing Langflow-tracked deployments)."
+                "When true, list deployments directly from the provider (bypassing OpenXFlow-tracked deployments)."
             )
         ),
     ] = False,
@@ -720,7 +720,7 @@ async def list_deployments(
         FlowVersionIdsQuery,
         Query(
             description=(
-                "Optional Langflow flow version ids (pass as repeated query params, "
+                "Optional OpenXFlow flow version ids (pass as repeated query params, "
                 "e.g. ?flow_version_ids=id1&flow_version_ids=id2). When provided, "
                 "deployments are filtered to those with at least one matching "
                 "attachment (OR semantics across ids). "
@@ -1216,7 +1216,7 @@ async def update_snapshot(
     """Replace an existing provider snapshot's content with a new flow version.
 
     Resolves the deployment context from the attachment record linked to
-    ``provider_snapshot_id``.  Only Langflow-tracked snapshots (those with
+    ``provider_snapshot_id``.  Only OpenXFlow-tracked snapshots (those with
     a ``flow_version_deployment_attachment`` row) can be updated.
     """
     from langflow.services.database.models.deployment.crud import get_deployment as get_deployment_row

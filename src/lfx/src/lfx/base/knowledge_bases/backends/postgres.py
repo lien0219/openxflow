@@ -16,7 +16,7 @@ dimension, different KBs may use different embedding models side by side.
 
 The small async adapter below deliberately uses SQLAlchemy + ``pgvector``
 directly. This keeps the published ``pgvector`` extra satisfiable while
-preserving Langflow's security floor on the Python pgvector client; released
+preserving OpenXFlow's security floor on the Python pgvector client; released
 ``langchain-postgres`` versions still require ``pgvector<0.4``.
 """
 
@@ -82,14 +82,14 @@ _FILTER_EF_SEARCH_CAP = 1000
 _STORAGE_SIZE_SQL = "SELECT COALESCE(pg_total_relation_size(to_regclass(:name)), 0)"
 
 # Separation of duties: the ``vector`` extension is privileged DDL on the
-# database catalog, so *the operator* provisions it — Langflow only reads and
+# database catalog, so *the operator* provisions it — OpenXFlow only reads and
 # writes. Every site that detects the extension's absence (``test_connection``,
 # first-ingest table setup, and — once wired — the deployment pre-flight probe)
 # surfaces this one message so the resolution is always the same, clear step.
 MISSING_EXTENSION_MESSAGE = (
     "The pgvector 'vector' extension is not installed on this database. Ask your "
     "database operator to enable it by running `CREATE EXTENSION vector;` as a "
-    "superuser. Langflow does not install database extensions — it only reads from "
+    "superuser. OpenXFlow does not install database extensions — it only reads from "
     "and writes to the database."
 )
 # Structured ``details.type`` tag on the test-connection result. The frontend
@@ -103,7 +103,7 @@ MISSING_EXTENSION_DETAILS_TYPE = "MissingExtension"
 # configure time, not when the first ingest fails with a raw permission error.
 MISSING_CREATE_PRIVILEGE_MESSAGE = (
     "Connected to Postgres, but this role cannot create tables in the current schema. "
-    "Langflow creates one table per knowledge base on first ingest, so it needs CREATE on the schema. "
+    "OpenXFlow creates one table per knowledge base on first ingest, so it needs CREATE on the schema. "
     "Grant it (for example `GRANT CREATE ON SCHEMA public TO <role>;`) or point "
     "PGVECTOR_CONNECTION_STRING at a role and schema that already has it."
 )
@@ -297,7 +297,7 @@ class _PostgresVectorStore(VectorStore):
 
 
 class PostgresBackend(BaseVectorStoreBackend):
-    """Postgres + pgvector as a Langflow KB backend (environment-driven)."""
+    """Postgres + pgvector as an OpenXFlow KB backend (environment-driven)."""
 
     distance_metric = "cosine"  # the HNSW index is built with vector_cosine_ops
 
@@ -433,7 +433,7 @@ class PostgresBackend(BaseVectorStoreBackend):
         engine = self._ensure_async_engine()
         async with engine.begin() as conn:
             await conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _ADVISORY_LOCK_KEY})
-            # Operator owns the extension; Langflow verifies, never creates it.
+            # Operator owns the extension; OpenXFlow verifies, never creates it.
             if not await self._vector_extension_installed(conn):
                 raise BackendConfigurationError(MISSING_EXTENSION_MESSAGE)
             await conn.execute(

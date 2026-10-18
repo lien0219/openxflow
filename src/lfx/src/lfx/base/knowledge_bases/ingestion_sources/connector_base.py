@@ -3,7 +3,7 @@
 Cloud connectors (S3, Google Drive, OneDrive, SharePoint, IBM COS)
 differ from ``FileUploadSource`` / ``FolderSource`` in two ways:
 
-1. They need **credentials** — resolved from Langflow's
+1. They need **credentials** — resolved from OpenXFlow's
    ``variable_service`` by variable-name reference, not embedded in
    the request payload. Storing variable *names* in ``source_config``
    (instead of the secrets themselves) means the ``ingestion_run``
@@ -165,11 +165,11 @@ class KBConnectorSource(KBIngestionSource):
         return CredentialLease(resolver, request)
 
     async def resolve_secret(self, variable_name: str) -> str | None:
-        """Return the value of a Langflow variable, or ``None`` if absent.
+        """Return the value of an OpenXFlow variable, or ``None`` if absent.
 
         Order of resolution:
 
-        1. Langflow's ``variable_service`` scoped to ``self.user_id``.
+        1. OpenXFlow's ``variable_service`` scoped to ``self.user_id``.
         2. Process env var of the same name (fallback so desktop /
            single-user deployments can skip the UI step).
 
@@ -201,7 +201,7 @@ class KBConnectorSource(KBIngestionSource):
         if not value:
             msg = (
                 f"Required credential variable {variable_name!r} is not "
-                "configured. Set it via Langflow's variable settings or as "
+                "configured. Set it via OpenXFlow's variable settings or as "
                 "an environment variable on the server."
             )
             raise ValueError(msg)
@@ -219,7 +219,7 @@ class KBConnectorSource(KBIngestionSource):
             return None
 
     async def _lookup_variable(self, user_uuid: UUID, variable_name: str) -> str | None:
-        """Look up ``variable_name`` through Langflow's variable service.
+        """Look up ``variable_name`` through OpenXFlow's variable service.
 
         Isolated so tests can patch a single seam. Wrapped in a broad
         try/except because the variable service can raise a handful of
@@ -272,7 +272,7 @@ class OAuthConnectorBase(KBConnectorSource):
       (via ``gcloud auth`` / Azure CLI / Google OAuth Playground /
       Microsoft MSAL sample) to obtain a long-lived refresh token.
     * User stores the refresh token plus OAuth client id/secret as
-      Langflow variables.
+      OpenXFlow variables.
     * The connector mints a short-lived access token on every list /
       fetch call by POSTing the refresh token back to the provider.
 
@@ -315,7 +315,7 @@ class OAuthConnectorBase(KBConnectorSource):
         endpoint yourself. When ``source_config["connection"]`` names a
         connection handle, the token comes from the host's connection
         resolver and this class is a thin adapter over it: no refresh
-        token is stored in a Langflow variable and no token exchange
+        token is stored in an OpenXFlow variable and no token exchange
         happens here. Otherwise the legacy bring-your-own-refresh-token
         flow below applies, caching the token until it is within a
         five-minute window of expiry so a run that performs N list+fetch
@@ -342,7 +342,7 @@ class OAuthConnectorBase(KBConnectorSource):
 
         Kept small and httpx-based on purpose — we don't need the full
         google-auth / msal SDKs just for a single POST, and avoiding
-        those deps keeps Langflow's install footprint tight.
+        those deps keeps OpenXFlow's install footprint tight.
         """
         import httpx
 

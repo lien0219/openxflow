@@ -28,7 +28,7 @@ from uuid import UUID, uuid4
 from lfx.log.logger import logger
 from lfx.utils.env_var_security import safe_getenv
 
-# Who controls a resolved secret's value. A Langflow variable is written by the
+# Who controls a resolved secret's value. A OpenXFlow variable is written by the
 # tenant through the UI/API; a process env var can only be set by whoever runs the
 # server. Destination policy for network backends turns on this distinction.
 SecretSource = Literal["variable", "environment", "missing"]
@@ -71,7 +71,7 @@ class BackendType(str, Enum):
     OPENSEARCH = "opensearch"
 
 
-# Keys Langflow always writes into ``Document.metadata`` for every chunk.
+# Keys OpenXFlow always writes into ``Document.metadata`` for every chunk.
 # Kept here so every backend and helper agrees on the schema.
 METADATA_KEY_SOURCE = "source"
 METADATA_KEY_SOURCE_TYPE = "source_type"
@@ -138,7 +138,7 @@ class BaseVectorStoreBackend(ABC):
     Wraps a LangChain ``VectorStore``: subclasses provide
     ``_build_vector_store`` and override ``storage_size_bytes`` /
     ``teardown`` / ``iter_documents`` where the LangChain primitives don't
-    line up with what Langflow needs.
+    line up with what OpenXFlow needs.
 
     Backends should be lightweight to construct; heavy resources (a Chroma
     persistent client, a MongoDB connection) are the backend's own concern
@@ -187,7 +187,7 @@ class BaseVectorStoreBackend(ABC):
             return None
 
     async def resolve_secret(self, variable_name: str) -> str | None:
-        """Look up ``variable_name`` through Langflow's variable service.
+        """Look up ``variable_name`` through OpenXFlow's variable service.
 
         Thin wrapper over :meth:`resolve_secret_with_source` for the callers that
         only need the value. Returns ``None`` when neither source has a value;
@@ -203,12 +203,12 @@ class BaseVectorStoreBackend(ABC):
         Resolution order matches the connector ingestion sources
         (``connector_base.ConnectorIngestionSource.resolve_secret``):
 
-        1. Langflow's ``variable_service`` scoped to ``self.user_id``.
+        1. OpenXFlow's ``variable_service`` scoped to ``self.user_id``.
         2. Process env var of the same name as a fallback for desktop /
            single-user deployments that skip the UI step.
 
         The provenance matters for values that become a *network destination*.
-        A Langflow variable is written by the tenant through the UI/API, so a URL
+        A OpenXFlow variable is written by the tenant through the UI/API, so a URL
         from source ``"variable"`` is tenant-controlled. A process env var can only
         be set by whoever runs the server, so source ``"environment"`` is
         operator-controlled. ``destination_policy.enforce_kb_destination`` uses that
@@ -258,7 +258,7 @@ class BaseVectorStoreBackend(ABC):
         if not value:
             msg = (
                 f"Required credential variable {variable_name!r} is not "
-                "configured. Set it via Langflow's variable settings or as "
+                "configured. Set it via OpenXFlow's variable settings or as "
                 "an environment variable on the server."
             )
             raise ValueError(msg)

@@ -208,7 +208,7 @@ class TestSourceThatCannotBeRead:
 
 
 class TestTargetVersion:
-    """Admins know the Langflow version their target image runs, not its schema revision."""
+    """Admins know the OpenXFlow version their target image runs, not its schema revision."""
 
     async def test_a_target_on_this_version_passes(self, safe_superuser):  # noqa: ARG002
         check = _check(await run_preflight(target_version=SOURCE_VERSION), "version")
@@ -241,7 +241,7 @@ class TestTargetVersion:
         check = _check(await run_preflight(target_version=mistyped), "version")
 
         assert check.status == "fail"
-        assert "is not a Langflow version" in check.summary
+        assert "is not an OpenXFlow version" in check.summary
 
     async def test_a_revision_is_exact_so_it_wins_over_a_version(self, safe_superuser):  # noqa: ARG002
         check = _check(await run_preflight(target_revision=PARENT, target_version="99.0.0"), "version")
@@ -269,7 +269,7 @@ class TestTargetVersion:
 
         version = json.loads(result.stdout.splitlines()[0])["check"]
         assert (version["name"], version["status"]) == ("version", "fail")
-        assert "Langflow 0.0.1" in version["summary"]
+        assert "OpenXFlow 0.0.1" in version["summary"]
 
 
 class TestDefaultSuperuser:

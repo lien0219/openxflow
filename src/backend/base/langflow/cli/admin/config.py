@@ -104,9 +104,9 @@ def resolve_connection(
     resolved_key = resolved_key or environment.get("LANGFLOW_API_KEY")
 
     if not resolved_url:
-        msg = "Langflow URL is required; use --url, select a profile, or set LANGFLOW_URL"
+        msg = "OpenXFlow URL is required; use --url, select a profile, or set LANGFLOW_URL"
         raise ConnectionConfigurationError(msg)
     if not resolved_key:
-        msg = "Langflow API key is required; use --api-key, select a profile, or set LANGFLOW_API_KEY"
+        msg = "OpenXFlow API key is required; use --api-key, select a profile, or set LANGFLOW_API_KEY"
         raise ConnectionConfigurationError(msg)
     return AdminConnection(url=resolved_url.rstrip("/"), api_key=resolved_key)

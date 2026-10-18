@@ -61,7 +61,7 @@ class MCPToolsComponent(ComponentWithCache):
     """MCP Tools component.
 
     Behaviour notes:
-    - Stale agent tools vs server were caused by Langflow caching the Toolset output
+    - Stale agent tools vs server were caused by OpenXFlow caching the Toolset output
       (``Output.cache=True`` plus the persisted ``output.value`` in saved flow JSON), not
       only by the user-facing "Use Cached Server" (``use_cache``) toggle. ``_build_tool_output``
       declares the Toolset output with ``cache=False`` and ``map_outputs`` overrides the
@@ -218,7 +218,7 @@ class MCPToolsComponent(ComponentWithCache):
 
     def _build_tool_output(self) -> Output:
         # Do not cache Toolset output. This is separate from the MCP "Use Cached Server" (use_cache)
-        # toggle: Langflow's Output.cache defaults to True and was memoizing the first to_toolkit()
+        # toggle: OpenXFlow's Output.cache defaults to True and was memoizing the first to_toolkit()
         # result, so per-request tweaks/headers never refreshed bound tools even when use_cache=False.
         return Output(
             name=TOOL_OUTPUT_NAME,
@@ -458,7 +458,7 @@ class MCPToolsComponent(ComponentWithCache):
             try:
                 # Try to fetch from database first to ensure we have the latest config.
                 # This ensures database updates (like editing a server) take effect.
-                # When running in LFX standalone mode the full Langflow package and
+                # When running in LFX standalone mode the full OpenXFlow package and
                 # database may not be available — in that case we skip the DB lookup
                 # and fall back to the config embedded in the flow (server_config_from_value).
                 server_config_from_db = None
@@ -473,14 +473,14 @@ class MCPToolsComponent(ComponentWithCache):
                 except ModuleNotFoundError as e:
                     # Deliberately `except ModuleNotFoundError` (not `except ImportError`): a
                     # plain ImportError here means `get_server` / `get_user_by_id` was removed
-                    # from an installed Langflow — a real API break that should NOT be
+                    # from an installed OpenXFlow — a real API break that should NOT be
                     # swallowed as "standalone mode". ModuleNotFoundError alone covers the
-                    # "Langflow absent" case.
+                    # "OpenXFlow absent" case.
                     #
                     # Even within ModuleNotFoundError, only treat this as LFX standalone mode
-                    # when one of the target Langflow modules is itself missing. Transitive
+                    # when one of the target OpenXFlow modules is itself missing. Transitive
                     # ModuleNotFoundError (e.g. a dependency like sqlmodel failing to import
-                    # inside langflow.*) indicates a real bug in the full Langflow stack and
+                    # inside langflow.*) indicates a real bug in the full OpenXFlow stack and
                     # must surface — otherwise we would silently use a stale flow-embedded
                     # config when DB config should have taken precedence.
                     missing_module = e.name or ""
@@ -488,7 +488,8 @@ class MCPToolsComponent(ComponentWithCache):
                     if not is_langflow_standalone:
                         raise
                     await logger.ainfo(
-                        "Langflow package not available; using MCP server config from flow value (LFX standalone mode)."
+                        "OpenXFlow package not available; using MCP server config from flow value "
+                        "(LFX standalone mode)."
                     )
                 else:
                     async with session_scope() as db:
@@ -1080,7 +1081,7 @@ class MCPToolsComponent(ComponentWithCache):
         try:
             self.tools, _ = await self.update_tool_list()
             if self.tool != "":
-                # Set session context for persistent MCP sessions using Langflow session ID
+                # Set session context for persistent MCP sessions using OpenXFlow session ID
                 session_context = self._get_session_context()
                 if session_context:
                     self.stdio_client.set_session_context(session_context)
@@ -1126,7 +1127,7 @@ class MCPToolsComponent(ComponentWithCache):
         return item_dict
 
     def _get_session_context(self) -> str | None:
-        """Get the Langflow session ID for MCP session caching."""
+        """Get the OpenXFlow session ID for MCP session caching."""
         # Try to get session ID from the component's execution context
         if hasattr(self, "graph") and hasattr(self.graph, "session_id"):
             session_id = self.graph.session_id

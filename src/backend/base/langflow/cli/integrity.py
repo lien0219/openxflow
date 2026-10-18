@@ -1,6 +1,6 @@
 """Report where an instance disagrees with itself.
 
-Langflow keeps state in the database and in places that are not the database:
+    OpenXFlow keeps state in the database and in places that are not the database:
 encrypted columns that only the configured secret key opens, file bytes in the
 storage backend, vectors in each knowledge base's store, and a compiled Casbin
 policy. Nothing checks that those agree, and when they don't, nothing raises until
@@ -113,7 +113,7 @@ async def check_instance(on_check: Callable[[CheckResult], None] | None = None) 
 
 
 async def check_schema(session: AsyncSession) -> CheckResult:
-    """Is the database at the schema this Langflow reads?
+    """Is the database at the schema this OpenXFlow reads?
 
     Nothing here migrates it: a check that upgraded the schema first would report
     on a database that is no longer the one it was pointed at.
@@ -144,8 +144,8 @@ async def check_schema(session: AsyncSession) -> CheckResult:
     return CheckResult(
         "schema",
         "fail",
-        f"database is at {found} and this Langflow reads {', '.join(sorted(heads))}; run the check with "
-        "the Langflow version that last ran against this database",
+        f"database is at {found} and this OpenXFlow reads {', '.join(sorted(heads))}; run the check with "
+        "the OpenXFlow version that last ran against this database",
     )
 
 
@@ -168,7 +168,7 @@ async def recorded_revisions(session: AsyncSession) -> set[str]:
 
 
 def script_directory():
-    """This Langflow's migration scripts, to read the revision it expects."""
+    """This OpenXFlow's migration scripts, to read the revision it expects."""
     import pathlib
 
     from alembic.config import Config
@@ -439,8 +439,8 @@ async def _check_knowledge_bases(
     storage_summary = []
     if upgrading:
         storage_summary.append(
-            f"{len(upgrading)} of {active} knowledge bases have not finished the storage upgrade this Langflow "
-            "reads them through; start this Langflow version once with a single worker and wait for "
+            f"{len(upgrading)} of {active} knowledge bases have not finished the storage upgrade this OpenXFlow "
+            "reads them through; start this OpenXFlow version once with a single worker and wait for "
             "/healthz?require_storage_ready=true, or retry them from /api/v1/knowledge-base-storage/status. "
             "Chroma Cloud stores have no upgrade path: migrate them to a pgvector or OpenSearch store"
         )

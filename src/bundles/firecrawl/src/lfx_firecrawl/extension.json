@@ -3,7 +3,7 @@
   "id": "lfx-firecrawl",
   "version": "0.2.0",
   "name": "Firecrawl",
-  "description": "Firecrawl components (Scrape, Crawl, Map, and Search APIs) as a standalone Langflow Extension Bundle.",
+  "description": "Firecrawl components (Scrape, Crawl, Map, and Search APIs) as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

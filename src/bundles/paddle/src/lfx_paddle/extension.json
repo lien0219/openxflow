@@ -3,7 +3,7 @@
   "id": "lfx-paddle",
   "version": "0.2.0",
   "name": "PaddleOCR",
-  "description": "PaddleOCR component (OCR and layout-aware document parsing via the AI Studio async Job API) as a standalone Langflow Extension Bundle.",
+  "description": "PaddleOCR component (OCR and layout-aware document parsing via the AI Studio async Job API) as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

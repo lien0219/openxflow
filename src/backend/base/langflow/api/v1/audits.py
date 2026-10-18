@@ -284,7 +284,7 @@ def _openapi_parameters(*, export: bool) -> list[dict[str, Any]]:
         many("result", "Outcome.", _ENUM_LISTS["result"]),
         many("actor_type", "How the request authenticated."),
         param("resource_id", "Exact resource.", uuid_schema),
-        param("user_id", "Exact Langflow account.", uuid_schema),
+        param("user_id", "Exact OpenXFlow account.", uuid_schema),
         param("actor_id", "Exact authenticated principal or credential.", uuid_schema),
         param("request_id", "Exact request correlation id.", uuid_schema),
         param("since", "Inclusive RFC 3339 timestamp.", timestamp_schema),

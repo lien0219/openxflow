@@ -99,7 +99,7 @@ def probe_database(address: str, source_address: str) -> dict[str, Any]:
             if name not in ours and not _KNOWLEDGE_BASE_TABLE.fullmatch(name)
         ]
         if strangers:
-            return _failed("db_not_empty", f"It holds tables that are not Langflow's, such as {strangers[0]}.")
+            return _failed("db_not_empty", f"It holds tables that are not OpenXFlow's, such as {strangers[0]}.")
         source = sa.create_engine(_sync_sqlite_url(source_address))
         try:
             with source.connect() as own:

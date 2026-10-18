@@ -4,7 +4,7 @@
 drive, so the walk lives here once. Credentials come from a dedicated
 Microsoft connection (``source_config["connection"]``, e.g.
 ``microsoft/work``) resolved through the host's connection resolver: no
-refresh token is stored in a Langflow variable and no token exchange
+refresh token is stored in an OpenXFlow variable and no token exchange
 happens in this module.
 
 Ingestion runs detached from the request that started it, so the
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 # SharePoint and OneDrive attribute throttling per application through this
 # decoration; sending it keeps ingestion out of the anonymous bucket.
-USER_AGENT = "NONISV|Langflow|langflow-kb-ingestion/1.0"
+USER_AGENT = "NONISV|OpenXFlow|openxflow-kb-ingestion/1.0"
 DEFAULT_PAGE_SIZE = 200
 MAX_ITEMS_DEFAULT = 5000
 # Same ceiling and the same ``max_file_size_bytes`` config key FolderSource

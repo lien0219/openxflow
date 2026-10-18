@@ -3,7 +3,7 @@
   "id": "lfx-duckduckgo",
   "version": "0.2.0",
   "name": "DuckDuckGo Search",
-  "description": "DuckDuckGo Search component as a standalone Langflow Extension Bundle.",
+  "description": "DuckDuckGo Search component as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

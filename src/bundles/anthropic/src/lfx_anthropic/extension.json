@@ -3,7 +3,7 @@
   "id": "lfx-anthropic",
   "version": "0.2.0",
   "name": "Anthropic",
-  "description": "Anthropic component(s) as a standalone Langflow Extension Bundle.",
+  "description": "Anthropic component(s) as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

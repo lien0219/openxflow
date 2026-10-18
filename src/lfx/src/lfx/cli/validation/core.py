@@ -86,7 +86,7 @@ def _node_display_name(node: dict[str, Any]) -> str | None:
 
 
 def _get_lf_version() -> str | None:
-    """Return the installed Langflow version string, or *None* if not installed.
+    """Return the installed OpenXFlow version string, or *None* if not installed.
 
     Prefer the full distribution, then the version-aligned base distribution.
     """

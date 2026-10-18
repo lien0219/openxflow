@@ -19,7 +19,7 @@ from ._state import _ensure_working_flow, _find_node, _load_registry_user_aware
 
 class SearchComponentTypes(Component):
     display_name = "Search Components"
-    description = "Search available Langflow component types by name, category, or output type."
+    description = "Search available OpenXFlow component types by name, category, or output type."
     icon = "Search"
     name = "SearchComponentTypes"
 

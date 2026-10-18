@@ -747,7 +747,7 @@ class ListenerSupervisor:
                 # of the trigger can do.
                 "The listener cannot read this connection with its own configuration "
                 f"({worker.last_error}). It must run with the same LANGFLOW_SECRET_KEY and "
-                "LANGFLOW_CONNECTION_OAUTH_REGISTRATIONS as the Langflow API. The trigger stays armed and "
+                "LANGFLOW_CONNECTION_OAUTH_REGISTRATIONS as the OpenXFlow API. The trigger stays armed and "
                 "resumes on its own once it does."
                 if local_configuration
                 else (

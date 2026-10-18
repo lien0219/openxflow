@@ -100,9 +100,9 @@ async def check_version_direction(
 
     So the source's revision has to be one the target's image already contains.
     A source ahead of the target would need migrations run backwards, which no
-    Langflow supports.
+    OpenXFlow supports.
 
-    Admins know the Langflow version their target runs, so that is enough. The
+    Admins know the OpenXFlow version their target runs, so that is enough. The
     revision is exact, so it wins when both are given: two images built from
     different commits can carry the same version.
     """
@@ -138,8 +138,8 @@ async def check_version_direction(
         return CheckResult(
             name,
             "warn",
-            f"target revision {target_revision} is not one this Langflow knows, so it may be newer; "
-            "run the preflight with the target's Langflow version to be sure",
+            f"target revision {target_revision} is not one this OpenXFlow knows, so it may be newer; "
+            "run the preflight with the target's OpenXFlow version to be sure",
         )
 
     behind = [revision for revision in source_revisions if revision not in target_ancestry]
@@ -158,9 +158,9 @@ async def check_version_direction(
 
 
 def check_target_version(target_version: str) -> CheckResult:
-    """Is the target's Langflow at least the version this instance runs?
+    """Is the target's OpenXFlow at least the version this instance runs?
 
-    This instance's database is at this Langflow's head, or the schema check stops
+    This instance's database is at this OpenXFlow's head, or the schema check stops
     the preflight, so its version stands for its schema.
     """
     from packaging.version import InvalidVersion, Version
@@ -173,21 +173,23 @@ def check_target_version(target_version: str) -> CheckResult:
         target = Version(target_version.strip())
     except InvalidVersion:
         return CheckResult(
-            name, "warn", f"{target_version!r} is not a Langflow version, such as {source}; the version was not checked"
+            name,
+            "warn",
+            f"{target_version!r} is not an OpenXFlow version, such as {source}; the version was not checked",
         )
     if target < source:
         return CheckResult(
             name,
             "fail",
-            f"the target runs Langflow {target}, older than this instance's {source}; "
+            f"the target runs OpenXFlow {target}, older than this instance's {source}; "
             "attaching would need its migrations run backwards",
         )
     if target == source:
-        return CheckResult(name, "ok", f"source and target both run Langflow {source}")
+        return CheckResult(name, "ok", f"source and target both run OpenXFlow {source}")
     return CheckResult(
         name,
         "ok",
-        f"the target runs Langflow {target}, newer than this instance's {source}; attaching migrates forward. "
+        f"the target runs OpenXFlow {target}, newer than this instance's {source}; attaching migrates forward. "
         f"This instance cannot confirm that {target} was released, so check the number",
     )
 
@@ -195,7 +197,7 @@ def check_target_version(target_version: str) -> CheckResult:
 async def check_default_superuser(session: AsyncSession, target_revision: str | None = None) -> CheckResult:
     """Will the default superuser survive the target's first boot?
 
-    With AUTO_LOGIN off, Langflow deletes the default superuser when it has never
+    With AUTO_LOGIN off, OpenXFlow deletes the default superuser when it has never
     signed in, and on Postgres the delete takes
     everything that user owns with it. The fix keeps the user: it claims the account
     for LANGFLOW_SUPERUSER or deactivates it, and setting last_login_at skips both.
@@ -203,7 +205,7 @@ async def check_default_superuser(session: AsyncSession, target_revision: str | 
     here tells which kind of target this is, so the advice covers both.
 
     An account that has signed in is kept, with the password it has unless that
-    is the old default. While AUTO_LOGIN is on that password can be one Langflow
+    is the old default. While AUTO_LOGIN is on that password can be one OpenXFlow
     made, so the check says to set one before the move, and passes once the
     LANGFLOW_SUPERUSER_PASSWORD it sees signs in as the account. It reads both as
     this command sees them, so the command has to run with the server's environment.
@@ -269,10 +271,10 @@ async def check_default_superuser(session: AsyncSession, target_revision: str | 
         name,
         "fail",
         f"{DEFAULT_SUPERUSER!r} has never signed in and owns rows; "
-        "a target with AUTO_LOGIN off deletes it on first boot unless its Langflow keeps such an account",
+        "a target with AUTO_LOGIN off deletes it on first boot unless its OpenXFlow keeps such an account",
         [
             ", ".join(f"{table}: {count}" for table, count in sorted(owned.items())),
-            "if the target's Langflow keeps it (its migrations add user.retired_at), change nothing: "
+            "if the target's OpenXFlow keeps it (its migrations add user.retired_at), change nothing: "
             f"LANGFLOW_SUPERUSER={DEFAULT_SUPERUSER} claims the account with the configured password, and its API "
             "keys, including any minted while AUTO_LOGIN was on, keep working; any other name deactivates it, which "
             "stops them. Setting last_login_at on such a target skips both",

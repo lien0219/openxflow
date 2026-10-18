@@ -30,7 +30,7 @@ A KB network destination is permitted only when it is operator-controlled:
   server can set one), or
 * its host is named in ``LANGFLOW_KB_ALLOWED_HOSTS``.
 
-Anything else — a URL written into a Langflow variable through the UI/API, a
+Anything else — a URL written into an OpenXFlow variable through the UI/API, a
 ``cloud_host`` posted in a request body — is refused whether or not the host
 looks public. That exclusivity is the point: ``LANGFLOW_SSRF_ALLOWED_HOSTS`` is an
 *exception* list that widens the blocklist and still admits every unlisted public
@@ -121,7 +121,7 @@ def enforce_kb_destination(url: str, *, source: str, description: str) -> None:
         source: Provenance of the value — ``"environment"`` for a process env var
             (operator-controlled), anything else for tenant-supplied input.
         description: Where the value came from, for the error message
-            (e.g. ``"Langflow variable 'OPENSEARCH_URL'"``).
+            (e.g. ``"OpenXFlow variable 'OPENSEARCH_URL'"``).
 
     Raises:
         SSRFProtectionError: If the destination is tenant-supplied and its host is

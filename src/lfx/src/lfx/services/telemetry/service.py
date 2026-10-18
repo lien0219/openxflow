@@ -124,7 +124,7 @@ class TelemetryService(BaseTelemetryService):
             if process_type is not None:
                 properties["processType"] = process_type
             else:
-                properties.update({"action": "registered", "name": "Email", "namespace": "Langflow"})
+                properties.update({"action": "registered", "name": "Email", "namespace": "OpenXFlow"})
             body = {
                 "anonymousId": self.anonymous_id,
                 "userId": get_hashed_user_id(self.anonymous_id),

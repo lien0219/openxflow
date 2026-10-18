@@ -3,7 +3,7 @@
   "id": "lfx-toolguard",
   "version": "0.2.0",
   "name": "ToolGuard",
-  "description": "Langflow Policies component powered by ToolGuard.",
+  "description": "OpenXFlow Policies component powered by ToolGuard.",
   "lfx": {
     "compat": ["1"]
   },

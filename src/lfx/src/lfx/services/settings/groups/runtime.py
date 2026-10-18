@@ -35,7 +35,7 @@ class RuntimeSettings(BaseModel):
     """Maximum total serialized execution-snapshot bytes retained or in flight per worker."""
 
     dev: bool = False
-    """If True, Langflow will run in development mode."""
+    """If True, OpenXFlow will run in development mode."""
 
     warm_reconcile_interval: float = Field(default=20.0, gt=0)
     """Seconds between warm-registry reconcile passes (LANGFLOW_WARM_RECONCILE_INTERVAL).
@@ -222,7 +222,7 @@ class RuntimeSettings(BaseModel):
     """How long a ``trigger_listener_lease`` row stays valid without a
     heartbeat. A replica that dies has its connections taken over within two
     TTLs, which is the failover target ``decisions/process-model.md`` records.
-    Expiry is a Langflow recovery bound, not proof that the dead process closed
+    Expiry is an OpenXFlow recovery bound, not proof that the dead process closed
     its socket, so adapters must tolerate bounded overlap."""
     listener_heartbeat_interval_s: float = Field(default=10.0, gt=0)
     """How often a held connection lease is renewed. Must stay well below

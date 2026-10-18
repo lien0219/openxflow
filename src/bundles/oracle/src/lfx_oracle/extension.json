@@ -3,7 +3,7 @@
   "id": "lfx-oracle",
   "version": "0.2.0",
   "name": "Oracle",
-  "description": "Oracle component(s) as a standalone Langflow Extension Bundle.",
+  "description": "Oracle component(s) as a standalone OpenXFlow Extension Bundle.",
   "lfx": {
     "compat": ["1"]
   },

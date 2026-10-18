@@ -198,7 +198,7 @@ class TestGlobalVarHeaderSafety:
             return await client.post("/run/flow")
 
         try:
-            with pytest.raises(RuntimeError, match="outside the Langflow server origin") as exc_info:
+            with pytest.raises(RuntimeError, match="outside the OpenXFlow server origin") as exc_info:
                 await send_request()
         finally:
             await client.close()
