@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   prepare-tag:
+    if: github.repository == 'langflow-ai/langflow'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -441,6 +441,13 @@ external = ["RUF027"]
     "TRY003",  # Long exception messages
     "EM101",   # String literals in exceptions
 ]
+"scripts/ci/openxflow_release.py" = [
+    "E501", "EM101", "FBT002", "FURB122", "PLR2004", "S310", "S603", "S607", "SIM300", "TRY003",
+]
+"scripts/ci/test_openxflow_release.py" = ["S603", "S607"]
+"scripts/ci/test_openxflow_release_workflow.py" = ["S506"]
+"scripts/ci/test_openxflow_deployment.py" = ["EM102", "PT018", "S105", "SIM117"]
+"deploy/*.py" = ["E501", "EM101", "EM102", "INP001", "PLR2004", "PTH105", "RUF100", "TRY003"]
 "docs/docs/Lfx/samples/connections/*" = [
     "INP001", # Reference samples are standalone files, loaded by path, not a package
 ]

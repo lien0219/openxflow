@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "scripts/ci/**"
+      - ".github/workflows/**"
+      - ".github/CODEOWNERS"
       - "design/dedicated-integrations/**"
       - "design/dedicated-integrations-triggers/**"
       - ".github/workflows/ci-scripts-test.yml"

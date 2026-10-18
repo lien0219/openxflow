@@ -1,0 +1,476 @@
+name: OpenXFlow Production Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: lien0219/openxflow
+  PRODUCTION_REPOSITORY: lien0219/openxflow
+
+# Every merged PR gets its own run. Only the floating main promotion is
+# serialized, so a slow build cannot discard an immutable source image.
+concurrency:
+  group: openxflow-production-${{ github.event.pull_request.merge_commit_sha || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  validate-merge:
+    name: Validate exact merged main source
+    if: >-
+      github.repository == 'lien0219/openxflow' &&
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.base.repo.full_name == 'lien0219/openxflow' &&
+      github.event.pull_request.merge_commit_sha != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      source: ${{ steps.plan.outputs.source }}
+      boundary: ${{ steps.plan.outputs.boundary }}
+      version: ${{ steps.plan.outputs.version }}
+      before: ${{ steps.plan.outputs.before }}
+      changed: ${{ steps.plan.outputs.changed }}
+      created: ${{ steps.plan.outputs.created }}
+      sha_exists: ${{ steps.coordinates.outputs.sha_exists }}
+      version_exists: ${{ steps.coordinates.outputs.version_exists }}
+      reuse_ref: ${{ steps.coordinates.outputs.reuse_ref }}
+      release_tag: ${{ steps.coordinates.outputs.release_tag }}
+    steps:
+      - name: Check out the merge commit from the event
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install read-only registry tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq skopeo
+
+      - name: Authenticate read-only coordinate checks
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Plan the exact PR boundary and check administrator readiness
+        id: plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          OPENXFLOW_RELEASE_ENABLED: ${{ vars.OPENXFLOW_RELEASE_ENABLED }}
+        run: |
+          set -Eeuo pipefail
+          export PYTHONPATH=scripts/ci
+          python scripts/ci/openxflow_release.py plan --output "$RUNNER_TEMP/openxflow-plan.json"
+          jq -r 'to_entries[] | "\(.key)=\(.value)"' "$RUNNER_TEMP/openxflow-plan.json" >> "$GITHUB_OUTPUT"
+          {
+            echo "### OpenXFlow release admission"
+            echo "- Merge source: \`$(jq -r .source "$RUNNER_TEMP/openxflow-plan.json")\`"
+            echo "- Pre-merge boundary: \`$(jq -r .boundary "$RUNNER_TEMP/openxflow-plan.json")\`"
+            echo "- IMAGE_VERSION: \`$(jq -r .version "$RUNNER_TEMP/openxflow-plan.json")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate released-version ordering and immutable coordinates
+        id: coordinates
+        shell: bash
+        env:
+          SOURCE: ${{ steps.plan.outputs.source }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          CHANGED: ${{ steps.plan.outputs.changed }}
+        run: |
+          set -Eeuo pipefail
+          export PYTHONPATH=scripts/ci
+          mapfile -t released < <(git ls-remote --refs origin 'refs/tags/v*' | sed -nE 's#^[0-9a-f]+[[:space:]]+refs/tags/v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$#\1#p')
+          python - "$VERSION" "${released[@]}" <<'PY'
+          import sys
+          from openxflow_release import ReleaseContractError, parse_version
+          current = parse_version(sys.argv[1])
+          for value in sys.argv[2:]:
+              if current <= parse_version(value):
+                  raise ReleaseContractError(f"version {sys.argv[1]} is not above published version {value}")
+          PY
+
+          image="${REGISTRY}/${IMAGE_NAME}"
+          sha_ref="${image}:sha-${SOURCE}"
+          version_ref="${image}:main-v${VERSION}"
+
+          inspect_image() {
+            local reference="$1"
+            local output
+            if output="$(skopeo inspect --override-os linux --override-arch amd64 "docker://$reference" 2>&1)"; then
+              printf '%s' "$output"
+              return 0
+            fi
+            if grep -Eiq 'manifest unknown|name unknown|requested image does not exist' <<<"$output"; then
+              return 1
+            fi
+            echo "::error::Registry lookup failed for $reference" >&2
+            echo "$output" >&2
+            return 2
+          }
+          sha_exists=false
+          reuse_ref=""
+          sha_digest=""
+          if sha_json="$(inspect_image "$sha_ref")"; then
+            revision="$(jq -r '.Labels["org.opencontainers.image.revision"] // empty' <<<"$sha_json")"
+            [ "$revision" = "$SOURCE" ] || { echo "::error::$sha_ref has revision $revision"; exit 1; }
+            sha_digest="$(jq -r '.Digest // empty' <<<"$sha_json")"
+            [[ "$sha_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::$sha_ref has no immutable digest"; exit 1; }
+            sha_exists=true
+            reuse_ref="$sha_ref"
+          else
+            status=$?
+            [ "$status" -eq 1 ] || exit "$status"
+          fi
+
+          release_tag="v${VERSION}"
+          tag_target="$(git ls-remote origin "refs/tags/${release_tag}^{}" "refs/tags/${release_tag}" | awk 'NR == 1 {print $1}')"
+          version_exists=false
+          if [ "$CHANGED" = "true" ]; then
+            if version_json="$(inspect_image "$version_ref")"; then
+              revision="$(jq -r '.Labels["org.opencontainers.image.revision"] // empty' <<<"$version_json")"
+              [ "$revision" = "$SOURCE" ] || { echo "::error::$version_ref has revision $revision"; exit 1; }
+              version_digest="$(jq -r '.Digest // empty' <<<"$version_json")"
+              [[ "$version_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::$version_ref has no immutable digest"; exit 1; }
+              if [ -n "$sha_digest" ]; then
+                [ "$version_digest" = "$sha_digest" ] || { echo "::error::version and SHA tags have different digests"; exit 1; }
+              else
+                reuse_ref="$version_ref"
+              fi
+              version_exists=true
+            else
+              status=$?
+              [ "$status" -eq 1 ] || exit "$status"
+            fi
+            if [ -n "$tag_target" ] && [ "$tag_target" != "$SOURCE" ]; then
+              echo "::error::immutable tag $release_tag points to $tag_target"; exit 1
+            fi
+          fi
+          echo "sha_exists=$sha_exists" >> "$GITHUB_OUTPUT"
+          echo "version_exists=$version_exists" >> "$GITHUB_OUTPUT"
+          echo "reuse_ref=$reuse_ref" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+
+  build-and-verify:
+    name: Build, test, and scan before registry publication
+    needs: validate-merge
+    if: needs.validate-merge.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      reused: ${{ steps.mode.outputs.reused }}
+    steps:
+      - name: Check out the exact merge commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-merge.outputs.source }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up emulation and Buildx
+        uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate read-only retry checks
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Select build or verified retry mode
+        id: mode
+        shell: bash
+        env:
+          SHA_EXISTS: ${{ needs.validate-merge.outputs.sha_exists }}
+          VERSION_EXISTS: ${{ needs.validate-merge.outputs.version_exists }}
+        run: |
+          if [ "$SHA_EXISTS" = "true" ] || [ "$VERSION_EXISTS" = "true" ]; then
+            echo "reused=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "reused=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Materialize the exact image verification plan
+        shell: bash
+        env:
+          SOURCE: ${{ needs.validate-merge.outputs.source }}
+          VERSION: ${{ needs.validate-merge.outputs.version }}
+          CREATED: ${{ needs.validate-merge.outputs.created }}
+        run: |
+          set -Eeuo pipefail
+          python - "$SOURCE" "$VERSION" "$CREATED" > /tmp/openxflow-plan.json <<'PY'
+          import json
+          import sys
+          print(json.dumps({"source": sys.argv[1], "version": sys.argv[2], "created": sys.argv[3]}))
+          PY
+
+      - name: Install local image tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq skopeo
+
+      - name: Recover the exact prior archive for a retry
+        if: steps.mode.outputs.reused == 'true'
+        shell: bash
+        env:
+          SOURCE: ${{ needs.validate-merge.outputs.source }}
+          REUSE_REF: ${{ needs.validate-merge.outputs.reuse_ref }}
+        run: |
+          set -Eeuo pipefail
+          skopeo copy --all "docker://${REUSE_REF}" oci-archive:/tmp/openxflow.oci.tar
+          docker pull --platform linux/amd64 "${REUSE_REF}" >/dev/null
+          revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${REUSE_REF}")"
+          [ "$revision" = "$SOURCE" ] || { echo "::error::retry image revision mismatch"; exit 1; }
+          docker run --rm --entrypoint python "${REUSE_REF}" -c \
+            'import importlib.util; assert importlib.util.find_spec("langflow"); assert importlib.util.find_spec("pgvector")'
+          docker run --rm --entrypoint langflow "${REUSE_REF}" --help >/dev/null
+
+      - name: Build a multi-architecture OCI archive without publishing
+        if: steps.mode.outputs.reused != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/build_and_push.Dockerfile
+          target: full
+          platforms: linux/amd64,linux/arm64
+          push: false
+          outputs: type=oci,dest=/tmp/openxflow.oci.tar
+          build-args: |
+            OPENXFLOW_VERSION=${{ needs.validate-merge.outputs.version }}
+            OPENXFLOW_REVISION=${{ needs.validate-merge.outputs.source }}
+            OPENXFLOW_CREATED=${{ needs.validate-merge.outputs.created }}
+            OPENXFLOW_SOURCE=https://github.com/lien0219/openxflow
+            OPENXFLOW_URL=https://github.com/lien0219/openxflow
+          labels: |
+            org.opencontainers.image.title=OpenXFlow
+            org.opencontainers.image.description=OpenXFlow workflow automation platform
+            org.opencontainers.image.version=${{ needs.validate-merge.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.validate-merge.outputs.source }}
+            org.opencontainers.image.created=${{ needs.validate-merge.outputs.created }}
+            org.opencontainers.image.source=https://github.com/lien0219/openxflow
+            org.opencontainers.image.url=https://github.com/lien0219/openxflow
+          cache-from: type=gha,scope=openxflow-production-full
+          cache-to: type=gha,mode=max,scope=openxflow-production-full
+          provenance: mode=max
+          sbom: true
+
+      - name: Build amd64 runtime probe image without publishing
+        shell: bash
+        env:
+          SOURCE: ${{ needs.validate-merge.outputs.source }}
+          VERSION: ${{ needs.validate-merge.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          if [ "${{ steps.mode.outputs.reused }}" = "true" ]; then
+            echo "A prior verified SHA coordinate will be scanned in the publish job."
+            exit 0
+          fi
+          docker buildx build --platform linux/amd64 --target full --load \
+            --build-arg OPENXFLOW_VERSION="$VERSION" \
+            --build-arg OPENXFLOW_REVISION="$SOURCE" \
+            --build-arg OPENXFLOW_SOURCE=https://github.com/lien0219/openxflow \
+            -t openxflow-runtime-probe:local .
+          docker run --rm --entrypoint python openxflow-runtime-probe:local -c \
+            'import importlib.util; assert importlib.util.find_spec("langflow"); assert importlib.util.find_spec("pgvector")'
+          docker run --rm --entrypoint langflow openxflow-runtime-probe:local --help >/dev/null
+
+      - name: Scan the unpushed OCI archive (or recovered retry)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          input: /tmp/openxflow.oci.tar
+          format: table
+          exit-code: "1"
+          ignore-unfixed: "false"
+          severity: CRITICAL,HIGH
+          scanners: vuln,secret
+
+      - name: Verify OCI attestations, both architectures, and runtime probes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python scripts/ci/openxflow_verify_image.py \
+            --archive /tmp/openxflow.oci.tar \
+            --plan /tmp/openxflow-plan.json \
+            --output-dir /tmp/openxflow-image-verification
+
+      - name: Retain image verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openxflow-image-verification-${{ needs.validate-merge.outputs.source }}
+          path: /tmp/openxflow-image-verification
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload the exact verified archive
+        id: archive
+        if: steps.mode.outputs.reused != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openxflow-oci-${{ needs.validate-merge.outputs.source }}
+          path: /tmp/openxflow.oci.tar
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-immutable:
+    name: Publish verified immutable image coordinates
+    needs: [validate-merge, build-and-verify]
+    if: needs.build-and-verify.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+    steps:
+      - name: Install registry tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq skopeo
+      - name: Authenticate GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download the verified archive
+        if: needs.build-and-verify.outputs.reused != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: openxflow-oci-${{ needs.validate-merge.outputs.source }}
+          path: /tmp/openxflow
+      - name: Recover existing or publish the verified archive
+        id: publish
+        shell: bash
+        env:
+          SOURCE: ${{ needs.validate-merge.outputs.source }}
+          VERSION: ${{ needs.validate-merge.outputs.version }}
+          CHANGED: ${{ needs.validate-merge.outputs.changed }}
+          SHA_EXISTS: ${{ needs.validate-merge.outputs.sha_exists }}
+          VERSION_EXISTS: ${{ needs.validate-merge.outputs.version_exists }}
+          REUSE_REF: ${{ needs.validate-merge.outputs.reuse_ref }}
+        run: |
+          set -Eeuo pipefail
+          image="${REGISTRY}/${IMAGE_NAME}"
+          sha_ref="${image}:sha-${SOURCE}"
+          version_ref="${image}:main-v${VERSION}"
+          if [ "$SHA_EXISTS" != "true" ]; then
+            if [ "$VERSION_EXISTS" = "true" ]; then
+              skopeo copy --all --preserve-digests "docker://${REUSE_REF}" "docker://${sha_ref}"
+            else
+              skopeo copy --all --preserve-digests "oci-archive:/tmp/openxflow/openxflow.oci.tar" "docker://${sha_ref}"
+            fi
+          fi
+          if [ "$CHANGED" = "true" ] && [ "$VERSION_EXISTS" != "true" ]; then
+            skopeo copy --all --preserve-digests "docker://${sha_ref}" "docker://${version_ref}"
+          fi
+          digest="$(skopeo inspect --override-os linux --override-arch amd64 "docker://${sha_ref}" | jq -r .Digest)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::missing immutable manifest digest"; exit 1; }
+          revision="$(skopeo inspect --override-os linux --override-arch amd64 "docker://${sha_ref}" | jq -r '.Labels["org.opencontainers.image.revision"] // empty')"
+          [ "$revision" = "$SOURCE" ] || { echo "::error::published image revision mismatch"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Verified immutable image"
+            echo "- SHA tag: \`${sha_ref}\`"
+            echo "- Digest: \`${digest}\`"
+            echo "- Revision: \`${SOURCE}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  create-release:
+    name: Create or recover immutable Git tag and Release
+    needs: [validate-merge, publish-immutable]
+    if: needs.publish-immutable.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the exact release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-merge.outputs.source }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Create or verify the version Release only after image verification
+        if: needs.validate-merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SOURCE: ${{ needs.validate-merge.outputs.source }}
+          VERSION: ${{ needs.validate-merge.outputs.version }}
+          DIGEST: ${{ needs.publish-immutable.outputs.digest }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export PYTHONPATH=scripts/ci
+          python scripts/ci/openxflow_release.py release \
+            --source "$SOURCE" --version "$VERSION" --digest "$DIGEST"
+
+  promote-main:
+    name: Promote verified digest to floating main
+    needs: [validate-merge, publish-immutable, create-release]
+    if: >-
+      needs.publish-immutable.result == 'success' &&
+      needs.create-release.result == 'success'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: openxflow-main-promotion
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Install registry tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq skopeo
+      - name: Authenticate GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote only if this is still the current main commit
+        env:
+          SOURCE: ${{ needs.validate-merge.outputs.source }}
+          DIGEST: ${{ needs.publish-immutable.outputs.digest }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          current="$(git ls-remote "https://github.com/${{ github.repository }}.git" refs/heads/main | awk 'NR == 1 {print $1}')"
+          if [ "$current" != "$SOURCE" ]; then
+            echo "main advanced to $current; immutable publication is complete and floating promotion is deferred"
+            exit 0
+          fi
+          image="${REGISTRY}/${IMAGE_NAME}"
+          skopeo copy --all --preserve-digests "docker://${image}:sha-${SOURCE}" "docker://${image}:main"
+          promoted="$(skopeo inspect --override-os linux --override-arch amd64 "docker://${image}:main" | jq -r .Digest)"
+          [ "$promoted" = "$DIGEST" ] || { echo "::error::main digest $promoted differs from $DIGEST"; exit 1; }
+          after="$(git ls-remote "https://github.com/${{ github.repository }}.git" refs/heads/main | awk 'NR == 1 {print $1}')"
+          [ "$after" = "$SOURCE" ] || { echo "::error::main advanced during promotion; inspect floating tag before retry"; exit 1; }

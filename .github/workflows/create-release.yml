@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   create_release:
+    if: github.repository == 'langflow-ai/langflow'
     name: Create Release Job
     runs-on: ubuntu-latest
     steps:

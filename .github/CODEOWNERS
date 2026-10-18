@@ -1,0 +1,9 @@
+# Require the OpenXFlow maintainer to review publishing and deployment surfaces.
+# Enable required Code Owner reviews in branch protection; this file alone does
+# not enforce approval or repository/environment settings.
+/.github/CODEOWNERS @lien0219
+/.github/workflows/ @lien0219
+/scripts/ci/openxflow_release.py @lien0219
+/scripts/ci/test_openxflow_*.py @lien0219
+/deploy/ @lien0219
+/docker/ @lien0219
