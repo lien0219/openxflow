@@ -252,7 +252,7 @@ async def test_defaults_when_no_overrides(client: AsyncClient, active_user, flow
         flow = await session.get(Flow, flow_id)
         assert body["name"] == flow.name
     assert body["version"] == get_version_info()["version"]
-    assert body["skills"][0]["tags"] == ["langflow"]
+    assert body["skills"][0]["tags"] == ["openxflow"]
 
 
 @pytest.mark.usefixtures("a2a_flag_on")

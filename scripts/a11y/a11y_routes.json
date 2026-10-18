@@ -119,6 +119,18 @@
       "path": "/settings/connections",
       "surface": "Connections settings page",
       "ready": [{ "testId": "add-connection" }, { "testId": "connections-search" }]
+    },
+    {
+      "id": "settings-channels",
+      "path": "/settings/channels",
+      "surface": "Channels settings page",
+      "ready": [{ "testId": "settings_menu_header" }]
+    },
+    {
+      "id": "settings-permissions",
+      "path": "/settings/permissions",
+      "surface": "Permissions settings page",
+      "ready": [{ "testId": "settings_menu_header" }]
     }
   ],
   "dynamic": [
