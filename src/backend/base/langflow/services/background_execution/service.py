@@ -194,7 +194,10 @@ class BackgroundExecutionService(Service):
         if self._watchdog_stop_event is not None:
             self._watchdog_stop_event.set()
         for task in watchdogs:
-            task.cancel()
+            # Let an active orphan sweep finish its database transaction. Its
+            # stop event also wakes an idle watchdog without waiting for a tick.
+            if task is not self._orphan_task:
+                task.cancel()
         self._deadline_task = None
         self._orphan_task = None
         self._retention_task = None

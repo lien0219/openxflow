@@ -506,9 +506,9 @@ const config = {
     ({
       navbar: {
         hideOnScroll: false,
+        title: "OpenXFlow",
         logo: {
           alt: "OpenXFlow",
-          title: "OpenXFlow",
           src: "img/openxflow-icon.svg",
           srcDark: "img/openxflow-icon.svg",
         },

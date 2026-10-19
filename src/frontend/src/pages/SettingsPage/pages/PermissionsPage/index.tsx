@@ -153,7 +153,12 @@ export default function PermissionsPage() {
     <div className="flex h-full min-w-0 flex-col overflow-hidden px-5 pb-6">
       <div className="flex flex-wrap items-start justify-between gap-3 pb-4">
         <div>
-          <h1 className="text-xl font-semibold">{t("rbac.title")}</h1>
+          <h1
+            data-testid="settings_menu_header"
+            className="text-xl font-semibold"
+          >
+            {t("rbac.title")}
+          </h1>
           <p className="mt-1 max-w-4xl text-sm text-muted-foreground">
             {t("rbac.description")}
           </p>

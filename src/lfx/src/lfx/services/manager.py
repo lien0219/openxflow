@@ -296,7 +296,10 @@ class ServiceManager:
                 first error after the table is cleared. Default False logs failures only.
         """
         errors: list[tuple[str, Exception]] = []
-        for service in [*self.services.values(), self.connection_resolver_fallback]:
+        # Services are created after their dependencies. Tear them down in the
+        # opposite order so dependents stop using resources before those
+        # resources are disposed (for example, background jobs before SQLite).
+        for service in [*reversed(self.services.values()), self.connection_resolver_fallback]:
             if service is None:
                 continue
             # Registered services are duck-typed: the in-memory caches and the Noop

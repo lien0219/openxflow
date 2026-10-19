@@ -604,10 +604,11 @@ variable_service = "lfx.services.variable.service:VariableService"
 class _SpyService(Service):
     """Minimal Service that records teardown and can be flipped to raise."""
 
-    def __init__(self, name: str, *, fail: bool = False) -> None:
+    def __init__(self, name: str, *, fail: bool = False, order: list[str] | None = None) -> None:
         super().__init__()
         self._name = name
         self._fail = fail
+        self._order = order
         self.torn_down = False
 
     @property
@@ -616,6 +617,8 @@ class _SpyService(Service):
 
     async def teardown(self) -> None:
         self.torn_down = True
+        if self._order is not None:
+            self._order.append(self._name)
         if self._fail:
             msg = f"{self._name} teardown boom"
             raise RuntimeError(msg)
@@ -623,6 +626,17 @@ class _SpyService(Service):
 
 class TestServiceManagerTeardown:
     """``teardown(raise_on_error=...)`` — strict mode for fork-safety-critical disposal."""
+
+    async def test_tears_down_services_in_reverse_creation_order(self, service_manager):
+        order = []
+        dependency = _SpyService("dependency", order=order)
+        dependent = _SpyService("dependent", order=order)
+        service_manager.services[ServiceType.DATABASE_SERVICE] = dependency
+        service_manager.services[ServiceType.STORAGE_SERVICE] = dependent
+
+        await service_manager.teardown()
+
+        assert order == ["dependent", "dependency"]
 
     async def test_best_effort_swallows_errors_by_default(self, service_manager):
         bad = _SpyService("bad_service", fail=True)

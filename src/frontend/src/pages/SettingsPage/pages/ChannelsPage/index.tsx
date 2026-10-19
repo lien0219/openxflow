@@ -313,7 +313,10 @@ export default function ChannelsPage() {
     <div className="flex h-full w-full flex-col gap-6 overflow-y-auto pb-8 pr-1">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <h2
+            data-testid="settings_menu_header"
+            className="flex items-center gap-2 text-lg font-semibold tracking-tight"
+          >
             {t("channels.title")}
             <ForwardedIconComponent
               name="RadioTower"

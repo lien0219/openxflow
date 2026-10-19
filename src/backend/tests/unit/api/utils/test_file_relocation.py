@@ -20,7 +20,7 @@ from langflow.api.utils.file_relocation import NoSuchUserError, SourceNotLocalEr
 from langflow.services.database.models.file.model import File
 from langflow.services.database.models.flow.model import Flow
 from langflow.services.database.models.message.model import MessageTable
-from langflow.services.deps import get_settings_service, get_storage_service, session_scope
+from langflow.services.deps import get_db_service, get_settings_service, get_storage_service, session_scope
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -84,6 +84,24 @@ async def _seed_user_file(storage_dir: Path, owner: uuid.UUID, *, name: str, dat
     owner_dir.mkdir(parents=True, exist_ok=True)
     (owner_dir / name).write_bytes(data)
     return name
+
+
+async def _snapshot_database_for_child(storage_dir: Path) -> Path:
+    """Give a child-process CLI a consistent database it can lock independently."""
+    import sqlite3
+    from pathlib import Path
+
+    from sqlalchemy.engine import make_url
+
+    source = Path(make_url(get_db_service().database_url).database).resolve()
+    destination = storage_dir.parent / "relocate-files-cli.db"
+
+    def backup() -> None:
+        with sqlite3.connect(source) as source_connection, sqlite3.connect(destination) as destination_connection:
+            source_connection.backup(destination_connection)
+
+    await anyio.to_thread.run_sync(backup)
+    return destination
 
 
 class TestRelocateFiles:
@@ -561,9 +579,14 @@ class TestFailureCodes:
 
         assert (result.status, result.code) == ("failed", "bucket_error")
 
-    async def test_any_other_failure(self, active_user, storage_dir, bucket):
-        name = await _seed_user_file(storage_dir, active_user.id, name="report.pdf", data=b"pdf-bytes")
-        (storage_dir / str(active_user.id) / name).chmod(0)
+    async def test_any_other_failure(self, active_user, storage_dir, bucket, monkeypatch):
+        await _seed_user_file(storage_dir, active_user.id, name="report.pdf", data=b"pdf-bytes")
+
+        async def fail_after_one_chunk(*_args, **_kwargs):
+            yield b"partial"
+            raise RuntimeError from None
+
+        monkeypatch.setattr(get_storage_service(), "get_file_stream", fail_after_one_chunk)
 
         results = await relocate_files(target_bucket=bucket, target_prefix="files")
 
@@ -837,14 +860,21 @@ class TestJsonEvents:
         flow_id = await self._flow_with_attachment(storage_dir, user_id, "photo.png", b"png-bytes")
         await self._message(flow_id, [str(storage_dir / str(flow_id) / "photo.png")])
 
-        # The command as an admin UI would start it, on this test's database and files.
+        # The command as an admin UI would start it, on this test's database snapshot and files.
+        # The parent fixture owns the live database process lock, so sharing its path would
+        # exercise the lock guard instead of the child command's JSON output contract.
+        child_database = await _snapshot_database_for_child(storage_dir)
         command = [sys.executable, "-m", "langflow", "relocate-files", "--json", "--bucket", bucket]
-        env = {**os.environ, "LANGFLOW_CONFIG_DIR": str(storage_dir), "LANGFLOW_LOG_LEVEL": "debug"}
+        env = {
+            **os.environ,
+            "LANGFLOW_CONFIG_DIR": str(storage_dir),
+            "LANGFLOW_DATABASE_URL": f"sqlite:///{child_database}",
+            "LANGFLOW_LOG_LEVEL": "debug",
+        }
         process = await asyncio.create_subprocess_exec(
             *command, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
-
         events = [json.loads(line) for line in stdout.decode().splitlines()]
         assert process.returncode == 1
         assert events[:2] == [
