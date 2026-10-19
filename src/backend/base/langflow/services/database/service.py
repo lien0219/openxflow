@@ -39,6 +39,7 @@ from langflow.services.database.constants import (
 from langflow.services.database.migration import get_current_alembic_heads
 from langflow.services.database.models.user.crud import get_user_by_username
 from langflow.services.database.session import NoopSession
+from langflow.services.database.sqlite import SQLiteNullPool, SQLiteStaticPool
 from langflow.services.database.utils import Result, TableResults
 from langflow.services.deps import get_settings_service
 from langflow.services.utils import teardown_superuser
@@ -428,6 +429,9 @@ class DatabaseService(Service):
             else:
                 logger.error(f"Invalid poolclass '{poolclass_key}' specified. Using default pool class.")
                 kwargs.pop("poolclass", None)
+
+        if self.database_url.startswith("sqlite+aiosqlite:"):
+            kwargs["poolclass"] = SQLiteStaticPool if kwargs.get("poolclass") is sa.pool.StaticPool else SQLiteNullPool
 
         return create_async_engine(
             self.database_url,
