@@ -39,6 +39,7 @@ from langflow.services.deps import (
 from lfx.components.input_output import ChatInput
 from lfx.graph import Graph
 from lfx.log.logger import logger
+from lfx.services.sqlite_runtime import release_sqlite_process_safety
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -603,11 +604,15 @@ async def client_fixture(
             get_service_manager().services.clear()  # Clear the services cache
             app = create_app()
             db_service = get_db_service()
-            db_service.database_url = f"sqlite:///{db_path}"
-            db_service.reload_engine()
-            return app, db_path, restored
+            return app, db_path, restored, db_service
 
-        app, db_path, restored = await asyncio.to_thread(init_app)
+        app, db_path, restored, db_service = await asyncio.to_thread(init_app)
+        # create_app() builds an engine before the test path is applied below.
+        # Dispose that engine explicitly; otherwise every API test leaves an
+        # aiosqlite worker behind and long suites eventually starve SQLite.
+        await db_service.engine.dispose()
+        db_service.database_url = f"sqlite:///{db_path}"
+        db_service.reload_engine()
 
         async def initialize_test_database(*, fix_migration=False):
             if not restored:
@@ -641,7 +646,11 @@ async def client_fixture(
                 AsyncClient(transport=ASGITransport(app=manager.app), base_url="http://testserver/", http2=True)
             )
             yield client
-        # app.dependency_overrides.clear()
+        # The lifespan owns service shutdown and must run before the engine is
+        # disposed. Disposing while the app is still shutting down can cancel an
+        # aiosqlite close operation and leave the SQLite file locked on Windows.
+        await db_service.engine.dispose()
+        release_sqlite_process_safety(f"sqlite+aiosqlite:///{db_path}", owner=db_service)
         monkeypatch.undo()
         # clear the temp db
         with suppress(FileNotFoundError):

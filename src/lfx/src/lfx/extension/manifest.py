@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Literal
 
 if sys.version_info >= (3, 11):
@@ -256,11 +256,12 @@ class BundleRef(BaseModel):
         # Reject absolute paths and parent-directory traversal at the syntactic
         # level.  A more thorough symlink-aware check happens in
         # validate_extension where the filesystem is available.
-        if Path(value).is_absolute():
+        posix_path = PurePosixPath(value)
+        windows_path = PureWindowsPath(value)
+        if posix_path.is_absolute() or windows_path.is_absolute() or windows_path.drive:
             msg = f"Bundle path {value!r} must be relative to the manifest"
             raise ValueError(msg)
-        parts = Path(value).parts
-        if any(part == ".." for part in parts):
+        if any(part == ".." for part in (*posix_path.parts, *windows_path.parts)):
             msg = f"Bundle path {value!r} must not contain '..'"
             raise ValueError(msg)
         return value
@@ -512,14 +513,15 @@ class IntegrationManifestRef(BaseModel):
         if "\x00" in value:
             msg = "Integration capability-manifest path must not contain a null byte"
             raise ValueError(msg)
-        path = Path(value)
-        if path.is_absolute():
+        posix_path = PurePosixPath(value)
+        windows_path = PureWindowsPath(value)
+        if posix_path.is_absolute() or windows_path.is_absolute() or windows_path.drive:
             msg = f"Integration capability-manifest path {value!r} must be relative to the owning bundle"
             raise ValueError(msg)
-        if any(part == ".." for part in path.parts):
+        if any(part == ".." for part in (*posix_path.parts, *windows_path.parts)):
             msg = f"Integration capability-manifest path {value!r} must not contain '..'"
             raise ValueError(msg)
-        if path.suffix != ".json":
+        if posix_path.suffix != ".json" and windows_path.suffix != ".json":
             msg = f"Integration capability-manifest path {value!r} must name a JSON file"
             raise ValueError(msg)
         return value

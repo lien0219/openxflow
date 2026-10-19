@@ -119,7 +119,7 @@ def _write(
     if path.exists() and not overwrite:
         return
     path.write_text(content, encoding="utf-8")
-    created.append((str(path.relative_to(target)), label))
+    created.append((path.relative_to(target).as_posix(), label))
 
 
 def _copy_template(
@@ -129,7 +129,7 @@ def _copy_template(
     if dest.exists() and not overwrite:
         return
     dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-    created.append((str(dest.relative_to(target)), label))
+    created.append((dest.relative_to(target).as_posix(), label))
 
 
 def _render_tree(target: Path, created: list[tuple[str, str]]) -> None:

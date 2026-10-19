@@ -8,16 +8,22 @@ interface IDeleteFiles {
   ids: string[];
 }
 
+interface DeleteFilesResponse {
+  message?: string;
+}
+
 export const useDeleteFilesV2: useMutationFunctionType<
   undefined,
   IDeleteFiles,
-  unknown,
+  DeleteFilesResponse,
   Error
 > = (options?) => {
   const { mutate, queryClient } = UseRequestProcessor();
 
-  const deleteFileFn = async (params: IDeleteFiles): Promise<unknown> => {
-    const response = await api.delete<unknown>(
+  const deleteFileFn = async (
+    params: IDeleteFiles,
+  ): Promise<DeleteFilesResponse> => {
+    const response = await api.delete<DeleteFilesResponse>(
       `${getURL("FILE_MANAGEMENT", { mode: "batch/" }, true)}`,
       {
         data: params.ids,
@@ -27,10 +33,8 @@ export const useDeleteFilesV2: useMutationFunctionType<
     return response.data;
   };
 
-  const mutation: UseMutationResult<unknown, Error, IDeleteFiles> = mutate(
-    ["useDeleteFilesV2"],
-    deleteFileFn,
-    {
+  const mutation: UseMutationResult<DeleteFilesResponse, Error, IDeleteFiles> =
+    mutate(["useDeleteFilesV2"], deleteFileFn, {
       onSettled: (...args) => {
         queryClient.invalidateQueries({
           queryKey: ["useGetFilesV2"],
@@ -38,8 +42,7 @@ export const useDeleteFilesV2: useMutationFunctionType<
         options?.onSettled?.(...args);
       },
       ...options,
-    },
-  );
+    });
 
   return mutation;
 };

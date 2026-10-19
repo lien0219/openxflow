@@ -24,11 +24,18 @@ jest.mock("@xyflow/react", () => ({
 // biome-ignore lint/suspicious/noExplicitAny: captures the hook's StreamCallbacks (interface not exported)
 let capturedCallbacks: any = null;
 // biome-ignore lint/suspicious/noExplicitAny: mock signature mirrors postAssistStream's untyped callbacks arg
-const mockPostAssistStream = jest.fn(async (_req: unknown, callbacks: any) => {
+const mockPostAssistStream = jest.fn<
+  Promise<void>,
+  [unknown, unknown, AbortSignal?]
+>(async (_req, callbacks) => {
   capturedCallbacks = callbacks;
 });
 jest.mock("@/controllers/API/queries/agentic", () => ({
-  postAssistStream: (...args: unknown[]) => mockPostAssistStream(...args),
+  postAssistStream: (
+    request: unknown,
+    callbacks: unknown,
+    signal?: AbortSignal,
+  ) => mockPostAssistStream(request, callbacks, signal),
 }));
 
 jest.mock(

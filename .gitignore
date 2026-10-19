@@ -182,6 +182,10 @@ coverage.xml
 /src/frontend/playwright.ci-pr42-validation.config.ts
 /src/frontend/temp.openxflow.lock
 
+# Local test reports, fixtures, and runtime artifacts
+/.tmp/
+/src/lfx/.tmp/
+
 # Translations
 *.mo
 *.pot

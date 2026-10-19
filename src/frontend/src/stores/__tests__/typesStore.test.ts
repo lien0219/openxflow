@@ -32,42 +32,63 @@ const mockTypesGenerator = require("../../utils/reactflowUtils").typesGenerator;
 
 const mockAPIData: APIDataType = {
   TextInput: {
-    template: {
-      value: {
-        type: "str",
-        required: true,
-        placeholder: "Enter text",
+    TextInput: {
+      template: {
+        value: {
+          type: "str",
+          required: true,
+          list: false,
+          show: true,
+          readonly: false,
+          placeholder: "Enter text",
+        },
       },
+      description: "Text input component",
+      display_name: "Text Input",
+      documentation: "",
     },
-    description: "Text input component",
   },
   NumberInput: {
-    template: {
-      value: {
-        type: "int",
-        required: false,
-        placeholder: "Enter number",
+    NumberInput: {
+      template: {
+        value: {
+          type: "int",
+          required: false,
+          list: false,
+          show: true,
+          readonly: false,
+          placeholder: "Enter number",
+        },
       },
+      description: "Number input component",
+      display_name: "Number Input",
+      documentation: "",
     },
-    description: "Number input component",
   },
 };
 
 const mockAPIData2: APIDataType = {
   BooleanInput: {
-    template: {
-      value: {
-        type: "bool",
-        required: true,
+    BooleanInput: {
+      template: {
+        value: {
+          type: "bool",
+          required: true,
+          list: false,
+          show: true,
+          readonly: false,
+        },
       },
+      description: "Boolean input component",
+      display_name: "Boolean Input",
+      documentation: "",
     },
-    description: "Boolean input component",
   },
 };
 
 const mockTemplates = {
-  TextInput: { template: mockAPIData.TextInput },
-  NumberInput: { template: mockAPIData.NumberInput },
+  TextInput: mockAPIData.TextInput.TextInput,
+  NumberInput: mockAPIData.NumberInput.NumberInput,
 };
 
 const mockTypes = {
@@ -140,7 +161,7 @@ describe("useTypesStore", () => {
 
     it("should handle empty Set", () => {
       const { result } = renderHook(() => useTypesStore());
-      const emptySet = new Set();
+      const emptySet = new Set<string>();
 
       act(() => {
         result.current.setComponentFields(emptySet);
@@ -577,7 +598,7 @@ describe("useTypesStore", () => {
 
     it("should handle large ComponentFields sets", () => {
       const { result } = renderHook(() => useTypesStore());
-      const largeSet = new Set();
+      const largeSet = new Set<string>();
 
       for (let i = 0; i < 1000; i++) {
         largeSet.add(`field-${i}`);

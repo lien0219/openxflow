@@ -11,6 +11,9 @@ BUILDER_ROWS = "builder rows deleted by user id"
 REFERENCE_CLEARED = "reference to the person set to NULL"
 END_USER_ROWS = "end-user rows matched by derived id, session prefix or job"
 NOT_PERSONAL = "holds no personal data"
+CHANNEL_DATA = (
+    "builder erase blocked while channel ownership, identity, execution, file, command or audit references remain"
+)
 
 TABLE_POLICY: dict[str, str] = {
     "a2a_checkpoints": "not attributable: keyed by run id only (documented limit)",
@@ -29,6 +32,20 @@ TABLE_POLICY: dict[str, str] = {
     "authz_team_member_grant": "deleted with its team membership",
     "background_job_metric_totals": NOT_PERSONAL,
     "casbin_rule": "derived policy, rebuilt by the authorization plugin after the account is deleted",
+    "channel_active_workflow_selection": CHANNEL_DATA,
+    "channel_binding_code": CHANNEL_DATA,
+    "channel_configuration_audit": CHANNEL_DATA,
+    "channel_connection": CHANNEL_DATA,
+    "channel_conversation_binding": CHANNEL_DATA,
+    "channel_conversation_context_entry": CHANNEL_DATA,
+    "channel_event_receipt": CHANNEL_DATA,
+    "channel_execution_log": CHANNEL_DATA,
+    "channel_file_asset": CHANNEL_DATA,
+    "channel_identity": CHANNEL_DATA,
+    "channel_message_record": CHANNEL_DATA,
+    "channel_outbound_delivery": CHANNEL_DATA,
+    "channel_webhook_job": CHANNEL_DATA,
+    "channel_workflow_command": CHANNEL_DATA,
     "catalog_policy_rule": REFERENCE_CLEARED,
     "connection": BUILDER_ROWS,
     "connection_oauth": BUILDER_ROWS,

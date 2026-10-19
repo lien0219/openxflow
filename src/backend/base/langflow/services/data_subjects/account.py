@@ -16,6 +16,7 @@ from langflow.services.authorization.lifecycle import (
     stage_identity_mutation,
     validate_identity_mutation,
 )
+from langflow.services.data_subjects.channel_guard import ensure_no_channel_data
 from langflow.services.data_subjects.errors import ProtectedAccountError
 from langflow.services.data_subjects.lifecycle import account_deletion_mutation
 from langflow.services.database.models.user.model import User
@@ -38,6 +39,7 @@ async def delete_account(request_id: UUID, user_id: UUID, actor_id: UUID | None)
         user = await session.get(User, user_id)
         if user is None:
             return
+        await ensure_no_channel_data(session, user_id)
         mutation = account_deletion_mutation(user, actor_id)
         try:
             await validate_identity_mutation(authorization_service, session, mutation)

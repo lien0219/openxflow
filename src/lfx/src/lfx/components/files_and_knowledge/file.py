@@ -1427,7 +1427,7 @@ class FileComponent(BaseFileComponent):
                 try:
                     if settings.storage_type == "s3":
                         # For S3 storage, use storage service to read file bytes
-                        file_path_str = str(file.path)
+                        file_path_str = file.path.as_posix() if not file.path.is_absolute() else str(file.path)
                         content = await read_file_bytes(file_path_str)
                     else:
                         # For local storage, read bytes directly from filesystem
@@ -1498,7 +1498,11 @@ class FileComponent(BaseFileComponent):
             final_return: list[BaseFileComponent.BaseFile] = []
             for file in file_list:
                 _raise_if_file_tool_cancelled(cancel_event)
-                file_path = str(file.path)
+                file_path = (
+                    file.path.as_posix()
+                    if settings.storage_type == "s3" and not file.path.is_absolute()
+                    else str(file.path)
+                )
                 advanced_data: Data | None = await self._aprocess_docling_in_subprocess(
                     file_path, is_local_temp_file=file.cleanup_local_file
                 )
@@ -1513,7 +1517,10 @@ class FileComponent(BaseFileComponent):
         # Standard multi-file (or single non-advanced) path
         concurrency = max(1, self.concurrency_multithreading)
 
-        file_paths = [str(f.path) for f in file_list]
+        file_paths = [
+            f.path.as_posix() if settings.storage_type == "s3" and not f.path.is_absolute() else str(f.path)
+            for f in file_list
+        ]
         self.log(f"Starting parallel processing of {len(file_paths)} files with concurrency: {concurrency}.")
         my_data = await aparallel_load_data(
             file_paths,

@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "include": [
+    "src/vite-env.d.ts",
     "src/components/authorization/authPermissionGuard.tsx",
     "src/controllers/API/helpers/constants.ts",
     "src/controllers/API/queries/authz/**/*.ts",

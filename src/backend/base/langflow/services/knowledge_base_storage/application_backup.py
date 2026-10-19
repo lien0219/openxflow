@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 from typing import TYPE_CHECKING
 from weakref import WeakKeyDictionary
 
@@ -33,6 +34,10 @@ if TYPE_CHECKING:
 
 BACKUP_DIRECTORY = "application-backups"
 _BACKUP_PREFIX = "application-before-upgrade-"
+_SHORT_BACKUP_DIGEST_LENGTH = 32
+# SQLite may need to create a journal beside the destination while copying. Keep
+# room for that suffix on Windows, whose legacy path APIs reject longer paths.
+_MAX_WINDOWS_SQLITE_PATH = 240
 # The journal files beside a SQLite database can hold its pages too, for example after an interrupted copy.
 _SQLITE_FILES = ("", "-wal", "-shm", "-journal")
 # An asyncio.Lock binds to the first loop that waits on it, so each event loop gets its own.
@@ -59,14 +64,34 @@ def backup_directory(root: Path) -> Path:
 def backup_path(directory: Path, database: Path) -> Path:
     """The one backup of ``database`` that every run of the upgrade shares."""
     identity = hashlib.sha256(str(database).encode()).hexdigest()
-    return directory / f"{_BACKUP_PREFIX}{identity}.sqlite3"
+    full = directory / f"{_BACKUP_PREFIX}{identity}.sqlite3"
+    if os.name != "nt" or len(os.fspath(full)) <= _MAX_WINDOWS_SQLITE_PATH:
+        return full
+    # Keep using an existing long-form backup when one was created by an older
+    # release. New copies use a shorter name so SQLite can create its journals.
+    try:
+        if full.exists():
+            return full
+    except OSError:
+        pass
+    short = identity[:_SHORT_BACKUP_DIGEST_LENGTH]
+    return directory / f"{_BACKUP_PREFIX}{short}.sqlite3"
+
+
+def _backup_variants(directory: Path, database: Path) -> tuple[Path, ...]:
+    """Return current and legacy names for one database backup, without duplicates."""
+    current = backup_path(directory, database)
+    identity = hashlib.sha256(str(database).encode()).hexdigest()
+    legacy = directory / f"{_BACKUP_PREFIX}{identity}.sqlite3"
+    return tuple(dict.fromkeys((current, legacy)))
 
 
 def _own_files(root: Path, database: Path) -> list[Path]:
-    backup = backup_path(backup_directory(root), database)
+    backups = _backup_variants(backup_directory(root), database)
     # A copy interrupted by a restart holds the same rows as a finished one.
     return [
         path.with_name(path.name + suffix)
+        for backup in backups
         for path in (backup, backup.with_suffix(".incomplete"))
         for suffix in _SQLITE_FILES
     ]

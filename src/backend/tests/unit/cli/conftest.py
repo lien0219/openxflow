@@ -2,22 +2,37 @@
 
 import pytest
 import sqlalchemy as sa
-from langflow.services.deps import get_db_service
+
+
+@pytest.fixture(autouse=True)
+def disable_data_subject_erase_worker(monkeypatch):
+    """CLI tests replace database services and do not exercise the app worker."""
+    # CLI fixtures can switch the global database service to a temporary source
+    # without keeping application-owned database workers alive against it.
+    monkeypatch.setenv("LANGFLOW_CHANNEL_STREAMS_ENABLED", "false")
+    monkeypatch.setenv("LANGFLOW_CHANNEL_WEBHOOK_DURABLE_ENABLED", "false")
+
+    async def no_worker(_self) -> None:
+        return None
+
+    monkeypatch.setattr("langflow.services.data_subjects.worker.DataSubjectEraseWorker.start", no_worker)
 
 
 @pytest.fixture
-def deny_revision_read(client):  # noqa: ARG001
+def deny_revision_read(client, monkeypatch):  # noqa: ARG001
     """Reproduce PostgreSQL's query-time permission failure on the local test engine."""
-    engine = get_db_service().engine.sync_engine
 
-    def deny(_connection, _cursor, statement, parameters, _context, _executemany):
-        if statement == "SELECT version_num FROM alembic_version":
-            raise sa.exc.ProgrammingError(
-                statement, parameters, RuntimeError("permission denied for table alembic_version")
-            )
+    async def deny(_session):
+        statement = "SELECT version_num FROM alembic_version"
+        message = "permission denied for table alembic_version"
+        raise sa.exc.ProgrammingError(
+            statement,
+            {},
+            RuntimeError(message),
+        )
 
-    sa.event.listen(engine, "before_cursor_execute", deny)
-    try:
-        yield
-    finally:
-        sa.event.remove(engine, "before_cursor_execute", deny)
+    from langflow.cli import integrity
+    from langflow.cli import migration_preflight as preflight
+
+    monkeypatch.setattr(integrity, "recorded_revisions", deny)
+    monkeypatch.setattr(preflight, "recorded_revisions", deny)

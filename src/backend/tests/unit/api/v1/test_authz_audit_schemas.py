@@ -289,7 +289,7 @@ def audit_client():
     from fastapi.testclient import TestClient
     from langflow.api.utils.core import injectable_session_scope
     from langflow.api.v1.authz_audit import router
-    from langflow.services.auth.utils import get_current_active_superuser
+    from langflow.services.auth.utils import get_current_active_user
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
@@ -298,7 +298,7 @@ def audit_client():
         yield _Session([])
 
     app.dependency_overrides[injectable_session_scope] = _session
-    app.dependency_overrides[get_current_active_superuser] = lambda: SimpleNamespace()
+    app.dependency_overrides[get_current_active_user] = lambda: SimpleNamespace(id=uuid4(), is_superuser=True)
     return TestClient(app)
 
 

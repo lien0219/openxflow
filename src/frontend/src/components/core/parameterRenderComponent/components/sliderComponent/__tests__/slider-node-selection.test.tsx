@@ -24,7 +24,7 @@ beforeAll(() => {
   // during the test without throwing. MouseEvent is a constructible, bubbling
   // stand-in for PointerEvent; the handlers only read event.pointerId, which is
   // harmlessly undefined here.
-  if (!("PointerEvent" in window)) {
+  if (typeof window.PointerEvent === "undefined") {
     window.PointerEvent = window.MouseEvent as unknown as typeof PointerEvent;
   }
   if (!Element.prototype.setPointerCapture) {

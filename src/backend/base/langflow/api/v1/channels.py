@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import AnyHttpUrl, BaseModel
 from sqlalchemy.exc import IntegrityError
 
 from langflow.api.utils import CurrentActiveUser, DbSession
+from langflow.api.utils.migration_pause import changes_the_instance
 from langflow.channels.adapters.factory import build_channel_adapter
 from langflow.channels.adapters.telegram import TelegramChannelAdapter
 from langflow.channels.security.provider_credentials import ChannelProviderCredentialError
@@ -86,7 +87,7 @@ async def read_provider_capabilities() -> dict[str, ChannelProviderCapabilities]
     return get_provider_capabilities()
 
 
-@router.get("/", response_model=list[ChannelConnectionRead])
+@router.get("/", response_model=list[ChannelConnectionRead], dependencies=[Depends(changes_the_instance)])
 async def read_channel_connections(
     db: DbSession,
     current_user: CurrentActiveUser,

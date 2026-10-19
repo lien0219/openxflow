@@ -175,14 +175,17 @@ export function FlowEditCarousel({
                 data: {
                   ...node.data,
                   node: {
-                    ...(node.data as Record<string, unknown>).node,
+                    ...((node.data as Record<string, unknown>).node as Record<
+                      string,
+                      unknown
+                    >),
                     template: {
                       ...tmpl,
                       [field]: { ...tmpl[field], value: op.value },
                     },
                   },
                 },
-              };
+              } as typeof node;
             }),
           );
         }

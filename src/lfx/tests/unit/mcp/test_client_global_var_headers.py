@@ -77,7 +77,9 @@ class TestGlobalVarHeaders:
         The header name is sent as written, which is fine because Langflow lowercases
         before matching.
         """
-        env.setenv(name, "tenant-value")
+        # Windows uppercases os.environ keys; preserve the supplied casing here
+        # so this test exercises case-insensitive matching on every platform.
+        env.setattr(os, "environ", {**os.environ, name: "tenant-value"})
 
         headers = LangflowClient(server_url="http://localhost:7860")._headers()
 

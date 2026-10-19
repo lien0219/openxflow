@@ -2325,8 +2325,9 @@ async def test_delete_flow_real_competing_sqlite_writer_is_retried(client: Async
     """A real second SQLite connection holding the write lock triggers a retry."""
     from langflow.api.v1 import flows as flows_module
     from langflow.services.database.models.folder import Folder
-    from langflow.services.deps import session_scope
+    from langflow.services.deps import get_db_service
     from sqlalchemy import text
+    from sqlmodel.ext.asyncio.session import AsyncSession
 
     create_response = await client.post(
         "api/v1/flows/",
@@ -2340,7 +2341,10 @@ async def test_delete_flow_real_competing_sqlite_writer_is_retried(client: Async
     async def delete_after_competing_commit(session, target_flow_id, **kwargs):
         attempts["count"] += 1
         if attempts["count"] == 1:
-            async with session_scope() as competing_session:
+            # An external writer does not participate in the application's
+            # in-process queue. Use an independent connection to exercise the
+            # actual SQLite busy error rather than deadlocking that queue.
+            async with AsyncSession(get_db_service().engine) as competing_session:
                 competing_session.add(Folder(name=f"delete-competing-write-{uuid.uuid4()}", user_id=None))
                 await competing_session.flush()
                 # The second connection now holds SQLite's write lock. Disable

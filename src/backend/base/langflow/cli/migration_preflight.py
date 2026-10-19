@@ -62,7 +62,7 @@ async def run_preflight(
 
     ``on_check`` is called with each result as its check finishes.
     """
-    from langflow.services.deps import session_scope
+    from langflow.cli.integrity import inspection_session
 
     report = IntegrityReport([])
 
@@ -71,7 +71,7 @@ async def run_preflight(
         if on_check:
             on_check(check)
 
-    async with session_scope() as session:
+    async with inspection_session() as session:
         version = await check_version_direction(session, target_revision, target_version)
         add(version)
         schema = await check_schema(session)
@@ -244,15 +244,22 @@ async def check_default_superuser(session: AsyncSession, target_revision: str | 
             "a target with AUTO_LOGIN off keeps that password, and replaces it with LANGFLOW_SUPERUSER_PASSWORD only "
             "when LANGFLOW_SUPERUSER names the account and it still has the old default password",
             [
-                "before the move, while AUTO_LOGIN is still on, check that a password you know signs in as "
-                f"{DEFAULT_SUPERUSER!r}: send POST /api/v1/login with the form fields username and password; if none "
-                f"does, set one: send PATCH /api/v1/users/{user.id} with only the password field, with an API key or "
-                "your session's token, and check again",
-                "on the target, set LANGFLOW_SUPERUSER_PASSWORD to that password and sign in as "
-                f"{DEFAULT_SUPERUSER!r} with it",
-                "the check passes once the LANGFLOW_SUPERUSER_PASSWORD it sees signs in as "
-                f"{DEFAULT_SUPERUSER!r}; until then this warning stays while AUTO_LOGIN is on, so go on once the "
-                "sign-in works",
+                (
+                    "before the move, while AUTO_LOGIN is still on, check that a password you know signs in as "
+                    f"{DEFAULT_SUPERUSER!r}: send POST /api/v1/login with the form fields username and password; "
+                    "if none does, set one: send PATCH "
+                    f"/api/v1/users/{user.id} with only the password field, with an API key or your session's token, "
+                    "and check again"
+                ),
+                (
+                    "on the target, set LANGFLOW_SUPERUSER_PASSWORD to that password and sign in as "
+                    f"{DEFAULT_SUPERUSER!r} with it"
+                ),
+                (
+                    "the check passes once the LANGFLOW_SUPERUSER_PASSWORD it sees signs in as "
+                    f"{DEFAULT_SUPERUSER!r}; until then this warning stays while AUTO_LOGIN is on, so go on once the "
+                    "sign-in works"
+                ),
             ],
         )
 
@@ -274,14 +281,21 @@ async def check_default_superuser(session: AsyncSession, target_revision: str | 
         "a target with AUTO_LOGIN off deletes it on first boot unless its OpenXFlow keeps such an account",
         [
             ", ".join(f"{table}: {count}" for table, count in sorted(owned.items())),
-            "if the target's OpenXFlow keeps it (its migrations add user.retired_at), change nothing: "
-            f"LANGFLOW_SUPERUSER={DEFAULT_SUPERUSER} claims the account with the configured password, and its API "
-            "keys, including any minted while AUTO_LOGIN was on, keep working; any other name deactivates it, which "
-            "stops them. Setting last_login_at on such a target skips both",
-            f"otherwise, before attaching, run against the target database: {_SUPERUSER_WORKAROUND} The account "
-            "stays active with its current password, so API keys minted while AUTO_LOGIN was on keep working. Set "
-            f"LANGFLOW_SUPERUSER to another name and, after the first boot, deactivate {DEFAULT_SUPERUSER!r} as that "
-            f"superuser: send PATCH /api/v1/users/{user.id} with is_active false",
+            (
+                "if the target's OpenXFlow keeps it (its migrations add user.retired_at), change nothing: "
+                f"LANGFLOW_SUPERUSER={DEFAULT_SUPERUSER} claims the account with the configured password, "
+                "and its API keys, including any minted while AUTO_LOGIN was on, keep working; any other name "
+                "deactivates it, which "
+                "stops them. Setting last_login_at on such a target skips both"
+            ),
+            (
+                f"otherwise, before attaching, run against the target database: {_SUPERUSER_WORKAROUND} The account "
+                "stays active with its current password, so API keys minted while AUTO_LOGIN was on keep working. "
+                "Set "
+                f"LANGFLOW_SUPERUSER to another name and, after the first boot, deactivate {DEFAULT_SUPERUSER!r} "
+                "as that "
+                f"superuser: send PATCH /api/v1/users/{user.id} with is_active false"
+            ),
         ],
     )
 

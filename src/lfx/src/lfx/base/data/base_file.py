@@ -454,7 +454,9 @@ class BaseFileComponent(Component, ABC):
 
         settings = get_settings_service().settings
         if settings.storage_type == "s3":
-            parsed_path = parse_storage_path(str(file.path))
+            # ``Path`` uses the host separator, but object-storage keys are always slash-delimited.
+            storage_path = str(file.path).replace("\\", "/")
+            parsed_path = parse_storage_path(storage_path)
             if not parsed_path:
                 # Absolute local paths can still be read in unrestricted S3 deployments
                 # for compatibility, but they must never be treated as object keys or
@@ -891,7 +893,10 @@ class BaseFileComponent(Component, ABC):
         # Generate the updated list of BaseFile objects, preserving the order of base_files
         updated_base_files = []
         for base_file in base_files:
-            new_data_list = data_dict.get(str(base_file.path), [])
+            # Object-storage keys are slash-delimited even when ``base_file.path``
+            # was materialized as a Windows ``Path``.  Accept both forms so
+            # callers using the legacy string representation still roll up.
+            new_data_list = data_dict.get(str(base_file.path), data_dict.get(base_file.path.as_posix(), []))
             merged_data_list = base_file.merge_data(new_data_list)
             updated_base_files.append(
                 BaseFileComponent.BaseFile(

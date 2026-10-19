@@ -26,11 +26,13 @@ def convert_image_to_base64(image_path: str | Path) -> str:
     Raises:
         FileNotFoundError: If the image file doesn't exist
     """
-    image_path = Path(image_path)
-
     storage_service = get_storage_service()
     if storage_service:
-        flow_id, file_name = storage_service.parse_file_path(str(image_path))
+        # Object-storage keys always use forward slashes.  Do not construct a
+        # host ``Path`` before parsing: on Windows that turns ``flow/photo.png``
+        # into ``flow\\photo.png`` and changes the object key.
+        storage_path = image_path.as_posix() if isinstance(image_path, Path) else image_path
+        flow_id, file_name = storage_service.parse_file_path(storage_path)
         try:
             file_content = run_until_complete(
                 storage_service.get_file(flow_id=flow_id, file_name=file_name)  # type: ignore[call-arg]
@@ -41,11 +43,12 @@ def convert_image_to_base64(image_path: str | Path) -> str:
             raise
 
     # Fall back to local file access
-    if not image_path.exists():
-        msg = f"Image file not found: {image_path}"
+    local_path = Path(image_path)
+    if not local_path.exists():
+        msg = f"Image file not found: {local_path}"
         raise FileNotFoundError(msg)
 
-    with image_path.open("rb") as image_file:
+    with local_path.open("rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
@@ -62,8 +65,6 @@ def create_data_url(image_path: str | Path, mime_type: str | None = None) -> str
     Raises:
         FileNotFoundError: If the image file doesn't exist
     """
-    image_path = Path(image_path)
-
     if mime_type is None:
         mime_type = get_mime_type(image_path)
 

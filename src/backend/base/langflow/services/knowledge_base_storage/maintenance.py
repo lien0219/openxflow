@@ -29,6 +29,19 @@ MAX_SOURCE_FILES = 200_000
 _PROCESS_TIME_TOLERANCE = 0.01
 
 
+def filesystem_path(path: Path) -> Path:
+    """Use an extended Windows path for storage files beyond the legacy limit."""
+    if os.name != "nt":
+        return path
+    value = os.fspath(path)
+    if value.startswith("\\\\?\\"):
+        return path
+    absolute = os.fspath(Path(value).resolve())
+    if absolute.startswith("\\\\"):
+        return Path("\\\\?\\UNC\\" + absolute.lstrip("\\"))
+    return Path("\\\\?\\" + absolute)
+
+
 class MaintenanceRequiredError(ValueError):
     """The managed old-writer barrier or rollback backup is not established."""
 
@@ -45,6 +58,7 @@ def _fsync_directory(path: Path) -> None:
 
 def file_sha256(path: Path) -> str:
     """Hash a file's contents for receipt and backup integrity checks."""
+    path = filesystem_path(path)
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -54,6 +68,7 @@ def file_sha256(path: Path) -> str:
 
 def tree_fingerprint(path: Path) -> str:
     """Hash every regular source file, including WAL, logs and native indexes."""
+    path = filesystem_path(path)
     if path.is_symlink() or not path.is_dir():
         msg = "Source directory is unavailable or is a symbolic link"
         raise MaintenanceRequiredError(msg)
@@ -88,6 +103,7 @@ def tree_fingerprint(path: Path) -> str:
 
 def tree_stat_fingerprint(path: Path) -> str:
     """Detect source changes without rereading retained document/index contents."""
+    path = filesystem_path(path)
     if path.is_symlink() or not path.is_dir():
         msg = "Source directory is unavailable or is a symbolic link"
         raise MaintenanceRequiredError(msg)
@@ -270,7 +286,9 @@ def create_receipt(*, root: Path, database: Path, receipt: Path, previous_worker
             if target.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
                 msg = "Application metadata backup failed integrity validation"
                 raise MaintenanceRequiredError(msg)
-        with backup.open("rb") as stream:
+        # Windows rejects fsync on a read-only handle (EBADF); the backup is
+        # private and freshly created, so opening it read/write is safe here.
+        with backup.open("r+b") as stream:
             os.fsync(stream.fileno())
         _fsync_directory(backup.parent)
         sources = {}
@@ -351,6 +369,8 @@ def validate_receipt(*, root: Path, database: Path, receipt: Path) -> dict:
 
 def snapshot_source(source: Path, destination: Path, expected_fingerprint: str) -> None:
     """Copy the entire frozen source, retaining the pristine copy on retry."""
+    source = filesystem_path(source)
+    destination = filesystem_path(destination)
     if tree_fingerprint(source) != expected_fingerprint:
         msg = "Source changed after the stopped-worker barrier"
         raise MaintenanceRequiredError(msg)
@@ -363,7 +383,17 @@ def snapshot_source(source: Path, destination: Path, expected_fingerprint: str) 
     if shutil.disk_usage(destination.parent).free < required * 4 + 64 * 1024 * 1024:
         msg = "Insufficient disk space for source snapshot and verified import"
         raise MaintenanceRequiredError(msg)
-    temporary = destination.with_name("snapshot.incomplete")
+    # The migration run directory already contains two UUIDs. A long
+    # temporary name makes source files exceed Windows' legacy path limit.
+    temporary = destination.with_name(".s")
+    legacy_temporary = destination.with_name("snapshot.incomplete")
+    try:
+        if legacy_temporary.exists():
+            temporary = legacy_temporary
+    except OSError:
+        # An overlong legacy path cannot be inspected on older Windows APIs;
+        # the short name is the only usable recovery location.
+        pass
     if temporary.exists():
         if temporary.is_symlink():
             msg = "Invalid incomplete snapshot path"

@@ -146,8 +146,8 @@ export function useFlowVersionSidebar(flowId: string) {
       (selectedId === CURRENT_DRAFT_ID || processedPreview?.error)
     ) {
       useFlowStore.setState({
-        nodes: cloneDeep(originalDraftNodesRef.current),
-        edges: cloneDeep(originalDraftEdgesRef.current),
+        nodes: cloneDeep(originalDraftNodesRef.current ?? []),
+        edges: cloneDeep(originalDraftEdgesRef.current ?? []),
       });
     }
     // Fit the canvas to the new nodes after ReactFlow processes the state update.
@@ -183,8 +183,8 @@ export function useFlowVersionSidebar(flowId: string) {
       );
     } else if (selectedId === CURRENT_DRAFT_ID || processedPreview?.error) {
       setPreview(
-        cloneDeep(originalDraftNodesRef.current),
-        cloneDeep(originalDraftEdgesRef.current),
+        cloneDeep(originalDraftNodesRef.current ?? []),
+        cloneDeep(originalDraftEdgesRef.current ?? []),
         "Current Draft",
         null,
       );
@@ -228,8 +228,8 @@ export function useFlowVersionSidebar(flowId: string) {
         // nothing to put back, and putting it back anyway looks like an edit.
         if (!wasRestored && previewedSomething.current) {
           useFlowStore.setState({
-            nodes: cloneDeep(originalDraftNodesRef.current),
-            edges: cloneDeep(originalDraftEdgesRef.current),
+            nodes: cloneDeep(originalDraftNodesRef.current ?? []),
+            edges: cloneDeep(originalDraftEdgesRef.current ?? []),
           });
         }
       } catch (err) {

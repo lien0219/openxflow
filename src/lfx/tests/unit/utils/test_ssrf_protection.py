@@ -355,15 +355,14 @@ class TestURLValidation:
 
     def test_public_hostnames_allowed(self):
         """Test that public hostnames are allowed."""
-        with mock_ssrf_settings(enabled=True):
-            # Test with real DNS to stable Google service
+        with (
+            mock_ssrf_settings(enabled=True),
+            patch("lfx.utils.ssrf_protection.resolve_hostname", return_value=["93.184.216.34"]),
+        ):
+            # Keep the DNS response public regardless of the runner's resolver.
             validate_url_for_ssrf("https://www.google.com", warn_only=False)
-
-            # Mock DNS for other domains
-            with patch("lfx.utils.ssrf_protection.resolve_hostname") as mock_resolve:
-                mock_resolve.return_value = ["93.184.216.34"]  # Public IP
-                validate_url_for_ssrf("https://api.example.com", warn_only=False)
-                validate_url_for_ssrf("https://example.com", warn_only=False)
+            validate_url_for_ssrf("https://api.example.com", warn_only=False)
+            validate_url_for_ssrf("https://example.com", warn_only=False)
 
     def test_localhost_hostname_blocked(self):
         """Test that localhost hostname is blocked."""

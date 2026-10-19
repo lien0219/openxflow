@@ -175,6 +175,9 @@ export type IOJSONInputComponentType = {
 };
 export type outputComponentType = {
   nodeId: string;
+  idx?: number;
+  types?: string[];
+  selected?: string;
   frozen?: boolean;
   name: string;
   proxy?: OutputFieldProxyType;
@@ -232,7 +235,6 @@ export type FloatComponentType = {
 };
 
 export type SliderComponentType = {
-  value: string;
   disabled?: boolean;
   rangeSpec: RangeSpecType;
   editNode?: boolean;

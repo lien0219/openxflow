@@ -88,6 +88,7 @@ def _git(*args: str) -> str:
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
     except subprocess.CalledProcessError as exc:
         # Surface stderr to the caller; treat absent base ref as "no diff".

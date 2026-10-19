@@ -43,6 +43,7 @@ from langflow.services.knowledge_base_storage.legacy_sources import (
 from langflow.services.knowledge_base_storage.maintenance import (
     MaintenanceRequiredError,
     _fsync_directory,
+    filesystem_path,
     snapshot_source,
     tree_fingerprint,
     tree_stat_fingerprint,
@@ -438,7 +439,7 @@ async def migrate_one(kb_id: UUID) -> None:
                 with output.open("wb") as stream:
                     write_export(stream, header, [])
             else:
-                header = await _worker(export_local_snapshot, snapshot, output, **arguments)
+                header = await _worker(export_local_snapshot, filesystem_path(snapshot), output, **arguments)
             await _phase(
                 run.id, "importing", source_version=header.source_version, validation={"header": asdict(header)}
             )

@@ -83,7 +83,7 @@ describe("useProviderFilter", () => {
   it("selects the first provider once providers load after starting empty", async () => {
     const { result, rerender } = renderHook(
       ({ list }: { list: ProviderAccount[] }) => useProviderFilter(list),
-      { initialProps: { list: [] } },
+      { initialProps: { list: [] as ProviderAccount[] } },
     );
 
     expect(result.current.selectedProviderId).toBe("");

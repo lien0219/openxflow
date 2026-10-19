@@ -87,6 +87,8 @@ repos:
     hooks:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
+        # Each batch can update the same baseline; concurrent writers lose updates.
+        require_serial: true
         # Bundle starter projects are excluded for the same reason as the langflow ones listed
         # just before them: both are generated flow templates that embed component source and
         # its content hash, so a regeneration trips the high-entropy detector on a value that is

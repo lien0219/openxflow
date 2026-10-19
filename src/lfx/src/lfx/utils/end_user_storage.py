@@ -9,6 +9,7 @@ The registry lives in a dot-folder, which neither the encoded nor legacy folder 
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
@@ -21,6 +22,25 @@ REGISTRY_DIR_NAME = ".save_file_end_users"
 # 145 bytes encode to 232 characters. The prefix and registry temporary-file suffix
 # then fit within the common 255-byte filesystem name limit without truncation.
 _MAX_END_USER_ID_BYTES = 145
+_MAX_INLINE_SEGMENT_LENGTH = 80
+_REGISTRY_HASH_PREFIX = "segment-"
+
+
+def _encoded_segment(raw: bytes) -> str:
+    return "end_user-" + b32encode(raw).decode("ascii").rstrip("=").lower()
+
+
+def _hashed_segment(raw: bytes) -> str:
+    return "end_user-hash-" + hashlib.sha256(raw).hexdigest()
+
+
+def legacy_end_user_folder_segment(end_user_id: str) -> str:
+    """Return the pre-hash encoded folder segment for compatibility lookups."""
+    raw = end_user_id.encode("utf-8")
+    if not raw or len(raw) > _MAX_END_USER_ID_BYTES:
+        msg = f"End-user file storage requires an identity of 1 to {_MAX_END_USER_ID_BYTES} UTF-8 bytes."
+        raise ValueError(msg)
+    return _encoded_segment(raw)
 
 
 def end_user_folder_segment(end_user_id: str) -> str:
@@ -33,10 +53,22 @@ def end_user_folder_segment(end_user_id: str) -> str:
     if not raw or len(raw) > _MAX_END_USER_ID_BYTES:
         msg = f"End-user file storage requires an identity of 1 to {_MAX_END_USER_ID_BYTES} UTF-8 bytes."
         raise ValueError(msg)
-    return "end_user-" + b32encode(raw).decode("ascii").rstrip("=").lower()
+    encoded = _encoded_segment(raw)
+    return encoded if len(encoded) <= _MAX_INLINE_SEGMENT_LENGTH else _hashed_segment(raw)
+
+
+def _registry_segment(segment: str) -> str:
+    if len(segment) <= _MAX_INLINE_SEGMENT_LENGTH:
+        return segment
+    digest = hashlib.sha256(segment.encode("utf-8")).hexdigest()
+    return f"{_REGISTRY_HASH_PREFIX}{digest}"
 
 
 def _entry(config_dir: Path, segment: str) -> Path:
+    return Path(config_dir) / REGISTRY_DIR_NAME / f"{_registry_segment(segment)}.json"
+
+
+def _legacy_entry(config_dir: Path, segment: str) -> Path:
     return Path(config_dir) / REGISTRY_DIR_NAME / f"{segment}.json"
 
 
@@ -47,20 +79,25 @@ def end_user_folder_lock(config_dir: Path, segment: str) -> FileLock:
     """
     entry = _entry(config_dir, segment)
     entry.parent.mkdir(parents=True, exist_ok=True)
-    return FileLock(entry.parent / f".{segment}.lock", timeout=10)
+    return FileLock(entry.parent / f".{_registry_segment(segment)}.lock", timeout=10)
 
 
 def end_user_folder_owners(config_dir: Path, segment: str) -> frozenset[str] | None:
     """The raw end-user ids recorded for ``config_dir/<segment>``, or ``None`` when nothing was recorded."""
-    entry = _entry(config_dir, segment)
-    try:
-        payload = json.loads(entry.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    owners = payload.get("end_user_ids") if isinstance(payload, dict) else None
-    if not isinstance(owners, list):
-        return None
-    return frozenset(str(owner) for owner in owners)
+    entries = [_entry(config_dir, segment)]
+    legacy_entry = _legacy_entry(config_dir, segment)
+    if legacy_entry != entries[0]:
+        entries.append(legacy_entry)
+    for entry in entries:
+        try:
+            payload = json.loads(entry.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            continue
+        owners = payload.get("end_user_ids") if isinstance(payload, dict) else None
+        if not isinstance(owners, list):
+            return None
+        return frozenset(str(owner) for owner in owners)
+    return None
 
 
 def record_end_user_folder(config_dir: Path, segment: str, end_user_id: str, *, exclusive: bool = False) -> None:
@@ -84,15 +121,23 @@ def record_end_user_folder(config_dir: Path, segment: str, end_user_id: str, *, 
             return
         entry = _entry(config_dir, segment)
         payload = json.dumps({"end_user_ids": sorted({*owners, end_user_id})})
-        fd, tmp = tempfile.mkstemp(dir=entry.parent, prefix=f".{segment}.", suffix=".tmp")
+        registry_segment = _registry_segment(segment)
+        fd, tmp = tempfile.mkstemp(dir=entry.parent, prefix=f".{registry_segment}.", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(payload)
             Path(tmp).replace(entry)
+            legacy_entry = _legacy_entry(config_dir, segment)
+            if legacy_entry != entry:
+                legacy_entry.unlink(missing_ok=True)
         except BaseException:
             Path(tmp).unlink(missing_ok=True)
             raise
 
 
 def forget_end_user_folder(config_dir: Path, segment: str) -> None:
-    _entry(config_dir, segment).unlink(missing_ok=True)
+    entry = _entry(config_dir, segment)
+    entry.unlink(missing_ok=True)
+    legacy_entry = _legacy_entry(config_dir, segment)
+    if legacy_entry != entry:
+        legacy_entry.unlink(missing_ok=True)

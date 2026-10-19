@@ -149,8 +149,8 @@ def test_rejects_unsupported_version_forms(version: str) -> None:
         # that declares neither a bundle nor a provider.
         ({"bundles": []}, "at least one bundle"),
         ({"bundles": [{"name": "Bad-Name", "path": "x"}]}, "name"),
-        ({"bundles": [{"name": "x", "path": "/abs/path"}]}, "path"),
-        ({"bundles": [{"name": "x", "path": "../escape"}]}, "path"),
+        ({"bundles": [{"name": "xx", "path": "/abs/path"}]}, "path"),
+        ({"bundles": [{"name": "xx", "path": "../escape"}]}, "path"),
     ],
 )
 def test_rejects_malformed_manifest(override_or_missing: dict, must_mention: str) -> None:
@@ -300,6 +300,10 @@ def test_bundle_ref_path_safety_sufficient_for_static_use() -> None:
         BundleRef(name="ok", path="../escape")
     with pytest.raises(ValidationError):
         BundleRef(name="ok", path="/abs")
+    with pytest.raises(ValidationError):
+        BundleRef(name="ok", path=r"C:\\abs")
+    with pytest.raises(ValidationError):
+        BundleRef(name="ok", path=r"..\\escape")
 
 
 def test_lfx_compat_rejects_invalid_versions() -> None:

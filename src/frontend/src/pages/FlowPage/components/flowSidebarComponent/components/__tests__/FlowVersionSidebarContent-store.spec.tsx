@@ -107,7 +107,7 @@ jest.mock("@/stores/flowStore", () => {
   const store: any = (selector: any) => selector(storeState);
   store.getState = () => storeState;
   // biome-ignore lint/suspicious/noExplicitAny: test doubles for untyped legacy stores
-  store.setState = (...args: any[]) => setStateMock(...args);
+  store.setState = (partial: any) => setStateMock(partial);
   // biome-ignore lint/suspicious/noExplicitAny: test doubles for untyped legacy stores
   store.subscribe = jest.fn((cb: any) => {
     storeSubscribers.add(cb);

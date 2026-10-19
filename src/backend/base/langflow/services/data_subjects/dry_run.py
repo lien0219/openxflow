@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func
 from sqlmodel import col, select
 
-from langflow.services.data_subjects.errors import DeployedResourcesError, LastAdministratorError
+from langflow.services.data_subjects.errors import ChannelDataError, DeployedResourcesError, LastAdministratorError
 from langflow.services.data_subjects.schemas import DryRunSummary
 from langflow.services.data_subjects.stop import deployed_resources, ensure_builder_erasable
 from langflow.services.data_subjects.transactions import end_user_transactions
@@ -75,6 +75,8 @@ async def builder_dry_run(session: AsyncSession, user: User) -> DryRunSummary:
         await ensure_builder_erasable(session, user)
     except DeployedResourcesError:
         summary.blocked_by = "deployed_flows"
+    except ChannelDataError:
+        summary.blocked_by = "channel_data_remaining"
     except LastAdministratorError:
         summary.blocked_by = "last_administrator"
     return summary

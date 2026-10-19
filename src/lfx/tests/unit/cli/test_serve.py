@@ -2,7 +2,9 @@
 
 import json
 import os
+import sys
 import tempfile
+import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,6 +18,18 @@ from lfx.cli.common import (
     is_port_in_use,
 )
 from lfx.cli.serve_app import FlowMeta, create_multi_serve_app
+
+
+@pytest.fixture
+def unix_gunicorn(monkeypatch):
+    """Provide the Unix launcher branch to tests that verify Gunicorn options."""
+    import lfx.cli
+
+    gunicorn_module = types.ModuleType("lfx.cli.serve_gunicorn")
+    gunicorn_module.LFXGunicornApp = object
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setitem(sys.modules, "lfx.cli.serve_gunicorn", gunicorn_module)
+    monkeypatch.setattr(lfx.cli, "serve_gunicorn", gunicorn_module, raising=False)
 
 
 def test_is_port_in_use():
@@ -855,6 +869,7 @@ def _run_serve_capturing_gunicorn(*, workers, max_requests, captured, sync_worke
             )
 
 
+@pytest.mark.usefixtures("unix_gunicorn")
 def test_serve_command_passes_workers_to_gunicorn():
     """--workers N is forwarded to gunicorn; default --max-requests recycles periodically.
 
@@ -879,6 +894,7 @@ def test_serve_command_passes_workers_to_gunicorn():
     assert captured["options"]["worker_class"] == "lfx.cli.serve_gunicorn.LFXUvicornWorker"
 
 
+@pytest.mark.usefixtures("unix_gunicorn")
 def test_serve_command_max_requests_propagates_to_gunicorn():
     """--max-requests N is forwarded to gunicorn as max_requests (overrides the default)."""
     captured: dict = {}
@@ -890,6 +906,7 @@ def test_serve_command_max_requests_propagates_to_gunicorn():
     assert captured["options"]["preload_app"] is True
 
 
+@pytest.mark.usefixtures("unix_gunicorn")
 def test_serve_command_max_requests_zero_disables_recycling():
     """--max-requests 0 explicitly disables recycling, overriding the periodic default."""
     captured: dict = {}
@@ -899,6 +916,7 @@ def test_serve_command_max_requests_zero_disables_recycling():
     assert captured["options"]["max_requests_jitter"] == 0
 
 
+@pytest.mark.usefixtures("unix_gunicorn")
 def test_serve_command_sets_startup_paths_env_for_multi_worker(tmp_path):
     """serve_command must set LFX_SERVE_STARTUP_PATHS so each worker can reload flows."""
     import json
@@ -947,6 +965,7 @@ def test_serve_command_sets_startup_paths_env_for_multi_worker(tmp_path):
     assert _SERVE_STARTUP_PATHS_ENV not in os.environ, "LFX_SERVE_STARTUP_PATHS must be cleaned up after server exits"
 
 
+@pytest.mark.usefixtures("unix_gunicorn")
 def test_serve_command_does_not_set_startup_paths_when_flow_dir_set(tmp_path):
     """When --flow-dir is set, LFX_SERVE_STARTUP_PATHS must be empty.
 
@@ -997,6 +1016,7 @@ def test_serve_command_does_not_set_startup_paths_when_flow_dir_set(tmp_path):
     assert paths == [], f"startup paths must be empty when flow_dir is set, got {paths}"
 
 
+@pytest.mark.usefixtures("unix_gunicorn")
 def test_serve_command_warns_when_workers_gt1_without_flow_dir():
     """--workers > 1 without --flow-dir should emit a warning to stderr."""
     import json
@@ -1084,6 +1104,7 @@ def test_serve_command_rejects_py_with_multiple_workers(tmp_path):
     assert any(".py" in msg and "cannot be used" in msg for msg in stderr_output), stderr_output
 
 
+@pytest.mark.usefixtures("unix_gunicorn")
 def test_serve_command_allows_py_with_multiple_workers_no_flow_dir(tmp_path):
     """.py files + --workers > 1 + no --flow-dir must be allowed.
 
@@ -1135,6 +1156,7 @@ def test_serve_command_allows_py_with_multiple_workers_no_flow_dir(tmp_path):
     assert any("my_flow.py" in p for p in paths), f"expected .py path in STARTUP_PATHS, got {paths}"
 
 
+@pytest.mark.usefixtures("unix_gunicorn")
 def test_serve_command_no_warning_when_workers_gt1_with_flow_dir(tmp_path):
     """--workers > 1 WITH --flow-dir must not emit the missing-store warning."""
     import json
@@ -1180,6 +1202,7 @@ def test_serve_command_no_warning_when_workers_gt1_with_flow_dir(tmp_path):
     assert not any("--flow-dir" in msg for msg in stderr_output)
 
 
+@pytest.mark.usefixtures("unix_gunicorn")
 def test_serve_command_warns_when_multiworker_has_no_isolation(tmp_path):
     """--workers > 1 without an isolation mechanism must warn; --reset-environ silences it."""
     import json

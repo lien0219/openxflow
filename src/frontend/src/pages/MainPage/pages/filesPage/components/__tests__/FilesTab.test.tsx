@@ -252,7 +252,7 @@ describe("FilesTab", () => {
     it.each([
       ["files/recording.21.mov", "MOV"],
       ["archives.v1/report.pdf", "PDF"],
-      ["files/README", undefined],
+      ["files/README", ""],
     ])("formats the final file extension from %s", (path, expected) => {
       render(<FilesTab {...defaultProps} />, { wrapper: createWrapper() });
       const typeColumn = mockLatestTableProps.columnDefs?.find(

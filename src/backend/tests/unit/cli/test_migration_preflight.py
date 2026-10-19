@@ -151,7 +151,7 @@ class TestVersionDirection:
         from langflow.cli.migration_preflight import TARGET_REVISION_HINT
 
         code = TARGET_REVISION_HINT.split('python -c "', 1)[1].removesuffix('"')
-        printed = subprocess.run(  # noqa: S603 - the hint's own code, run as the operator would
+        printed = subprocess.run(  # noqa: S603 - executes the fixed command embedded in the local revision hint
             [sys.executable, "-c", code], capture_output=True, text=True, check=True
         ).stdout
 
@@ -187,7 +187,9 @@ class TestSourceThatCannotBeRead:
         assert "permission denied" in report.checks[1].summary
 
     async def test_a_source_with_no_alembic_version_table_fails_the_schema_check(self, instance_on, tmp_path):
-        instance_on(f"sqlite:///{tmp_path}/empty.db")
+        database = tmp_path / "empty.db"
+        database.touch()
+        instance_on(f"sqlite:///{database}")
 
         report = await run_preflight(target_revision=HEAD)
 
@@ -258,7 +260,7 @@ class TestTargetVersion:
             "LANGFLOW_CONFIG_DIR": str(tmp_path),
             "LANGFLOW_DATABASE_URL": f"sqlite:///{tmp_path / 'empty.db'}",
         }
-        result = subprocess.run(  # noqa: S603 - the command as an admin runs it
+        result = subprocess.run(  # noqa: S603 - fixed test command using this interpreter, no shell
             [sys.executable, "-m", "langflow", "migration-preflight", "--json", "--target-version", "0.0.1"],
             env=env,
             capture_output=True,
@@ -524,6 +526,12 @@ class TestTargetKey:
 
 
 class TestRoleAssignments:
+    @pytest.fixture(autouse=True)
+    async def empty_assignments(self, client):  # noqa: ARG002
+        # The no-grants scenario must not inherit the startup administrator grant.
+        async with session_scope() as session:
+            await session.exec(sa.delete(AuthzRoleAssignment))
+
     async def test_role_grants_come_with_the_policy_sync_step(self, safe_superuser):
         async with session_scope() as session:
             admin_id = (await session.exec(select(AuthzRole).where(AuthzRole.name == "admin"))).one().id

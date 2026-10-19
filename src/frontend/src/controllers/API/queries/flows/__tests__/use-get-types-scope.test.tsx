@@ -98,7 +98,7 @@ describe("useGetTypes scoped store ownership", () => {
   });
 
   afterEach(() => {
-    onlineManager.setOnline(undefined);
+    onlineManager.setOnline(true);
     queryClient.clear();
   });
 

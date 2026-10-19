@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import type { Message } from "../../types/messages";
 import { useMessagesStore } from "../messagesStore";
 
-const mockMessage: Message = {
+const mockMessage = {
   id: "msg-1",
   text: "Hello world",
   sender: "User",
@@ -14,9 +14,9 @@ const mockMessage: Message = {
   background_color: "#ffffff",
   text_color: "#000000",
   flow_id: "flow-1",
-};
+} satisfies Message;
 
-const mockMachineMessage: Message = {
+const mockMachineMessage = {
   id: "msg-2",
   text: "Machine response",
   sender: "Machine",
@@ -29,10 +29,10 @@ const mockMachineMessage: Message = {
   text_color: "#333333",
   flow_id: "flow-1",
   category: "response",
-  properties: { type: "ai" },
-};
+  properties: { source: { display_name: "AI Assistant" } },
+} satisfies Message;
 
-const mockMessage2: Message = {
+const mockMessage2 = {
   id: "msg-3",
   text: "Another message",
   sender: "User",
@@ -44,7 +44,7 @@ const mockMessage2: Message = {
   background_color: "#ffffff",
   text_color: "#000000",
   flow_id: "flow-2",
-};
+} satisfies Message;
 
 describe("useMessagesStore", () => {
   beforeEach(() => {
@@ -702,8 +702,8 @@ describe("useMessagesStore", () => {
       const messageWithOptionals: Message = {
         ...mockMessage,
         category: "test-category",
-        properties: { key: "value", nested: { prop: true } },
-        content_blocks: [{ type: "text", content: "block content" } as any],
+        properties: { state: "complete", source: { id: "component-1" } },
+        content_blocks: [{ type: "text", text: "block content" }],
       };
 
       act(() => {

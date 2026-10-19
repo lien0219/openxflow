@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 
 // Mock localStorage before importing the store
 const localStorageMock = {
-  getItem: jest.fn(() => null),
+  getItem: jest.fn<string | null, [key: string]>(() => null),
   setItem: jest.fn(),
   clear: jest.fn(),
 };

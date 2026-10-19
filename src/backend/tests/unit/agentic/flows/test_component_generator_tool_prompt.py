@@ -33,7 +33,7 @@ LANGFLOW_ASSISTANT_JSON = (
 # The COMPONENT GENERATOR agent (the inner one whose prompt embeds the
 # Langflow Component API Reference). The PARENT agent has a different id
 # and is covered by test_langflow_assistant_prompt.py.
-COMPONENT_GENERATOR_AGENT_MARKER = "Langflow Component API Reference"
+COMPONENT_GENERATOR_AGENT_MARKER = "OpenXFlow Component API Reference"
 
 
 @pytest.fixture(scope="module")

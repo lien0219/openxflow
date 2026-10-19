@@ -1,6 +1,7 @@
 """Tests for minimal service implementations in LFX."""
 
 import os
+from pathlib import Path
 
 import pytest
 from lfx.services.storage.local import LocalStorageService
@@ -65,8 +66,8 @@ class TestLocalStorageService:
         """Test building full file path."""
         path = storage.build_full_path("flow_123", "test.txt")
         config_dir = mock_settings_service.settings.config_dir
-        expected = f"{config_dir}/flow_123/test.txt"
-        assert path == expected
+        expected = Path(config_dir) / "flow_123" / "test.txt"
+        assert Path(path) == expected
 
     @pytest.mark.asyncio
     async def test_list_files_empty_flow(self, storage):

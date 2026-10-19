@@ -23,6 +23,7 @@ from lfx.utils.end_user_storage import (
     end_user_folder_owners,
     end_user_folder_segment,
     forget_end_user_folder,
+    legacy_end_user_folder_segment,
 )
 from sqlmodel import select
 
@@ -169,6 +170,10 @@ def end_user_storage_plan(ctx: EraseContext) -> list[dict[str, str]]:
     with contextlib.suppress(ValueError):
         encoded = end_user_folder_segment(ctx.end_user.raw_id)
         plan.append(_item(KIND_SAVE_FILE_DIR, encoded, end_user_id=ctx.end_user.raw_id))
+    with contextlib.suppress(ValueError):
+        legacy_encoded = legacy_end_user_folder_segment(ctx.end_user.raw_id)
+        if not any(item["value"] == legacy_encoded for item in plan):
+            plan.append(_item(KIND_SAVE_FILE_DIR, legacy_encoded, end_user_id=ctx.end_user.raw_id))
     segment = _save_file_segment(ctx.end_user.raw_id)
     if segment:
         plan.append(_item(KIND_SAVE_FILE_DIR, segment, end_user_id=ctx.end_user.raw_id))

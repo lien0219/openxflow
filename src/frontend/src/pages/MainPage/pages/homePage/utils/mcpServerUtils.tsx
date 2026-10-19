@@ -102,7 +102,7 @@ export const buildMcpServerJson = (opts: {
   apiUrl: string;
   isOAuthProject: boolean;
   authHeadersFragment: string;
-  transport: MCPTransport;
+  transport?: MCPTransport;
   maxNameLength?: number;
 }): string => {
   const {
@@ -112,7 +112,7 @@ export const buildMcpServerJson = (opts: {
     apiUrl,
     isOAuthProject,
     authHeadersFragment,
-    transport,
+    transport = "sse",
     maxNameLength = MAX_MCP_SERVER_NAME_LENGTH,
   } = opts;
 

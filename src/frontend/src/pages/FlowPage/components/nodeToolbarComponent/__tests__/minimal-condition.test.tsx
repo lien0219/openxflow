@@ -20,7 +20,7 @@ describe("NodeToolbar minimize contract (LE-1810)", () => {
 
   const scenarios: Array<{
     name: string;
-    outputs: { name: string }[];
+    outputs: { name: string; group_outputs?: boolean }[];
     edges: number;
   }> = [
     {

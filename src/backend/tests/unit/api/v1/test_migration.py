@@ -497,7 +497,7 @@ async def test_the_source_checks_stream_each_check_then_the_report(
 
     *checks, report = await _run_checks(client, logged_in_headers_super_user, target_version=f"langflow v{VERSION}")
 
-    assert {line["event"] for line in checks} == {"check"}
+    assert {line["event"] for line in checks} == {"check"}, report
     assert report["event"] == "report"
     assert report["checks"] == [line["check"] for line in checks]
     by_name = {check["name"]: check for check in report["checks"]}
@@ -653,7 +653,9 @@ async def test_a_run_that_ends_after_a_newer_run_took_the_record_leaves_it_alone
 async def test_a_run_reads_as_live_only_while_its_child_exists(client, logged_in_headers_super_user, config_dir):
     """What another worker's run looks like from here, and what a server restart mid-run leaves behind."""
     headers = logged_in_headers_super_user
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])  # noqa: ASYNC220, S603
+    child = subprocess.Popen(  # noqa: ASYNC220, S603 - fixed test script using this interpreter, no shell
+        [sys.executable, "-c", "import time; time.sleep(60)"]
+    )
     step = {"status": "running", "started_by": "alice", "started_at": "2026-09-30T00:00:00+00:00", "pid": child.pid}
     _write_record(
         config_dir,
@@ -693,13 +695,7 @@ async def test_a_record_that_fails_to_save_does_not_leave_the_child_running(
         await _run_and_hang_up(client, logged_in_headers_super_user, break_the_record)
 
     # Killed before the record was read, so the child is gone at once instead of finishing its checks.
-    status = subprocess.run(  # noqa: ASYNC221, S603
-        ["ps", "-o", "stat=", "-p", str(pids[0])],  # noqa: S607
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert status.stdout.strip() in {"", "Z"}
+    assert not psutil.pid_exists(pids[0])
 
 
 async def test_an_unreadable_record_says_where_it_is(client, logged_in_headers_super_user, config_dir):
@@ -2466,7 +2462,7 @@ async def test_an_instance_on_postgresql_cannot_keep_knowledge_bases_without_its
     # After the copy the server reads them through that variable, so the admin learns it here, before the pause.
     assert saved["results"]["vectors"]["code"] == "pgvector_env_missing"
     assert "PGVECTOR_CONNECTION_STRING" in saved["results"]["vectors"]["reason"]
-    assert "restart Langflow" in saved["results"]["vectors"]["reason"]
+    assert "restart OpenXFlow" in saved["results"]["vectors"]["reason"]
     assert {step["id"]: (step["state"], step["reason"]) for step in saved["steps"]}["connect_target"] == (
         "blocked",
         "pgvector_env_missing",
@@ -2579,32 +2575,28 @@ async def test_a_bucket_is_tested_with_what_the_admin_gave_and_nothing_of_the_se
 
 
 async def test_a_slow_test_of_a_destination_keeps_what_was_saved_meanwhile(
-    client, logged_in_headers_super_user, active_super_user
+    client, logged_in_headers_super_user, active_super_user, monkeypatch
 ):
     headers = logged_in_headers_super_user
     await _add_file_without_bytes(active_super_user.id)
     arrived, answer = asyncio.Event(), asyncio.Event()
 
-    async def keep_waiting(_reader, writer) -> None:
+    async def slow_probe(**_kwargs) -> dict[str, object]:
         arrived.set()
         await answer.wait()
-        writer.close()
+        return {"ok": False, "code": "bucket_unreachable"}
 
-    # A server that takes the connection and says nothing, as a destination far away does for a while.
-    server = await asyncio.start_server(keep_waiting, "127.0.0.1", 0)
-    endpoint = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}"
-    saving = asyncio.create_task(
-        client.put(
-            "api/v1/migration/destinations", json={"files": {**FILES, "endpoint_url": endpoint}}, headers=headers
-        )
-    )
+    monkeypatch.setattr(migration_module, "probe_files", slow_probe)
+    saving = asyncio.create_task(client.put("api/v1/migration/destinations", json={"files": FILES}, headers=headers))
     await asyncio.wait_for(arrived.wait(), timeout=10)
 
     # While the bucket is being tested, another request saves the database.
-    await _connect(client, headers, database_url=f"postgresql://{NOWHERE}/langflow")
+    async with AsyncClient(
+        transport=ASGITransport(app=client._transport.app), base_url="http://testserver/", http2=True
+    ) as concurrent_client:
+        await _connect(concurrent_client, headers, database_url=f"postgresql://{NOWHERE}/langflow")
     answer.set()
     saved = (await saving).json()
-    server.close()
 
     assert saved["results"]["files"]["ok"] is False
     assert saved["record"]["destinations"]["database"]["location"] == f"{NOWHERE}/langflow"
@@ -2638,19 +2630,27 @@ async def test_what_this_worker_holds_changes_only_when_the_destination_is_saved
     _checked(config_dir, [PASSING], destinations={"database": part, "results": {"database": {"ok": True}}})
     monkeypatch.setitem(migration_module._secrets, "database_url", earlier)
     monkeypatch.setitem(migration_module._secrets, "for", {"database": part})
-    endpoint, arrived, answer, server = await _bucket_that_keeps_waiting()
-    body = {"database_url": f"postgresql://{NOWHERE}/langflow", "files": {**FILES, "endpoint_url": endpoint}}
+    arrived, answer = asyncio.Event(), asyncio.Event()
+
+    async def slow_probe(**_kwargs) -> dict[str, object]:
+        arrived.set()
+        await answer.wait()
+        return {"ok": False, "code": "bucket_unreachable"}
+
+    monkeypatch.setattr(migration_module, "probe_database", lambda *_args: {"ok": False, "code": "db_unreachable"})
+    monkeypatch.setattr(migration_module, "probe_files", slow_probe)
+    body = {"database_url": f"postgresql://{NOWHERE}/langflow", "files": FILES}
     saving = asyncio.create_task(client.put("api/v1/migration/destinations", json=body, headers=headers))
-    await asyncio.wait_for(arrived.wait(), timeout=10)
+    try:
+        await asyncio.wait_for(arrived.wait(), timeout=10)
 
-    # The database test of this save is over, and it failed. The save now waits on its bucket and has
-    # written nothing, so the record and this worker still name the earlier database.
-    assert (await _migration(client, headers))["record"]["destinations"]["database"] == part
-    assert migration_module._secrets.get("database_url") == earlier
-
-    answer.set()
-    saved = (await saving).json()
-    server.close()
+        # The database test of this save is over, and it failed. The save now waits on its bucket and has
+        # written nothing, so the record and this worker still name the earlier database.
+        assert (await _migration(client, headers))["record"]["destinations"]["database"] == part
+        assert migration_module._secrets.get("database_url") == earlier
+    finally:
+        answer.set()
+        saved = (await saving).json()
 
     # Saved and forgotten in one step.
     assert saved["record"]["destinations"]["database"]["location"] == f"{NOWHERE}/langflow"
@@ -2725,18 +2725,31 @@ async def test_knowledge_bases_tested_in_a_database_that_is_replaced_meanwhile_k
     _checked(config_dir, [PASSING], destinations={"database": part, "results": {"database": {"ok": True}}})
     monkeypatch.setitem(migration_module._secrets, "database_url", earlier)
     monkeypatch.setitem(migration_module._secrets, "for", {"database": part})
-    endpoint, arrived, answer, server = await _bucket_that_keeps_waiting()
+    arrived, answer = asyncio.Event(), asyncio.Event()
+
+    async def slow_probe(**_kwargs) -> dict[str, object]:
+        arrived.set()
+        await answer.wait()
+        return {"ok": False, "code": "bucket_unreachable"}
+
+    monkeypatch.setattr(migration_module, "probe_database", lambda *_args: {"ok": False, "code": "db_unreachable"})
+    monkeypatch.setattr(migration_module, "probe_vectors", lambda *_args: {"ok": True})
+    monkeypatch.setattr(migration_module, "probe_files", slow_probe)
     # Sent with no database, the knowledge bases are tested in the one this worker holds. Then the bucket
     # keeps the save waiting.
-    body = {"vectors": {"kind": "pgvector"}, "files": {**FILES, "endpoint_url": endpoint}}
+    body = {"vectors": {"kind": "pgvector"}, "files": FILES}
     saving = asyncio.create_task(client.put("api/v1/migration/destinations", json=body, headers=headers))
-    await asyncio.wait_for(arrived.wait(), timeout=10)
+    try:
+        await asyncio.wait_for(arrived.wait(), timeout=10)
 
-    # Meanwhile another save names another database.
-    await _connect(client, headers, database_url=f"postgresql://{NOWHERE}/another")
-    answer.set()
-    saved = (await saving).json()
-    server.close()
+        # Meanwhile another save names another database.
+        async with AsyncClient(
+            transport=ASGITransport(app=client._transport.app), base_url="http://testserver/", http2=True
+        ) as concurrent_client:
+            await _connect(concurrent_client, headers, database_url=f"postgresql://{NOWHERE}/another")
+    finally:
+        answer.set()
+        saved = (await saving).json()
 
     # What they found, they found in a database that is no longer the saved one. It is not kept.
     destinations = saved["record"]["destinations"]

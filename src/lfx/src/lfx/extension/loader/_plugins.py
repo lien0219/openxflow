@@ -169,6 +169,7 @@ def _manifest_via_direct_url(dist: importlib_metadata.Distribution) -> Path | No
     """Resolve the manifest from PEP 610 ``direct_url.json`` for editable installs."""
     import json
     from urllib.parse import urlparse
+    from urllib.request import url2pathname
 
     try:
         raw = dist.read_text("direct_url.json")
@@ -195,7 +196,7 @@ def _manifest_via_direct_url(dist: importlib_metadata.Distribution) -> Path | No
     parsed = urlparse(url)
     if parsed.scheme != "file":
         return None
-    project_root = Path(parsed.path)
+    project_root = Path(url2pathname(parsed.path))
     if not project_root.is_dir():
         return None
 

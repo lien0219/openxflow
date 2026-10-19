@@ -56,7 +56,7 @@ const FilesTab = ({
   isShiftPressed,
 }: FilesTabProps) => {
   const { t } = useTranslation();
-  const tableRef = useRef<AgGridReact<FileType>>(null);
+  const tableRef = useRef<AgGridReact<unknown>>(null);
   const { data: files } = useGetFilesV2();
   const setErrorData = useAlertStore((state) => state.setErrorData);
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
@@ -201,12 +201,12 @@ const FilesTab = ({
             ) : (
               <div className="file-icon pointer-events-none relative">
                 <ForwardedIconComponent
-                  name={FILE_ICONS[type]?.icon ?? "File"}
+                  name={FILE_ICONS[type ?? ""]?.icon ?? "File"}
                   className={cn(
                     "-mx-[3px] h-6 w-6 shrink-0",
                     params.data.progress !== undefined
                       ? "text-placeholder-foreground"
-                      : (FILE_ICONS[type]?.color ?? undefined),
+                      : (FILE_ICONS[type ?? ""]?.color ?? undefined),
                   )}
                 />
               </div>
@@ -252,7 +252,7 @@ const FilesTab = ({
       filter: "agTextColumnFilter",
       editable: false,
       valueFormatter: (params) => {
-        return getFileExtension(params.value)?.toUpperCase();
+        return getFileExtension(params.value)?.toUpperCase() ?? "";
       },
       cellClass:
         "text-muted-foreground cursor-text select-text group-[.no-select-cells]:cursor-default group-[.no-select-cells]:select-none",
@@ -340,7 +340,9 @@ const FilesTab = ({
       },
       {
         onSuccess: (data) => {
-          setSuccessData({ title: data.message });
+          setSuccessData({
+            title: data.message ?? t("files.deletedSuccessfully"),
+          });
           setQuantitySelected(0);
           setSelectedFiles([]);
         },

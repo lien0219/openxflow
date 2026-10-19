@@ -37,20 +37,32 @@ const mockNode: AllNodeType = {
       template: {
         param1: {
           type: "str",
+          required: false,
+          list: false,
+          show: true,
+          readonly: false,
           advanced: false,
           api_editable: true,
           value: "test-value",
         },
         param2: {
           type: "str",
+          required: false,
+          list: false,
+          show: true,
+          readonly: false,
           advanced: true,
           api_editable: false,
           value: "advanced-value",
         },
       },
+      description: "Test node",
+      display_name: "Test node",
+      documentation: "",
       frozen: false,
     },
     type: "TestNode",
+    id: "node-1",
   } as NodeDataType,
 };
 
@@ -63,14 +75,22 @@ const mockNode2: AllNodeType = {
       template: {
         param3: {
           type: "str",
+          required: false,
+          list: false,
+          show: true,
+          readonly: false,
           advanced: false,
           api_editable: true,
           value: "another-value",
         },
       },
+      description: "Another node",
+      display_name: "Another node",
+      documentation: "",
       frozen: false,
     },
     type: "AnotherNode",
+    id: "node-2",
   } as NodeDataType,
 };
 
@@ -83,14 +103,22 @@ const mockFrozenNode: AllNodeType = {
       template: {
         param4: {
           type: "str",
+          required: false,
+          list: false,
+          show: true,
+          readonly: false,
           advanced: false,
           api_editable: true,
           value: "frozen-value",
         },
       },
+      description: "Frozen node",
+      display_name: "Frozen node",
+      documentation: "",
       frozen: true,
     },
     type: "FrozenNode",
+    id: "node-frozen",
   } as NodeDataType,
 };
 
@@ -369,7 +397,21 @@ describe("useTweaksStore", () => {
     });
 
     it("should skip nodes that are not genericNode type", () => {
-      const nonGenericNode = { ...mockNode, type: "customNode" };
+      const nonGenericNode: AllNodeType = {
+        id: "note-1",
+        type: "noteNode",
+        position: { x: 0, y: 0 },
+        data: {
+          id: "note-1",
+          type: "note",
+          node: {
+            description: "",
+            display_name: "Note",
+            documentation: "",
+            template: {},
+          },
+        },
+      };
       const { result } = renderHook(() => useTweaksStore());
 
       act(() => {
@@ -383,12 +425,12 @@ describe("useTweaksStore", () => {
       expect(result.current.tweaks).toEqual({});
     });
 
-    it("should handle nodes without template", () => {
+    it("should handle nodes with an empty template", () => {
       const nodeWithoutTemplate = {
         ...mockNode,
         data: {
           ...mockNode.data,
-          node: { ...mockNode.data.node, template: undefined },
+          node: { ...mockNode.data.node, template: {} },
         },
       };
       const { result } = renderHook(() => useTweaksStore());
@@ -538,22 +580,27 @@ describe("useTweaksStore", () => {
       });
 
       act(() => {
-        result.current.setNode("node-1", (node) => ({
-          ...node,
+        result.current.setNode("node-1", {
+          ...mockNode,
           data: {
-            ...node.data,
+            ...mockNode.data,
             node: {
-              ...node.data.node,
+              ...mockNode.data.node,
               template: {
-                ...node.data.node?.template,
+                ...mockNode.data.node?.template,
                 param1: {
+                  type: "str",
+                  required: false,
+                  list: false,
+                  show: true,
+                  readonly: false,
                   advanced: false,
                   value: "updated-value",
                 },
               },
             },
-          } as NodeDataType,
-        }));
+          },
+        } as unknown as AllNodeType);
       });
 
       expect(result.current.currentFlowId).toBe("complex-flow");

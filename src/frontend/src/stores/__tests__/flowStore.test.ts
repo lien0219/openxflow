@@ -147,6 +147,7 @@ jest.mock("../../utils/reactflowUtils", () => {
 // Note: Some utility modules may not exist in test environment
 // The store should handle missing utilities gracefully
 
+import type { FitView, ReactFlowInstance } from "@xyflow/react";
 import { checkCodeValidity } from "@/CustomNodes/helpers/check-code-validity";
 import type { LogsLogType, VertexBuildTypeAPI } from "@/types/api";
 import type { AllNodeType, EdgeType } from "@/types/flow";
@@ -600,7 +601,9 @@ describe("useFlowStore", () => {
   describe("inputs and outputs management", () => {
     it("should set inputs", () => {
       const { result } = renderHook(() => useFlowStore());
-      const mockInputs = [{ name: "input1", type: "text" }];
+      const mockInputs = [
+        { id: "input1", displayName: "Input 1", type: "text" },
+      ];
 
       act(() => {
         result.current.setInputs(mockInputs);
@@ -611,7 +614,9 @@ describe("useFlowStore", () => {
 
     it("should set outputs", () => {
       const { result } = renderHook(() => useFlowStore());
-      const mockOutputs = [{ name: "output1", type: "text" }];
+      const mockOutputs = [
+        { id: "output1", displayName: "Output 1", type: "text" },
+      ];
 
       act(() => {
         result.current.setOutputs(mockOutputs);
@@ -640,7 +645,7 @@ describe("useFlowStore", () => {
   describe("flow pool management", () => {
     it("should set flow pool", () => {
       const { result } = renderHook(() => useFlowStore());
-      const mockFlowPool = { flow1: { id: "flow1", data: {} } };
+      const mockFlowPool = { flow1: [] };
 
       act(() => {
         result.current.setFlowPool(mockFlowPool);
@@ -665,7 +670,10 @@ describe("useFlowStore", () => {
       const mockAbort = jest.fn();
       act(() => {
         useFlowStore.setState({
-          buildController: { abort: mockAbort },
+          buildController: {
+            abort: mockAbort,
+            signal: new AbortController().signal,
+          },
           updateEdgesRunningByNodes: jest.fn(),
           revertBuiltStatusFromBuilding: jest.fn(),
           nodes: [mockNode],
@@ -708,11 +716,48 @@ describe("useFlowStore", () => {
 
     it("should handle fitViewNode when reactFlowInstance exists", () => {
       const { result } = renderHook(() => useFlowStore());
-      const mockFitView = jest.fn();
+      const mockFitView = jest.fn<
+        ReturnType<FitView<AllNodeType>>,
+        Parameters<FitView<AllNodeType>>
+      >(() => Promise.resolve(true));
+      const mockReactFlowInstance = {
+        getNodes: jest.fn(),
+        setNodes: jest.fn(),
+        addNodes: jest.fn(),
+        getNode: jest.fn(),
+        getInternalNode: jest.fn(),
+        getEdges: jest.fn(),
+        setEdges: jest.fn(),
+        addEdges: jest.fn(),
+        getEdge: jest.fn(),
+        toObject: jest.fn(),
+        deleteElements: jest.fn(),
+        getIntersectingNodes: jest.fn(),
+        isNodeIntersecting: jest.fn(),
+        updateNode: jest.fn(),
+        updateNodeData: jest.fn(),
+        updateEdge: jest.fn(),
+        updateEdgeData: jest.fn(),
+        getNodesBounds: jest.fn(),
+        getHandleConnections: jest.fn(),
+        getNodeConnections: jest.fn(),
+        fitView: mockFitView,
+        zoomIn: jest.fn(),
+        zoomOut: jest.fn(),
+        zoomTo: jest.fn(),
+        getZoom: jest.fn(),
+        setViewport: jest.fn(),
+        getViewport: jest.fn(),
+        setCenter: jest.fn(),
+        fitBounds: jest.fn(),
+        screenToFlowPosition: jest.fn(),
+        flowToScreenPosition: jest.fn(),
+        viewportInitialized: true,
+      } as unknown as ReactFlowInstance<AllNodeType, EdgeType>;
 
       act(() => {
         useFlowStore.setState({
-          reactFlowInstance: { fitView: mockFitView },
+          reactFlowInstance: mockReactFlowInstance,
           nodes: [mockNode],
         });
       });
@@ -765,8 +810,12 @@ describe("useFlowStore", () => {
 
       // Set up inputs/outputs
       act(() => {
-        result.current.setInputs([{ name: "input1", type: "text" }]);
-        result.current.setOutputs([{ name: "output1", type: "text" }]);
+        result.current.setInputs([
+          { id: "input1", displayName: "Input 1", type: "text" },
+        ]);
+        result.current.setOutputs([
+          { id: "output1", displayName: "Output 1", type: "text" },
+        ]);
         result.current.setHasIO(true);
       });
 
@@ -850,9 +899,19 @@ describe("useFlowStore", () => {
         result.current.setPlaygroundPage(true);
         result.current.setPositionDictionary({ 10: 20, 30: 40 });
         result.current.setComponentsToUpdate([]);
-        result.current.setInputs([{ name: "concurrent-input", type: "text" }]);
+        result.current.setInputs([
+          {
+            id: "concurrent-input",
+            displayName: "Concurrent input",
+            type: "text",
+          },
+        ]);
         result.current.setOutputs([
-          { name: "concurrent-output", type: "text" },
+          {
+            id: "concurrent-output",
+            displayName: "Concurrent output",
+            type: "text",
+          },
         ]);
         result.current.setHasIO(true);
       });
@@ -1860,7 +1919,15 @@ describe("useFlowStore", () => {
       useAuthStore.setState({
         isAuthenticated: true,
         autoLogin: false,
-        userData: { id: "user-123" },
+        userData: {
+          id: "user-123",
+          username: "test-user",
+          is_active: true,
+          is_superuser: false,
+          profile_image: null,
+          create_at: new Date(),
+          updated_at: new Date(),
+        },
       });
       useFlowStore.setState({ playgroundPage: true });
       mockedRunFlow.mockImplementation(async () => {

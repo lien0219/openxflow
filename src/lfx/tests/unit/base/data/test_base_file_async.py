@@ -80,8 +80,8 @@ class StorageBackedFileComponent(BaseFileComponent):
     async def aprocess_files(self, file_list):
         self.process_threads.append(threading.current_thread())
         for file in file_list:
-            content = await read_file_bytes(str(file.path))
-            file.data = [Data(data={"text": content.decode(), "file_path": str(file.path)})]
+            content = await read_file_bytes(file.path.as_posix())
+            file.data = [Data(data={"text": content.decode(), "file_path": file.path.as_posix()})]
         return file_list
 
 

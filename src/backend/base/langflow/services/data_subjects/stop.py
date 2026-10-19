@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete, func, update
 from sqlmodel import col, or_, select
 
+from langflow.services.data_subjects.channel_guard import ensure_no_channel_data
 from langflow.services.data_subjects.errors import DeployedResourcesError, LastAdministratorError
 from langflow.services.database.models.api_key.model import ApiKey
 from langflow.services.database.models.auth.authz import AuthzShare, ShareScope
@@ -69,6 +70,7 @@ async def deployed_resources(session: AsyncSession, user_id: UUID) -> list[str]:
 
 
 async def ensure_builder_erasable(session: AsyncSession, user: User) -> None:
+    await ensure_no_channel_data(session, user.id)
     blocking = await deployed_resources(session, user.id)
     if blocking:
         msg = "Undeploy these resources before erasing the account"

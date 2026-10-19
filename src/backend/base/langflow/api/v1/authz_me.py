@@ -5,12 +5,13 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.api.utils import CurrentActiveUser, DbSession, DbSessionReadOnly
+from langflow.api.utils.migration_pause import changes_the_instance
 from langflow.services.auth.context import current_auth_context_for_authz
 from langflow.services.authorization.access_ceiling import filter_actions_by_external_access_ceiling
 from langflow.services.authorization.bootstrap import (
@@ -162,7 +163,7 @@ class RbacIdentitySummaryResponse(BaseModel):
     permission_catalog: list[str]
 
 
-@router.get("/status", response_model=RbacStatusResponse)
+@router.get("/status", response_model=RbacStatusResponse, dependencies=[Depends(changes_the_instance)])
 async def get_rbac_status(
     current_user: CurrentActiveUser,
     session: DbSession,
@@ -189,7 +190,7 @@ async def get_rbac_status(
     )
 
 
-@router.get("/summary", response_model=RbacIdentitySummaryResponse)
+@router.get("/summary", response_model=RbacIdentitySummaryResponse, dependencies=[Depends(changes_the_instance)])
 async def get_rbac_identity_summary(
     current_user: CurrentActiveUser,
     session: DbSession,

@@ -131,12 +131,14 @@ const ModelRow = ({
 }: ModelRowProps) => {
   const { t } = useTranslation();
   const tags = buildCapabilityTags(model, !!showEmbeddingTag, t);
+  const iconName =
+    typeof model.metadata?.icon === "string" ? model.metadata.icon : "Bot";
 
   return (
     <div className="flex flex-row items-center justify-between h-[24px]">
       <div className="flex flex-row items-center gap-2">
         <ForwardedIconComponent
-          name={model.metadata?.icon || "Bot"}
+          name={iconName}
           className={cn("w-5 h-5", { grayscale: !isEnabledModel })}
         />
         <span

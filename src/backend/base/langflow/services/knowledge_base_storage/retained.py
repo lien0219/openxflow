@@ -16,7 +16,7 @@ from contextlib import closing, suppress
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from langflow.services.knowledge_base_storage.maintenance import MaintenanceRequiredError
+from langflow.services.knowledge_base_storage.maintenance import MaintenanceRequiredError, filesystem_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -75,6 +75,7 @@ def _patterns(value: str) -> set[bytes]:
 
 def file_mentions(path: Path, value: str) -> bool:
     """Whether a file's bytes carry an end-user stamp for ``value``, read in bounded chunks."""
+    path = filesystem_path(path)
     patterns = _patterns(value)
     overlap = max(len(pattern) for pattern in patterns) - 1
     tail = b""
@@ -94,7 +95,7 @@ def copy_mentions(copy: Path, value: str) -> bool:
     one that did leaves the person's data behind. The byte scan finds rows that Chroma deleted but
     left in free pages and journals. The SQL read finds values that SQLite split across overflow pages.
     """
-    files = [copy / name for name in _DATABASE_FILES if (copy / name).is_file()]
+    files = [candidate for name in _DATABASE_FILES if (candidate := filesystem_path(copy / name)).is_file()]
     if not files:
         return False
     if any(file_mentions(path, value) for path in files):
@@ -104,8 +105,13 @@ def copy_mentions(copy: Path, value: str) -> bool:
 
 def _database_mentions(database: Path, value: str) -> bool:
     # ``immutable`` opens without creating a -shm file, so the copy and its fingerprint stay untouched.
+    database = filesystem_path(database)
     try:
-        with closing(sqlite3.connect(f"{database.as_uri()}?mode=ro&immutable=1", uri=True)) as connection:
+        if str(database).startswith("\\\\?\\"):
+            connection = sqlite3.connect(database)
+        else:
+            connection = sqlite3.connect(f"{database.as_uri()}?mode=ro&immutable=1", uri=True)
+        with closing(connection) as connection:
             connection.execute("PRAGMA trusted_schema=OFF")
             if connection.execute(
                 "SELECT 1 FROM embedding_metadata WHERE key = ? AND string_value = ? LIMIT 1", (END_USER_KEY, value)
@@ -140,7 +146,7 @@ def _check_path(path: Path, root: Path) -> None:
 def _delete_tree(path: Path) -> None:
     # Another worker that took over the request may be deleting the same entry.
     with suppress(FileNotFoundError):
-        shutil.rmtree(path)
+        shutil.rmtree(filesystem_path(path))
 
 
 def _erased_directory(root: Path) -> Path:
@@ -158,7 +164,8 @@ def remove_copy(copy: Path, root: Path) -> None:
         _delete_tree(leftover)
     if not copy.is_dir():
         return
-    target = erased / uuid4().hex
+    copy = filesystem_path(copy)
+    target = filesystem_path(erased / uuid4().hex)
     copy.rename(target)
     _delete_tree(target)
 
@@ -166,7 +173,7 @@ def remove_copy(copy: Path, root: Path) -> None:
 def remove_file(path: Path, root: Path) -> None:
     """Delete a retained file, such as a failed run's export, inside the storage root."""
     _check_path(path, root)
-    path.unlink(missing_ok=True)
+    filesystem_path(path).unlink(missing_ok=True)
 
 
 def remove_upgrade_evidence(root: Path, kb_id: UUID) -> None:

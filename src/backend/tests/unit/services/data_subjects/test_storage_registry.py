@@ -40,3 +40,11 @@ def test_should_keep_all_owners_when_worker_processes_overlap(tmp_path):
                 worker.join(timeout=5)
 
     assert end_user_storage.end_user_folder_owners(tmp_path, "a_b") == frozenset({"a@b", "a_b"})
+
+
+def test_should_register_a_legacy_segment_that_would_make_a_windows_lock_path_too_long(tmp_path):
+    segment = "a" * 100
+
+    end_user_storage.record_end_user_folder(tmp_path, segment, segment)
+
+    assert end_user_storage.end_user_folder_owners(tmp_path, segment) == frozenset({segment})

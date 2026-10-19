@@ -18,6 +18,7 @@ import useFlowStore from "@/stores/flowStore";
 import TableComponent from "../../../components/core/parameterRenderComponent/components/tableComponent";
 import useAlertStore from "../../../stores/alertStore";
 import { useMessagesStore } from "../../../stores/messagesStore";
+import type { Message } from "../../../types/messages";
 import { extractColumnsFromRows, messagesSorter } from "../../../utils/utils";
 import { MessageHistoryLoader } from "./message-history-loader";
 
@@ -103,7 +104,7 @@ export default function SessionView({
     const data = {
       ...row,
       [field]: newValue,
-    };
+    } as Message;
     updateMessageMutation(
       { message: data },
       {

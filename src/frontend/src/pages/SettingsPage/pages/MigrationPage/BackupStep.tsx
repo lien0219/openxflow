@@ -42,7 +42,7 @@ export function BackupStep({ migration }: { migration: MigrationState }) {
       t("settings.migration.backup.filesFolder", {
         path: instance.files.folder,
       }),
-  ].filter(Boolean);
+  ].filter((folder): folder is string => Boolean(folder));
 
   return (
     <form

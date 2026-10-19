@@ -332,6 +332,10 @@ def install_sqlite_session_guard(
         guard_held = False
 
     async def recover_failed_write() -> None:
+        # The savepoint owner must unwind a nested failure. Rolling back the
+        # whole session here discards unrelated work in the caller's transaction.
+        if session.in_nested_transaction():
+            return
         try:
             await original_rollback()
         finally:

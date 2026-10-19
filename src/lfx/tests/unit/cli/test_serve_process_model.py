@@ -364,6 +364,7 @@ def test_preload_does_not_open_the_database(tmp_path, monkeypatch):
     assert opened["count"] == 0, "preload opened a DB session — fork-unsafe with a real DB service"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Gunicorn preload and fork-safety hooks are Unix-only")
 def test_preload_starts_no_fork_unsafe_background_threads(tmp_path, monkeypatch):
     """Fork-safety invariant: building the preload app must not leave non-benign threads.
 
@@ -552,7 +553,15 @@ def _capture_gunicorn_launch(monkeypatch, **launch_overrides):
         def run(self):
             captured["env"] = dict(os.environ)
 
-    monkeypatch.setattr("lfx.cli.serve_gunicorn.LFXGunicornApp", FakeGunicornApp)
+    import types
+
+    import lfx.cli
+
+    gunicorn_module = types.ModuleType("lfx.cli.serve_gunicorn")
+    gunicorn_module.LFXGunicornApp = FakeGunicornApp
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setitem(sys.modules, "lfx.cli.serve_gunicorn", gunicorn_module)
+    monkeypatch.setattr(lfx.cli, "serve_gunicorn", gunicorn_module, raising=False)
     kwargs = {
         "host": "127.0.0.1",
         "port": 8000,
@@ -579,6 +588,9 @@ def test_launch_workers_default_uses_async_uvicorn_worker(monkeypatch):
 
 def test_launch_workers_sync_workers_uses_sync_worker(monkeypatch):
     """--use-sync-workers swaps in gunicorn's sync worker serving the a2wsgi WSGI bridge."""
+    import types
+
+    monkeypatch.setitem(sys.modules, "a2wsgi", types.ModuleType("a2wsgi"))
     captured = _capture_gunicorn_launch(monkeypatch, sync_workers=True)
     assert captured["app_import_string"] == "lfx.cli.serve_preloaded_app:wsgi_application"
     assert captured["options"]["worker_class"] == "sync"

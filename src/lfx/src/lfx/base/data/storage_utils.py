@@ -10,7 +10,7 @@ implementations.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING
 
 from lfx.services.deps import get_settings_service, get_storage_service
@@ -135,7 +135,11 @@ def to_storage_path(file_path: str) -> str:
 
     flow_id, file_name = require_storage_service(get_storage_service()).parse_file_path(file_path)
     storage_path = f"{flow_id}/{file_name}"
-    if Path(storage_path).is_absolute():
+    # ``storage_path`` is an object key, so absolute-path checks must not depend
+    # on the host OS.  A POSIX key such as ``/etc/hosts`` must be rejected on
+    # Windows as well, while drive-letter and UNC forms must be rejected on
+    # POSIX hosts.
+    if PurePosixPath(storage_path).is_absolute() or PureWindowsPath(storage_path).is_absolute():
         msg = f"Not a storage key: {file_path}"
         raise ValueError(msg)
     return storage_path

@@ -55,10 +55,6 @@ export const detectedLang = normalizeLanguage(
 
 const i18n = i18next.createInstance();
 
-// i18next hardcodes a Locize promotional message via console.info during init.
-// Suppress it by temporarily replacing console.info for the synchronous init call.
-const _consoleInfo = console.info.bind(console);
-console.info = () => {};
 i18n.use(initReactI18next).init({
   resources: {
     de: {
@@ -113,13 +109,13 @@ i18n.use(initReactI18next).init({
   },
   lng: detectedLang,
   fallbackLng: "en",
+  showSupportNotice: false,
   returnNull: false,
   returnEmptyString: false,
   interpolation: {
     escapeValue: false,
   },
 });
-console.info = _consoleInfo;
 
 /**
  * Keeps `<html lang>` in sync with the active locale so assistive technology

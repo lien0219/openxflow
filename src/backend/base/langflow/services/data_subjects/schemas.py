@@ -72,7 +72,7 @@ class DryRunSummary(BaseModel):
     counts: dict[str, int]
     deployments: list[str] = Field(default_factory=list)
     shared_flows: list[str] = Field(default_factory=list)
-    blocked_by: Literal["deployed_flows", "last_administrator"] | None = None
+    blocked_by: Literal["deployed_flows", "last_administrator", "channel_data_remaining"] | None = None
 
 
 class OwnDeletionRequestStatus(BaseModel):

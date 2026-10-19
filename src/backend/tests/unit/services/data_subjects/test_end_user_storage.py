@@ -109,9 +109,10 @@ async def test_should_erase_legacy_files_for_an_identity_over_the_new_encoding_l
     """The new save limit must not prevent cleanup of files written before it existed."""
     admin = await create_user("storage-admin-long", superuser=True)
     monkeypatch.setattr(get_settings_service().settings, "config_dir", str(tmp_path))
-    identity = "a" * 146
-    record_end_user_folder(_config_dir(), identity, identity)
-    legacy_folder = _folder_with(identity, "old.txt")
+    identity = "a" + "茅" * 72
+    legacy_segment = "a"
+    record_end_user_folder(_config_dir(), legacy_segment, identity)
+    legacy_folder = _folder_with(legacy_segment, "old.txt")
 
     _, status = await _erase(identity, admin)
 

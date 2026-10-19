@@ -47,6 +47,11 @@ class DeployedResourcesError(DataSubjectError):
     status_code = HTTPStatus.CONFLICT
 
 
+class ChannelDataError(DataSubjectError):
+    code = "channel_data_remaining"
+    status_code = HTTPStatus.CONFLICT
+
+
 class LastAdministratorError(DataSubjectError):
     code = "last_administrator"
     status_code = HTTPStatus.CONFLICT

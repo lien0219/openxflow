@@ -741,7 +741,12 @@ class JobService(Service):
 
             interval_s = get_settings_service().settings.background_heartbeat_interval_s
         stop = asyncio.Event()
-        loop = self._keep_alive_loop(job_id, stop, max(interval_s, _MIN_HEARTBEAT_INTERVAL_S), beat_now=beat_now)
+        loop = self._keep_alive_loop(
+            job_id,
+            stop,
+            max(interval_s, _MIN_HEARTBEAT_INTERVAL_S),
+            beat_now=beat_now,
+        )
         task = asyncio.create_task(loop)
         self._keep_alives[job_id] = (task, stop)
         task.add_done_callback(lambda done: self._forget_keep_alive(job_id, done))

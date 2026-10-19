@@ -76,13 +76,20 @@ export default function ChatMessage({
         setIsStreaming(false);
         eventSource.current?.close();
         setStreamUrl(undefined);
-        if (JSON.parse(event.data)?.error) {
-          setErrorData({
-            title: t("errors.errorOnStreaming"),
-            list: [JSON.parse(event.data)?.error],
-          });
+        if (event.data) {
+          try {
+            const errorData = JSON.parse(event.data) as { error?: string };
+            if (errorData.error) {
+              setErrorData({
+                title: t("errors.errorOnStreaming"),
+                list: [errorData.error],
+              });
+            }
+          } catch {
+            // Connection errors do not always carry a JSON event payload.
+          }
         }
-        updateChat(chat, chatMessageRef.current);
+        updateChat?.(chat, chatMessageRef.current);
         reject(new Error("Streaming failed"));
       };
       eventSource.current.addEventListener("close", (event) => {
@@ -154,7 +161,7 @@ export default function ChatMessage({
       },
       {
         onSuccess: () => {
-          updateChat(chat, message);
+          updateChat?.(chat, message);
           setEditMessage(false);
         },
         onError: () => {
@@ -309,8 +316,8 @@ export default function ChatMessage({
                 )}
                 {!chat.isSend && (
                   <MessageMetadata
-                    duration={chat.properties?.build_duration}
-                    usage={chat.properties?.usage}
+                    duration={chat.properties?.build_duration ?? undefined}
+                    usage={chat.properties?.usage ?? undefined}
                     timestamp={chat.timestamp}
                   />
                 )}
@@ -333,15 +340,17 @@ export default function ChatMessage({
               <div className="form-modal-chat-text-position flex-grow">
                 <div className="form-modal-chat-text">
                   {hidden && chat.thought && chat.thought !== "" && (
-                    <div
+                    <button
+                      type="button"
                       onClick={(): void => setHidden((prev) => !prev)}
                       className="form-modal-chat-icon-div"
+                      aria-label={t("trace.expandSpan")}
                     >
                       <IconComponent
                         name="MessageSquare"
                         className="form-modal-chat-icon"
                       />
-                    </div>
+                    </button>
                   )}
                   {chat.thought && chat.thought !== "" && !hidden && (
                     <SanitizedHTMLWrapper

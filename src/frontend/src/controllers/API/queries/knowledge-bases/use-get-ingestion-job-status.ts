@@ -27,13 +27,13 @@ export const useGetIngestionJobStatus: useQueryFunctionType<
     return res.data;
   };
 
-  const queryResult: UseQueryResult<IngestionJobStatusResponse, any> = query(
+  const queryResult: UseQueryResult<IngestionJobStatusResponse, Error> = query(
     ["useGetIngestionJobStatus", params?.job_id],
     getStatusFn,
     {
       enabled: !!params?.job_id,
       refetchInterval: (query) => {
-        const data = query.state.data;
+        const data = query.state.data as IngestionJobStatusResponse | undefined;
         if (
           data?.status === "completed" ||
           data?.status === "failed" ||

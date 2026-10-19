@@ -71,8 +71,8 @@ describe("useGetGlobalVariables store isolation", () => {
   });
 
   afterAll(() => {
-    focusManager.setFocused(undefined);
-    onlineManager.setOnline(undefined);
+    focusManager.setFocused(true);
+    onlineManager.setOnline(true);
   });
 
   it("keeps the explicitly mirrored global snapshot when a scoped request settles later", async () => {

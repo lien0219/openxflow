@@ -7,7 +7,6 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from markitdown import MarkItDown
 
 from lfx.custom.custom_component.component import Component
 from lfx.field_typing.range_spec import RangeSpec
@@ -250,6 +249,11 @@ class URLComponent(Component):
     @staticmethod
     def _markdown_extractor(x: str) -> str:
         """Convert HTML to Markdown format."""
+        # markitdown imports magika, which loads the nearest .env at import time. Keep that
+        # optional converter out of component discovery and load it only when Markdown output
+        # is actually requested.
+        from markitdown import MarkItDown
+
         stream = io.BytesIO(x.encode("utf-8"))
         result = MarkItDown(enable_plugins=False).convert_stream(stream)
         return result.markdown

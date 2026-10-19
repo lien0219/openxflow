@@ -12,7 +12,9 @@ from lfx.utils.flow_validation import describe_component_code_substitution
 
 @pytest.fixture
 def saved_agent(monkeypatch):
-    registry = dict(json.loads(files("lfx").joinpath("_assets/component_index.json").read_text())["entries"])
+    registry = dict(
+        json.loads(files("lfx").joinpath("_assets/component_index.json").read_text(encoding="utf-8"))["entries"]
+    )
     cache = components.ComponentCache()
     cache.all_types_dict = registry
     cache.all_types_ready = True

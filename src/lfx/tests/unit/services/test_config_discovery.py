@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from lfx.services.config_discovery import resolve_config_dir
 
@@ -65,13 +65,9 @@ class TestLoadTomlConfig:
 
         config_file = tmp_path / "lfx.toml"
         config_file.write_text("[section]\nkey = 'value'\n")
-        config_file.chmod(0o000)
-
-        try:
+        with patch.object(type(config_file), "open", side_effect=PermissionError):
             result = load_toml_config(config_file)
-            assert result is None
-        finally:
-            config_file.chmod(0o644)
+        assert result is None
 
     def test_valid_toml_is_loaded(self, tmp_path):
         from lfx.services.config_discovery import load_toml_config

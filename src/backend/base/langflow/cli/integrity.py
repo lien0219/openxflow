@@ -14,8 +14,10 @@ customer reports flows failing for no visible reason. Start the instance with
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
 
 import sqlalchemy as sa
@@ -23,7 +25,7 @@ from cryptography.fernet import InvalidToken
 from sqlmodel import func, select
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import AsyncIterator, Callable, Iterable
     from uuid import UUID
 
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -77,14 +79,61 @@ def open_instance() -> None:
         get_settings_service()
 
 
+@asynccontextmanager
+async def inspection_session() -> AsyncIterator[AsyncSession]:
+    """Inspect SQLite alongside the server without taking its exclusive writer-process lock.
+
+    A private pool keeps query_only off the application's connections. SQLite itself
+    refuses writes on these connections, even if a future check accidentally tries one.
+    Connection failures remain lazy so check_schema can report an unreachable source.
+    """
+    from lfx.services.deps import session_scope_readonly
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlmodel.ext.asyncio.session import AsyncSession
+
+    from langflow.services.deps import get_db_service
+
+    database = get_db_service()
+    url = sa.make_url(database.database_url)
+    if url.get_backend_name() != "sqlite" or url.database in {None, "", ":memory:"}:
+        async with session_scope_readonly() as session:
+            yield session
+        return
+
+    # Use SQLite's native read-only URI mode as well as ``query_only`` below.
+    # ``query_only`` rejects DML, but a normal SQLite connection can still
+    # participate in WAL/shared-memory state. The migration preflight runs in a
+    # short-lived subprocess that may be terminated when a streaming caller
+    # disconnects; opening the file read-only keeps that cleanup from leaving
+    # the application's writer with a damaged journal state on Windows.
+    database_path = await asyncio.to_thread(Path(url.database).resolve)
+    readonly_url = url.set(
+        database=database_path.as_uri(),
+        query={**url.query, "mode": "ro", "uri": "true"},
+    )
+    engine = create_async_engine(readonly_url, poolclass=sa.pool.NullPool)
+
+    @sa.event.listens_for(engine.sync_engine, "connect")
+    def read_only(connection, _record):
+        cursor = connection.cursor()
+        try:
+            cursor.execute("PRAGMA query_only=ON")
+        finally:
+            cursor.close()
+
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            yield session
+    finally:
+        await engine.dispose()
+
+
 async def check_instance(on_check: Callable[[CheckResult], None] | None = None) -> IntegrityReport:
     """Run every check against the running instance's configuration.
 
     ``on_check`` is called with each result as its check finishes, so a caller can
     show progress on an instance where the checks take minutes.
     """
-    from langflow.services.deps import session_scope
-
     report = IntegrityReport([])
 
     def add(check: CheckResult) -> None:
@@ -93,7 +142,7 @@ async def check_instance(on_check: Callable[[CheckResult], None] | None = None) 
             on_check(check)
 
     # One session, and it never commits: everything here is a read.
-    async with session_scope() as session:
+    async with inspection_session() as session:
         schema = await check_schema(session)
         add(schema)
         if schema.status != "ok":
@@ -124,7 +173,9 @@ async def check_schema(session: AsyncSession) -> CheckResult:
     except sa.exc.SQLAlchemyError as exc:
         await session.rollback()
         # The driver's first line names the host it tried, and never the URL or its password.
-        reason = _database_error_reason(exc)
+        from langflow.services.deps import get_db_service
+
+        reason = _database_error_reason(exc, getattr(get_db_service(), "database_url", None))
         return CheckResult(
             "schema", "fail", f"the database could not be reached: {reason}. Check LANGFLOW_DATABASE_URL"
         )
@@ -149,9 +200,22 @@ async def check_schema(session: AsyncSession) -> CheckResult:
     )
 
 
-def _database_error_reason(exc: sa.exc.SQLAlchemyError) -> str:
+def _database_error_reason(exc: sa.exc.SQLAlchemyError, database_url: str | None = None) -> str:
     """Report only the driver's first line, without SQLAlchemy's query parameters."""
-    return str(exc.orig).strip().partition("\n")[0] if isinstance(exc, sa.exc.DBAPIError) else type(exc).__name__
+    reason = str(exc.orig).strip().partition("\n")[0] if isinstance(exc, sa.exc.DBAPIError) else type(exc).__name__
+    # On Windows psycopg can fail before opening a socket because the current
+    # event loop is incompatible. Preserve the safe endpoint so operators can
+    # still tell which configured database was unreachable, without exposing
+    # credentials or the full connection URL.
+    if database_url and "127.0.0.1" not in reason and "localhost" not in reason:
+        try:
+            endpoint = sa.make_url(database_url)
+            host = endpoint.host
+            if host:
+                reason = f"{reason} ({host})"
+        except (sa.exc.ArgumentError, ValueError):
+            pass
+    return reason
 
 
 async def recorded_revisions(session: AsyncSession) -> set[str]:

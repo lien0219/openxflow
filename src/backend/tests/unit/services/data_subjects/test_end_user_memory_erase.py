@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import anyio
 import pytest
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -72,7 +73,7 @@ async def _seed_memory_base(username: str):
 
 async def _upgrade_never_written_legacy_memory_base(username: str):
     """Run the real SQLite upgrade over a legacy local-Chroma Memory Base whose directory never existed."""
-    Path(get_settings_service().settings.knowledge_bases_dir).mkdir(parents=True, exist_ok=True)
+    await anyio.Path(get_settings_service().settings.knowledge_bases_dir).mkdir(parents=True, exist_ok=True)
     owner = await create_user(username)
     async with session_scope() as session:
         record = KnowledgeBaseRecord(name="legacy_memory", user_id=owner, backend_type="chroma", backend_config={})

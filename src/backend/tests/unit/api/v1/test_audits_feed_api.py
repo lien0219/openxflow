@@ -336,25 +336,37 @@ async def test_the_export_releases_its_connection_between_batches(client, logged
 
     Asserted on the pool, not on the rows: ``expunge_all()`` runs before the
     scope closes either way, so detached rows prove nothing about whether the
-    connection went back. ``checkedout()`` is what a stalled download would
-    pin — move the ``yield`` inside the session scope and it is 1 here.
+    connection went back. Pool checkout/checkin events also cover SQLite's
+    NullPool, which has no ``checkedout()`` counter.
     """
     from langflow.services.audit.feed import AuditFeedFilters, iter_feed_batches_per_session
     from langflow.services.deps import get_db_service
+    from sqlalchemy import event
 
     await seed(*(resource_event(minute) for minute in range(6)))
     filters = AuditFeedFilters(
         since=datetime(2021, 3, 4, tzinfo=timezone.utc), until=datetime(2021, 3, 5, tzinfo=timezone.utc)
     )
     pool = get_db_service().engine.pool
-    # Measured relatively: whatever else the suite is holding, the walk adds none.
-    idle = pool.checkedout()
+    checked_out = set()
 
+    def checkout(_connection, record, _proxy):
+        checked_out.add(record)
+
+    def checkin(_connection, record):
+        checked_out.discard(record)
+
+    event.listen(pool, "checkout", checkout)
+    event.listen(pool, "checkin", checkin)
     batches = 0
-    async for batch in iter_feed_batches_per_session(filters, batch_size=2):
-        batches += 1
-        assert pool.checkedout() <= idle, "the walk is holding a connection while the client reads"
-        assert all(feed_row.row.action for feed_row in batch), "the rows are still readable"
+    try:
+        async for batch in iter_feed_batches_per_session(filters, batch_size=2):
+            batches += 1
+            assert not checked_out, "the walk is holding a connection while the client reads"
+            assert all(feed_row.row.action for feed_row in batch), "the rows are still readable"
+    finally:
+        event.remove(pool, "checkout", checkout)
+        event.remove(pool, "checkin", checkin)
 
     assert batches >= 3, "the walk should span several batches"
 

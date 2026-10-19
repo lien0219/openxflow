@@ -1,4 +1,4 @@
-import type { ContentBlockItem, UsageType } from "../chat";
+import type { ContentBlockItem, PropertiesType } from "../chat";
 
 type Message = {
   flow_id: string;
@@ -13,24 +13,7 @@ type Message = {
   background_color: string;
   text_color: string;
   category?: string;
-  properties?: {
-    state?: "partial" | "complete";
-    source?: {
-      id?: string;
-      display_name?: string;
-      source?: string;
-    };
-    icon?: string;
-    background_color?: string;
-    text_color?: string;
-    targets?: string[];
-    edited?: boolean;
-    allow_markdown?: boolean;
-    positive_feedback?: boolean | null;
-    build_duration?: number | null;
-    usage?: UsageType | null;
-    [key: string]: unknown;
-  };
+  properties?: PropertiesType;
   content_blocks?: ContentBlockItem[];
 };
 

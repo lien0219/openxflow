@@ -161,13 +161,19 @@ def create_verbose_printer(*, verbose: bool):
 
 def is_port_in_use(port: int, host: str = "localhost") -> bool:
     """Check if a port is already in use."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind((host, port))
-        except OSError:
-            return True
-        else:
-            return False
+    # Windows permits a loopback bind alongside an unconnected wildcard bind
+    # (and vice versa). Probe both addresses so the answer describes the port,
+    # rather than the particular local address chosen by the caller.
+    probe_hosts = [host]
+    if host not in ("", "0.0.0.0"):
+        probe_hosts.append("")
+    for probe_host in probe_hosts:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((probe_host, port))
+            except OSError:
+                return True
+    return False
 
 
 def get_free_port(starting_port: int = 8000) -> int:

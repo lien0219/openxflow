@@ -19,7 +19,7 @@ import anyio
 import pytest
 import sqlalchemy as sa
 from cryptography.fernet import Fernet
-from langflow.cli.integrity import _FERNET_PREFIX, check_instance, open_instance
+from langflow.cli.integrity import _FERNET_PREFIX, check_instance, inspection_session, open_instance
 from langflow.services.database.models.api_key.model import ApiKey
 from langflow.services.database.models.auth.authz import AuthzRole, AuthzRoleAssignment, CasbinRule
 from langflow.services.database.models.file.model import File
@@ -111,6 +111,22 @@ def _contents(directory: Path) -> dict[str, str]:
 
 
 class TestCleanInstance:
+    async def test_cli_client_does_not_start_the_data_subject_erase_worker(self, client):  # noqa: ARG002
+        from langflow.services.data_subjects.worker import data_subject_erase_worker
+
+        assert data_subject_erase_worker._task is None
+
+    async def test_inspection_cannot_write_and_does_not_make_application_connections_readonly(self, active_user):
+        async with inspection_session() as session:
+            assert (await session.exec(sa.text('SELECT count(*) FROM "user"'))).one()[0] > 0
+            with pytest.raises(sa.exc.OperationalError, match="readonly"):
+                await session.exec(sa.text('DELETE FROM "user"'))
+
+        row = File(user_id=active_user.id, name="after-inspection", path="after-inspection.txt", size=0)
+        await _add(row)
+        async with session_scope() as session:
+            assert await session.get(File, row.id) is not None
+
     async def test_every_check_passes(self, active_user, storage_dir, kb_root):  # noqa: ARG002
         report = await check_instance()
 
@@ -193,7 +209,9 @@ class TestSchema:
         assert "postgresql" not in summary
 
     async def test_a_database_with_no_alembic_version_table_has_no_recorded_revision(self, instance_on, tmp_path):
-        instance_on(f"sqlite:///{tmp_path}/empty.db")
+        database = tmp_path / "empty.db"
+        database.touch()
+        instance_on(f"sqlite:///{database}")
 
         report = await check_instance()
 
@@ -592,6 +610,13 @@ class TestMemoryBases:
 
 
 class TestAuthorization:
+    @pytest.fixture(autouse=True)
+    async def empty_assignments(self, client):  # noqa: ARG002
+        # Startup grants the bootstrap administrator a role. Each case supplies
+        # the assignments and compiled policy it wants the integrity check to inspect.
+        async with session_scope() as session:
+            await session.exec(sa.delete(AuthzRoleAssignment))
+
     async def test_an_assignment_to_a_missing_role_is_reported(self, active_user, storage_dir, kb_root):  # noqa: ARG002
         missing_role = uuid.uuid4()
         async with session_scope() as session:
@@ -887,7 +912,7 @@ class TestOutput:
             "LANGFLOW_DATABASE_URL": f"sqlite:///{tmp_path / 'empty.db'}",
             "LANGFLOW_LOG_LEVEL": "debug",
         }
-        result = subprocess.run(  # noqa: S603 - the command as an admin UI would start it
+        result = subprocess.run(  # noqa: S603 - fixed test command using this interpreter, no shell
             [sys.executable, "-m", "langflow", "check-integrity", "--json"],
             env=env,
             capture_output=True,

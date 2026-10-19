@@ -205,19 +205,19 @@ describe("useUtilityStore", () => {
       expect(result.current.selectedItems).toEqual(["item-2"]);
     });
 
-    it("should handle various item types", () => {
+    it("should handle item IDs from different sources", () => {
       const { result } = renderHook(() => useUtilityStore());
 
       act(() => {
         result.current.setSelectedItems("string-item");
-        result.current.setSelectedItems(123);
-        result.current.setSelectedItems({ id: "object-item" });
+        result.current.setSelectedItems(String(123));
+        result.current.setSelectedItems({ id: "object-item" }.id);
       });
 
       expect(result.current.selectedItems).toEqual([
         "string-item",
-        123,
-        { id: "object-item" },
+        "123",
+        "object-item",
       ]);
     });
 
@@ -537,23 +537,23 @@ describe("useUtilityStore", () => {
   });
 
   describe("setEventDelivery", () => {
-    it("should set event delivery to webhook", () => {
+    it("should set event delivery to streaming", () => {
       const { result } = renderHook(() => useUtilityStore());
 
       act(() => {
-        result.current.setEventDelivery(EventDeliveryType.WEBHOOK);
+        result.current.setEventDelivery(EventDeliveryType.STREAMING);
       });
 
-      expect(result.current.eventDelivery).toBe(EventDeliveryType.WEBHOOK);
+      expect(result.current.eventDelivery).toBe(EventDeliveryType.STREAMING);
     });
 
     it("should switch between event delivery types", () => {
       const { result } = renderHook(() => useUtilityStore());
 
       act(() => {
-        result.current.setEventDelivery(EventDeliveryType.WEBHOOK);
+        result.current.setEventDelivery(EventDeliveryType.STREAMING);
       });
-      expect(result.current.eventDelivery).toBe(EventDeliveryType.WEBHOOK);
+      expect(result.current.eventDelivery).toBe(EventDeliveryType.STREAMING);
 
       act(() => {
         result.current.setEventDelivery(EventDeliveryType.POLLING);
@@ -714,7 +714,7 @@ describe("useUtilityStore", () => {
       expect(result.current.selectedItems).toHaveLength(1000);
     });
 
-    it("should handle complex object selection", () => {
+    it("should select a complex object by its ID", () => {
       const { result } = renderHook(() => useUtilityStore());
       const complexObject = {
         id: "complex",
@@ -723,10 +723,10 @@ describe("useUtilityStore", () => {
       };
 
       act(() => {
-        result.current.setSelectedItems(complexObject);
+        result.current.setSelectedItems(complexObject.id);
       });
 
-      expect(result.current.selectedItems).toEqual([complexObject]);
+      expect(result.current.selectedItems).toEqual([complexObject.id]);
     });
 
     it("should handle extreme pagination values", () => {

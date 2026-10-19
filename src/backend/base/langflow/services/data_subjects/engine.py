@@ -16,6 +16,7 @@ from lfx.log.logger import logger
 from langflow.services.data_subjects import audit_events
 from langflow.services.data_subjects.builder_account_steps import BUILDER_ACCOUNT_STEPS
 from langflow.services.data_subjects.builder_flow_steps import erase_owned_flows
+from langflow.services.data_subjects.channel_guard import ensure_no_channel_data
 from langflow.services.data_subjects.end_user_steps import END_USER_STEPS
 from langflow.services.data_subjects.errors import DataSubjectError
 from langflow.services.data_subjects.knowledge_base_steps import erase_knowledge_base_upgrades, erase_knowledge_bases
@@ -197,6 +198,10 @@ async def run_request(request_id: UUID, heartbeat: Heartbeat = _noop) -> str | N
         subject_id, actor_id = request.subject_user_id, request.decided_by
     steps = END_USER_STEPS if is_end_user else BUILDER_STEPS
     try:
+        if not is_end_user:
+            # Also protect approved requests created before channel integration.
+            async with session_scope() as session:
+                await ensure_no_channel_data(session, subject_id)
         if phase == PHASE_ROWS:
             await _run_steps(request_id, ctx, steps, heartbeat, final=False)
             phase = PHASE_STORAGE

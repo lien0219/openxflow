@@ -46,7 +46,9 @@ export default function SecretKeyModal({
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const generateToken = useGenerateToken();
-  const modalConfigProps = modalProps?.modalProps ?? modalProps;
+  const modalConfigProps = (modalProps?.modalProps ?? modalProps) as
+    | ModalConfigProps
+    | undefined;
 
   useEffect(() => {
     if (open) {

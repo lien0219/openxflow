@@ -4,7 +4,7 @@ import {
   DeploymentStepperProvider,
   useDeploymentStepper,
 } from "../contexts/deployment-stepper-context";
-import type { ConnectionItem, Deployment } from "../types";
+import type { ConnectionItem, Deployment, SelectedFlowVersion } from "../types";
 
 jest.mock(
   "@/controllers/API/queries/deployment-provider-accounts/use-post-provider-account",
@@ -49,10 +49,7 @@ const mockDeployment: Deployment = {
 function renderEditHook(
   overrides?: Partial<{
     editingDeployment: Deployment;
-    selectedVersionByFlow: Map<
-      string,
-      { versionId: string; versionTag: string }
-    >;
+    selectedVersionByFlow: Map<string, SelectedFlowVersion>;
     initialLlm: string;
     initialToolNameByFlow: Map<string, string>;
     initialConnectionsByFlow: Map<string, string[]>;
@@ -61,8 +58,26 @@ function renderEditHook(
   const defaults = {
     editingDeployment: mockDeployment,
     selectedVersionByFlow: new Map([
-      ["flow-1", { versionId: "ver-1", versionTag: "v1" }],
-      ["flow-2", { versionId: "ver-2", versionTag: "v2" }],
+      [
+        "flow-1",
+        {
+          key: "flow-1:ver-1",
+          flowId: "flow-1",
+          flowName: "Flow One",
+          versionId: "ver-1",
+          versionTag: "v1",
+        },
+      ],
+      [
+        "flow-2",
+        {
+          key: "flow-2:ver-2",
+          flowId: "flow-2",
+          flowName: "Flow Two",
+          versionId: "ver-2",
+          versionTag: "v2",
+        },
+      ],
     ]),
     initialLlm: "test-model",
     initialToolNameByFlow: new Map([

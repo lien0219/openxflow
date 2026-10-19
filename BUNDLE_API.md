@@ -224,6 +224,12 @@ the deserialize half is covered by
 
 ## Changelog
 
+- **Portable extension paths.** Bundle and integration capability-manifest paths
+  reject absolute, drive-qualified, and parent-traversal paths using both Windows
+  and POSIX syntax, independent of the host platform. Editable-install discovery
+  converts PEP 610 file URLs to native paths, including escaped spaces and Windows
+  drive letters. Public signatures and `BUNDLE_API_VERSION` remain unchanged.
+
 - **Knowledge storage provider defaults.** `DBProviderInput` defaults to the
   application-provided SQLite backend. Its public name, fields and signature
   remain unchanged, so `BUNDLE_API_VERSION` remains `1`. Recognized historical

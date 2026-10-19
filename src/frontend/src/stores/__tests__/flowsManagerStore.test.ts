@@ -17,10 +17,31 @@ const mockResetFlow = jest.fn();
 const mockSetNodes = jest.fn();
 const mockSetEdges = jest.fn();
 
+const snapshotNodes = (id: string): AllNodeType[] => [
+  {
+    id,
+    type: "noteNode",
+    position: { x: 0, y: 0 },
+    data: {
+      id,
+      type: "note",
+      node: {
+        description: "",
+        display_name: "Note",
+        documentation: "",
+        template: {},
+      },
+    },
+  },
+];
+const snapshotEdges = (id: string): EdgeType[] => [
+  { id, source: "node-1", target: "node-2" },
+];
+
 const mockFlowStore = {
   getState: jest.fn(() => ({
-    nodes: [],
-    edges: [],
+    nodes: [] as AllNodeType[],
+    edges: [] as EdgeType[],
     resetFlow: mockResetFlow,
     setNodes: mockSetNodes,
     setEdges: mockSetEdges,
@@ -32,7 +53,7 @@ jest.mock("../flowStore", () => ({
   default: mockFlowStore,
 }));
 
-import type { FlowType } from "@/types/flow";
+import type { AllNodeType, EdgeType, FlowType } from "@/types/flow";
 import useFlowsManagerStore from "../flowsManagerStore";
 
 describe("useFlowsManagerStore", () => {
@@ -41,17 +62,17 @@ describe("useFlowsManagerStore", () => {
     id: "flow-1",
     name: "Test Flow 1",
     description: "Test Description 1",
-    data: { nodes: [], edges: [] },
+    data: null,
     is_component: false,
-  } as FlowType;
+  };
 
   const mockFlow2: FlowType = {
     id: "flow-2",
     name: "Test Flow 2",
     description: "Test Description 2",
-    data: { nodes: [], edges: [] },
+    data: null,
     is_component: false,
-  } as FlowType;
+  };
 
   const mockFlows = [mockFlow1, mockFlow2];
 
@@ -295,8 +316,8 @@ describe("useFlowsManagerStore", () => {
     beforeEach(() => {
       // Setup flowStore mock with test data
       mockFlowStore.getState.mockReturnValue({
-        nodes: [{ id: "node-1", data: {} }],
-        edges: [{ id: "edge-1" }],
+        nodes: snapshotNodes("node-1"),
+        edges: snapshotEdges("edge-1"),
         resetFlow: mockResetFlow,
         setNodes: mockSetNodes,
         setEdges: mockSetEdges,
@@ -311,8 +332,8 @@ describe("useFlowsManagerStore", () => {
         result.current.takeSnapshot();
       });
 
-      expect(mockCloneDeep).toHaveBeenCalledWith([{ id: "node-1", data: {} }]);
-      expect(mockCloneDeep).toHaveBeenCalledWith([{ id: "edge-1" }]);
+      expect(mockCloneDeep).toHaveBeenCalledWith(snapshotNodes("node-1"));
+      expect(mockCloneDeep).toHaveBeenCalledWith(snapshotEdges("edge-1"));
     });
 
     it("should not take duplicate snapshots", () => {
@@ -333,8 +354,8 @@ describe("useFlowsManagerStore", () => {
 
       // Setup initial state
       mockFlowStore.getState.mockReturnValue({
-        nodes: [{ id: "node-2", data: {} }],
-        edges: [{ id: "edge-2" }],
+        nodes: snapshotNodes("node-2"),
+        edges: snapshotEdges("edge-2"),
         resetFlow: mockResetFlow,
         setNodes: mockSetNodes,
         setEdges: mockSetEdges,
@@ -347,8 +368,8 @@ describe("useFlowsManagerStore", () => {
 
       // Change the flow store state
       mockFlowStore.getState.mockReturnValue({
-        nodes: [{ id: "node-3", data: {} }],
-        edges: [{ id: "edge-3" }],
+        nodes: snapshotNodes("node-3"),
+        edges: snapshotEdges("edge-3"),
         resetFlow: mockResetFlow,
         setNodes: mockSetNodes,
         setEdges: mockSetEdges,
@@ -358,16 +379,16 @@ describe("useFlowsManagerStore", () => {
         result.current.undo();
       });
 
-      expect(mockSetNodes).toHaveBeenCalledWith([{ id: "node-2", data: {} }]);
-      expect(mockSetEdges).toHaveBeenCalledWith([{ id: "edge-2" }]);
+      expect(mockSetNodes).toHaveBeenCalledWith(snapshotNodes("node-2"));
+      expect(mockSetEdges).toHaveBeenCalledWith(snapshotEdges("edge-2"));
     });
 
     it("should handle redo operation", () => {
       const { result } = renderHook(() => useFlowsManagerStore());
 
       mockFlowStore.getState.mockReturnValue({
-        nodes: [{ id: "node-1", data: {} }],
-        edges: [{ id: "edge-1" }],
+        nodes: snapshotNodes("node-1"),
+        edges: snapshotEdges("edge-1"),
         resetFlow: mockResetFlow,
         setNodes: mockSetNodes,
         setEdges: mockSetEdges,

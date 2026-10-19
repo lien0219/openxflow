@@ -1,4 +1,5 @@
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
+import type { TFunction } from "i18next";
 import { useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
@@ -25,7 +26,7 @@ type ConflictResolveRowProps = {
 };
 
 /** The one line of each side, so the choice reads as a comparison. */
-function summarise(group: ChangeGroup, t: (k: string, p?: object) => string) {
+function summarise(group: ChangeGroup, t: TFunction) {
   return group.changes
     .map((change) =>
       // Values are dropped here even when they are short enough to inline.

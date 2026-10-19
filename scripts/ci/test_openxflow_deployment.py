@@ -157,6 +157,7 @@ def setup_deployment(tmp_path, *, previous=False):
     if previous:
         old = deployer.inspect(OLD)["target"]
         (tmp_path / ".deployed-image").write_text(json.dumps(old), encoding="utf-8")
+        (tmp_path / ".deployed-image").chmod(0o600)
         docker.image = OLD
         plan = deployer.inspect(NEW)
     gate = {
@@ -175,6 +176,7 @@ def setup_deployment(tmp_path, *, previous=False):
     }
     gate_path = tmp_path / ".upgrade-gate.json"
     gate_path.write_text(json.dumps(gate), encoding="utf-8")
+    gate_path.chmod(0o600)
     return module, deployer, docker, gate_path
 
 

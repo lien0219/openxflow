@@ -43,6 +43,16 @@ _LOCAL_FILESYSTEMS = {
     "NTFS",
     "fuseblk",
 }
+_WINDOWS_PATH_LIMIT = 259
+
+
+def _temporary_file(directory: Path, prefix: str) -> Path:
+    """Choose a unique temporary name that remains usable on Windows deep paths."""
+    token = uuid4().hex
+    if os.name == "nt":
+        available = _WINDOWS_PATH_LIMIT - len(os.fspath(directory)) - 1 - len(prefix) - len(".tmp")
+        token = token[: max(1, min(len(token), available))]
+    return directory / f"{prefix}{token}.tmp"
 
 
 class AutomaticUpgradeUnavailableError(MaintenanceRequiredError):
@@ -92,7 +102,7 @@ def preserve_routing(directory: Path, row, database: Path | None, *, backup_dire
     """Keep private pre-upgrade routing, plus a consistent SQLite app DB backup."""
     path = directory / "routing-before-upgrade.json"
     if not path.exists():
-        temporary = directory / f"routing-backup-{uuid4().hex}.tmp"
+        temporary = _temporary_file(directory, "routing-backup-")
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
         try:
             with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
@@ -148,11 +158,11 @@ def preserve_routing(directory: Path, row, database: Path | None, *, backup_dire
             raise MaintenanceRequiredError(msg)
         reference = directory / "application-backup.json"
         if not reference.exists():
-            temporary = directory / f"application-reference-{uuid4().hex}.tmp"
+            temporary = _temporary_file(directory, "application-reference-")
             descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
             try:
                 with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-                    json.dump({"backup": str(backup.relative_to(directory.parents[1]))}, stream)
+                    json.dump({"backup": backup.relative_to(directory.parents[1]).as_posix()}, stream)
                     stream.flush()
                     os.fsync(stream.fileno())
                 temporary.replace(reference)

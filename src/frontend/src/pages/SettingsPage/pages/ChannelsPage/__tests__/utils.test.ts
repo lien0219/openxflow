@@ -51,7 +51,7 @@ describe("channel settings helpers", () => {
       id: "connection-id",
       channel_type: "feishu",
       settings_data: { public_base_url: "https://example.com/" },
-    } as ChannelConnection;
+    } as unknown as ChannelConnection;
 
     expect(buildChannelWebhookUrl(connection)).toBe(
       "https://example.com/api/v1/channel-webhooks/feishu/connection-id",

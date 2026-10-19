@@ -396,7 +396,7 @@ async def test_malformed_overrides_fall_back_to_defaults(client: AsyncClient, ac
         flow = await session.get(Flow, flow_id)
         assert body["name"] == flow.name
     assert body["version"] == get_version_info()["version"]
-    assert body["skills"][0]["tags"] == ["langflow"]
+    assert body["skills"][0]["tags"] == ["openxflow"]
     assert "examples" not in body["skills"][0]
 
 

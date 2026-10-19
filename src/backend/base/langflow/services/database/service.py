@@ -260,6 +260,8 @@ class DatabaseService(Service):
 
     def __init__(self, settings_service: SettingsService):
         self._logged_pragma = False
+        self._connection_listener = self.on_connection
+        self._connection_listener_engine = None
         self.settings_service = settings_service
         if settings_service.settings.database_url is None:
             msg = "No database URL provided"
@@ -276,13 +278,14 @@ class DatabaseService(Service):
         self.script_location = langflow_dir / "alembic"
         self.alembic_cfg_path = langflow_dir / "alembic.ini"
 
-        # register the event listener for sqlite as part of this class.
-        # Using decorator will make the method not able to use self
-        event.listen(Engine, "connect", self.on_connection)
         if self.settings_service.settings.database_connection_retry:
             self.engine = self._create_engine_with_retry()
         else:
             self.engine = self._create_engine()
+        # Keep connection settings local to this service's engine. Registering
+        # on SQLAlchemy's Engine class would also affect unrelated engines,
+        # including read-only inspection engines used by migration checks.
+        self._listen_for_connections(self.engine)
         # Here rather than in the app factory: this is an AsyncEngine, and the instrumentor
         # patches the sync engine underneath it. Instrumenting globally instead (no engine
         # argument) attaches to pool events only, which yields a connect span per checkout and
@@ -336,17 +339,35 @@ class DatabaseService(Service):
             )
 
     def reload_engine(self) -> None:
+        self._remove_connection_listener(self.engine)
         self._sanitize_database_url()
         if self.settings_service.settings.database_connection_retry:
             self.engine = self._create_engine_with_retry()
         else:
             self.engine = self._create_engine()
+        self._listen_for_connections(self.engine)
 
         self.async_session_maker = async_sessionmaker(
             self.engine,
             class_=SQLModelAsyncSession,
             expire_on_commit=False,
         )
+
+    def _listen_for_connections(self, engine: AsyncEngine) -> None:
+        sync_engine = engine.sync_engine
+        # A few construction-only tests replace create_async_engine with a
+        # MagicMock. There is no SQLAlchemy event target to register on in that
+        # case; real AsyncEngine instances always expose an Engine here.
+        if not isinstance(sync_engine, Engine):
+            return
+        event.listen(sync_engine, "connect", self._connection_listener)
+        self._connection_listener_engine = sync_engine
+
+    def _remove_connection_listener(self, engine: AsyncEngine | None) -> None:
+        if engine is None or self._connection_listener_engine is not engine.sync_engine:
+            return
+        event.remove(engine.sync_engine, "connect", self._connection_listener)
+        self._connection_listener_engine = None
 
     def _sanitize_database_url(self):
         """Create the engine for the database."""
@@ -884,6 +905,7 @@ class DatabaseService(Service):
             raise
         finally:
             try:
+                self._remove_connection_listener(self.engine)
                 await self.engine.dispose()
             finally:
                 release_sqlite_process_safety(self.database_url, owner=self)

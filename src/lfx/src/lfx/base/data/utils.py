@@ -222,7 +222,10 @@ async def read_text_file_async(file_path: str, *, encoding: str | None = None) -
 async def _read_text_file_with_encoding_async(file_path: str, *, encoding: str | None = None) -> tuple[str, str]:
     # Use storage-aware read to get bytes; encoding detection is CPU-bound, so keep it off the loop.
     raw_data = await read_file_bytes(file_path)
-    return await asyncio.to_thread(_decode_text_bytes_with_encoding, raw_data, file_path, encoding=encoding)
+    text, selected = await asyncio.to_thread(_decode_text_bytes_with_encoding, raw_data, file_path, encoding=encoding)
+    # Match the sync reader's universal-newline behavior for local files and
+    # downloaded object-storage content.
+    return text.replace("\r\n", "\n").replace("\r", "\n"), selected
 
 
 def _decode_text_bytes(raw_data: bytes, file_path: str, *, encoding: str | None = None) -> str:
