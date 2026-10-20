@@ -197,7 +197,9 @@ async def test_first_streamed_error_carries_the_diagnosis(monkeypatch, allow_cus
     from lfx.services.deps import get_settings_service
     from lfx.workflow.agui_translator import AGUITranslator
 
-    registry = dict(json.loads(files("lfx").joinpath("_assets/component_index.json").read_text())["entries"])
+    registry = dict(
+        json.loads(files("lfx").joinpath("_assets/component_index.json").read_text(encoding="utf-8"))["entries"]
+    )
     # Keep the registry and its derived lookups isolated from earlier tests.
     cache = components_module.ComponentCache()
     cache.all_types_dict = registry

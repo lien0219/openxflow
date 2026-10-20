@@ -71,7 +71,7 @@ describe("AppHeader accessibility", () => {
 
     expect(screen.getByTestId("icon-ChevronLeft")).toHaveAttribute(
       "aria-label",
-      "Go to home",
+      "Go to home OpenXFlow",
     );
   });
 

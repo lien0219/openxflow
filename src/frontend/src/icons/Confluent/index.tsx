@@ -6,5 +6,5 @@ export const ConfluentIcon = forwardRef<
   SVGSVGElement,
   React.PropsWithChildren<{ isDark?: boolean }>
 >((props, ref) => {
-  return <SvgConfluent ref={ref} {...props} />;
+  return <SvgConfluent ref={ref} {...props} isDark={props.isDark ?? false} />;
 });

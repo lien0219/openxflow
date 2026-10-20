@@ -77,7 +77,9 @@ class TestGlobalVarHeaders:
         The header name is sent as written, which is fine because Langflow lowercases
         before matching.
         """
-        env.setenv(name, "tenant-value")
+        # Windows uppercases os.environ keys; preserve the supplied casing here
+        # so this test exercises case-insensitive matching on every platform.
+        env.setattr(os, "environ", {**os.environ, name: "tenant-value"})
 
         headers = LangflowClient(server_url="http://localhost:7860")._headers()
 
@@ -198,7 +200,7 @@ class TestGlobalVarHeaderSafety:
             return await client.post("/run/flow")
 
         try:
-            with pytest.raises(RuntimeError, match="outside the Langflow server origin") as exc_info:
+            with pytest.raises(RuntimeError, match="outside the OpenXFlow server origin") as exc_info:
                 await send_request()
         finally:
             await client.close()

@@ -60,6 +60,8 @@ import { useModelConnectionLogic } from "./hooks/useModelConnectionLogic";
 import { useRefreshAfterProviderClose } from "./hooks/useRefreshAfterProviderClose";
 import type { ModelInputComponentType, ModelOption } from "./types";
 
+export type { ModelOption } from "./types";
+
 export default function ModelInputComponent({
   id,
   value,

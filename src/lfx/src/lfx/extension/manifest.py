@@ -1,14 +1,16 @@
 """Pydantic models for the v0 Extension manifest schema.
 
-A Langflow Extension is the distribution unit that gets pip-installed. It
+A OpenXFlow Extension is the distribution unit that gets pip-installed. It
 ships Bundles (named groups of components) and/or model providers, plus a
-manifest at the distribution root. The manifest tells Langflow:
+manifest at the distribution root. The manifest tells OpenXFlow:
 
     - which Bundles to register (``bundles``),
     - what component-base-class API surface the Bundle was built against
       (``lfx.compat``),
     - what optional capabilities the Bundle declares
-      (``capabilities.requiresCredentials`` is the only v0 slot).
+      (``capabilities.requiresCredentials`` is the only v0 flag),
+    - which bundle-owned integration capability manifests to load
+      (``integrations``).
 
 Manifest source forms (both supported):
 
@@ -31,7 +33,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Literal
 
 if sys.version_info >= (3, 11):
@@ -48,6 +50,9 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+from lfx.extension.integration_compat import INTEGRATIONS_MIN_LFX_VERSION, check_integration_runtime
+from lfx.integrations.models import provider_env_segment
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -251,11 +256,12 @@ class BundleRef(BaseModel):
         # Reject absolute paths and parent-directory traversal at the syntactic
         # level.  A more thorough symlink-aware check happens in
         # validate_extension where the filesystem is available.
-        if Path(value).is_absolute():
+        posix_path = PurePosixPath(value)
+        windows_path = PureWindowsPath(value)
+        if posix_path.is_absolute() or windows_path.is_absolute() or windows_path.drive:
             msg = f"Bundle path {value!r} must be relative to the manifest"
             raise ValueError(msg)
-        parts = Path(value).parts
-        if any(part == ".." for part in parts):
+        if any(part == ".." for part in (*posix_path.parts, *windows_path.parts)):
             msg = f"Bundle path {value!r} must not contain '..'"
             raise ValueError(msg)
         return value
@@ -344,7 +350,7 @@ class ProviderManifestEntry(BaseModel):
         pattern=_PROVIDER_ID_RE.pattern,
         description=(
             "Stable machine identity used by policy, e.g. 'openai' or 'acme.watsonx'. "
-            "Omit only for legacy manifests; Langflow then derives an ID from name."
+            "Omit only for legacy manifests; OpenXFlow then derives an ID from name."
         ),
     )
     display_name: StrictStr | None = Field(
@@ -410,7 +416,7 @@ class ProviderManifestEntry(BaseModel):
         min_length=1,
         description=(
             "Dotted-path callable 'module:attr' returning a flat list of static model metadata rows. "
-            "Langflow stamps provider ownership and validates model identities."
+            "OpenXFlow stamps provider ownership and validates model identities."
         ),
     )
 
@@ -470,17 +476,69 @@ class ProviderManifestEntry(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Integration capability manifests
+# ---------------------------------------------------------------------------
+
+
+class IntegrationManifestRef(BaseModel):
+    """Reference to a versioned capability manifest owned by one bundle."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_id: StrictStr = Field(
+        ...,
+        pattern=_PROVIDER_ID_RE.pattern,
+        description=(
+            "Stable provider key used by discovery, policy, and connection resolution. "
+            "Owned by one installed bundle; cross-bundle claims are rejected."
+        ),
+    )
+    bundle: StrictStr = Field(
+        ...,
+        pattern=BUNDLE_NAME_RE.pattern,
+        description="Name of the bundle that owns the capability manifest.",
+    )
+    path: StrictStr = Field(
+        ...,
+        min_length=1,
+        description="JSON capability-manifest path, relative to the owning bundle directory.",
+        json_schema_extra={
+            "pattern": r"^(?!.*\u0000)(?![\\/])(?!.*(?:^|[\\/])\.\.(?:[\\/]|$)).+\.json$",
+        },
+    )
+
+    @field_validator("path")
+    @classmethod
+    def _validate_path_shape(cls, value: str) -> str:
+        if "\x00" in value:
+            msg = "Integration capability-manifest path must not contain a null byte"
+            raise ValueError(msg)
+        posix_path = PurePosixPath(value)
+        windows_path = PureWindowsPath(value)
+        if posix_path.is_absolute() or windows_path.is_absolute() or windows_path.drive:
+            msg = f"Integration capability-manifest path {value!r} must be relative to the owning bundle"
+            raise ValueError(msg)
+        if any(part == ".." for part in (*posix_path.parts, *windows_path.parts)):
+            msg = f"Integration capability-manifest path {value!r} must not contain '..'"
+            raise ValueError(msg)
+        if posix_path.suffix != ".json" and windows_path.suffix != ".json":
+            msg = f"Integration capability-manifest path {value!r} must name a JSON file"
+            raise ValueError(msg)
+        return value
+
+
+# ---------------------------------------------------------------------------
 # ExtensionManifest
 # ---------------------------------------------------------------------------
 
 
 class ExtensionManifest(BaseModel):
-    """The v0 Langflow Extension manifest.
+    """The v0 OpenXFlow Extension manifest.
 
     Required fields:
         - id, version, name, bundles, lfx
     Optional:
-        - description, capabilities, schema (``$schema``)
+        - description, capabilities, integrations, schema (``$schema``)
     Deferred (rejected with ``field-deferred-in-this-milestone`` when set):
         - services, routes, hooks, starter_projects, userConfig
     """
@@ -515,7 +573,7 @@ class ExtensionManifest(BaseModel):
         ...,
         min_length=1,
         max_length=200,
-        description="Human-readable display name shown in Langflow.",
+        description="Human-readable display name shown in OpenXFlow.",
     )
     description: StrictStr | None = Field(
         default=None,
@@ -542,7 +600,7 @@ class ExtensionManifest(BaseModel):
         default_factory=list,
         description=(
             "Model providers contributed by this extension. Each is merged into "
-            "Langflow's unified model-provider tables (MODEL_PROVIDER_METADATA, the "
+            "OpenXFlow's unified model-provider tables (MODEL_PROVIDER_METADATA, the "
             "class-import registries, LIVE_MODEL_PROVIDERS) at load time, so a "
             "provider bundle adds a provider without editing core lfx."
         ),
@@ -551,6 +609,14 @@ class ExtensionManifest(BaseModel):
     capabilities: Capabilities = Field(
         default_factory=Capabilities,
         description="Optional declared capabilities (v0: requiresCredentials only).",
+    )
+
+    integrations: tuple[IntegrationManifestRef, ...] = Field(
+        default=(),
+        description=(
+            "Bundle-owned, versioned provider capability-manifest references. "
+            f"Requires an lfx>={INTEGRATIONS_MIN_LFX_VERSION} runtime dependency."
+        ),
     )
 
     # ------------------------------------------------------------------
@@ -611,6 +677,23 @@ class ExtensionManifest(BaseModel):
         names = [p.name for p in self.providers]
         if len(set(names)) != len(names):
             msg = "Provider names must be unique within an extension"
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_integration_provider_uniqueness(self) -> ExtensionManifest:
+        provider_ids = [integration.provider_id for integration in self.integrations]
+        if len(set(provider_ids)) != len(provider_ids):
+            msg = "Integration provider ids must be unique within an extension"
+            raise ValueError(msg)
+        env_segments = [provider_env_segment(provider_id) for provider_id in provider_ids]
+        if len(set(env_segments)) != len(env_segments):
+            msg = "Integration provider ids must map to unique environment-key segments"
+            raise ValueError(msg)
+        bundle_names = {bundle.name for bundle in self.bundles}
+        unknown_bundles = sorted({integration.bundle for integration in self.integrations} - bundle_names)
+        if unknown_bundles:
+            msg = f"Integration references unknown bundles: {', '.join(unknown_bundles)}"
             raise ValueError(msg)
         return self
 
@@ -716,12 +799,14 @@ def load_manifest(root: Path | str) -> ManifestSource:
 
     if extension_json.is_file():
         data = _read_extension_json(extension_json)
+        check_integration_runtime(data)
         manifest = ExtensionManifest.model_validate(data)
         return ManifestSource(manifest=manifest, path=extension_json, kind="extension.json")
 
     if pyproject.is_file():
         section = _read_pyproject_extension(pyproject)
         if section is not None:
+            check_integration_runtime(section)
             manifest = ExtensionManifest.model_validate(section)
             return ManifestSource(manifest=manifest, path=pyproject, kind="pyproject.toml")
 

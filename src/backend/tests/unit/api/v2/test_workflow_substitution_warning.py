@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import BackgroundTasks
+from langflow.api.utils.execution_principal import FAMILY_WORKFLOW_V2
 from langflow.api.v2.workflow_validation import _validate_flow_data_for_execution
 from lfx.graph.exceptions import GraphPausedException
 from lfx.interface import components
@@ -21,7 +22,9 @@ from lfx.workflow.converters import ParsedWorkflowRun
 
 @pytest.fixture
 def custom_agent_flow(monkeypatch):
-    registry = dict(json.loads(files("lfx").joinpath("_assets/component_index.json").read_text())["entries"])
+    registry = dict(
+        json.loads(files("lfx").joinpath("_assets/component_index.json").read_text(encoding="utf-8"))["entries"]
+    )
     cache = components.ComponentCache()
     cache.all_types_dict = registry
     cache.all_types_ready = True
@@ -212,6 +215,7 @@ async def test_warning_is_streamed_before_success(custom_agent_flow, monkeypatch
             parsed=parsed,
             current_user=user,
             protocol=protocol,
+            execution_family=FAMILY_WORKFLOW_V2,
             execution_timeout=None,
         )
     ]

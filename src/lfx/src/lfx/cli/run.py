@@ -129,9 +129,9 @@ async def run(
         ),
     ),
 ) -> None:
-    """Execute a Langflow graph script or JSON flow and return the result.
+    """Execute an OpenXFlow graph script or JSON flow and return the result.
 
-    This command analyzes and executes either a Python script containing a Langflow graph,
+    This command analyzes and executes either a Python script containing an OpenXFlow graph,
     a JSON flow file, inline JSON, or JSON from stdin, returning the result in the specified format.
     By default, output is minimal for use in containers and serverless environments.
 

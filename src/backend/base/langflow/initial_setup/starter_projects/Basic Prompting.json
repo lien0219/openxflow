@@ -122,6 +122,7 @@
             "lf_version": "1.7.0",
             "metadata": {
               "code_hash": "45974e6b1909",
+              "component_class_name": "ChatInput",
               "dependencies": {
                 "dependencies": [
                   {
@@ -381,6 +382,7 @@
             "lf_version": "1.7.0",
             "metadata": {
               "code_hash": "e3714ffe5d15",
+              "component_class_name": "PromptComponent",
               "dependencies": {
                 "dependencies": [
                   {
@@ -519,7 +521,7 @@
         "data": {
           "id": "undefined-Ua7t1",
           "node": {
-            "description": "# 📖 README\nThis template demonstrates a standard chat flow with additional instructions provided by a prompt. Prompts provide instructions and inputs for a Large Language Model (LLM) beyond the standard user-provided chat input. In this example, the prompt describes the LLM's role and persona.\n\n## Quick start\n1. Configure your **Model Provider** with your API credentials.\n2. Open the **Playground** to start the chat and run the flow.\n\n## Next steps\nChange the prompt template, model, or model settings, such as **Temperature**, and then see how the responses change with these different inputs.\n💡 Some component settings are hidden by default; to view all settings click **Controls** in each component's header menu.\n💡 You can use curly braces to create variables in your template, such as `{variable}`. These can be populated from other components, with Langflow global variables, or at runtime.",
+            "description": "# 📖 README\nThis template demonstrates a standard chat flow with additional instructions provided by a prompt. Prompts provide instructions and inputs for a Large Language Model (LLM) beyond the standard user-provided chat input. In this example, the prompt describes the LLM's role and persona.\n\n## Quick start\n1. Configure your **Model Provider** with your API credentials.\n2. Open the **Playground** to start the chat and run the flow.\n\n## Next steps\nChange the prompt template, model, or model settings, such as **Temperature**, and then see how the responses change with these different inputs.\n💡 Some component settings are hidden by default; to view all settings click **Controls** in each component's header menu.\n💡 You can use curly braces to create variables in your template, such as `{variable}`. These can be populated from other components, with OpenXFlow global variables, or at runtime.",
             "display_name": "",
             "documentation": "",
             "i18n_key": "template_notes.basic_prompting.bd8ff52b",
@@ -620,6 +622,7 @@
             "lf_version": "1.7.0",
             "metadata": {
               "code_hash": "0aab1c78e1dc",
+              "component_class_name": "ChatOutput",
               "dependencies": {
                 "dependencies": [
                   {
@@ -922,7 +925,8 @@
                 "large language model"
               ],
               "model_provider_policy_mode": "delegate",
-              "module": "lfx.components.models_and_agents.language_model.LanguageModelComponent"
+              "module": "lfx.components.models_and_agents.language_model.LanguageModelComponent",
+              "component_class_name": "LanguageModelComponent"
             },
             "minimized": false,
             "output_types": [],

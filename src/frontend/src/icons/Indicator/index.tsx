@@ -6,5 +6,11 @@ export const IndicatorIcon = forwardRef<
   SVGSVGElement,
   React.PropsWithChildren<{ className?: string }>
 >((props, ref) => {
-  return <IndicatorComponent ref={ref} {...props} />;
+  return (
+    <IndicatorComponent
+      ref={ref}
+      {...props}
+      className={props.className ?? ""}
+    />
+  );
 });

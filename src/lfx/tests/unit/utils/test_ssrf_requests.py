@@ -5,6 +5,7 @@ import os
 import socket
 import ssl
 from unittest.mock import Mock, patch
+from urllib.request import getproxies_environment
 
 import certifi
 import httpcore
@@ -48,6 +49,10 @@ class TestSSRFSafeGet:
         for name in tuple(os.environ):
             if name.lower().endswith("_proxy"):
                 monkeypatch.delenv(name)
+        # urllib reads the Windows Internet Settings registry as well as env vars.
+        # Keep these transport tests isolated from developer-machine proxy settings
+        # while retaining coverage for explicitly configured environment proxies.
+        monkeypatch.setattr(requests.utils, "getproxies", getproxies_environment)
 
     def test_direct_internal_ip_is_blocked(self):
         """A literal internal IP is blocked before any request is made."""

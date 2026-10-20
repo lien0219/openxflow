@@ -68,7 +68,7 @@ if TYPE_CHECKING:
 # security-critical startup warnings must use a guaranteed channel.
 _startup_console = Console(stderr=True, soft_wrap=True)
 
-# Security - use the same pattern as Langflow main API
+# Security - use the same pattern as OpenXFlow main API
 API_KEY_NAME = "x-api-key"
 
 # Constants for app factory env vars (used by uvicorn worker processes)
@@ -523,7 +523,7 @@ class UploadFlowRequest(BaseModel):
     name: str = Field(..., description="Human-readable name for the flow")
     data: dict = Field(..., description="Flow graph data — nodes and edges")
     description: str | None = Field(default=None, description="Optional flow description")
-    id: str | None = Field(default=None, description="Stable flow ID from Langflow export (must be a valid UUID)")
+    id: str | None = Field(default=None, description="Stable flow ID from OpenXFlow export (must be a valid UUID)")
     replace: bool = Field(default=False, description="Overwrite the existing flow if the ID already exists")
 
     @field_validator("id", mode="before")
@@ -652,7 +652,7 @@ def _ensure_variable_service_registered() -> None:
     """Register the minimal in-memory :class:`VariableService` if none is registered.
 
     Idempotent and safe to call on every worker startup: a previously registered
-    service (e.g. a real DB-backed one in a full Langflow process) is left untouched.
+    service (e.g. a real DB-backed one in a full OpenXFlow process) is left untouched.
     """
     from lfx.services.deps import get_variable_service
     from lfx.services.manager import get_service_manager

@@ -94,11 +94,14 @@ class AuthSettings(BaseSettings):
     )
 
     AUTO_LOGIN: bool = Field(
-        default=True,  # TODO: Set to False in v2.0
+        default=False,  # TODO: Set the development default to False in v2.0.
         description=(
             "Enable automatic login with a configured or generated bootstrap account. "
             "SECURITY WARNING: This bypasses authentication and should only be used in development environments. "
-            "Set to False in production. This will default to False in v2.0."
+            "Enabled by default on development branches; official release packages and tags default to False. "
+            "Set LANGFLOW_AUTO_LOGIN=false to require authentication. "
+            "Planned to default to False for all installations in v2.0, requiring an explicit "
+            "LANGFLOW_AUTO_LOGIN=true to enable automatic login."
         ),
     )
     """If True, the application will attempt to log in automatically as a super user."""
@@ -178,7 +181,7 @@ class AuthSettings(BaseSettings):
 
     # External trusted-identity settings.
     # Used when an upstream identity layer (proxy, gateway, IdP) issues or
-    # validates a credential and Langflow needs to accept it and map it to
+    # validates a credential and OpenXFlow needs to accept it and map it to
     # a local user via SSOUserProfile (JIT provisioning).
     EXTERNAL_AUTH_ENABLED: bool = Field(
         default=False,
@@ -191,7 +194,7 @@ class AuthSettings(BaseSettings):
     EXTERNAL_AUTH_TOKEN_HEADER: str = Field(
         default="Authorization",
         description=(
-            "Header containing the external credential. The native Langflow JWT path is tried first; "
+            "Header containing the external credential. The native OpenXFlow JWT path is tried first; "
             "if it fails, the external path is attempted as a fallback. Bearer-prefixed values are supported."
         ),
     )
@@ -235,7 +238,7 @@ class AuthSettings(BaseSettings):
     )
     EXTERNAL_AUTH_USERNAME_CLAIM: str = Field(
         default="preferred_username",
-        description="JWT claim preferred for the local Langflow username on JIT provisioning.",
+        description="JWT claim preferred for the local OpenXFlow username on JIT provisioning.",
     )
     EXTERNAL_AUTH_EMAIL_CLAIM: str = Field(
         default="email",
@@ -284,7 +287,7 @@ class AuthSettings(BaseSettings):
     EXTERNAL_AUTH_DISABLE_API_KEYS_FOR_EXTERNAL_USERS: bool = Field(
         default=True,
         description=(
-            "When the external access ceiling is enabled, reject Langflow API-key authentication for users mapped "
+            "When the external access ceiling is enabled, reject OpenXFlow API-key authentication for users mapped "
             "through the configured external provider so API keys cannot bypass the JWT claim ceiling."
         ),
     )

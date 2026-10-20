@@ -7,18 +7,14 @@ The connector SSRF guard is *validate-then-connect*: it resolves the hostname,
 checks the answers against the blocklist, and then hands the original URL to a
 third-party SDK that resolves DNS again at connect time. For the SDKs the API
 Request component uses we close that window by pinning the validated IPs
-(``lfx.utils.ssrf_transport.SSRFProtectedTransport``), but neither KB network SDK
-offers a seam for it:
+(``lfx.utils.ssrf_transport.SSRFProtectedTransport``), but the OpenSearch adapter
+does not offer a compatible seam:
 
-* ``chromadb.CloudClient`` builds its own ``httpx.Client`` inside
-  ``chromadb.api.fastapi.FastAPI.__init__`` with no transport parameter, and
-  ``Client.__init__`` makes an identity request *during construction*, so there is
-  no moment between "client exists" and "first request" in which to install one.
 * ``langchain_community``'s ``OpenSearchVectorSearch`` forwards one ``**kwargs``
   dict to both ``OpenSearch`` (urllib3) and ``AsyncOpenSearch`` (aiohttp), so a
   single ``connection_class`` cannot pin both transports.
 
-So for these two backends a tenant-chosen *hostname* whose DNS answer flips
+For this backend a tenant-chosen *hostname* whose DNS answer flips
 between validation and the SDK's own resolution can still land on an internal
 address. Literal IP targets — cloud metadata at ``169.254.169.254``, RFC1918
 literals — have no DNS to rebind and are blocked by the SSRF guard either way;
@@ -34,7 +30,7 @@ A KB network destination is permitted only when it is operator-controlled:
   server can set one), or
 * its host is named in ``LANGFLOW_KB_ALLOWED_HOSTS``.
 
-Anything else — a URL written into a Langflow variable through the UI/API, a
+Anything else — a URL written into an OpenXFlow variable through the UI/API, a
 ``cloud_host`` posted in a request body — is refused whether or not the host
 looks public. That exclusivity is the point: ``LANGFLOW_SSRF_ALLOWED_HOSTS`` is an
 *exception* list that widens the blocklist and still admits every unlisted public
@@ -125,7 +121,7 @@ def enforce_kb_destination(url: str, *, source: str, description: str) -> None:
         source: Provenance of the value — ``"environment"`` for a process env var
             (operator-controlled), anything else for tenant-supplied input.
         description: Where the value came from, for the error message
-            (e.g. ``"Langflow variable 'OPENSEARCH_URL'"``).
+            (e.g. ``"OpenXFlow variable 'OPENSEARCH_URL'"``).
 
     Raises:
         SSRFProtectionError: If the destination is tenant-supplied and its host is

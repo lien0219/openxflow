@@ -1,4 +1,4 @@
-"""Flow-shape eligibility checks for Watsonx Orchestrate Langflow tools."""
+"""Flow-shape eligibility checks for Watsonx Orchestrate OpenXFlow tools."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ CHAT_OUTPUT_TYPE = "ChatOutput"
 
 
 def get_wxo_flow_eligibility_error(flow_data: Any) -> str | None:
-    """Return an actionable error when a flow cannot become a wxO Langflow tool."""
+    """Return an actionable error when a flow cannot become a wxO OpenXFlow tool."""
     nodes = flow_data.get("nodes", []) if isinstance(flow_data, dict) else []
     nodes = nodes if isinstance(nodes, list) else []
 

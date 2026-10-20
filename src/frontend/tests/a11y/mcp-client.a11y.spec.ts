@@ -51,7 +51,7 @@ test.describe("MCP client route accessibility", () => {
     async ({ page }) => {
       await openMcpClientRoute(page);
       await page.getByRole("tab", { name: "Claude Code" }).click();
-      await expect(page.getByText("claude mcp add langflow")).toBeVisible({
+      await expect(page.getByText("claude mcp add openxflow")).toBeVisible({
         timeout: TIMEOUTS.standard,
       });
 
@@ -134,7 +134,7 @@ test.describe("MCP client route accessibility", () => {
       await expect(claude).toHaveAttribute("aria-selected", "true");
       await expect(claude).toHaveAttribute("tabindex", "0");
       await expect(bob).toHaveAttribute("tabindex", "-1");
-      await expect(page.getByText("claude mcp add langflow")).toBeVisible();
+      await expect(page.getByText("claude mcp add openxflow")).toBeVisible();
 
       // Wraps back to the first tab.
       await page.keyboard.press("ArrowRight");

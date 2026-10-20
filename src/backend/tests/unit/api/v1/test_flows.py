@@ -1,4 +1,3 @@
-import sqlite3
 import tempfile
 import uuid
 from uuid import UUID
@@ -983,6 +982,137 @@ async def test_read_flows_header_mode_filtered_by_flow_type(client: AsyncClient,
     assert all(flow["flow_type"] == "agent" for flow in result)
 
 
+async def test_read_flows_paginated_header_mode_returns_headers(client: AsyncClient, logged_in_headers):
+    """get_all=false + header_flows=true returns a page of data-less headers with updated_at."""
+    created = await client.post(
+        "api/v1/flows/",
+        json={"name": "paginated_header_flow", "data": {"nodes": [], "edges": []}, "is_component": False},
+        headers=logged_in_headers,
+    )
+    assert created.status_code == status.HTTP_201_CREATED
+    flow = created.json()
+
+    response = await client.get(
+        "api/v1/flows/",
+        params={
+            "get_all": False,
+            "header_flows": True,
+            "folder_id": flow["folder_id"],
+            "page": 1,
+            "size": 50,
+        },
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    result = response.json()
+
+    # Pagination semantics survive the header shape.
+    assert set(result) >= {"items", "total", "page", "size"}
+    assert result["page"] == 1
+    assert result["size"] == 50
+    assert result["total"] >= 1
+
+    headers_by_id = {item["id"]: item for item in result["items"]}
+    assert flow["id"] in headers_by_id
+    header = headers_by_id[flow["id"]]
+
+    # Header shape: no flow payload for a non-component, and none of the
+    # FlowRead-only fields.
+    assert header["data"] is None
+    assert "user_id" not in header
+    assert header["name"] == "paginated_header_flow"
+    assert header["updated_at"] is not None
+
+
+async def test_read_flows_paginated_without_header_flows_unchanged(client: AsyncClient, logged_in_headers):
+    """get_all=false without the flag still returns full FlowRead rows."""
+    created = await client.post(
+        "api/v1/flows/",
+        json={"name": "paginated_full_flow", "data": {"nodes": [], "edges": []}, "is_component": False},
+        headers=logged_in_headers,
+    )
+    assert created.status_code == status.HTTP_201_CREATED
+    flow = created.json()
+
+    response = await client.get(
+        "api/v1/flows/",
+        params={"get_all": False, "folder_id": flow["folder_id"], "page": 1, "size": 50},
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    result = response.json()
+
+    rows_by_id = {item["id"]: item for item in result["items"]}
+    assert flow["id"] in rows_by_id
+    row = rows_by_id[flow["id"]]
+
+    assert "user_id" in row
+    assert row["data"] == {"nodes": [], "edges": []}
+    assert row["updated_at"] == flow["updated_at"]
+
+
+async def test_read_flows_paginated_header_updated_at_matches_flow(client: AsyncClient, logged_in_headers):
+    """A header's updated_at is the flow's updated_at, serialized identically."""
+    created = await client.post(
+        "api/v1/flows/",
+        json={"name": "paginated_header_updated_at_flow", "data": {"nodes": [], "edges": []}},
+        headers=logged_in_headers,
+    )
+    assert created.status_code == status.HTTP_201_CREATED
+    flow = created.json()
+
+    full_read = await client.get(f"api/v1/flows/{flow['id']}", headers=logged_in_headers)
+    assert full_read.status_code == status.HTTP_200_OK
+    expected_updated_at = full_read.json()["updated_at"]
+
+    response = await client.get(
+        "api/v1/flows/",
+        params={
+            "get_all": False,
+            "header_flows": True,
+            "folder_id": flow["folder_id"],
+            "page": 1,
+            "size": 50,
+        },
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    header = next(item for item in response.json()["items"] if item["id"] == flow["id"])
+
+    assert header["updated_at"] == expected_updated_at
+    # Whole seconds, with an explicit offset — the FlowRead wire format.
+    assert "." not in header["updated_at"]
+
+
+async def test_read_flows_paginated_header_mode_keeps_component_data(client: AsyncClient, logged_in_headers):
+    """A component keeps its data on the paginated header path, as it does on get_all."""
+    component_data = {"nodes": [{"id": "n1", "data": {}}], "edges": []}
+    created = await client.post(
+        "api/v1/flows/",
+        json={"name": "paginated_header_component", "data": component_data, "is_component": True},
+        headers=logged_in_headers,
+    )
+    assert created.status_code == status.HTTP_201_CREATED
+    flow = created.json()
+
+    response = await client.get(
+        "api/v1/flows/",
+        params={
+            "get_all": False,
+            "header_flows": True,
+            "folder_id": flow["folder_id"],
+            "page": 1,
+            "size": 50,
+        },
+        headers=logged_in_headers,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    header = next(item for item in response.json()["items"] if item["id"] == flow["id"])
+
+    assert header["is_component"] is True
+    assert header["data"] == component_data
+
+
 async def test_create_flows(client: AsyncClient, logged_in_headers):
     amount_flows = 10
     basic_case = {
@@ -1600,7 +1730,7 @@ async def test_upload_flow_rejects_endpoint_name_with_dots(client: AsyncClient, 
     """Regression: endpoint_name containing dots must return 422, not 500.
 
     Previously a ValidationError from the Pydantic model escaped the handler
-    and hit the global exception_handler, producing a 500 and a Scarf telemetry
+    and hit the global exception_handler, producing a 500 and a product telemetry
     event.  The import path now wraps FlowCreate construction in a try/except
     and re-raises as HTTPException(422).
     """
@@ -2094,7 +2224,7 @@ async def test_delete_flow_retries_transient_sqlite_lock(client: AsyncClient, lo
     attempts = {"count": 0}
     statement = "DELETE FROM flow WHERE flow.id = ?"
 
-    async def delete_after_one_lock(session, target_flow_id):
+    async def delete_after_one_lock(session, target_flow_id, **kwargs):
         attempts["count"] += 1
         if attempts["count"] == 1:
             raise OperationalError(
@@ -2102,7 +2232,7 @@ async def test_delete_flow_retries_transient_sqlite_lock(client: AsyncClient, lo
                 {"id": target_flow_id},
                 sqlite3.OperationalError("database is locked"),
             )
-        return await original_delete(session, target_flow_id)
+        return await original_delete(session, target_flow_id, **kwargs)
 
     monkeypatch.setattr(flows_module, "cascade_delete_flow", delete_after_one_lock)
 
@@ -2134,7 +2264,7 @@ async def test_delete_flow_exhausted_lock_retries_return_sanitized_503(
     leaked_value = f"secret-bound-value-{uuid.uuid4()}"
     attempts = {"count": 0}
 
-    async def always_locked(_session, _target_flow_id):
+    async def always_locked(_session, _target_flow_id, **_kwargs):
         attempts["count"] += 1
         raise OperationalError(
             leaked_statement,
@@ -2176,7 +2306,7 @@ async def test_delete_flow_non_lock_failure_returns_sanitized_500(client: AsyncC
     leaked_detail = f"sensitive-delete-detail-{uuid.uuid4()}"
     attempts = {"count": 0}
 
-    async def fail_delete(_session, _target_flow_id):
+    async def fail_delete(_session, _target_flow_id, **_kwargs):
         attempts["count"] += 1
         raise RuntimeError(leaked_detail)
 
@@ -2194,7 +2324,10 @@ async def test_delete_flow_non_lock_failure_returns_sanitized_500(client: AsyncC
 async def test_delete_flow_real_competing_sqlite_writer_is_retried(client: AsyncClient, logged_in_headers, monkeypatch):
     """A real second SQLite connection holding the write lock triggers a retry."""
     from langflow.api.v1 import flows as flows_module
+    from langflow.services.database.models.folder import Folder
+    from langflow.services.deps import get_db_service
     from sqlalchemy import text
+    from sqlmodel.ext.asyncio.session import AsyncSession
 
     create_response = await client.post(
         "api/v1/flows/",
@@ -2205,18 +2338,21 @@ async def test_delete_flow_real_competing_sqlite_writer_is_retried(client: Async
     original_delete = flows_module.cascade_delete_flow
     attempts = {"count": 0}
 
-    async def delete_after_competing_commit(session, target_flow_id):
+    async def delete_after_competing_commit(session, target_flow_id, **kwargs):
         attempts["count"] += 1
         if attempts["count"] == 1:
-            await session.exec(text("PRAGMA busy_timeout = 0"))
-            competing_connection = sqlite3.connect(session.bind.url.database, timeout=1, isolation_level=None)
-            try:
-                competing_connection.execute("BEGIN IMMEDIATE")
-                return await original_delete(session, target_flow_id)
-            finally:
-                competing_connection.rollback()
-                competing_connection.close()
-        return await original_delete(session, target_flow_id)
+            # An external writer does not participate in the application's
+            # in-process queue. Use an independent connection to exercise the
+            # actual SQLite busy error rather than deadlocking that queue.
+            async with AsyncSession(get_db_service().engine) as competing_session:
+                competing_session.add(Folder(name=f"delete-competing-write-{uuid.uuid4()}", user_id=None))
+                await competing_session.flush()
+                # The second connection now holds SQLite's write lock. Disable
+                # waiting on the route connection so its real DELETE reports
+                # the lock immediately and exercises the retry boundary.
+                await session.exec(text("PRAGMA busy_timeout = 0"))
+                return await original_delete(session, target_flow_id, **kwargs)
+        return await original_delete(session, target_flow_id, **kwargs)
 
     monkeypatch.setattr(flows_module, "cascade_delete_flow", delete_after_competing_commit)
 
@@ -2248,7 +2384,7 @@ async def test_delete_flow_retry_returns_not_found_when_concurrent_delete_wins(
     attempts = {"count": 0}
     statement = "DELETE FROM flow WHERE flow.id = ?"
 
-    async def concurrent_delete_then_lock(_session, target_flow_id):
+    async def concurrent_delete_then_lock(_session, target_flow_id, **_kwargs):
         attempts["count"] += 1
         async with session_scope() as competing_session:
             target = await competing_session.get(Flow, target_flow_id)
@@ -2281,7 +2417,7 @@ async def test_delete_flow_retry_preserves_permission_denial(client: AsyncClient
     flow_id = create_response.json()["id"]
     statement = "DELETE FROM flow WHERE flow.id = ?"
 
-    async def locked_once(_session, target_flow_id):
+    async def locked_once(_session, target_flow_id, **_kwargs):
         raise OperationalError(statement, {"id": target_flow_id}, sqlite3.OperationalError("database is locked"))
 
     async def deny_retry(*_args, **_kwargs):
@@ -2330,7 +2466,7 @@ async def test_delete_flow_deployment_guard_retry_reauthorizes_before_second_cas
         if permission_attempts == 2:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="delete permission revoked")
 
-    async def fail_deployment_guard_once(_session, _target_flow_id):
+    async def fail_deployment_guard_once(_session, _target_flow_id, **_kwargs):
         nonlocal cascade_attempts
         cascade_attempts += 1
         raise DeploymentGuardError(
@@ -2377,7 +2513,7 @@ async def test_bulk_delete_retries_transient_sqlite_lock(client: AsyncClient, lo
     attempts = {"count": 0}
     statement = "DELETE FROM flow WHERE flow.id = ?"
 
-    async def delete_after_one_lock(session, target_flow_id):
+    async def delete_after_one_lock(session, target_flow_id, **kwargs):
         attempts["count"] += 1
         if attempts["count"] == 1:
             raise OperationalError(
@@ -2385,7 +2521,7 @@ async def test_bulk_delete_retries_transient_sqlite_lock(client: AsyncClient, lo
                 {"id": target_flow_id},
                 sqlite3.OperationalError("database is locked"),
             )
-        return await original_delete(session, target_flow_id)
+        return await original_delete(session, target_flow_id, **kwargs)
 
     monkeypatch.setattr(flows_module, "cascade_delete_flow", delete_after_one_lock)
 
@@ -2423,7 +2559,7 @@ async def test_bulk_delete_retry_rebuilds_authorized_owner_map(client: AsyncClie
     first_delete = True
     statement = "DELETE FROM flow WHERE flow.id = ?"
 
-    async def delete_after_concurrent_removal(session, target_flow_id):
+    async def delete_after_concurrent_removal(session, target_flow_id, **kwargs):
         nonlocal first_delete
         if first_delete:
             first_delete = False
@@ -2436,7 +2572,7 @@ async def test_bulk_delete_retry_rebuilds_authorized_owner_map(client: AsyncClie
                 {"id": target_flow_id},
                 sqlite3.OperationalError("database is locked"),
             )
-        return await original_delete(session, target_flow_id)
+        return await original_delete(session, target_flow_id, **kwargs)
 
     async def record_guard_map(*, db, flow_owner_ids, operation):  # noqa: ARG001
         try:
@@ -2480,7 +2616,7 @@ async def test_bulk_delete_exhausted_lock_retries_return_sanitized_503(
     leaked_value = f"secret-bound-value-{uuid.uuid4()}"
     attempts = {"count": 0}
 
-    async def always_locked(_session, _target_flow_id):
+    async def always_locked(_session, _target_flow_id, **_kwargs):
         attempts["count"] += 1
         raise OperationalError(
             leaked_statement,

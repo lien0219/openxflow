@@ -172,7 +172,7 @@ describe("AppInitPage - isSessionReady Logic", () => {
       // Act: Initial state
       const { result, rerender } = renderHook(
         ({ auto }) => useIsSessionReady(auto, isSessionFetched),
-        { initialProps: { auto: autoLogin } },
+        { initialProps: { auto: autoLogin as boolean | undefined } },
       );
 
       expect(result.current).toBe(false);
@@ -212,7 +212,12 @@ describe("AppInitPage - isSessionReady Logic", () => {
 
       const { result, rerender } = renderHook(
         ({ auto, fetched }) => useIsSessionReady(auto, fetched),
-        { initialProps: { auto: autoLogin, fetched: isSessionFetched } },
+        {
+          initialProps: {
+            auto: autoLogin as boolean | undefined,
+            fetched: isSessionFetched as boolean,
+          },
+        },
       );
 
       // Step 1: Initial state - not ready

@@ -9,7 +9,8 @@ implementations.
 
 from __future__ import annotations
 
-from pathlib import Path
+import asyncio
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING
 
 from lfx.services.deps import get_settings_service, get_storage_service
@@ -134,7 +135,11 @@ def to_storage_path(file_path: str) -> str:
 
     flow_id, file_name = require_storage_service(get_storage_service()).parse_file_path(file_path)
     storage_path = f"{flow_id}/{file_name}"
-    if Path(storage_path).is_absolute():
+    # ``storage_path`` is an object key, so absolute-path checks must not depend
+    # on the host OS.  A POSIX key such as ``/etc/hosts`` must be rejected on
+    # Windows as well, while drive-letter and UNC forms must be rejected on
+    # POSIX hosts.
+    if PurePosixPath(storage_path).is_absolute() or PureWindowsPath(storage_path).is_absolute():
         msg = f"Not a storage key: {file_path}"
         raise ValueError(msg)
     return storage_path
@@ -164,8 +169,8 @@ async def read_file_bytes(
     settings = get_settings_service().settings
 
     if settings.storage_type == "s3":
-        if _is_existing_local_file(file_path):
-            return Path(_confine_local_read(file_path, resolve_path)).read_bytes()
+        if await asyncio.to_thread(_is_existing_local_file, file_path):
+            return await asyncio.to_thread(lambda: Path(_confine_local_read(file_path, resolve_path)).read_bytes())
 
         parsed = parse_storage_path(file_path)
         if not parsed:
@@ -179,14 +184,15 @@ async def read_file_bytes(
         flow_id, filename = parsed
         return await storage_service.get_file(flow_id, filename)
 
-    file_path = _confine_local_read(file_path, resolve_path)
+    def read_local() -> bytes:
+        path = _confine_local_read(file_path, resolve_path)
+        path_obj = Path(path)
+        if not path_obj.exists():
+            msg = f"File not found: {path}"
+            raise FileNotFoundError(msg)
+        return path_obj.read_bytes()
 
-    path_obj = Path(file_path)
-    if not path_obj.exists():
-        msg = f"File not found: {file_path}"
-        raise FileNotFoundError(msg)
-
-    return path_obj.read_bytes()
+    return await asyncio.to_thread(read_local)
 
 
 async def read_file_text(
@@ -276,6 +282,29 @@ def get_file_size(file_path: str, storage_service: StorageService | None = None)
         raise FileNotFoundError(msg)
 
     return path_obj.stat().st_size
+
+
+async def get_file_size_async(file_path: str, storage_service: StorageService | None = None) -> int:
+    """Async counterpart of ``get_file_size`` that awaits object-storage lookups on the caller's loop.
+
+    Local files (including real local files under S3) are stat'ed in a worker thread through
+    ``get_file_size``, so they keep its containment checks.
+    """
+    settings = get_settings_service().settings
+    if settings.storage_type != "s3" or _is_existing_local_file(file_path):
+        return await asyncio.to_thread(get_file_size, file_path, storage_service)
+
+    parsed = parse_storage_path(file_path)
+    if not parsed:
+        msg = f"Invalid S3 path format: {file_path}. Expected 'flow_id/filename'"
+        raise ValueError(msg)
+    enforce_current_storage_key_scope(file_path)
+
+    if storage_service is None:
+        storage_service = require_storage_service(get_storage_service())
+
+    flow_id, filename = parsed
+    return await storage_service.get_file_size(flow_id, filename)
 
 
 def file_exists(file_path: str, storage_service: StorageService | None = None) -> bool:

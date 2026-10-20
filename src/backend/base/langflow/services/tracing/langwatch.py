@@ -123,8 +123,8 @@ class LangWatchTracer(BaseTracer):
                 "LANGWATCH_API_KEY is set but the 'langwatch' package is not installed, so "
                 "LangWatch tracing is disabled. 'langwatch' does not yet support Python "
                 f"{sys.version_info.major}.{sys.version_info.minor} (it requires Python <3.14), so "
-                "it is excluded from Python 3.14+ environments, including the official Langflow "
-                "Docker images. To enable LangWatch tracing, run Langflow on Python 3.10-3.13 "
+                "it is excluded from Python 3.14+ environments, including the official OpenXFlow "
+                "Docker images. To enable LangWatch tracing, run OpenXFlow on Python 3.10-3.13 "
                 "(for example via 'pip install langflow')."
             )
         else:

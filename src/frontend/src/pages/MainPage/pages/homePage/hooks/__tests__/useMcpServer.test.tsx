@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { ReactNode } from "react";
 import { useMcpServer } from "../useMcpServer";
 
@@ -62,7 +62,9 @@ jest.mock("@/customization/feature-flags", () => ({
   ENABLE_MCP_COMPOSER: false,
 }));
 
-const customGetMCPUrlMock = jest.fn(() => "http://test.com/api");
+const customGetMCPUrlMock = jest.fn(
+  (..._args: unknown[]) => "http://test.com/api",
+);
 
 jest.mock("@/customization/utils/custom-mcp-url", () => ({
   customGetMCPUrl: (...args: unknown[]) => customGetMCPUrlMock(...args),

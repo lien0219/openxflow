@@ -1,4 +1,4 @@
-"""Helpers for building spec-valid A2A agent cards from Langflow flows.
+"""Helpers for building spec-valid A2A agent cards from OpenXFlow flows.
 
 The typed models come from ``a2a.compat.v0_3.types`` (pydantic). Do NOT import
 from ``a2a.types`` — in a2a-sdk 1.x those are protobuf messages that serialize
@@ -187,15 +187,15 @@ async def build_agent_card(flow: Flow, *, rpc_url: str, session: AsyncSession) -
     overrides = flow.a2a_card_overrides if isinstance(flow.a2a_card_overrides, dict) else {}
     name = _override_str(overrides, "name") or flow.name
     description = _override_str(overrides, "description") or flow.description or f"A2A agent for flow {flow.name}"
-    # No per-flow version field exists on Flow; fall back to the langflow version.
+    # No per-flow version field exists on Flow; fall back to the OpenXFlow version.
     version = _override_str(overrides, "version") or get_version_info()["version"]
 
     # Builds the graph from flow.data and injects a session_id property. A flow
     # can be flagged for A2A with empty/unbuildable data, so degrade to an empty
     # input contract rather than 500ing the public discovery endpoint.
     try:
-        # json_schema_from_flow does a full, synchronous graph build; offload it
-        # so this public endpoint never blocks the event loop.
+        # json_schema_from_flow parses the graph synchronously (without instantiating
+        # components); offload it so this public endpoint never blocks the event loop.
         input_schema = await asyncio.to_thread(json_schema_from_flow, flow, require_api_editable=False)
     except Exception:  # noqa: BLE001 - any graph build failure degrades, not crashes
         logger.warning("Could not build A2A input schema for flow %s; serving empty input contract", flow.id)
@@ -205,7 +205,7 @@ async def build_agent_card(flow: Flow, *, rpc_url: str, session: AsyncSession) -
         id=str(flow.id),
         name=name,
         description=description,
-        tags=_override_str_list(overrides, "tags") or ["langflow"],
+        tags=_override_str_list(overrides, "tags") or ["openxflow"],
         examples=_override_str_list(overrides, "examples"),
         input_modes=["application/json"],
         output_modes=["application/json"],

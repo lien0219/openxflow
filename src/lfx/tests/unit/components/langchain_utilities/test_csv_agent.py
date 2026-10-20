@@ -132,7 +132,7 @@ class TestCSVAgentComponent:
             mock_get_settings.return_value = mock_settings
 
             local_path = component._get_local_path()
-            assert local_path == "/tmp/test.csv"
+            assert Path(local_path) == Path("/tmp/test.csv")
             # Should not have created temp file path
             assert not hasattr(component, "_temp_file_path")
 

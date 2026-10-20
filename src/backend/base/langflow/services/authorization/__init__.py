@@ -1,8 +1,10 @@
 """OpenXFlow authorization service package."""
 
 from langflow.services.authorization.actions import (
+    AdministrationAction,
     AuditAction,
     ChannelAction,
+    ConnectionAction,
     DeploymentAction,
     FileAction,
     FlowAction,
@@ -23,17 +25,21 @@ from langflow.services.authorization.decorators import requires_flow_permission,
 from langflow.services.authorization.fetch import authorized_or_owner_scoped, deny_to_404
 from langflow.services.authorization.guards import (
     capability_probe,
+    ensure_connection_permission,
     ensure_deployment_permission,
     ensure_file_permission,
+    ensure_flow_audit_read_permission,
     ensure_flow_permission,
     ensure_flows_permission,
     ensure_knowledge_base_permission,
     ensure_permission,
+    ensure_project_audit_read_permission,
     ensure_project_permission,
     ensure_provider_account_permission,
     ensure_share_permission,
     ensure_variable_permission,
     ensure_voice_permission,
+    is_decision_audit_suppressed,
     should_apply_owner_override,
 )
 from langflow.services.authorization.listing import (
@@ -49,9 +55,11 @@ from langflow.services.authorization.listing import (
 from langflow.services.authorization.service import LangflowAuthorizationService
 
 __all__ = [
+    "AdministrationAction",
     "AuditAction",
     "AuditPersistenceError",
     "ChannelAction",
+    "ConnectionAction",
     "DeploymentAction",
     "FileAction",
     "FlowAction",
@@ -69,12 +77,15 @@ __all__ = [
     "capability_probe",
     "deny_to_404",
     "drain_pending_audit_writes",
+    "ensure_connection_permission",
     "ensure_deployment_permission",
     "ensure_file_permission",
+    "ensure_flow_audit_read_permission",
     "ensure_flow_permission",
     "ensure_flows_permission",
     "ensure_knowledge_base_permission",
     "ensure_permission",
+    "ensure_project_audit_read_permission",
     "ensure_project_permission",
     "ensure_provider_account_permission",
     "ensure_share_permission",
@@ -82,6 +93,7 @@ __all__ = [
     "ensure_voice_permission",
     "filter_visible_resources",
     "get_audit_producer_health",
+    "is_decision_audit_suppressed",
     "requires_flow_permission",
     "requires_resource_permission",
     "resource_visible_in_scope",

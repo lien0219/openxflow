@@ -113,7 +113,7 @@ class WatsonxFlowArtifactProviderData(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    project_id: NormalizedId = Field(description="Langflow project id carried for watsonx snapshot creation.")
+    project_id: NormalizedId = Field(description="OpenXFlow project id carried for watsonx snapshot creation.")
     source_ref: NormalizedStr = Field(
         description="Adapter-neutral source reference used for create/update snapshot correlation.",
     )
@@ -359,7 +359,7 @@ class WatsonxUnbindOperation(BaseModel):
 
 
 class WatsonxRenameToolOperation(BaseModel):
-    """Update a Langflow-managed tool's user-facing label on the provider."""
+    """Update an OpenXFlow-managed tool's user-facing label on the provider."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -647,7 +647,7 @@ class WatsonxAgentExecutionResultData(BaseModel):
     execution_id: NonEmptyString | None = None
     agent_id: NonEmptyString | None = Field(
         default=None,
-        description="WXO agent identifier (resource_key in Langflow DB).",
+        description="WXO agent identifier (resource_key in OpenXFlow DB).",
     )
     thread_id: NonEmptyString | None = None
     status: str | None = None

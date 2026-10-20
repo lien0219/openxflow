@@ -1,4 +1,4 @@
-"""Default authorization service for LFX (allows all; Langflow or plugins provide enforcement)."""
+"""Default authorization service for LFX (allows all; OpenXFlow or plugins provide enforcement)."""
 
 from __future__ import annotations
 

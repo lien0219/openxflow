@@ -105,7 +105,24 @@ function GlobalVariablesPageContent({
 
   const DropdownEditor = ({ options, value, onValueChange }) => {
     return (
-      <Dropdown options={options} value={value} onSelect={onValueChange}>
+      <Dropdown
+        id="global-variable-type"
+        nodeId="global-variable-type"
+        nodeClass={{
+          description: "",
+          display_name: "",
+          documentation: "",
+          template: {},
+        }}
+        handleNodeClass={() => undefined}
+        name="type"
+        editNode={false}
+        disabled={false}
+        handleOnNewValue={() => undefined}
+        options={options}
+        value={value}
+        onSelect={onValueChange}
+      >
         <div className="-mt-1.5 w-full"></div>
       </Dropdown>
     );
@@ -130,6 +147,7 @@ function GlobalVariablesPageContent({
       suppressKeyboardEvent: suppressRowActionKeys,
     },
     {
+      headerName: t("globalVars.columnValue"),
       field: "value",
       valueFormatter: (params: ValueFormatterParams<GlobalVariable>) => {
         return formatVariableValue(
@@ -353,6 +371,13 @@ function GlobalVariablesPageContent({
   );
 
   function updateVariables(event: RowClickedEvent<GlobalVariable>) {
+    // AG Grid dispatches row clicks before a button's React stopPropagation.
+    if (
+      event.event?.target instanceof Element &&
+      event.event.target.closest('[col-id="actions"]')
+    ) {
+      return;
+    }
     if (!canMutateVariable(event.data, "write", permissionState, can)) return;
     rememberFocusedCell(event.rowIndex, "name");
     initialData.current = event.data;
@@ -362,6 +387,9 @@ function GlobalVariablesPageContent({
   function handleCellKeyDown(event: CellKeyDownEvent<GlobalVariable>) {
     const keyboardEvent = event.event as KeyboardEvent | undefined;
     if (!keyboardEvent) return;
+
+    // Actions own their activation keys and must not edit or select the row.
+    if (event.column?.getColId() === "actions") return;
 
     // Let AG Grid / the checkbox handle Space when focus is already on it.
     if (

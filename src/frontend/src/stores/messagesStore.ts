@@ -33,7 +33,8 @@ export const useMessagesStore = create<MessagesStoreType>((set, get) => ({
         // For streaming, accumulate the text content
         get().updateMessageText(message.id, message.text || "");
         // Update other properties but preserve accumulated text
-        const { text, ...messageWithoutText } = message;
+        const messageWithoutText = { ...message } as Partial<typeof message>;
+        Reflect.deleteProperty(messageWithoutText, "text");
         get().updateMessagePartial(messageWithoutText);
       } else {
         // For complete messages, replace entirely
@@ -95,7 +96,7 @@ export const useMessagesStore = create<MessagesStoreType>((set, get) => ({
       try {
         set((state) => {
           const updatedMessages = state.messages.filter(
-            (msg) => !ids.includes(msg.id),
+            (msg) => msg.id === null || !ids.includes(msg.id),
           );
           get().setMessages(updatedMessages);
           resolve(updatedMessages);

@@ -9,16 +9,16 @@ class UploadError(Exception):
 
 
 def upload(file_path: str, host: str, flow_id: str, api_key: str | None = None):
-    """Upload a file to Langflow and return the file path.
+    """Upload a file to OpenXFlow and return the file path.
 
-    The upload endpoint now requires authentication (see Langflow
+    The upload endpoint now requires authentication (see OpenXFlow
     PR #12831).  Callers must supply an API key via ``api_key`` or by
     setting the ``LANGFLOW_API_KEY`` environment variable; otherwise the
     server will reject the request with 401/403.
 
     Args:
         file_path (str): The path to the file to be uploaded.
-        host (str): The host URL of Langflow.
+        host (str): The host URL of OpenXFlow.
         flow_id (UUID): The ID of the flow to which the file belongs.
         api_key (str | None): API key sent as ``x-api-key``.  If None,
             falls back to the ``LANGFLOW_API_KEY`` environment variable.
@@ -53,12 +53,12 @@ def upload_file(
     tweaks: dict | None = None,
     api_key: str | None = None,
 ):
-    """Upload a file to Langflow and return the file path.
+    """Upload a file to OpenXFlow and return the file path.
 
     Args:
         file_path (str): The path to the file to be uploaded.
-        host (str): The host URL of Langflow.
-        port (int): The port number of Langflow.
+        host (str): The host URL of OpenXFlow.
+        port (int): The port number of OpenXFlow.
         flow_id (UUID): The ID of the flow to which the file belongs.
         components (str): List of component IDs or names that need the file.
         tweaks (dict): A dictionary of tweaks to be applied to the file.

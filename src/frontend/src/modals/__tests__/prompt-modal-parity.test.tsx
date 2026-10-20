@@ -1,7 +1,24 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { APIClassType } from "@/types/api";
 import MustachePromptModal from "../mustachePromptModal";
 import PromptModal from "../promptModal";
+
+const makePromptNodeClass = (): APIClassType => ({
+  description: "Prompt",
+  display_name: "Prompt",
+  documentation: "",
+  template: {
+    template: {
+      type: "str",
+      required: false,
+      list: false,
+      show: true,
+      readonly: false,
+      value: "",
+    },
+  },
+});
 
 // Mock the API hook
 const mockMutate = jest.fn();
@@ -213,11 +230,7 @@ describe.each(syntaxes)(
       field_name: "template",
       value: "",
       setValue: jest.fn(),
-      nodeClass: {
-        template: {
-          template: { value: "" },
-        },
-      },
+      nodeClass: makePromptNodeClass(),
       setNodeClass: jest.fn(),
       children: <button data-testid="trigger">Open</button>,
       disabled: false,
@@ -545,11 +558,7 @@ describe("fstring-specific behavior (PromptModal)", () => {
     field_name: "template",
     value: "",
     setValue: jest.fn(),
-    nodeClass: {
-      template: {
-        template: { value: "" },
-      },
-    },
+    nodeClass: makePromptNodeClass(),
     setNodeClass: jest.fn(),
     children: <button data-testid="trigger">Open</button>,
     disabled: false,
@@ -583,11 +592,7 @@ describe("mustache-specific behavior (MustachePromptModal)", () => {
     field_name: "template",
     value: "",
     setValue: jest.fn(),
-    nodeClass: {
-      template: {
-        template: { value: "" },
-      },
-    },
+    nodeClass: makePromptNodeClass(),
     setNodeClass: jest.fn(),
     children: <button data-testid="trigger">Open</button>,
     disabled: false,

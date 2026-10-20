@@ -186,7 +186,7 @@ def test_upgrade_converges_packaged_flow_to_committed_fix(migration):
     import json
 
     flows_dir = Path(langflow.__file__).parent / "agentic" / "flows"
-    fixed = json.loads((flows_dir / "LangflowAssistant.json").read_text())
+    fixed = json.loads((flows_dir / "LangflowAssistant.json").read_text(encoding="utf-8"))
     fixed_data = fixed["data"]
 
     # Reconstruct the pre-fix row by reversing the shipped rewrite on every Agent node.

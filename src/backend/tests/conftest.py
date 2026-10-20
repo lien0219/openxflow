@@ -39,6 +39,7 @@ from langflow.services.deps import (
 from lfx.components.input_output import ChatInput
 from lfx.graph import Graph
 from lfx.log.logger import logger
+from lfx.services.sqlite_runtime import release_sqlite_process_safety
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -580,9 +581,16 @@ async def client_fixture(
             restored = template.restore(db_path) if template else False
             monkeypatch.setenv("LANGFLOW_DATABASE_URL", f"sqlite:///{db_path}")
             monkeypatch.setenv("LANGFLOW_AUTO_LOGIN", "false")
+            monkeypatch.setenv("LANGFLOW_KNOWLEDGE_BASES_DIR", str(db_path.parent / "knowledge"))
             monkeypatch.setenv("LANGFLOW_SUPERUSER", "langflow")
             monkeypatch.setenv("LANGFLOW_SUPERUSER_PASSWORD", "test-superuser-password")
             monkeypatch.setenv("DO_NOT_TRACK", "true")
+            # Triggers: keep the leased dispatcher out of the test app. It is a
+            # background loop that polls the database, so leaving it on would
+            # race any test that drives the dispatcher directly and would add a
+            # poll to every unrelated API test. Trigger tests call the loop's
+            # own entry points instead.
+            monkeypatch.setenv("LANGFLOW_TRIGGER_DISPATCHER_ENABLED", "false")
             if "load_flows" in request.keywords:
                 shutil.copyfile(
                     pytest.BASIC_EXAMPLE_PATH, Path(load_flows_dir) / "c54f9130-f2fa-4a3e-b22a-3856d946351b.json"
@@ -596,11 +604,15 @@ async def client_fixture(
             get_service_manager().services.clear()  # Clear the services cache
             app = create_app()
             db_service = get_db_service()
-            db_service.database_url = f"sqlite:///{db_path}"
-            db_service.reload_engine()
-            return app, db_path, restored
+            return app, db_path, restored, db_service
 
-        app, db_path, restored = await asyncio.to_thread(init_app)
+        app, db_path, restored, db_service = await asyncio.to_thread(init_app)
+        # create_app() builds an engine before the test path is applied below.
+        # Dispose that engine explicitly; otherwise every API test leaves an
+        # aiosqlite worker behind and long suites eventually starve SQLite.
+        await db_service.engine.dispose()
+        db_service.database_url = f"sqlite:///{db_path}"
+        db_service.reload_engine()
 
         async def initialize_test_database(*, fix_migration=False):
             if not restored:
@@ -623,13 +635,22 @@ async def client_fixture(
                 if template:
                     startup_patch.setattr(service_utils, "initialize_database", initialize_test_database)
                 manager = await stack.enter_async_context(LifespanManager(app, startup_timeout=60, shutdown_timeout=60))
+                # Startup schedules storage discovery. Settle it before tests
+                # insert fenced records that the background migration could alter.
+                from langflow.services.knowledge_base_storage import coordinator
+
+                await coordinator.wait_for_upgrade(timeout=30)
             # Restore the real initializer before test code runs. Tests of
             # database initialization must still exercise production behavior.
             client = await stack.enter_async_context(
                 AsyncClient(transport=ASGITransport(app=manager.app), base_url="http://testserver/", http2=True)
             )
             yield client
-        # app.dependency_overrides.clear()
+        # The lifespan owns service shutdown and must run before the engine is
+        # disposed. Disposing while the app is still shutting down can cancel an
+        # aiosqlite close operation and leave the SQLite file locked on Windows.
+        await db_service.engine.dispose()
+        release_sqlite_process_safety(f"sqlite+aiosqlite:///{db_path}", owner=db_service)
         monkeypatch.undo()
         # clear the temp db
         with suppress(FileNotFoundError):

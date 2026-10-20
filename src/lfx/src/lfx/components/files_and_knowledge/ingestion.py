@@ -24,14 +24,14 @@ astra_error_msg = "Knowledge ingestion is not supported in Astra cloud environme
 
 
 class KnowledgeIngestionComponent(KnowledgeComponent):
-    """Create or append to Langflow Knowledge from a DataFrame.
+    """Create or append to OpenXFlow Knowledge from a DataFrame.
 
     Pins the merged :class:`KnowledgeComponent` to ingest mode. All
     behavior is inherited unchanged.
     """
 
     display_name = "Knowledge Ingestion"
-    description = "Create or update knowledge in Langflow."
+    description = "Create or update knowledge in OpenXFlow."
     icon = "upload"
     name = "KnowledgeIngestion"
     # Hidden from the default palette — surfaces only when a saved flow

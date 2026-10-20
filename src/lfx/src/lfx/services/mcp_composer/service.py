@@ -103,7 +103,7 @@ class MCPComposerService(Service):
         self._last_errors.pop(project_id, None)
 
     def get_or_create_backend_auth_token(self, project_id: str) -> str:
-        """Return the internal token used by MCP Composer to call Langflow's MCP endpoint."""
+        """Return the internal token used by MCP Composer to call OpenXFlow's MCP endpoint."""
         if project_id not in self._backend_auth_tokens:
             self._backend_auth_tokens[project_id] = secrets.token_urlsafe(32)
         return self._backend_auth_tokens[project_id]
@@ -749,7 +749,7 @@ class MCPComposerService(Service):
             else:
                 # Port is in use by unknown process - don't kill it (security concern)
                 await logger.aerror(
-                    f"Port {port} is in use by an unknown process (not owned by Langflow). "
+                    f"Port {port} is in use by an unknown process (not owned by OpenXFlow). "
                     f"Will not kill external application for security reasons."
                 )
                 port_error_msg = (
@@ -849,7 +849,7 @@ class MCPComposerService(Service):
         *,
         legacy_sse_url: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Build mcp-composer member-server config with internal Langflow auth headers."""
+        """Build mcp-composer member-server config with internal OpenXFlow auth headers."""
         backend_token = self.get_or_create_backend_auth_token(project_id)
         headers = {COMPOSER_BACKEND_AUTH_HEADER: backend_token}
         streamable_id = f"{project_id}-streamable"
@@ -919,7 +919,7 @@ class MCPComposerService(Service):
     def _normalize_oauth_callback_aliases(cls, auth_config: dict[str, Any] | None) -> dict[str, Any]:
         """Normalize OAuth callback aliases to a canonical full callback URL value.
 
-        `oauth_callback_url` is the canonical field name in Langflow. For compatibility,
+        `oauth_callback_url` is the canonical field name in OpenXFlow. For compatibility,
         we also accept `oauth_callback_path` and mirror the effective value to both keys so
         comparisons and subprocess env var mapping stay consistent.
         """
@@ -1069,7 +1069,7 @@ class MCPComposerService(Service):
 
         Args:
             project_id: The project ID
-            streamable_http_url: Streamable HTTP endpoint for the remote Langflow MCP server
+            streamable_http_url: Streamable HTTP endpoint for the remote OpenXFlow MCP server
             auth_config: Authentication configuration
             max_retries: Maximum number of retry attempts (default: 3)
             max_startup_checks: Number of checks per retry attempt (default: 40)
@@ -1133,7 +1133,7 @@ class MCPComposerService(Service):
 
         Args:
             project_id: The project ID
-            streamable_http_url: Streamable HTTP endpoint for the remote Langflow MCP server
+            streamable_http_url: Streamable HTTP endpoint for the remote OpenXFlow MCP server
             auth_config: Authentication configuration
             max_retries: Maximum number of retry attempts (default: 3)
             max_startup_checks: Number of checks per retry attempt (default: 40)

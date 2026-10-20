@@ -96,7 +96,8 @@ def test_in_scope_change_without_changelog_fails(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_in_scope_change_with_changelog_passes(tmp_path: Path) -> None:
+@pytest.mark.parametrize("entry", ["added a new field", "loader \u2014 Windows compatibility"])
+def test_in_scope_change_with_changelog_passes(tmp_path: Path, entry: str) -> None:
     """Editing manifest.py and adding a new ## Changelog line is accepted."""
     _init_repo(tmp_path)
     (tmp_path / "BUNDLE_API.md").write_text("# Bundle API\n\n## Changelog\n\n### v0\n\n- initial\n", encoding="utf-8")
@@ -108,7 +109,7 @@ def test_in_scope_change_with_changelog_passes(tmp_path: Path) -> None:
 
     manifest.write_text("# manifest v0\n# extra\n", encoding="utf-8")
     (tmp_path / "BUNDLE_API.md").write_text(
-        "# Bundle API\n\n## Changelog\n\n### v0\n\n- initial\n- added a new field\n",
+        f"# Bundle API\n\n## Changelog\n\n### v0\n\n- initial\n- {entry}\n",
         encoding="utf-8",
     )
     _commit(tmp_path, "tweak manifest + changelog")

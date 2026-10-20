@@ -64,7 +64,8 @@ export default function AppHeader(): JSX.Element {
           onClick={() => navigate("/")}
           className="mr-1 flex h-8 items-center gap-2 rounded-md px-1"
           data-testid="icon-ChevronLeft"
-          aria-label={t("header.home")}
+          aria-label={`${t("header.home")} OpenXFlow`}
+          title={t("header.home")}
         >
           <LangflowLogo className="h-5 w-5" aria-hidden="true" />
           <span className="whitespace-nowrap text-sm font-semibold text-foreground">

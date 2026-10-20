@@ -33,7 +33,7 @@ class ContentCategory(str, Enum):
 
 
 REFUSAL_MESSAGE = (
-    "I can't help with that. I'm the Langflow Assistant and I won't produce slurs or abusive "
+    "I can't help with that. I'm the OpenXFlow Assistant and I won't produce slurs or abusive "
     "content. I'm happy to help you build components, flows, and integrations."
 )
 

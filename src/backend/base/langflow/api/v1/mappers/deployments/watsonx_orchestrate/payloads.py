@@ -344,14 +344,14 @@ class WatsonxApiDeploymentCreatePayload(BaseModel):
         default=None,
         description=(
             "User-facing label to set on a new wxO agent. "
-            "Required unless tracking an existing wxO agent in Langflow (via ``existing_agent_id`` field)."
+            "Required unless tracking an existing wxO agent in OpenXFlow (via ``existing_agent_id`` field)."
         ),
     )
     llm: NormalizedStr | None = Field(
         default=None,
         description=(
             "Provider model identifier to use for a new wxO agent."
-            "Required unless tracking an existing wxO agent in Langflow (via ``existing_agent_id`` field)."
+            "Required unless tracking an existing wxO agent in OpenXFlow (via ``existing_agent_id`` field)."
         ),
     )
     connections: list[WatsonxApiKeyValueConnectionPayload] = Field(default_factory=list)
@@ -360,7 +360,7 @@ class WatsonxApiDeploymentCreatePayload(BaseModel):
     existing_agent_id: NormalizedStr | None = Field(
         default=None,
         description=(
-            "Provider-owned agent id to track in Langflow instead of creating a new wxO agent. "
+            "Provider-owned agent id to track in OpenXFlow instead of creating a new wxO agent. "
             "When provided, the request must not include fields that would update the wxO agent."
         ),
     )
@@ -373,7 +373,7 @@ class WatsonxApiDeploymentCreatePayload(BaseModel):
                 raise ValueError(msg)
             if len(self.model_fields_set) > 1:
                 msg = (
-                    "existing_agent_id is only for tracking existing wxO agents in Langflow and cannot include "
+                    "existing_agent_id is only for tracking existing wxO agents in OpenXFlow and cannot include "
                     "fields that update the wxO agent. Update the deployment after it is tracked."
                 )
                 raise ValueError(msg)
@@ -398,12 +398,12 @@ class WatsonxApiDeploymentCreatePayload(BaseModel):
     def validate_with_outer_fields(self, outer_payload: DeploymentCreateRequest) -> None:
         if self.existing_agent_id is None or "description" not in outer_payload.model_fields_set:
             return
-        msg = "When existing_agent_id is provided, Langflow uses the description already set for the agent in wxO."
+        msg = "When existing_agent_id is provided, OpenXFlow uses the description already set for the agent in wxO."
         raise ValueError(msg)
 
 
 class WatsonxApiCreatedTool(BaseModel):
-    """API response shape for a tool created from a Langflow flow version."""
+    """API response shape for a tool created from an OpenXFlow flow version."""
 
     model_config = {"extra": "forbid"}
 
@@ -599,8 +599,8 @@ class _WatsonxApiAgentExecutionResultBase(BaseModel):
     """Shared fields for API-facing agent execution result payloads.
 
     All provider-owned identifiers and metadata live here inside
-    ``provider_data``.  The enclosing response only carries Langflow-owned
-    fields (``deployment_id``).  ``deployment_id`` (Langflow DB UUID) is
+    ``provider_data``.  The enclosing response only carries OpenXFlow-owned
+    fields (``deployment_id``).  ``deployment_id`` (OpenXFlow DB UUID) is
     intentionally omitted from this schema to avoid ownership confusion.
     """
 

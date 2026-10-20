@@ -71,7 +71,7 @@ function getInitialSidebarSection(
 type SidebarContext = {
   state: "expanded" | "collapsed";
   open: boolean;
-  setOpen: (open: boolean) => void;
+  setOpen: (open: boolean | ((value: boolean) => boolean)) => void;
   toggleSidebar: () => void;
   defaultOpen: boolean;
   // Section management

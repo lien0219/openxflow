@@ -25,9 +25,9 @@ MAX_INPUT_LENGTH = 2000
 
 REFUSAL_MESSAGE = (
     "I'm sorry, but I can't process that request. "
-    "I'm the Langflow Assistant and I can help you with "
-    "Langflow components, flows, and technical questions. "
-    "Please rephrase your question about Langflow."
+    "I'm the OpenXFlow Assistant and I can help you with "
+    "OpenXFlow components, flows, and technical questions. "
+    "Please rephrase your question about OpenXFlow."
 )
 
 ACT_AS_PATTERN = re.compile(r"\bact\s+as\s+(a|an|if\s+you\s+were)\s+", re.IGNORECASE)

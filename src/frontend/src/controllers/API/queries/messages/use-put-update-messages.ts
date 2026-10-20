@@ -1,6 +1,6 @@
 import type { UseMutationResult } from "@tanstack/react-query";
-import { useGetFlowId } from "@/modals/IOModal/hooks/useGetFlowId";
 import { isAuthenticatedPlayground } from "@/modals/IOModal/helpers/playground-auth";
+import { useGetFlowId } from "@/modals/IOModal/hooks/useGetFlowId";
 import useFlowStore from "@/stores/flowStore";
 import type { useMutationFunctionType } from "@/types/api";
 import type { Message } from "@/types/messages";
@@ -54,10 +54,8 @@ export const useUpdateMessage: useMutationFunctionType<
     }
   };
 
-  const mutation: UseMutationResult<Message, any, UpdateMessageParams> = mutate(
-    ["useUpdateMessages"],
-    updateMessageApi,
-    {
+  const mutation: UseMutationResult<Message, Error, UpdateMessageParams> =
+    mutate(["useUpdateMessages"], updateMessageApi, {
       ...options,
       onSettled: (_, __, variables, ___) => {
         const params = variables as unknown as UpdateMessageParams | undefined;
@@ -106,8 +104,7 @@ export const useUpdateMessage: useMutationFunctionType<
           });
         }
       },
-    },
-  );
+    });
 
   return mutation;
 };

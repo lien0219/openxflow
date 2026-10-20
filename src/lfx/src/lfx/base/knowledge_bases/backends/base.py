@@ -23,12 +23,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from lfx.log.logger import logger
 from lfx.utils.env_var_security import safe_getenv
 
-# Who controls a resolved secret's value. A Langflow variable is written by the
+# Who controls a resolved secret's value. A OpenXFlow variable is written by the
 # tenant through the UI/API; a process env var can only be set by whoever runs the
 # server. Destination policy for network backends turns on this distinction.
 SecretSource = Literal["variable", "environment", "missing"]
@@ -64,13 +64,14 @@ class BackendType(str, Enum):
     """
 
     CHROMA = "chroma"
+    SQLITE = "sqlite"
     MONGODB = "mongodb"
     ASTRA = "astra"
     POSTGRES = "postgres"
     OPENSEARCH = "opensearch"
 
 
-# Keys Langflow always writes into ``Document.metadata`` for every chunk.
+# Keys OpenXFlow always writes into ``Document.metadata`` for every chunk.
 # Kept here so every backend and helper agrees on the schema.
 METADATA_KEY_SOURCE = "source"
 METADATA_KEY_SOURCE_TYPE = "source_type"
@@ -94,6 +95,9 @@ class IngestedDocument:
     content: str
     metadata: dict[str, Any] = field(default_factory=dict)
     embedding: list[float] | None = None
+    # The store's own id for the chunk. Carrying it lets a copy between stores
+    # write each chunk under the same id, so re-running the copy upserts.
+    id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -134,7 +138,7 @@ class BaseVectorStoreBackend(ABC):
     Wraps a LangChain ``VectorStore``: subclasses provide
     ``_build_vector_store`` and override ``storage_size_bytes`` /
     ``teardown`` / ``iter_documents`` where the LangChain primitives don't
-    line up with what Langflow needs.
+    line up with what OpenXFlow needs.
 
     Backends should be lightweight to construct; heavy resources (a Chroma
     persistent client, a MongoDB connection) are the backend's own concern
@@ -145,6 +149,11 @@ class BaseVectorStoreBackend(ABC):
 
     backend_type: BackendType
 
+    @property
+    def distance_metric(self) -> str | None:
+        """Return the configured metric (cosine, l2, inner_product), or None if unknown."""
+        return None
+
     def __init__(
         self,
         kb_name: str,
@@ -153,10 +162,10 @@ class BaseVectorStoreBackend(ABC):
         embedding_function: Embeddings | None = None,
         user_id: UUID | str | None = None,
     ) -> None:
-        # ``kb_path`` is meaningful only to local Chroma, the one backend that
-        # persists to this box's filesystem. Every other backend ignores it, so
-        # callers that resolved a non-local backend pass ``None`` rather than
-        # inventing a throwaway directory just to satisfy the signature.
+        # Legacy local Chroma uses kb_path. SQLite derives its own path from
+        # trusted immutable storage context. Remote backends ignore it, so
+        # their callers pass None rather than inventing a directory.
+        """Capture backend configuration and the trusted storage and embedding context."""
         self.kb_name = kb_name
         self.kb_path = kb_path
         self.backend_config = backend_config or {}
@@ -178,7 +187,7 @@ class BaseVectorStoreBackend(ABC):
             return None
 
     async def resolve_secret(self, variable_name: str) -> str | None:
-        """Look up ``variable_name`` through Langflow's variable service.
+        """Look up ``variable_name`` through OpenXFlow's variable service.
 
         Thin wrapper over :meth:`resolve_secret_with_source` for the callers that
         only need the value. Returns ``None`` when neither source has a value;
@@ -194,12 +203,12 @@ class BaseVectorStoreBackend(ABC):
         Resolution order matches the connector ingestion sources
         (``connector_base.ConnectorIngestionSource.resolve_secret``):
 
-        1. Langflow's ``variable_service`` scoped to ``self.user_id``.
+        1. OpenXFlow's ``variable_service`` scoped to ``self.user_id``.
         2. Process env var of the same name as a fallback for desktop /
            single-user deployments that skip the UI step.
 
         The provenance matters for values that become a *network destination*.
-        A Langflow variable is written by the tenant through the UI/API, so a URL
+        A OpenXFlow variable is written by the tenant through the UI/API, so a URL
         from source ``"variable"`` is tenant-controlled. A process env var can only
         be set by whoever runs the server, so source ``"environment"`` is
         operator-controlled. ``destination_policy.enforce_kb_destination`` uses that
@@ -249,7 +258,7 @@ class BaseVectorStoreBackend(ABC):
         if not value:
             msg = (
                 f"Required credential variable {variable_name!r} is not "
-                "configured. Set it via Langflow's variable settings or as "
+                "configured. Set it via OpenXFlow's variable settings or as "
                 "an environment variable on the server."
             )
             raise ValueError(msg)
@@ -281,6 +290,15 @@ class BaseVectorStoreBackend(ABC):
         await self._resolve_secrets()
         self._secrets_resolved = True
 
+    @property
+    def store_location(self) -> tuple[Any, ...] | None:
+        """Where this knowledge base's chunks live, once ``ensure_ready`` has run.
+
+        Two backends of one class with equal locations read and write the same
+        chunks, whatever their configs say. None means the backend does not say.
+        """
+        return None
+
     # ---- subclass surface ------------------------------------------------
 
     @abstractmethod
@@ -288,6 +306,10 @@ class BaseVectorStoreBackend(ABC):
         """Build and return the concrete LangChain ``VectorStore`` instance."""
 
     # ---- public API ------------------------------------------------------
+
+    async def get_distance_metric(self) -> str | None:
+        """Return the metric used by the store, resolving persisted settings if needed."""
+        return self.distance_metric
 
     @property
     def vector_store(self) -> VectorStore:
@@ -297,10 +319,44 @@ class BaseVectorStoreBackend(ABC):
         return self._vector_store
 
     async def add_documents(self, docs: list[Document]) -> None:
+        """Write nonempty document batches through the initialized vector store."""
         if not docs:
             return
         await self.ensure_ready()
         await self.vector_store.aadd_documents(docs)
+
+    async def add_embedded_documents(self, docs: list[IngestedDocument]) -> None:
+        """Write chunks whose vectors are already computed, without re-embedding.
+
+        This is how a knowledge base moves between stores: what one backend
+        returns from ``iter_documents(include_embeddings=True)`` is written here
+        as-is, so no embedding model or provider credentials are involved.
+
+        Every document needs an ``embedding`` of the same width. A document with
+        an ``id`` is written under that id, so writing the same batch twice
+        upserts instead of duplicating; one without gets a fresh id.
+        """
+        if not docs:
+            return
+        missing = [i for i, doc in enumerate(docs) if doc.embedding is None or len(doc.embedding) == 0]
+        if missing:
+            msg = f"add_embedded_documents needs an embedding on every document; missing at positions {missing[:5]}"
+            raise ValueError(msg)
+        widths = {len(doc.embedding) for doc in docs}  # type: ignore[arg-type]
+        if len(widths) > 1:
+            msg = f"add_embedded_documents needs one embedding width per batch; got {sorted(widths)}"
+            raise ValueError(msg)
+        await self.ensure_ready()
+        await self._write_embedded([doc.id or str(uuid4()) for doc in docs], docs)
+
+    async def _write_embedded(self, ids: list[str], docs: list[IngestedDocument]) -> None:
+        """Store ``docs`` under ``ids`` with their existing vectors. Backends override this.
+
+        There is deliberately no fallback: a silent no-op here would read as a
+        successful copy that lost every chunk.
+        """
+        msg = f"{type(self).__name__} does not support writing precomputed embeddings"
+        raise NotImplementedError(msg)
 
     async def similarity_search(
         self,
@@ -310,6 +366,7 @@ class BaseVectorStoreBackend(ABC):
         filter: dict[str, Any] | None = None,  # noqa: A002 — matches LangChain VectorStore API
         with_scores: bool = False,
     ) -> list[tuple[Document, float]]:
+        """Search with metadata filters and optionally return provider distance scores."""
         await self.ensure_ready()
         if with_scores:
             return await self.vector_store.asimilarity_search_with_score(query=query, k=k, filter=filter)
@@ -321,16 +378,26 @@ class BaseVectorStoreBackend(ABC):
         return -float(score)
 
     async def delete_by(self, where: dict[str, Any]) -> None:
+        """Delete matching documents through the initialized vector store."""
         await self.ensure_ready()
         await self.vector_store.adelete(where=where)
 
     async def count(self) -> int:
         # Default: iterate. Subclasses with a native count should override.
+        """Count documents by streaming batches when the backend has no native count."""
         await self.ensure_ready()
         total = 0
         async for batch in self.iter_documents(batch_size=5000):
             total += len(batch)
         return total
+
+    async def read_only_count(self) -> int | None:
+        """How many chunks the store holds, read without creating the store or anything in it.
+
+        None when the store does not exist. The default is ``count``, for backends
+        whose count only reads; a backend whose count can create storage overrides it.
+        """
+        return await self.count()
 
     async def iter_documents(  # pragma: no cover — overridden by subclasses
         self,

@@ -1,21 +1,17 @@
-# Run Langflow
+# OpenXFlow deployment
 
-
-## Docker compose
-To run Langflow with Docker compose, you need to have Docker and Docker compose installed on your machine. You can install Docker and Docker compose by following the instructions on the [official Docker documentation](https://docs.docker.com/get-docker/).
-
-The docker-compose file uses `latest` tag; it's recommended to pull the latest version of the images before running the docker-compose file.
-
-```bash
-docker compose pull
-```
-
-To start the Langflow services, run the following command:
+`docker-compose.prod.yml` runs the OpenXFlow API against external PostgreSQL
+(with pgVector), Redis, and S3. It does not start local stateful containers.
+Copy `production.env.example` to `.env`, provide real credentials, and keep the
+file mode `600`.
 
 ```bash
-docker compose up
+./deploy-main.sh ghcr.io/lien0219/openxflow:main-vX.Y.Z
 ```
 
-After running the command, you can access the Langflow services at the following url: http://localhost:80.
-
-Edit the `.env` file to change the port or other configurations.
+Deploy only immutable version/SHA tags or a digest. The helper verifies image
+source, revision, version, architecture, non-root execution, migration graph,
+production configuration, and an operator-supplied backup/upgrade gate before
+stopping the current API. It requires a real `healthy` status and records only
+the last verified digest for recovery. See
+[PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md).

@@ -91,5 +91,5 @@ def test_should_need_no_configuration():
 
 
 def test_refusal_message_names_the_assistant_and_offers_a_way_forward():
-    assert "Langflow Assistant" in REFUSAL_MESSAGE
+    assert "OpenXFlow Assistant" in REFUSAL_MESSAGE
     assert "build" in REFUSAL_MESSAGE

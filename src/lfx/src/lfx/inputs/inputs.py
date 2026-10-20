@@ -14,6 +14,7 @@ from .input_mixin import (
     AuthMixin,
     BaseInputMixin,
     ConnectionMixin,
+    ConnectionRefMixin,
     DatabaseLoadMixin,
     DropDownMixin,
     FieldTypes,
@@ -78,7 +79,7 @@ class TableInput(BaseInputMixin, MetadataTraceMixin, TableMixin, ListableInputMi
                 "- A list of dictionaries (each dict is a row)\n"
                 "- A pandas DataFrame\n"
                 "- A single dictionary (will become a one-row table)\n"
-                "- A Data object (Langflow's internal data structure)\n"
+                "- A Data object (OpenXFlow's internal data structure)\n"
             )
             raise ValueError(msg)  # noqa: TRY004
         # Ensure each item in the list is either a dict or a Data instance.
@@ -87,7 +88,7 @@ class TableInput(BaseInputMixin, MetadataTraceMixin, TableMixin, ListableInputMi
                 msg = (
                     f"Row {i + 1} in your table has an invalid format. Each row must be either:\n"
                     "- A dictionary containing column name/value pairs\n"
-                    "- A Data object (Langflow's internal data structure for passing data between components)\n"
+                    "- A Data object (OpenXFlow's internal data structure for passing data between components)\n"
                     f"Instead, got a {type(item).__name__}. Please check the format of your input data."
                 )
                 raise ValueError(msg)  # noqa: TRY004
@@ -155,7 +156,7 @@ class ToolsInput(BaseInputMixin, ListableInputMixin, MetadataTraceMixin, ToolMod
 class JSONInput(HandleInput, InputTraceMixin, ListableInputMixin, ToolModeMixin):
     """Represents an Input that has a Handle that receives a JSON object.
 
-    This is the new standard input for Langflow data structures.
+    This is the new standard input for OpenXFlow data structures.
     DataInput is maintained as an alias for backwards compatibility.
 
     Attributes:
@@ -302,7 +303,7 @@ class DBProviderInput(BaseInputMixin, InputTraceMixin, ToolModeMixin):
 
     Default is intentionally an empty dict so the frontend can populate
     it from the user's configured DB Provider on first render. Falls
-    back to Chroma server-side via ``_normalize_backend_selection``.
+    back to SQLite server-side via ``_normalize_backend_selection``.
     """
 
     field_type: SerializableFieldTypes = FieldTypes.DB_PROVIDER
@@ -394,9 +395,9 @@ class MessageInput(StrInput, InputTraceMixin):
 
 
 class MessageTextInput(StrInput, MetadataTraceMixin, InputTraceMixin, ToolModeMixin):
-    """Represents a text input component for the Langflow system.
+    """Represents a text input component for the OpenXFlow system.
 
-    This component is used to handle text inputs in the Langflow system.
+    This component is used to handle text inputs in the OpenXFlow system.
     It provides methods for validating and processing text values.
 
     Attributes:
@@ -852,6 +853,34 @@ class ConnectionInput(BaseInputMixin, ConnectionMixin, MetadataTraceMixin, ToolM
     track_in_telemetry: CoalesceBool = False  # Never track connection strings (may contain credentials)
 
 
+class ConnectionRefInput(BaseInputMixin, ConnectionRefMixin, MetadataTraceMixin):
+    """Portable, non-secret reference resolved by the execution host."""
+
+    field_type: SerializableFieldTypes = FieldTypes.CONNECTION_REF
+    password: CoalesceBool = False
+    load_from_db: CoalesceBool = False
+    track_in_telemetry: CoalesceBool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_connection_ref(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if data.get("tool_mode"):
+            msg = "Connection references cannot be exposed as tool-call inputs"
+            raise ValueError(msg)
+        value = data.get("value")
+        if value is not None and value != "":
+            from lfx.integrations.models import ConnectionRef
+
+            ref = ConnectionRef.parse(value)
+            provider = data.get("provider")
+            if provider and ref.provider != provider:
+                msg = f"Connection reference provider {ref.provider!r} does not match declared provider {provider!r}"
+                raise ValueError(msg)
+        return data
+
+
 class AuthInput(BaseInputMixin, AuthMixin, MetadataTraceMixin):
     """Represents an authentication input field.
 
@@ -1074,6 +1103,7 @@ InputTypes: TypeAlias = (
     | MultiselectInput
     | SortableListInput
     | ConnectionInput
+    | ConnectionRefInput
     | FileInput
     | FloatInput
     | HandleInput

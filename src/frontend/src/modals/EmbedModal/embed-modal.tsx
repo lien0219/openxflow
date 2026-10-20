@@ -36,6 +36,7 @@ export default function EmbedModal({
     flowId: flowId,
     flowName: flowName,
     isAuth: isAuth,
+    webhookAuthEnable: false,
     tweaksBuildedObject: tweaksBuildedObject,
     activeTweaks: activeTweaks,
   };

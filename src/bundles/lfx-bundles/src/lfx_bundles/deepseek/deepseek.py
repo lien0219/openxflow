@@ -1,5 +1,6 @@
 import httpx
 from lfx.base.models.model import LCModelComponent
+from lfx.base.models.provider_ssrf import ensure_credential_endpoint_allowed
 from lfx.field_typing import LanguageModel
 from lfx.field_typing.range_spec import RangeSpec
 from lfx.inputs.inputs import BoolInput, DictInput, DropdownInput, IntInput, SecretStrInput, SliderInput, StrInput
@@ -14,6 +15,7 @@ DEEPSEEK_MODELS = [
     "deepseek-chat",
     "deepseek-reasoner",
 ]
+DEFAULT_DEEPSEEK_API_BASE = "https://api.deepseek.com"
 
 
 class DeepSeekModelComponent(LCModelComponent):
@@ -87,6 +89,7 @@ class DeepSeekModelComponent(LCModelComponent):
         if not self.api_key:
             return DEEPSEEK_MODELS
 
+        ensure_credential_endpoint_allowed(self.api_key, self.api_base, default_url=DEFAULT_DEEPSEEK_API_BASE)
         url = f"{self.api_base}/models"
         headers = {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
 
@@ -117,6 +120,9 @@ class DeepSeekModelComponent(LCModelComponent):
             raise ImportError(msg) from e
 
         api_key = SecretStr(self.api_key).get_secret_value() if self.api_key else None
+        ensure_credential_endpoint_allowed(
+            api_key, self.api_base, default_url=DEFAULT_DEEPSEEK_API_BASE, sdk_env_fallback="OPENAI_API_KEY"
+        )
         ssrf_client_kwargs = ssrf_protected_openai_clients_for_url(self.api_base)
 
         output = ChatOpenAI(

@@ -15,7 +15,7 @@ import styles from "./PageFeedback.module.css";
 
 type Feedback = "good" | "bad";
 
-const GITHUB_REPO = "https://github.com/langflow-ai/langflow";
+const GITHUB_REPO = "https://github.com/lien0219/openxflow";
 
 function buildIssueUrl(pageUrl: string): string {
   const title = `[DOCS] Feedback on ${pageUrl}`;
@@ -54,7 +54,7 @@ export function PageFeedback(): JSX.Element {
       channel: "docs",
       elementId: `page-feedback-${value}`,
       namespace: "doc-footer",
-      platformTitle: "Langflow",
+      platformTitle: "OpenXFlow",
     });
   };
 
@@ -102,7 +102,7 @@ export function PageFeedback(): JSX.Element {
                     data-channel="docs"
                     data-element-id="page-feedback-github-issue"
                     data-namespace="doc-footer"
-                    data-platform-title="Langflow"
+                    data-platform-title="OpenXFlow"
                   >
                     opening a GitHub issue
                   </a>
@@ -120,7 +120,7 @@ export function PageFeedback(): JSX.Element {
           data-channel="docs"
           data-element-id="page-feedback-support"
           data-namespace="doc-footer"
-          data-platform-title="Langflow"
+          data-platform-title="OpenXFlow"
         >
           <LifeBuoyIcon size={14} strokeWidth={2} aria-hidden="true" />
           <span>Support</span>

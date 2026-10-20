@@ -20,10 +20,12 @@ import { mergeFlowIntoCanvas } from "./merge-flow-into-canvas";
 type UpdateNodeInternals = ReturnType<typeof useUpdateNodeInternals>;
 
 interface PositionedNode {
+  [key: string]: unknown;
   id: string;
   position: { x: number; y: number };
 }
 interface SimpleEdge {
+  [key: string]: unknown;
   id: string;
   source: string;
   target: string;

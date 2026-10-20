@@ -10,6 +10,23 @@ const mockMutateTemplate = jest.fn();
 const mockSetErrorData = jest.fn();
 const mockPostTemplateValue = { mutateAsync: jest.fn() };
 
+const makeNodeClass = (): APIClassType => ({
+  description: "MCP tools",
+  display_name: "MCP Tools",
+  documentation: "",
+  template: {
+    code: {
+      type: "code",
+      required: false,
+      list: false,
+      show: true,
+      readonly: false,
+      value: "code",
+    },
+  },
+  tool_mode: false,
+});
+
 jest.mock("@/CustomNodes/helpers/mutate-template", () => ({
   mutateTemplate: (...args: unknown[]) => mockMutateTemplate(...args),
 }));
@@ -54,11 +71,12 @@ jest.mock("@/stores/flowStore", () => {
   const mockFlowState = {
     updateBuildStatus,
   };
-  const useFlowStoreMock = jest.fn(
-    (selector?: (state: typeof mockFlowState) => unknown) =>
+  const useFlowStoreMock = Object.assign(
+    jest.fn((selector?: (state: typeof mockFlowState) => unknown) =>
       selector ? selector(mockFlowState) : mockFlowState,
+    ),
+    { getState: () => mockFlowState },
   );
-  useFlowStoreMock.getState = () => mockFlowState;
   return {
     __esModule: true,
     default: useFlowStoreMock,
@@ -121,10 +139,7 @@ describe("McpComponent", () => {
     handleOnNewValue: jest.fn(),
     editNode: false,
     nodeId: "MCPTools-1",
-    nodeClass: {
-      template: { code: { value: "code" } },
-      tool_mode: false,
-    } as APIClassType,
+    nodeClass: makeNodeClass(),
     handleNodeClass: jest.fn(),
   });
 
@@ -177,10 +192,7 @@ describe("McpComponent", () => {
 
   it("shows the MCP server error and refreshes the node on demand", async () => {
     const user = userEvent.setup();
-    const nodeClass = {
-      template: { code: { value: "code" } },
-      tool_mode: false,
-    } as APIClassType;
+    const nodeClass = makeNodeClass();
 
     render(
       <McpComponent

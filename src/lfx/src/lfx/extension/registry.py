@@ -379,14 +379,14 @@ class ExtensionRegistry:
             code = "installed-extension-immutable"
             hint = (
                 f"To {verb} {extension_id!r}, change the pip install "
-                "(remove the package from the image / lockfile) and restart Langflow. "
+                "(remove the package from the image / lockfile) and restart OpenXFlow. "
                 "Runtime mutation of installed Extensions is intentionally not supported."
             )
         elif extension.source_kind == "seed":
             code = "seed-directory-immutable"
             hint = (
                 f"To {verb} {extension_id!r}, edit the seed directory layout and "
-                "restart Langflow. Runtime mutation of seed Extensions is intentionally not supported."
+                "restart OpenXFlow. Runtime mutation of seed Extensions is intentionally not supported."
             )
         else:  # pragma: no cover - defensive: every source_kind is covered above
             msg = f"Unknown source_kind {extension.source_kind!r} on Extension {extension_id!r}."

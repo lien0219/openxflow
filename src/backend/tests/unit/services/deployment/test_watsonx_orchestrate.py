@@ -1821,11 +1821,11 @@ async def test_apply_provider_create_plan_binds_raw_tools_with_provider_app_ids(
     assert fake_clients.agent.create_calls
     assert fake_clients.agent.create_calls[0]["name"] == _agent_technical_name()
     assert fake_clients.agent.create_calls[0]["display_name"] == "my deployment"
-    assert fake_clients.agent.create_calls[0]["description"] == "Langflow deployment my deployment"
+    assert fake_clients.agent.create_calls[0]["description"] == "OpenXFlow deployment my deployment"
     assert fake_clients.agent.create_calls[0]["tools"] == ["created-tool-1"]
     assert fake_clients.agent.create_calls[0]["llm"] == TEST_WXO_LLM
     assert result.agent_id == "dep-created"
-    assert result.description == "Langflow deployment my deployment"
+    assert result.description == "OpenXFlow deployment my deployment"
     assert result.app_ids == ["cfg"]
     assert [(binding.tool_id, binding.app_ids) for binding in result.tool_app_bindings] == [("created-tool-1", ["cfg"])]
     assert [(binding.source_ref, binding.tool_id) for binding in result.tools_with_refs] == [
@@ -6672,7 +6672,7 @@ def test_build_agent_payload_from_values_uses_display_name_for_default_descripti
         llm=TEST_WXO_LLM,
     )
 
-    assert payload["description"] == "Langflow deployment Agent Name"
+    assert payload["description"] == "OpenXFlow deployment Agent Name"
 
 
 # ---------------------------------------------------------------------------
@@ -8379,7 +8379,7 @@ async def test_update_connection_deltas_rejects_non_langflow_tool():
     clients = FakeWXOClients(tool=FakeToolClient([external_tool]))
 
     ops = ToolConnectionOps(bind=OrderedUniqueStrs.from_values(["app-1"]))
-    with pytest.raises(InvalidContentError, match="does not have a Langflow binding"):
+    with pytest.raises(InvalidContentError, match="does not have an OpenXFlow binding"):
         await _update_deltas(
             clients=clients,
             existing_tool_deltas={"ext-1": ops},
@@ -8422,7 +8422,7 @@ async def test_bind_existing_tools_for_create_rejects_non_langflow_tool():
     external_tool = _make_external_tool("ext-1")
     clients = FakeWXOClients(tool=FakeToolClient([external_tool]))
 
-    with pytest.raises(InvalidContentError, match="does not have a Langflow binding"):
+    with pytest.raises(InvalidContentError, match="does not have an OpenXFlow binding"):
         await _bind_existing(
             clients=clients,
             existing_tool_bindings={"ext-1": ["app-1"]},
@@ -8460,7 +8460,7 @@ async def test_update_existing_tool_connection_bindings_rejects_non_langflow_too
     external_tool = _make_external_tool("ext-1")
     clients = FakeWXOClients(tool=FakeToolClient([external_tool]))
 
-    with pytest.raises(InvalidContentError, match="does not have a Langflow binding"):
+    with pytest.raises(InvalidContentError, match="does not have an OpenXFlow binding"):
         await _update_bindings(
             clients=clients,
             existing_target_tool_ids=["ext-1"],
@@ -8477,7 +8477,7 @@ async def test_update_existing_tool_connection_bindings_rejects_unbound_tool():
     bare_tool = _make_unbound_tool("bare-1")
     clients = FakeWXOClients(tool=FakeToolClient([bare_tool]))
 
-    with pytest.raises(InvalidContentError, match="does not have a Langflow binding"):
+    with pytest.raises(InvalidContentError, match="does not have an OpenXFlow binding"):
         await _update_bindings(
             clients=clients,
             existing_target_tool_ids=["bare-1"],
@@ -8548,7 +8548,7 @@ async def test_apply_tool_renames_rejects_non_langflow_tool():
     external_tool = _make_external_tool("ext-1")
     clients = FakeWXOClients(tool=FakeToolClient([external_tool]))
 
-    with pytest.raises(InvalidContentError, match="does not have a Langflow binding"):
+    with pytest.raises(InvalidContentError, match="does not have an OpenXFlow binding"):
         await _apply_renames(
             clients=clients,
             existing_tool_deltas={},

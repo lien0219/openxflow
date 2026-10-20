@@ -3,7 +3,7 @@
 Cloud connectors (S3, Google Drive, OneDrive, SharePoint, IBM COS)
 differ from ``FileUploadSource`` / ``FolderSource`` in two ways:
 
-1. They need **credentials** — resolved from Langflow's
+1. They need **credentials** — resolved from OpenXFlow's
    ``variable_service`` by variable-name reference, not embedded in
    the request payload. Storing variable *names* in ``source_config``
    (instead of the secrets themselves) means the ``ingestion_run``
@@ -16,19 +16,38 @@ differ from ``FileUploadSource`` / ``FolderSource`` in two ways:
    on — connectors don't need to reinvent that.
 
 This base class gives connectors a single ``resolve_secret`` helper so
-every provider talks to the variable service the same way. No shared
-OAuth plumbing here: Phase 3B+ adds a dedicated ``OAuthConnectorBase``
-subclass with token-refresh logic once the first OAuth provider lands.
+every provider talks to the variable service the same way, plus two
+entry points onto the managed-connection path: ``connection_lease`` for
+sources that declare their provider and scopes on the class (OneDrive,
+SharePoint) and ``resolve_connection_credential`` for sources that pass
+scopes per call (Google Drive). Both build the same resolution request:
+``source_config["connection"]`` carries a portable ``provider/name``
+handle and the host's connection resolver mints a short-lived access
+token for it.
+
+The managed-connection and bring-your-own-refresh-token paths coexist on
+purpose. A managed connection is the better answer — the credential
+lives in encrypted server-side storage and is refreshed by the worker
+that uses it — but it needs an execution principal, and ingestion runs
+in a background job. ``OAuthConnectorBase`` keeps the refresh-token flow
+for deployments that have not adopted connections, and prefers the
+connection resolver whenever a handle is configured.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID
 
 from lfx.base.knowledge_bases.ingestion_sources.base import KBIngestionSource
+from lfx.integrations.errors import ConnectionNotAuthorizedError
+from lfx.integrations.models import ConnectionRef, ConnectionResolutionRequest
 from lfx.log.logger import logger
+from lfx.services.authorization.base import ExecutionPrincipal
 from lfx.utils.env_var_security import safe_getenv
+
+if TYPE_CHECKING:
+    from lfx.integrations.models import CredentialLease
 
 # HTTP-status threshold cloud-connector helpers treat as "request failed".
 # Shared so every connector checks the same boundary.
@@ -44,12 +63,113 @@ class KBConnectorSource(KBIngestionSource):
 
     requires_credentials = True
 
+    #: Integration provider whose connections this source accepts, e.g.
+    #: ``"microsoft"``. Empty when the source predates dedicated
+    #: connections and only reads credential variables.
+    connection_provider: ClassVar[str] = ""
+    #: Provider scopes the source needs on that connection.
+    connection_required_scopes: ClassVar[tuple[str, ...]] = ()
+
+    #: ``ExecutionPrincipal.family`` stamped on connection resolutions made
+    #: by an ingestion job. Ingestion always runs detached from the request
+    #: that started it, so the principal is a non-interactive job owner and
+    #: the connection must opt in with ``allow_non_interactive``.
+    connection_family: ClassVar[str] = "knowledge_base_ingestion"
+
+    # ``source_config`` key holding a managed-connection handle, e.g.
+    # ``{"connection": "google/work"}``.
+    connection_config_key: str = "connection"
+
+    def required_connection_scopes(self) -> tuple[str, ...]:
+        """Return the scopes this configuration needs.
+
+        Defaults to the class-level list. A source whose requirements depend
+        on its configuration -- a drive id widens OneDrive from ``Files.Read``
+        to ``Files.Read.All`` -- overrides this.
+        """
+        return self.connection_required_scopes
+
+    def connection_handle(self) -> str | None:
+        """Return the configured managed-connection handle, if any."""
+        value = self.source_config.get(self.connection_config_key)
+        if not isinstance(value, str) or not value or value.isspace():
+            return None
+        return value
+
+    def execution_principal(self) -> ExecutionPrincipal:
+        """Return the principal an ingestion job runs under.
+
+        Ingestion is a background job started earlier by a person, so the
+        principal is ``job_owner``: it carries that person's identity but is
+        explicitly non-interactive. The portable deny floor in
+        ``lfx.services.connection.base`` refuses a user-owned connection for a
+        non-interactive principal unless the connection was created with
+        ``allow_non_interactive``, which is exactly the consent this path needs.
+        """
+        return ExecutionPrincipal(
+            kind="job_owner",
+            user_id=str(self.user_id) if self.user_id is not None else None,
+            family=self.connection_family,
+            interactive=False,
+        )
+
+    def connection_lease(self) -> CredentialLease:
+        """Return a credential lease for the configured handle and class scopes.
+
+        Building the lease is cheap and does not resolve, so it is safe to do
+        during ``validate_config``. Resolution itself is what enforces
+        ownership: the ingestion job is a ``job_owner`` principal, which the
+        portable deny floor refuses unless the connection allows
+        non-interactive use.
+        """
+        return self._credential_lease(frozenset(self.required_connection_scopes()))
+
+    async def resolve_connection_credential(self, required_scopes: frozenset[str]) -> CredentialLease:
+        """Return a credential lease for the configured handle and ``required_scopes``."""
+        return self._credential_lease(required_scopes)
+
+    def _credential_lease(self, required_scopes: frozenset[str]) -> CredentialLease:
+        """Build the lease both connection entry points share.
+
+        Raises ``ValueError`` for a missing handle or one naming another
+        provider, and ``ConnectionNotAuthorizedError`` when no resolver is
+        installed, so a host without connection support fails closed rather
+        than silently falling back to another credential source.
+        """
+        from lfx.integrations.models import CredentialLease
+        from lfx.services.deps import get_connection_resolver
+
+        handle = self.connection_handle()
+        if handle is None:
+            msg = (
+                f"{type(self).__name__} requires a connection. Set "
+                f"source_config[{self.connection_config_key!r}] to a "
+                f"{self.connection_provider or 'provider'} connection handle."
+            )
+            raise ValueError(msg)
+        ref = ConnectionRef.parse(handle)
+        if self.connection_provider and ref.provider != self.connection_provider:
+            msg = (
+                f"Connection {handle!r} belongs to provider {ref.provider!r}, but "
+                f"{type(self).__name__} requires {self.connection_provider!r}."
+            )
+            raise ValueError(msg)
+        resolver = get_connection_resolver()
+        if resolver is None:
+            raise ConnectionNotAuthorizedError(provider=ref.provider)
+        request = ConnectionResolutionRequest(
+            ref=ref,
+            principal=self.execution_principal(),
+            required_scopes=required_scopes,
+        )
+        return CredentialLease(resolver, request)
+
     async def resolve_secret(self, variable_name: str) -> str | None:
-        """Return the value of a Langflow variable, or ``None`` if absent.
+        """Return the value of an OpenXFlow variable, or ``None`` if absent.
 
         Order of resolution:
 
-        1. Langflow's ``variable_service`` scoped to ``self.user_id``.
+        1. OpenXFlow's ``variable_service`` scoped to ``self.user_id``.
         2. Process env var of the same name (fallback so desktop /
            single-user deployments can skip the UI step).
 
@@ -81,7 +201,7 @@ class KBConnectorSource(KBIngestionSource):
         if not value:
             msg = (
                 f"Required credential variable {variable_name!r} is not "
-                "configured. Set it via Langflow's variable settings or as "
+                "configured. Set it via OpenXFlow's variable settings or as "
                 "an environment variable on the server."
             )
             raise ValueError(msg)
@@ -99,7 +219,7 @@ class KBConnectorSource(KBIngestionSource):
             return None
 
     async def _lookup_variable(self, user_uuid: UUID, variable_name: str) -> str | None:
-        """Look up ``variable_name`` through Langflow's variable service.
+        """Look up ``variable_name`` through OpenXFlow's variable service.
 
         Isolated so tests can patch a single seam. Wrapped in a broad
         try/except because the variable service can raise a handful of
@@ -131,10 +251,14 @@ class KBConnectorSource(KBIngestionSource):
         Since connectors store credential *references* in
         ``source_config`` (e.g. ``{"access_key_variable":
         "AWS_ACCESS_KEY_ID"}``), the default describe already leaks
-        only variable names. Subclasses can override if they carry
+        only variable names. A managed-connection handle is likewise a
+        non-secret reference. Subclasses can override if they carry
         additional secret-adjacent fields.
         """
-        return super().describe()
+        base = super().describe()
+        base.setdefault("config", {})
+        base["uses_managed_connection"] = self.connection_handle() is not None
+        return base
 
 
 class OAuthConnectorBase(KBConnectorSource):
@@ -148,7 +272,7 @@ class OAuthConnectorBase(KBConnectorSource):
       (via ``gcloud auth`` / Azure CLI / Google OAuth Playground /
       Microsoft MSAL sample) to obtain a long-lived refresh token.
     * User stores the refresh token plus OAuth client id/secret as
-      Langflow variables.
+      OpenXFlow variables.
     * The connector mints a short-lived access token on every list /
       fetch call by POSTing the refresh token back to the provider.
 
@@ -180,16 +304,29 @@ class OAuthConnectorBase(KBConnectorSource):
         self._cached_access_token: str | None = None
         self._cached_token_expires_at: float = 0.0
         self.token_ttl_seconds: int = self.default_token_ttl_seconds
+        # One lease per run: it single-flights refreshes and permits exactly
+        # one reactive re-resolve after the provider rejects a token.
+        self._lease: CredentialLease | None = None
 
     async def get_access_token(self) -> str:
         """Return a currently-valid access token, refreshing if needed.
 
         Shared entry point for subclasses — don't hit the refresh
-        endpoint yourself. Caches the token until it's within a 5-
-        minute window of expiry so a run that performs N list+fetch
+        endpoint yourself. When ``source_config["connection"]`` names a
+        connection handle, the token comes from the host's connection
+        resolver and this class is a thin adapter over it: no refresh
+        token is stored in an OpenXFlow variable and no token exchange
+        happens here. Otherwise the legacy bring-your-own-refresh-token
+        flow below applies, caching the token until it is within a
+        five-minute window of expiry so a run that performs N list+fetch
         calls makes only one refresh round-trip.
         """
         import time
+
+        if self.connection_handle():
+            if self._lease is None:
+                self._lease = self.connection_lease()
+            return await self._lease.get_token()
 
         now = time.monotonic()
         if self._cached_access_token and now < self._cached_token_expires_at:
@@ -205,7 +342,7 @@ class OAuthConnectorBase(KBConnectorSource):
 
         Kept small and httpx-based on purpose — we don't need the full
         google-auth / msal SDKs just for a single POST, and avoiding
-        those deps keeps Langflow's install footprint tight.
+        those deps keeps OpenXFlow's install footprint tight.
         """
         import httpx
 
@@ -281,6 +418,10 @@ class OAuthConnectorBase(KBConnectorSource):
         """
         base = super().describe()
         base.setdefault("config", {})
+        if self.connection_handle():
+            # A connection-backed source reads no credential variables, so
+            # advertising the legacy variable names would be misleading.
+            return base
         base["config"].setdefault("client_id_variable", self._client_id_variable())
         base["config"].setdefault("client_secret_variable", self._client_secret_variable())
         base["config"].setdefault("refresh_token_variable", self._refresh_token_variable())

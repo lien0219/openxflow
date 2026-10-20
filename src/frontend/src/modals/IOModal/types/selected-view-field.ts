@@ -1,4 +1,4 @@
-import type { Node } from "reactflow";
+import type { AllNodeType } from "@/types/flow";
 export type SelectedViewFieldProps = {
   selectedViewField: { type: string; id: string } | undefined;
   setSelectedViewField: (
@@ -17,5 +17,5 @@ export type SelectedViewFieldProps = {
   }>;
   sessions: string[];
   currentFlowId: string;
-  nodes: Node[];
+  nodes: AllNodeType[];
 };

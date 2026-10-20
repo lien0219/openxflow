@@ -17,7 +17,7 @@ function buildMcpJson(serverUrl: string): string {
   return JSON.stringify(
     {
       mcpServers: {
-        langflow: {
+        openxflow: {
           command: "uvx",
           args: ["--from", "lfx", "lfx-mcp"],
           env: {
@@ -61,7 +61,7 @@ function getAgentInstructions(
 }
 
 function getClaudeCodeCommand(serverUrl: string): string {
-  return `claude mcp add langflow -- uvx --from lfx lfx-mcp \\
+  return `claude mcp add openxflow -- uvx --from lfx lfx-mcp \\
   -e LANGFLOW_SERVER_URL=${serverUrl} \\
   -e LANGFLOW_API_KEY=YOUR_API_KEY`;
 }

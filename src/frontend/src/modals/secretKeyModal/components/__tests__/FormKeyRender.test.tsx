@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createRef } from "react";
 import { FormKeyRender } from "../form-key-render";
 
 // These values match the en.json translations that the global i18n mock resolves.
@@ -22,7 +23,7 @@ const makeProps = (overrides = {}) => ({
   },
   apiKeyName: "",
   // Cast avoids the tsx-generic-vs-JSX ambiguity when used outside a function.
-  inputRef: { current: null } as React.RefObject<HTMLInputElement>,
+  inputRef: createRef<HTMLInputElement>(),
   setApiKeyName: jest.fn(),
   expiresAt: "",
   setExpiresAt: jest.fn(),

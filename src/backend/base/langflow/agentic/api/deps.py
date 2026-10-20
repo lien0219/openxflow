@@ -10,7 +10,7 @@ from lfx.utils.flow_validation import admin_only_build_required
 
 from langflow.api.utils.core import CurrentActiveUser
 
-ASSISTANT_ADMIN_ONLY_DETAIL = "The Langflow Assistant is restricted to administrators on this server."
+ASSISTANT_ADMIN_ONLY_DETAIL = "The OpenXFlow Assistant is restricted to administrators on this server."
 
 
 def require_agentic_experience() -> None:

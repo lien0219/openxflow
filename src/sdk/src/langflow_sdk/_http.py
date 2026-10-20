@@ -51,5 +51,5 @@ def _build_headers(api_key: str | None) -> dict[str, str]:
 
 
 def _connection_error(base_url: str, exc: Exception) -> LangflowConnectionError:
-    msg = f"Could not connect to Langflow at {base_url}: {exc}"
+    msg = f"Could not connect to OpenXFlow at {base_url}: {exc}"
     return LangflowConnectionError(msg)

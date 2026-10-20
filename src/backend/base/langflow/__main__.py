@@ -20,7 +20,9 @@ if __name__ == "__main__":
         _os.execv(_sys.executable, [_sys.executable, "-m", "langflow.__main__", *_sys.argv[1:]])  # noqa: S606
 
 import asyncio
+import dataclasses
 import inspect
+import json
 import os
 import platform
 import signal
@@ -52,6 +54,7 @@ from rich.panel import Panel
 from rich.table import Table
 from sqlmodel import select
 
+from langflow.cli.admin import admin_app
 from langflow.cli.progress import create_langflow_progress
 from langflow.initial_setup.setup import get_or_create_default_folder
 from langflow.main import setup_app
@@ -63,7 +66,7 @@ from langflow.services.utils import get_auto_login_superuser_password, initializ
 from langflow.utils.version import fetch_latest_version, get_version_info
 from langflow.utils.version import is_pre_release as langflow_is_pre_release
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 console = Console()
 if platform.system() == "Windows":
     console = Console(legacy_windows=True, emoji=False)
@@ -73,7 +76,7 @@ try:
     from lfx.cli.commands import serve_command
     from lfx.cli.run import run as lfx_run
 
-    lfx_app = typer.Typer(name="lfx", help="Langflow Executor commands")
+    lfx_app = typer.Typer(name="lfx", help="OpenXFlow Executor commands")
     lfx_app.command(name="serve", help="Serve a flow as an API", no_args_is_help=True)(serve_command)
     lfx_app.command(name="run", help="Run a flow directly", no_args_is_help=True)(lfx_run)
 
@@ -92,6 +95,7 @@ except ImportError:
 from lfx.cli._observability_commands import observability_app  # noqa: E402
 
 app.add_typer(observability_app, name="observability")
+app.add_typer(admin_app, name="admin")
 
 
 class ProcessManager:
@@ -264,7 +268,7 @@ def multi_worker_bypass_warning(num_workers: int) -> str:
 
     return (
         f"{MULTI_WORKER_BYPASS_ENV_VAR}=true: starting with {num_workers} workers and the "
-        "default in-memory job queue. THIS CONFIGURATION IS UNSUPPORTED WITH THE LANGFLOW UI "
+        "default in-memory job queue. THIS CONFIGURATION IS UNSUPPORTED WITH THE OpenXFlow UI "
         "AND WITH MCP OVER SSE. Every behavior that needs state shared across workers is "
         "degraded:\n"
         "  * The v1 /build editor and playground flows do not work. Build queues live in one "
@@ -338,7 +342,7 @@ def ensure_multi_worker_safe(num_workers: int) -> None:
         "  * Configure a shared job queue: LANGFLOW_JOB_QUEUE_TYPE=redis. Works "
         "for every event_delivery mode.\n"
         "  * Run with --workers 1. Single worker, no cross-worker routing.\n"
-        f"  * If this deployment never uses the Langflow UI or MCP over SSE, set "
+        f"  * If this deployment never uses the OpenXFlow UI or MCP over SSE, set "
         f"{MULTI_WORKER_BYPASS_ENV_VAR}=true to boot anyway and accept per-worker "
         "behavior. Unsupported; read the startup warning it prints first.\n"
         "Note: event_delivery=direct works in multi-worker because the POST "
@@ -491,7 +495,7 @@ def run(
         show_default=False,
     ),
 ) -> None:
-    """Run Langflow."""
+    """Run OpenXFlow."""
     if env_file:
         if is_settings_service_initialized():
             err = (
@@ -513,7 +517,7 @@ def run(
     verbose = log_level == "debug"
     progress = create_langflow_progress(verbose=verbose)
 
-    # Step 0: Initializing Langflow
+    # Step 0: Initializing OpenXFlow
     with progress.step(0):
         logger.debug(f"Loading config from file: '{env_file}'" if env_file else "No env_file provided.")
         set_var_for_macos_issue()
@@ -615,7 +619,7 @@ def run(
         with progress.step(5):
             pass  # Starter projects are added during app startup
 
-    # Step 6: Launching Langflow
+    # Step 6: Launching OpenXFlow
     if use_direct_uvicorn():
         # LANGFLOW_GUNICORN_PRELOAD is a Gunicorn-only knob: it triggers fork-safe
         # master-process preload so workers inherit state via copy-on-write. On
@@ -857,6 +861,7 @@ def stylize_text(text: str, to_style: str, *, is_prerelease: bool) -> str:
 
 
 def print_banner(host: str, port: int, protocol: str) -> None:
+    display_name = "OpenXFlow"
     notices = []
     package_names = []  # Track package names for pip install instructions
     is_pre_release = False  # Track if any package is a pre-release
@@ -865,12 +870,14 @@ def print_banner(host: str, port: int, protocol: str) -> None:
     # Use langflow.utils.version to get the version info
     version_info = get_version_info()
     langflow_version = version_info["version"]
-    package_name = version_info["package"]
+    display_name = version_info["package"]
+    package_name = display_name.replace("OpenXFlow", "Langflow")
     is_pre_release |= langflow_is_pre_release(langflow_version)  # Update pre-release status
 
     notice = build_version_notice(langflow_version, package_name)
+    notice = notice.replace(package_name, display_name)
 
-    notice = stylize_text(notice, package_name, is_prerelease=is_pre_release)
+    notice = stylize_text(notice, display_name, is_prerelease=is_pre_release)
     if notice:
         notices.append(notice)
     package_names.append(package_name)
@@ -884,7 +891,7 @@ def print_banner(host: str, port: int, protocol: str) -> None:
 
     [f"[bold]{notice}[/bold]" for notice in notices if notice]
     styled_package_name = stylize_text(
-        package_name, package_name, is_prerelease=any("pre-release" in notice for notice in notices)
+        display_name, display_name, is_prerelease=any("pre-release" in notice for notice in notices)
     )
 
     title = f"[bold]Welcome to {styled_package_name}[/bold]\n"
@@ -904,22 +911,22 @@ def print_banner(host: str, port: int, protocol: str) -> None:
         status_icon = "🟢"
 
     info_text = (
-        f"{github_icon} GitHub: Star for updates {arrow} https://github.com/langflow-ai/langflow\n"
+        f"{github_icon} GitHub: Star for updates {arrow} https://github.com/lien0219/openxflow\n"
         f"{discord_icon} Discord: Join for support {arrow} https://discord.com/invite/EqksyE2EX9"
     )
     telemetry_text = (
         (
-            "We collect anonymous usage data to improve Langflow.\n"
+            "We collect anonymous usage data to improve OpenXFlow.\n"
             "To opt out, set: [bold]DO_NOT_TRACK=true[/bold] in your environment."
         )
         if os.getenv("DO_NOT_TRACK", os.getenv("LANGFLOW_DO_NOT_TRACK", "False")).lower() != "true"
         else (
-            "We are [bold]not[/bold] collecting anonymous usage data to improve Langflow.\n"
+            "We are [bold]not[/bold] collecting anonymous usage data to improve OpenXFlow.\n"
             "To contribute, set: [bold]DO_NOT_TRACK=false[/bold] in your environment."
         )
     )
     access_host = get_best_access_host(host, port)
-    access_link = f"[bold]{status_icon} Open Langflow {arrow}[/bold] [link={protocol}://{access_host}:{port}]{protocol}://{access_host}:{port}[/link]"
+    access_link = f"[bold]{status_icon} OpenXFlow {arrow}[/bold] [link={protocol}://{access_host}:{port}]{protocol}://{access_host}:{port}[/link]"
 
     message = f"{title}\n{info_text}\n\n{telemetry_text}\n\n{access_link}"
 
@@ -930,21 +937,21 @@ def print_banner(host: str, port: int, protocol: str) -> None:
     except UnicodeEncodeError:
         # Fallback to a simpler banner without emojis for Windows systems with encoding issues
         fallback_message = (
-            f"Welcome to {package_name}\n\n"
-            "* GitHub: https://github.com/langflow-ai/langflow\n"
+            "Welcome to OpenXFlow\n\n"
+            "* GitHub: https://github.com/lien0219/openxflow\n"
             "# Discord: https://discord.com/invite/EqksyE2EX9\n\n"
             f"{telemetry_text}\n\n"
-            f"[OK] Open Langflow -> {protocol}://{access_host}:{port}"
+            f"[OK] OpenXFlow -> {protocol}://{access_host}:{port}"
         )
         try:
             console.print()  # Add line break before fallback banner
             console.print(Panel.fit(fallback_message, border_style="#7528FC", padding=(1, 2)))
         except UnicodeEncodeError:
             # Last resort: use logger instead of print
-            logger.info(f"Welcome to {package_name}")
-            logger.info("GitHub: https://github.com/langflow-ai/langflow")
+            logger.info("Welcome to OpenXFlow")
+            logger.info("GitHub: https://github.com/lien0219/openxflow")
             logger.info("Discord: https://discord.com/invite/EqksyE2EX9")
-            logger.info(f"Open Langflow: {protocol}://{access_host}:{port}")
+            logger.info(f"OpenXFlow: {protocol}://{access_host}:{port}")
 
 
 @app.command()
@@ -1077,6 +1084,38 @@ async def _create_superuser(username: str, password: str, auth_token: str | None
             typer.echo("Superuser creation failed.")
 
 
+@app.command(name="listeners")
+def listeners(
+    log_level: str = typer.Option("info", help="Logging level.", envvar="LANGFLOW_LOG_LEVEL"),
+    health_host: str | None = typer.Option(
+        None, help="Interface the health endpoint binds.", envvar="LANGFLOW_LISTENERS_HEALTH_HOST"
+    ),
+    health_port: int | None = typer.Option(
+        None, help="Port serving /health and /healthz.", envvar="LANGFLOW_LISTENERS_HEALTH_PORT"
+    ),
+) -> None:
+    """Run the trigger listener process: hold provider connections, write events to the ledger.
+
+    This is the Track B half of triggers - Slack Socket Mode, Microsoft Graph delta
+    polling, Gmail Pub/Sub pull - for instances that cannot accept provider webhooks.
+    It shares the API's database and configuration and hosts no HTTP application:
+    only /health and /healthz. It never runs migrations, so start or upgrade the API
+    against this database first.
+
+    Run it as its own service (a Kubernetes Deployment, a Compose service) for
+    multi-replica deployments, or set LANGFLOW_LISTENERS_MODE=subprocess to have the
+    API spawn it for a single container or Desktop.
+    """
+    configure(log_level=log_level)
+    if health_host is not None:
+        os.environ["LANGFLOW_LISTENERS_HEALTH_HOST"] = health_host
+    if health_port is not None:
+        os.environ["LANGFLOW_LISTENERS_HEALTH_PORT"] = str(health_port)
+    from langflow.services.triggers.listeners.runtime import main as run_listener_process
+
+    run_listener_process()
+
+
 @app.command(name="migrate-mcp")
 def migrate_mcp(
     log_level: str = typer.Option("info", help="Logging level.", envvar="LANGFLOW_LOG_LEVEL"),
@@ -1135,6 +1174,533 @@ async def _reconcile_kb_from_disk(*, username: str | None, dry_run: bool) -> Non
     scope = f"user '{username}'" if username else "all users"
     verb = "would adopt" if dry_run else "adopted"
     typer.echo(f"Knowledge base reconciliation complete: {verb} {inserted} knowledge base(s) for {scope}.")
+
+
+@app.command(name="convert-sqlite-to-postgres")
+def convert_sqlite_to_postgres(
+    source: str = typer.Option(
+        ...,
+        help="SQLite database URL to read, e.g. sqlite:////data/langflow.db.",
+        envvar="LANGFLOW_MIGRATION_SOURCE_URL",
+    ),
+    target: str = typer.Option(
+        ...,
+        help="Postgres database URL to write. It is upgraded to the latest schema first.",
+        envvar="LANGFLOW_MIGRATION_TARGET_URL",
+    ),
+    batch_size: int = typer.Option(1000, help="Rows per insert batch."),
+    drop_orphans: bool = typer.Option(  # noqa: FBT001
+        default=False,
+        help="Copy rows whose foreign key points at a deleted row the way Postgres would have handled them: "
+        "leave them out (ON DELETE CASCADE) or clear the key (ON DELETE SET NULL). Without it they are refused.",
+    ),
+    log_level: str = typer.Option("error", help="Logging level.", envvar="LANGFLOW_LOG_LEVEL"),
+    json_output: bool = typer.Option(  # noqa: FBT001
+        False,  # noqa: FBT003
+        "--json",
+        help="Write progress, each copied table and a final report to stdout as one JSON object per line, "
+        "for a program that runs this command. Logs go to stderr.",
+    ),
+) -> None:
+    """Copy every row of an OpenXFlow SQLite database into Postgres.
+
+    Stop OpenXFlow before running this. The source must already be on the latest
+    schema (start this OpenXFlow version against it once). The copy runs in one
+    transaction and is checked table by table, so it either lands whole or not at
+    all, and running it again is safe. Nothing in the source is changed.
+
+    SQLite never enforced OpenXFlow's foreign keys, so deletes can leave rows that
+    point at nothing. They are refused, naming each key, unless --drop-orphans.
+
+    A command line is visible to other users of the machine. Set the URLs in
+    LANGFLOW_MIGRATION_SOURCE_URL and LANGFLOW_MIGRATION_TARGET_URL instead of
+    the options to keep the target's password out of it.
+
+    Exits non-zero if anything was refused or failed. With --json every problem
+    carries a stable code, and the last line is the report.
+    """
+    from langflow.cli import sqlite_to_postgres_events as events
+    from langflow.services.database.sqlite_to_postgres import convert_sqlite_to_postgres as convert
+
+    configure(log_level=log_level, output_file=sys.stderr if json_output else None)
+    report = convert(
+        source,
+        target,
+        batch_size=batch_size,
+        drop_orphans=drop_orphans,
+        on_progress=events.emit_progress if json_output else None,
+        on_table=events.emit_table if json_output else None,
+    )
+    if json_output:
+        events.emit_report(report)
+        raise typer.Exit(0 if report.ok else 1)
+    if not report.ok:
+        # A failed copy is rolled back, so per-table counts would describe rows that are gone.
+        for problem in report.problems:
+            typer.echo(f"Problem: {problem}", err=True)
+        raise typer.Exit(1)
+    for table in report.tables:
+        typer.echo(f"{table.name}: {table.target_rows} row(s)")
+    for orphans in report.orphans:
+        done = "left out" if orphans.ondelete == "CASCADE" else f"copied with {orphans.column} set to NULL"
+        typer.echo(f"{orphans.table}: {orphans.rows} row(s) pointing at a deleted {orphans.parent} {done}")
+    typer.echo(f"Converted {len(report.tables)} table(s) at revision {report.revision}.")
+
+
+@app.command(name="relocate-files")
+def relocate_files(
+    log_level: str = typer.Option("info", help="Logging level.", envvar="LANGFLOW_LOG_LEVEL"),
+    bucket: str = typer.Option(..., help="Target S3 bucket to copy stored files into."),
+    prefix: str = typer.Option("files", help="Key prefix inside the bucket."),
+    username: str = typer.Option("", help="Only copy this user's files."),
+    dry_run: bool = typer.Option(default=False, help="Report what would be copied without writing."),  # noqa: FBT001
+    concurrency: int = typer.Option(
+        4, min=1, help="Files copied at once. Each holds at most one 8 MiB part in memory."
+    ),
+    as_json: bool = typer.Option(  # noqa: FBT001
+        False,  # noqa: FBT003
+        "--json",
+        help="Print one JSON object per line: progress and each result as it happens, then the report. "
+        "Logs go to stderr.",
+    ),
+) -> None:
+    """Copy stored file bytes into an S3 bucket, keeping each file's key.
+
+    Run this with LANGFLOW_STORAGE_TYPE=local, the setting the instance had before
+    the switch, so it reads the files on local disk. Credentials come from the
+    environment, the same way the S3 storage backend reads them. The bucket is
+    checked first: if it is missing or out of reach, nothing is copied.
+
+    A file counts as copied only once the bucket reports an object of the same
+    size, and files already there are skipped, so a run can be repeated.
+
+    Nothing is deleted from the source. Readers address a file by its owner and
+    name, which the copy preserves. Chat history is the exception: it records
+    attachments by absolute local path, so those entries are rewritten to the
+    owner/name form, which both storage backends read.
+
+    Uploads, chat attachments and files attached to flows are copied. Profile
+    pictures and knowledge bases live outside the storage backend and stay where
+    they are.
+
+    Files stream across, so memory scales with --concurrency alone.
+
+    With --json, stdout carries one JSON object per line and logs go to stderr:
+    a "progress" at the start, another once the files are counted, a "progress"
+    and an "item" as each file finishes, an "error" when the run is refused, and
+    a closing "report" with the counts and the items that failed.
+
+    Exits non-zero if any file could not be copied.
+    """
+    configure(log_level=log_level, output_file=sys.stderr if as_json else None)
+    failed = asyncio.run(
+        _relocate_files(
+            bucket=bucket,
+            prefix=prefix,
+            username=username or None,
+            dry_run=dry_run,
+            concurrency=concurrency,
+            as_json=as_json,
+        )
+    )
+    if failed:
+        raise typer.Exit(1)
+
+
+@app.command(name="relocate-kb")
+def relocate_kb(
+    to: str = typer.Option(..., "--to", help="Target backend type, for example 'postgres' or 'opensearch'."),
+    target_config: str = typer.Option(
+        "{}",
+        help="Target backend_config as JSON. Postgres needs none; it reads PGVECTOR_CONNECTION_STRING. "
+        "Per-collection names are not supported.",
+    ),
+    username: str = typer.Option("", help="Only relocate this user's knowledge bases."),
+    dry_run: bool = typer.Option(default=False, help="Report what would be moved without writing."),  # noqa: FBT001
+    batch_size: int = typer.Option(500, help="Chunks read and written per batch."),
+    allow_metric_change: bool = typer.Option(  # noqa: FBT001
+        default=False,
+        help="Move knowledge bases whose search rankings would change because the target ranks by another metric.",
+    ),
+    verify_skipped: bool = typer.Option(  # noqa: FBT001
+        default=True,
+        help="Before skipping a knowledge base whose row already names the target, count its chunks there, and "
+        "fail it when the store cannot be read or holds fewer than the row records. With --no-verify-skipped it "
+        "is skipped without a look at the store.",
+    ),
+    as_json: bool = typer.Option(  # noqa: FBT001
+        False,  # noqa: FBT003
+        "--json",
+        help="Write progress and results to stdout as one JSON object per line, and logs to stderr.",
+    ),
+    log_level: str = typer.Option("info", help="Logging level.", envvar="LANGFLOW_LOG_LEVEL"),
+) -> None:
+    """Move knowledge base vectors to another backend without re-embedding.
+
+    Copies each knowledge base's chunks with their existing vectors, confirms the
+    target holds all of them, then repoints the knowledge base at the new store.
+    Memory bases move with the knowledge bases they refer to.
+
+    Stop ingestion and memory capture before running this: chunks written while a
+    knowledge base moves would stay behind on the old store.
+
+    A knowledge base whose vectors are not unit length is not moved to a backend
+    that ranks by another metric, since its search results would change, unless
+    --allow-metric-change is passed.
+
+    Safe to re-run: chunks keep their ids, so a second run upserts, and knowledge
+    bases already on the target are skipped. Nothing is deleted from the source.
+    Exits non-zero if any knowledge base failed.
+
+    A knowledge base whose row already names the target is not moved. Its chunks
+    are counted there first, if the row records any and its storage is ready,
+    and it fails when the store cannot be read or holds fewer chunks than the
+    row records, as it does when PGVECTOR_CONNECTION_STRING names another
+    database than the one the chunks were written to. Pass --no-verify-skipped
+    to skip it without a look at the store, for a knowledge base that is in
+    place and whose row records too many chunks.
+
+    With --json, stdout carries one JSON object per line and logs go to stderr:
+    "progress" as a knowledge base's chunks are copied, an "item" as each one
+    finishes, and a closing "report" with the counts and the knowledge bases
+    that need attention. A run refused before it starts writes one "error"
+    instead. Failed items and errors carry a stable "code".
+    """
+    from langflow.cli import relocate_kb_events as events
+
+    try:
+        config = json.loads(target_config)
+    except json.JSONDecodeError as exc:
+        events.refuse(f"--target-config is not valid JSON: {exc}", "bad_target_config", as_json=as_json)
+        raise typer.Exit(2) from exc
+    if not isinstance(config, dict):
+        events.refuse("--target-config must be a JSON object", "bad_target_config", as_json=as_json)
+        raise typer.Exit(2)
+    from langflow.api.utils.knowledge_base_relocation import validate_relocation_target_config
+
+    try:
+        validate_relocation_target_config(to, config)
+    except ValueError as exc:
+        events.refuse(str(exc), "bad_target_config", as_json=as_json)
+        raise typer.Exit(2) from exc
+    configure(log_level=log_level, output_file=sys.stderr if as_json else None)
+    failed = asyncio.run(
+        _relocate_kb(
+            target_backend_type=to,
+            target_backend_config=config,
+            username=username or None,
+            dry_run=dry_run,
+            batch_size=batch_size,
+            allow_metric_change=allow_metric_change,
+            verify_skipped=verify_skipped,
+            as_json=as_json,
+        )
+    )
+    if failed:
+        raise typer.Exit(1)
+
+
+async def _relocate_files(
+    *, bucket: str, prefix: str, username: str | None, dry_run: bool, concurrency: int, as_json: bool = False
+) -> int:
+    from dataclasses import asdict
+
+    from langflow.api.utils.file_relocation import (
+        NoSuchUserError,
+        SourceNotLocalError,
+        TargetBucketError,
+        relocate_files,
+    )
+    from langflow.cli.events import emit
+    from langflow.services.utils import register_all_service_factories
+
+    if as_json:
+        # Before the checks and the listing, which on a large instance take a while: the
+        # caller learns the run is alive, and that the number of files is not known yet.
+        emit("progress", phase="checking", done=0, total=None, bytes=0, unit="files")
+    # Not initialize_services(): that is the server's startup, which migrates the schema,
+    # sets up the superuser and prunes history. Services are built on first use instead,
+    # and building one writes nothing.
+    register_all_service_factories()
+    await _refuse_a_database_not_at_this_versions_head(as_json=as_json)
+    try:
+        results = await relocate_files(
+            target_bucket=bucket,
+            target_prefix=prefix,
+            username=username,
+            dry_run=dry_run,
+            concurrency=concurrency,
+            on_result=(lambda result: emit("item", item=asdict(result))) if as_json else None,
+            on_progress=(
+                (
+                    lambda done, total, copied: emit(
+                        "progress", phase="copying", done=done, total=total, bytes=copied, unit="files"
+                    )
+                )
+                if as_json
+                else None
+            ),
+        )
+    except (SourceNotLocalError, NoSuchUserError, TargetBucketError) as exc:
+        if as_json:
+            emit("error", code=exc.code, message=str(exc))
+        else:
+            typer.echo(f"Cannot copy files: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    counts: dict[str, int] = {}
+    for result in results:
+        counts[result.status] = counts.get(result.status, 0) + 1
+    scope = f"user '{username}'" if username else "all users"
+    if as_json:
+        # Only what failed is repeated: the report is what a caller keeps, and every item already went by.
+        emit(
+            "report",
+            ok="failed" not in counts,
+            dry_run=dry_run,
+            scope=scope,
+            counts=dict(sorted(counts.items())),
+            bytes=sum(result.size for result in results if result.status == "copied"),
+            attention=[asdict(result) for result in results if result.status == "failed"],
+        )
+        return counts.get("failed", 0)
+    for result in results:
+        # A repoint rewrites a path in message.files and moves no bytes.
+        size = "" if result.status in ("repointed", "would_repoint") else f"  {result.size} bytes"
+        line = f"{result.status:12} {result.owner}/{result.file_name}{size}  -> {result.key}"
+        typer.echo(f"{line}  ({result.reason})" if result.reason else line)
+    summary = ", ".join(f"{count} {status}" for status, count in sorted(counts.items())) or "no files found"
+    typer.echo(f"File relocation complete for {scope}: {summary}.")
+    return counts.get("failed", 0)
+
+
+async def _refuse_a_database_not_at_this_versions_head(*, as_json: bool = False) -> None:
+    """Exit unless the database is at this OpenXFlow's migration head.
+
+    This version's queries need this version's schema, and migrating is the server's
+    job, so a database at any other revision is left as it is.
+    """
+    from alembic.script import ScriptDirectory
+
+    from langflow.cli.events import emit
+    from langflow.services.database.migration import get_current_alembic_heads
+
+    expected = set(ScriptDirectory(str(get_db_service().script_location)).get_heads())
+    async with session_scope() as session:
+        current = set(await get_current_alembic_heads(session))
+    if current != expected:
+        message = (
+            f"the database is at migration revision {', '.join(sorted(current)) or 'none'}, "
+            f"and this OpenXFlow expects {', '.join(sorted(expected))}. This command does not migrate the database. "
+            "Run it with the OpenXFlow version that matches the database."
+        )
+        if as_json:
+            emit("error", code="schema_mismatch", message=message)
+        else:
+            typer.echo(f"Cannot copy files: {message}", err=True)
+        raise typer.Exit(2)
+
+
+def relocation_line(result) -> str:
+    """One line per knowledge base: what moved, out of how many chunks."""
+    moved = result.status in {"relocated", "failed"}
+    counts = f"{result.copied}/{result.source_count}" if moved else str(result.source_count)
+    line = f"{result.status:15} {result.owner}/{result.kb_name}  {result.source_backend} -> {result.target_backend}"
+    return f"{line}  chunks {counts}"
+
+
+def relocation_lines(result) -> list[str]:
+    """Everything the command prints for one knowledge base: its line, a hint, its warnings."""
+    lines = [relocation_line(result) + (f"  ({result.reason})" if result.reason else "")]
+    if result.code == "kb_target_short":
+        # Only in this output. The reason and the flag go to the migration page as well, and nobody there
+        # runs the command.
+        lines.append(
+            f"{'':15} hint: if this is the right store and its row records too many chunks, "
+            "re-run with --no-verify-skipped, which skips every knowledge base already on the target "
+            "without a count"
+        )
+    return [*lines, *(f"{'':15} warning: {warning}" for warning in result.warnings)]
+
+
+async def _schema_mismatch() -> str | None:
+    """Say why the database is not at this OpenXFlow's schema, or None when it is."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    import langflow
+    from langflow.services.database.migration import get_current_alembic_heads
+
+    config = Config()
+    config.set_main_option("script_location", str(Path(langflow.__file__).parent / "alembic"))
+    expected = set(ScriptDirectory.from_config(config).get_heads())
+    async with session_scope() as session:
+        found = set(await get_current_alembic_heads(session))
+    if found == expected:
+        return None
+    return (
+        f"The database is at revision {', '.join(sorted(found)) or 'none'} and this OpenXFlow expects "
+        f"{', '.join(sorted(expected))}. This command does not migrate the database: run it with the "
+        "OpenXFlow version that matches the database, or upgrade the database first."
+    )
+
+
+async def _relocate_kb(
+    *,
+    target_backend_type: str,
+    target_backend_config: dict,
+    username: str | None,
+    dry_run: bool,
+    batch_size: int,
+    allow_metric_change: bool = False,
+    verify_skipped: bool = False,
+    as_json: bool = False,
+) -> int:
+    from langflow.api.utils.knowledge_base_relocation import relocate_knowledge_bases
+    from langflow.cli import relocate_kb_events as events
+    from langflow.services.utils import register_all_service_factories
+
+    # Not initialize_services(): that is the server's startup, and it migrates the
+    # database, sets up the superuser, reassigns orphaned flows and prunes history,
+    # dry run or not. Each service is built on first use, which writes nothing.
+    register_all_service_factories()
+    if mismatch := await _schema_mismatch():
+        events.refuse(mismatch, "schema_mismatch", as_json=as_json)
+        raise typer.Exit(1)
+    results = await relocate_knowledge_bases(
+        target_backend_type=target_backend_type,
+        target_backend_config=target_backend_config,
+        username=username,
+        dry_run=dry_run,
+        batch_size=batch_size,
+        allow_metric_change=allow_metric_change,
+        verify_skipped=verify_skipped,
+        on_result=events.item if as_json else None,
+        on_progress=events.progress if as_json else None,
+    )
+    by_status: dict[str, int] = {}
+    for result in results:
+        by_status[result.status] = by_status.get(result.status, 0) + 1
+    failed = by_status.get("failed", 0)
+    if as_json:
+        events.report(results, by_status, dry_run=dry_run)
+        return failed
+    for result in results:
+        for line in relocation_lines(result):
+            typer.echo(line)
+    summary = ", ".join(f"{count} {status}" for status, count in sorted(by_status.items())) or "no knowledge bases"
+    typer.echo(f"Knowledge base relocation {'dry run ' if dry_run else ''}complete: {summary}.")
+    return failed
+
+
+_JSON_HELP = "Print one JSON object per line: each check as it finishes, then the report. Logs go to stderr."
+
+
+@app.command(name="check-integrity")
+def check_integrity(
+    log_level: str = typer.Option("error", help="Logging level.", envvar="LANGFLOW_LOG_LEVEL"),
+    as_json: bool = typer.Option(False, "--json", help=_JSON_HELP),  # noqa: FBT001, FBT003
+) -> None:
+    """Report where this instance's database disagrees with what lives outside it.
+
+    Checks that the secret key opens every encrypted value, that every file row has
+    bytes in storage, that every knowledge base's store can be reached and holds as
+    many vectors as its row records, that memory bases with ingested messages have
+    vectors behind them, and that role assignments resolve and match the compiled
+    policy.
+
+    Read-only: it reports and never repairs, so it is safe to run on production.
+    Exits non-zero if any check fails.
+    """
+    configure(log_level=log_level, output_file=sys.stderr if as_json else None)
+    if not asyncio.run(_check_integrity(as_json=as_json)):
+        raise typer.Exit(1)
+
+
+async def _check_integrity(*, as_json: bool = False) -> bool:
+    from langflow.cli.integrity import check_instance, open_instance
+
+    open_instance()
+    report = await check_instance(on_check=partial(_echo_check, width=16, as_json=as_json))
+    if as_json:
+        _echo_json_report(report)
+    return report.ok
+
+
+def _echo_check(check, *, width: int, as_json: bool) -> None:
+    if as_json:
+        typer.echo(json.dumps({"event": "check", "check": dataclasses.asdict(check)}))
+        return
+    typer.echo(f"{check.status:5} {check.name:{width}} {check.summary}")
+    for problem in check.problems:
+        typer.echo(f"        - {problem}")
+
+
+def _echo_json_report(report) -> None:
+    checks = [dataclasses.asdict(check) for check in report.checks]
+    typer.echo(json.dumps({"event": "report", "ok": report.ok, "checks": checks}))
+
+
+@app.command(name="migration-preflight")
+def migration_preflight(
+    log_level: str = typer.Option("error", help="Logging level.", envvar="LANGFLOW_LOG_LEVEL"),
+    target_revision: str = typer.Option(
+        "", help="Alembic revision the target image runs. Refuses a target older than this database."
+    ),
+    target_version: str = typer.Option(
+        "",
+        help="OpenXFlow version the target image runs, such as 1.13.0. Refuses a target older than this OpenXFlow. "
+        "--target-revision is exact and wins when both are given.",
+    ),
+    target_secret_key_file: Path | None = typer.Option(
+        None,
+        help="File holding the LANGFLOW_SECRET_KEY the target will run with.",
+        envvar="LANGFLOW_TARGET_SECRET_KEY_FILE",
+        exists=True,
+        dir_okay=False,
+    ),
+    as_json: bool = typer.Option(False, "--json", help=_JSON_HELP),  # noqa: FBT001, FBT003
+) -> None:
+    """Refuse a migration from this instance that cannot succeed, before anything moves.
+
+    Checks that the target's schema is not older than this database's, that the
+    default superuser will survive a target with AUTO_LOGIN off, that the target's
+    key opens every stored credential, and which knowledge bases record the model
+    their vectors need. Then runs check-integrity against this instance.
+
+    Read-only. Exits non-zero if any check fails.
+
+    Run it with the environment the server runs with: the database, the secret
+    key and AUTO_LOGIN are read from it.
+    """
+    configure(log_level=log_level, output_file=sys.stderr if as_json else None)
+    # Not stripped: a Secret made from this file with --from-file carries its whitespace, so the key is tested with it.
+    key = target_secret_key_file.read_text() if target_secret_key_file else None
+    if not asyncio.run(
+        _migration_preflight(target_revision or None, key, target_version=target_version or None, as_json=as_json)
+    ):
+        raise typer.Exit(1)
+
+
+async def _migration_preflight(
+    target_revision: str | None,
+    target_secret_key: str | None,
+    *,
+    target_version: str | None = None,
+    as_json: bool = False,
+) -> bool:
+    from langflow.cli.integrity import open_instance
+    from langflow.cli.migration_preflight import run_preflight
+
+    open_instance()
+    report = await run_preflight(
+        target_revision=target_revision,
+        target_version=target_version,
+        target_secret_key=target_secret_key,
+        on_check=partial(_echo_check, width=24, as_json=as_json),
+    )
+    if as_json:
+        _echo_json_report(report)
+    return report.ok
 
 
 # command to copy the langflow database from the cache to the current directory
@@ -1257,7 +1823,7 @@ def show_version(*, value: bool):
         default = "DEV"
         raw_info = get_version_info()
         version = raw_info.get("version", default) if raw_info else default
-        typer.echo(f"langflow {version}")
+        typer.echo(f"OpenXFlow {version}")
         raise typer.Exit
 
 

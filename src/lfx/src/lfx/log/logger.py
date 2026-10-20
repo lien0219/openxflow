@@ -1,4 +1,4 @@
-"""Logging configuration for Langflow using structlog."""
+"""Logging configuration for OpenXFlow using structlog."""
 
 import contextlib
 import json
@@ -223,6 +223,12 @@ DEFAULT_REDACT_KEYS: frozenset[str] = frozenset(
         "token",
         "access_token",
         "refresh_token",
+        "client_secret",
+        "client_assertion",
+        "private_key",
+        "code_verifier",
+        "encrypted_verifier",
+        "registrations",
         "authorization",
         "auth",
         "cookie",
@@ -342,7 +348,7 @@ _OTEL_LOG_SKIP_KEYS = frozenset({"event", "level", "timestamp", "trace_id", "spa
 # Do not ship DEBUG to the operator's backend by default.
 #
 # The console is the developer's, the APM is the operator's, and they are not the same trust
-# boundary. Langflow's DEBUG output includes flow payloads (graph/base.py logs "Run outputs:"
+# boundary. OpenXFlow's DEBUG output includes flow payloads (graph/base.py logs "Run outputs:"
 # with the rendered outputs), and the redaction processor only scrubs known sensitive *keys*,
 # not free text inside a message. INFO is the floor because it drops that bulk payload logging.
 #
@@ -399,7 +405,7 @@ def _otel_min_severity() -> int:
         elif severity < _INFO_SEVERITY:
             warnings.warn(
                 f"LANGFLOW_OTEL_LOG_LEVEL={raw!r} exports DEBUG log records to the configured OTLP "
-                "endpoint. Langflow logs flow inputs and outputs at DEBUG. Their bodies are "
+                "endpoint. OpenXFlow logs flow inputs and outputs at DEBUG. Their bodies are "
                 "withheld unless LANGFLOW_OTEL_LOG_BODIES=all is also set, so this alone raises "
                 "the volume rather than the content; with both set, prompt and completion "
                 "content will reach that backend. Use INFO unless that is intended.",
@@ -477,7 +483,7 @@ _PROVIDER_SDK_MODULES = frozenset({"openai", "anthropic"})
 # The exact codes that may be exported. Not a pattern: the value is whatever the server put in
 # the response JSON, and the SDK parrots it, so shape says nothing about where it came from.
 #
-# That is the part the module check alone missed. Langflow supports OpenAI-compatible endpoints
+# That is the part the module check alone missed. OpenXFlow supports OpenAI-compatible endpoints
 # through OPENAI_BASE_URL, so a genuine openai.BadRequestError can carry a code that a
 # self-hosted or hostile endpoint chose. Matching against a fixed set defined here means the
 # exported string is one we wrote, and nothing from the wire can pass through it.
@@ -544,7 +550,7 @@ def _otel_body_policy() -> str:
         elif policy == "all":
             warnings.warn(
                 "LANGFLOW_OTEL_LOG_BODIES=all exports log message bodies to the configured OTLP "
-                "endpoint. Langflow error messages carry model completions, chat history and "
+                "endpoint. OpenXFlow error messages carry model completions, chat history and "
                 "provider responses, and redaction only covers known sensitive keys, not free "
                 "text inside a message, so prompt and completion content will reach that "
                 "backend. Leave it unset unless that is intended.",
@@ -648,7 +654,7 @@ def _exception_chain(exc: BaseException) -> Iterator[BaseException]:
 def _error_identity(exc: BaseException) -> tuple[str, str]:
     """Reduce an exception to class names: the root cause, and the chain that wrapped it.
 
-    The root cause is the point of this. Langflow wraps aggressively -- a provider's rate limit
+    The root cause is the point of this. OpenXFlow wraps aggressively -- a provider's rate limit
     surfaces as ``ComponentBuildError`` at the run boundary -- so the outermost class names our
     catch site and is identical for every failing flow, while the innermost names the failure.
     Reporting the chain outer-to-inner as well keeps the wrapping visible without costing
@@ -706,7 +712,7 @@ def _error_transport_identity(exc: BaseException) -> dict[str, str | int]:
     ``code`` must be an exact ``str`` matching ``_KNOWN_PROVIDER_ERROR_CODES``, on an exception
     belonging to one of ``_PROVIDER_SDK_MODULES``, and what is exported is the literal from that
     mapping rather than the value handed in. The value allowlist is the boundary, because neither
-    shape nor source is one: the SDK copies ``code`` out of the response JSON, and Langflow can be
+    shape nor source is one: the SDK copies ``code`` out of the response JSON, and OpenXFlow can be
     pointed at any OpenAI-compatible endpoint, so a genuine ``openai.BadRequestError`` can carry a
     string the server chose. Matching a fixed set means the exported value is one written here.
 
@@ -763,7 +769,7 @@ def emit_to_otel_logs(_logger: Any, _method_name: str, event_dict: dict[str, Any
 
     A pass-through: this sits in the processor chain purely for the side effect, so console
     and file output are unaffected. When no SDK logger provider is installed -- bare lfx, or
-    Langflow with no OTLP endpoint configured -- ``get_logger`` returns a no-op and this costs
+    OpenXFlow with no OTLP endpoint configured -- ``get_logger`` returns a no-op and this costs
     one attribute lookup.
 
     Placed after the redaction processor so anything scrubbed there is scrubbed here too.
@@ -904,7 +910,7 @@ def buffer_writer(_logger: Any, _method_name: str, event_dict: dict[str, Any]) -
 
 
 def _forward_loguru_message(message) -> None:
-    """Forward Loguru messages through Langflow's configured structlog pipeline."""
+    """Forward Loguru messages through OpenXFlow's configured structlog pipeline."""
     record = message.record
     structlog_logger = structlog.get_logger(record["name"])
     level_name = record["level"].name.lower()
@@ -916,7 +922,7 @@ def _forward_loguru_message(message) -> None:
 
 
 def setup_loguru_logger(log_level: str, *, enqueue: bool = False) -> None:
-    """Route Loguru's default logger through Langflow logging."""
+    """Route Loguru's default logger through OpenXFlow logging."""
     global _loguru_handler_id  # noqa: PLW0603
 
     if _loguru_handler_id is not None:
@@ -935,7 +941,7 @@ def setup_loguru_logger(log_level: str, *, enqueue: bool = False) -> None:
 
 
 def setup_log_file(log_file: Path, *, max_bytes: int, formatter: logging.Formatter | None = None) -> None:
-    """Set up Langflow's rotating file handler.
+    """Set up OpenXFlow's rotating file handler.
 
     ``formatter`` lets JSON modes attach a ``structlog.stdlib.ProcessorFormatter``
     so third-party stdlib records (uvicorn, sqlalchemy, httpx, ...) are rendered
@@ -1036,9 +1042,8 @@ def configure(
     # Fingerprint of every caller-supplied input that changes the resulting
     # setup. Stored on the wrapper_class (below) so structlog.reset_defaults()
     # -- used between tests -- invalidates it automatically and the next call
-    # rebuilds from scratch. Env-only toggles (e.g. LANGFLOW_PRETTY_LOGS) are not
-    # part of the fingerprint: the four env-backed args above are already folded
-    # into their resolved values, and the remainder are process-stable.
+    # rebuilds from scratch. The pretty-output toggle also changes the renderer
+    # and stdlib routing, so changes to it must invalidate the cached setup.
     config_fingerprint = (
         numeric_level,
         log_env,
@@ -1048,6 +1053,7 @@ def configure(
         log_rotation,
         cache if cache is not None else True,
         output_file,
+        os.getenv("LANGFLOW_PRETTY_LOGS", "true").lower() == "true",
     )
     cfg = structlog.get_config() if structlog.is_configured() else {}
     if getattr(cfg.get("wrapper_class"), "config_fingerprint", None) == config_fingerprint:
@@ -1254,13 +1260,10 @@ def configure(
     )
     if json_mode and not log_file:
         _install_stdlib_intercept(numeric_level)
-    elif log_file:
-        # From here structlog resolves back into the stdlib tree, so a root
-        # intercept left over from an earlier stdout-mode configure() would feed
-        # every record back into the logger it just came from. The guard in
-        # ``InterceptHandler.emit`` keeps that from looping, but the record would
-        # still be written twice -- once by the intercept's structlog call and
-        # once by the original record reaching the file handler.
+    else:
+        # Pretty output must remove an intercept left by JSON stdout mode.
+        # File output resolves back into the stdlib tree, where that intercept
+        # would duplicate records by feeding them back into the same logger.
         _remove_stdlib_intercept()
 
     # Apply per-logger level overrides last so user env beats library defaults.

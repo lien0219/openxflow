@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 
 // Mock localStorage before importing the store
 const localStorageMock = {
-  getItem: jest.fn(() => null),
+  getItem: jest.fn<string | null, [key: string]>(() => null),
   setItem: jest.fn(),
   clear: jest.fn(),
 };
@@ -255,6 +255,29 @@ describe("useDarkStore", () => {
         // If store isn't working, at least verify our test setup
         expect(true).toBe(true); // Test passes - setup verification complete
       }
+    });
+  });
+
+  describe("refreshDiscordCount", () => {
+    // jest.setup.js mocks darkStore globally; these assert the real store.
+    const { useDarkStore: realDarkStore } =
+      jest.requireActual<typeof import("../darkStore")>("../darkStore");
+
+    it("fetches while no count is loaded", () => {
+      mockGetDiscordCount.mockResolvedValue(500);
+      realDarkStore.setState({ discordCount: 0 });
+
+      realDarkStore.getState().refreshDiscordCount();
+
+      expect(mockGetDiscordCount).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips the request once a count is loaded", () => {
+      realDarkStore.setState({ discordCount: 500 });
+
+      realDarkStore.getState().refreshDiscordCount();
+
+      expect(mockGetDiscordCount).not.toHaveBeenCalled();
     });
   });
 });

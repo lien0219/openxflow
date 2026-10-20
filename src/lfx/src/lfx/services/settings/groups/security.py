@@ -21,7 +21,7 @@ class SecuritySettings(BaseModel):
 
     # SSRF Protection
     ssrf_protection_enabled: bool = True
-    """If set to True, Langflow will enable SSRF (Server-Side Request Forgery) protection.
+    """If set to True, OpenXFlow will enable SSRF (Server-Side Request Forgery) protection.
     When enabled, blocks requests to private IP ranges, localhost, and cloud metadata endpoints.
     When False, no URL validation is performed, allowing requests to any destination
     including internal services, private networks, and cloud metadata endpoints.
@@ -101,7 +101,7 @@ class SecuritySettings(BaseModel):
 
     A destination resolved from a process environment variable is already operator-controlled
     and does not need to be listed: an operator who sets OPENSEARCH_URL on the server keeps
-    working with no configuration change. Only values written through the Langflow variables
+    working with no configuration change. Only values written through the OpenXFlow variables
     UI/API, or posted in a request body (Chroma's cloud_host), consult this list. Chroma Cloud's
     fixed default host is not tenant input and is always permitted.
 
@@ -333,7 +333,7 @@ class SecuritySettings(BaseModel):
     serving_end_user_header: str | None = None
     """Name of the trusted request header that carries the end-user identity on the serving plane
     (e.g. ``X-End-User-Id``). The value is an opaque, deterministic per-user string minted and
-    injected by the authenticated gateway; Langflow does not parse or validate it, it only uses it
+    injected by the authenticated gateway; OpenXFlow does not parse or validate it, it only uses it
     as the per-user memory/state scope key.
 
     UNSET (the default) means the feature is OFF: no end-user identity is read and every serving
@@ -394,6 +394,20 @@ class SecuritySettings(BaseModel):
     """Public-flow runs allowed per minute per IP on the unauthenticated v1 build and v2 workflow endpoints.
     V1 uses one bucket per flow; v2 uses its public-workflow bucket. Each run executes as the flow owner, so
     anonymous callers are throttled separately from and more generously than login. Gated by rate_limit_enabled."""
+    connection_metadata_rate_limit_per_minute: int = 60
+    """Connection and integration metadata reads allowed per minute per authenticated user.
+
+    These endpoints return no credential material and make no outbound provider call, and the UI polls
+    the connection listing every two seconds while an OAuth consent is pending, so they get their own
+    bucket sized for that poll rather than the login budget. Writes take
+    connection_write_rate_limit_per_minute; credential tests, health checks, and the OAuth endpoints
+    stay on the tighter per-endpoint buckets. Gated by rate_limit_enabled."""
+    connection_write_rate_limit_per_minute: int = 30
+    """Connection creates, updates, revokes, and deletes allowed per minute per authenticated user.
+
+    The four share one bucket, sized for a person managing connections in the UI rather than the login
+    budget, which cut a user off after five actions. Counting per user rather than per client IP keeps
+    users behind one NAT or proxy from throttling each other. Gated by rate_limit_enabled."""
 
     @field_validator("sandbox_allowed_domains", mode="after")
     @classmethod

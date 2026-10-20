@@ -35,11 +35,13 @@ import CollectionPage from "./pages/MainPage/pages/main-page";
 import SettingsPage from "./pages/SettingsPage";
 import ApiKeysPage from "./pages/SettingsPage/pages/ApiKeysPage";
 import ChannelsPage from "./pages/SettingsPage/pages/ChannelsPage";
+import ConnectionsPage from "./pages/SettingsPage/pages/ConnectionsPage";
 import DBProvidersPage from "./pages/SettingsPage/pages/DBProvidersPage";
 import GeneralPage from "./pages/SettingsPage/pages/GeneralPage";
 import GlobalVariablesPage from "./pages/SettingsPage/pages/GlobalVariablesPage";
 import MCPServersPage from "./pages/SettingsPage/pages/MCPServersPage";
 import McpClientPage from "./pages/SettingsPage/pages/McpClientPage";
+import MigrationPage from "./pages/SettingsPage/pages/MigrationPage";
 import ModelProvidersPage from "./pages/SettingsPage/pages/ModelProvidersPage";
 import MessagesPage from "./pages/SettingsPage/pages/messagesPage";
 import PermissionsPage from "./pages/SettingsPage/pages/PermissionsPage";
@@ -158,6 +160,7 @@ const router = createBrowserRouter(
                   />
                   <Route path="db-providers" element={<DBProvidersPage />} />
                   <Route path="mcp-servers" element={<MCPServersPage />} />
+                  <Route path="connections" element={<ConnectionsPage />} />
                   <Route path="mcp-client" element={<McpClientPage />} />
                   <Route path="channels" element={<ChannelsPage />} />
                   <Route path="api-keys" element={<ApiKeysPage />} />
@@ -179,6 +182,7 @@ const router = createBrowserRouter(
                       </ProtectedPermissionRoute>
                     }
                   />
+                  <Route path="migration" element={<MigrationPage />} />
                   {CustomRoutesStore()}
                 </Route>
                 {CustomRoutesStorePages()}

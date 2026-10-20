@@ -171,9 +171,9 @@ class TestSanitizeInputNormalization:
 class TestRefusalMessage:
     """Tests for the refusal message constant."""
 
-    def test_refusal_message_mentions_langflow(self):
-        """Refusal message should mention Langflow to redirect the user."""
-        assert "Langflow" in REFUSAL_MESSAGE
+    def test_refusal_message_mentions_openxflow(self):
+        """Refusal message should mention OpenXFlow to redirect the user."""
+        assert "OpenXFlow" in REFUSAL_MESSAGE
 
     def test_refusal_message_is_not_empty(self):
         """Refusal message should not be empty."""

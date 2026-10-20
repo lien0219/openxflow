@@ -6,6 +6,7 @@ Filesystem operations use ``tmp_path`` so every test gets a fresh sandbox.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -476,6 +477,8 @@ class TestInitCommandShellScripts:
         assert created == expected
 
     def test_shell_scripts_are_executable(self, tmp_path: Path) -> None:
+        if os.name == "nt":
+            pytest.skip("Windows does not expose POSIX executable mode bits")
         if not _SHELL_SRC.exists():
             pytest.skip("Shell templates not bundled")
         _run_init(tmp_path)

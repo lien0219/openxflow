@@ -197,7 +197,7 @@ flowchart TB
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, Zustand, XYFlow |
 | Backend | Python 3.10–3.14, FastAPI, SQLModel / SQLAlchemy, Alembic |
 | Desktop | Electron, electron-builder, Windows NSIS, macOS DMG |
-| Workflow | Langflow graph execution engine, LFX |
+| Workflow | OpenXFlow graph execution engine, LFX |
 | Agents | LangChain ecosystem, tool calling, structured output |
 | Protocols | REST APIs, webhooks, MCP |
 | Data storage | SQLite, optional PostgreSQL, file storage |

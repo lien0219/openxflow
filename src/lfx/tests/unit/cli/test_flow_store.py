@@ -141,3 +141,16 @@ class TestFilesystemFlowStore:
         store = FilesystemFlowStore(tmp_path)
         with pytest.raises(ValueError, match="Invalid flow_id"):
             store.write("a/b", {"name": "bad"})
+
+    def test_rejects_symlink_outside_store(self, tmp_path):
+        store_dir = tmp_path / "store"
+        store = FilesystemFlowStore(store_dir)
+        outside = tmp_path / "outside.json"
+        outside.write_text('{"name": "outside"}', encoding="utf-8")
+        try:
+            (store_dir / "linked.json").symlink_to(outside)
+        except (OSError, NotImplementedError):
+            pytest.skip("Symlink creation is unavailable")
+
+        with pytest.raises(ValueError, match="Invalid flow_id"):
+            store.read("linked")

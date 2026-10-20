@@ -10,7 +10,7 @@ import {
 
 export default function ExpiryDateCellRender({
   value,
-}: CustomCellRendererProps) {
+}: Pick<CustomCellRendererProps, "value">) {
   const { t } = useTranslation();
 
   if (value) {

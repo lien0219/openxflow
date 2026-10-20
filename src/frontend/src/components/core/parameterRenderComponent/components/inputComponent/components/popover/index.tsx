@@ -207,7 +207,7 @@ const CustomInputPopover = ({
   blockAddNewGlobalVariable,
   hasRefreshButton,
   inspectionPanel,
-  ariaLabelledBy,
+  ariaLabelledBy = undefined as string | undefined,
   inputProps = undefined as
     | React.InputHTMLAttributes<HTMLInputElement>
     | undefined,

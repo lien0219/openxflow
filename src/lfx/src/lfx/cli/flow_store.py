@@ -11,11 +11,18 @@ Three deployment modes — all use the same code path:
 from __future__ import annotations
 
 import json
+import os
+import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from filelock import FileLock
+
 from lfx.log.logger import logger
+
+_MAX_REPLACE_ATTEMPTS = 100
 
 
 @runtime_checkable
@@ -50,6 +57,16 @@ class FlowStore(Protocol):
     def is_persistent(self) -> bool:
         """True if writes are visible to other processes (e.g. filesystem store)."""
         ...
+
+
+@contextmanager
+def _operation_lock(path: Path):
+    """Serialize store operations around Windows' replacement path transition."""
+    if os.name == "nt":
+        with FileLock(f"{path}.lock"):
+            yield
+    else:
+        yield
 
 
 class NullFlowStore:
@@ -105,44 +122,58 @@ class FilesystemFlowStore:
 
     def write(self, flow_id: str, flow_json: dict) -> None:
         target = self._safe_path(flow_id)
-        tmp = self._dir / f"{flow_id}.{uuid.uuid4().hex}.tmp"
-        try:
-            tmp.write_text(json.dumps(flow_json), encoding="utf-8")
-            tmp.replace(target)
-        except OSError:
-            # Don't leak the partial temp file (e.g. disk full mid-write); list_ids()
-            # only globs *.json so an orphaned *.tmp would silently accumulate.
-            tmp.unlink(missing_ok=True)
-            raise
+        with _operation_lock(target):
+            tmp = self._dir / f"{flow_id}.{uuid.uuid4().hex}.tmp"
+            try:
+                tmp.write_text(json.dumps(flow_json), encoding="utf-8")
+                for attempt in range(_MAX_REPLACE_ATTEMPTS):
+                    try:
+                        tmp.replace(target)
+                    except PermissionError as exc:
+                        if (
+                            os.name != "nt"
+                            or getattr(exc, "winerror", None) not in (5, 32)
+                            or attempt == _MAX_REPLACE_ATTEMPTS - 1
+                        ):
+                            raise
+                        time.sleep(0.01)
+                    else:
+                        break
+            except OSError:
+                # Don't leak the partial temp file (e.g. disk full mid-write); list_ids()
+                # only globs *.json so an orphaned *.tmp would silently accumulate.
+                tmp.unlink(missing_ok=True)
+                raise
 
     def read(self, flow_id: str) -> dict | None:
         path = self._safe_path(flow_id)
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            return None
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
-            # A corrupted/unreadable file in a shared store (e.g. an external writer
-            # killed mid-write, or PVC corruption) must not take down the worker.
-            # Treat it as absent (logged) so warm_from_store/list_metas skip it and
-            # every other flow keeps serving, instead of raising into a 500/startup crash.
-            logger.warning("Skipping unreadable flow store file %s: %r", path.name, exc)
-            return None
+        with _operation_lock(path):
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                return None
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+                # A corrupted/unreadable flow must not take down the worker.
+                logger.warning("Skipping unreadable flow store file %s: %r", path.name, exc)
+                return None
 
     def delete(self, flow_id: str) -> bool:
         path = self._safe_path(flow_id)
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            return False
-        else:
-            return True
+        with _operation_lock(path):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                return False
+            else:
+                return True
 
     def list_ids(self) -> list[str]:
         return [p.stem for p in self._dir.glob("*.json")]
 
     def exists(self, flow_id: str) -> bool:
-        return self._safe_path(flow_id).exists()
+        path = self._safe_path(flow_id)
+        with _operation_lock(path):
+            return path.exists()
 
     @property
     def is_persistent(self) -> bool:

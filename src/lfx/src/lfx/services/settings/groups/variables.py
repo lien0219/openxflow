@@ -11,14 +11,14 @@ class VariablesSettings(BaseModel):
 
     fallback_to_env_var: bool = True
     """If set to True, Global Variables set in the UI will fallback to a environment variable
-    with the same name in case Langflow fails to retrieve the variable value."""
+    with the same name in case OpenXFlow fails to retrieve the variable value."""
 
     store_environment_variables: bool = True
     """Whether to store environment variables as Global Variables in the database."""
 
     # Agentic Experience
     agentic_experience: bool = True
-    """Whether the Langflow Assistant is available. On by default: it is the primary way into
+    """Whether the OpenXFlow Assistant is available. On by default: it is the primary way into
     the product, so requiring opt-in would hide the main entry point behind an env var.
 
     Set it to False to turn the Assistant off for a deployment -- an operator who does not want
@@ -32,7 +32,7 @@ class VariablesSettings(BaseModel):
     """
 
     assistant_max_message_length: int = Field(default=2000, ge=1)
-    """Maximum length, in characters, of a single message sent to the Langflow Assistant.
+    """Maximum length, in characters, of a single message sent to the OpenXFlow Assistant.
 
     Enforced server-side on the assistant API entry points and mirrored to the UI through
     ``/api/v1/config`` so the composer and the API agree on one number -- a UI cap below the
@@ -46,7 +46,7 @@ class VariablesSettings(BaseModel):
 
     # Developer API
     developer_api_enabled: bool = False
-    """If set to True, Langflow will enable developer API endpoints for advanced debugging and introspection."""
+    """If set to True, OpenXFlow will enable developer API endpoints for advanced debugging and introspection."""
 
     @field_validator("variables_to_get_from_environment", mode="before")
     @classmethod

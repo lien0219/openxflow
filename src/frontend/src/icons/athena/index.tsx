@@ -7,5 +7,7 @@ export const AthenaIcon = forwardRef<
   SVGSVGElement,
   React.PropsWithChildren<{ className?: string }>
 >((props, ref) => {
-  return <AthenaComponent ref={ref} {...props} />;
+  return (
+    <AthenaComponent ref={ref} {...props} className={props.className ?? ""} />
+  );
 });

@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -71,8 +72,7 @@ class TestFileDescriptionGeneratorComponent:
         write_calls = mock_proc.stdin.write.call_args_list
         config = json.loads(write_calls[0][0][0])
         assert len(config["file_paths"]) == 2
-        assert "/path/to/file1.csv" in config["file_paths"]
-        assert "/path/to/file2.csv" in config["file_paths"]
+        assert {Path(path) for path in config["file_paths"]} == {Path("/path/to/file1.csv"), Path("/path/to/file2.csv")}
 
         assert len(result) == 2
         assert all(isinstance(item, Data) for item in result)
@@ -101,7 +101,7 @@ class TestFileDescriptionGeneratorComponent:
         write_calls = mock_proc.stdin.write.call_args_list
         config = json.loads(write_calls[0][0][0])
         assert len(config["file_paths"]) == 1
-        assert "/path/to/legacy_file.csv" in config["file_paths"]
+        assert Path("/path/to/legacy_file.csv") in {Path(path) for path in config["file_paths"]}
 
     def test_extract_file_paths_from_data_objects(self):
         """Test extracting file paths from Data objects."""

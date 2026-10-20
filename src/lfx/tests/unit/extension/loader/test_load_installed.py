@@ -161,7 +161,7 @@ def test_editable_install_discovered_via_direct_url(tmp_path: Path) -> None:
     the bundle entirely.
     """
     # Lay out a real extension on disk to be the "editable source".
-    project_root = tmp_path / "src" / "bundles" / "duckduckgo"
+    project_root = tmp_path / "source with spaces" / "bundles" / "duckduckgo"
     bundle_dir = project_root / "components"
     bundle_dir.mkdir(parents=True)
     (project_root / "extension.json").write_text(

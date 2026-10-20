@@ -18,7 +18,7 @@ def sample_flow_dict():
 
 
 @pytest.fixture
-def flow_runner():
+def flow_runner(client):  # noqa: ARG001 - use the isolated test database and service registry
     return LangflowRunnerExperimental()
 
 

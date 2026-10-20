@@ -39,6 +39,7 @@ from langflow.services.database.constants import (
 from langflow.services.database.migration import get_current_alembic_heads
 from langflow.services.database.models.user.crud import get_user_by_username
 from langflow.services.database.session import NoopSession
+from langflow.services.database.sqlite import SQLiteNullPool, SQLiteStaticPool
 from langflow.services.database.utils import Result, TableResults
 from langflow.services.deps import get_settings_service
 from langflow.services.utils import teardown_superuser
@@ -143,7 +144,7 @@ def _postgres_migration_lock(database_url: str):
     here (bounded, with progress logging) and then find the schema already at
     head.
 
-    No-op for non-PostgreSQL URLs. SQLite has no advisory locks (and Langflow
+    No-op for non-PostgreSQL URLs. SQLite has no advisory locks (and OpenXFlow
     runs single-process on it anyway).
     """
     if not database_url.startswith(("postgresql", "postgres")):
@@ -222,7 +223,7 @@ def check_sqlite_database_path(database_url: str) -> None:
     ``LANGFLOW_DATABASE_URL`` are resolved by SQLAlchemy against the current
     working directory at connect time. When the resolved parent directory is
     missing the raw ``sqlite3.OperationalError`` ("unable to open database file")
-    is opaque, so surface where Langflow actually tried to open the database and
+    is opaque, so surface where OpenXFlow actually tried to open the database and
     how a relative path was resolved. No-op for non-SQLite and in-memory URLs.
 
     Note: this only improves diagnostics; it does not change which URLs are
@@ -245,12 +246,12 @@ def check_sqlite_database_path(database_url: str) -> None:
         f"directories. "
     )
     if db_path.is_absolute():
-        msg += "Create the directory before starting Langflow, or point LANGFLOW_DATABASE_URL at an existing path."
+        msg += "Create the directory before starting OpenXFlow, or point LANGFLOW_DATABASE_URL at an existing path."
     else:
         msg += (
             f"The relative path '{db_path}' from LANGFLOW_DATABASE_URL was resolved against the current working "
             f"directory ('{Path.cwd()}'). Set LANGFLOW_DATABASE_URL to an absolute path "
-            f"(e.g. 'sqlite:///{resolved}'), or create the directory before starting Langflow."
+            f"(e.g. 'sqlite:///{resolved}'), or create the directory before starting OpenXFlow."
         )
     raise ValueError(msg)
 
@@ -260,6 +261,8 @@ class DatabaseService(Service):
 
     def __init__(self, settings_service: SettingsService):
         self._logged_pragma = False
+        self._connection_listener = self.on_connection
+        self._connection_listener_engine = None
         self.settings_service = settings_service
         if settings_service.settings.database_url is None:
             msg = "No database URL provided"
@@ -276,13 +279,14 @@ class DatabaseService(Service):
         self.script_location = langflow_dir / "alembic"
         self.alembic_cfg_path = langflow_dir / "alembic.ini"
 
-        # register the event listener for sqlite as part of this class.
-        # Using decorator will make the method not able to use self
-        event.listen(Engine, "connect", self.on_connection)
         if self.settings_service.settings.database_connection_retry:
             self.engine = self._create_engine_with_retry()
         else:
             self.engine = self._create_engine()
+        # Keep connection settings local to this service's engine. Registering
+        # on SQLAlchemy's Engine class would also affect unrelated engines,
+        # including read-only inspection engines used by migration checks.
+        self._listen_for_connections(self.engine)
         # Here rather than in the app factory: this is an AsyncEngine, and the instrumentor
         # patches the sync engine underneath it. Instrumenting globally instead (no engine
         # argument) attaches to pool events only, which yields a connect span per checkout and
@@ -336,17 +340,35 @@ class DatabaseService(Service):
             )
 
     def reload_engine(self) -> None:
+        self._remove_connection_listener(self.engine)
         self._sanitize_database_url()
         if self.settings_service.settings.database_connection_retry:
             self.engine = self._create_engine_with_retry()
         else:
             self.engine = self._create_engine()
+        self._listen_for_connections(self.engine)
 
         self.async_session_maker = async_sessionmaker(
             self.engine,
             class_=SQLModelAsyncSession,
             expire_on_commit=False,
         )
+
+    def _listen_for_connections(self, engine: AsyncEngine) -> None:
+        sync_engine = engine.sync_engine
+        # A few construction-only tests replace create_async_engine with a
+        # MagicMock. There is no SQLAlchemy event target to register on in that
+        # case; real AsyncEngine instances always expose an Engine here.
+        if not isinstance(sync_engine, Engine):
+            return
+        event.listen(sync_engine, "connect", self._connection_listener)
+        self._connection_listener_engine = sync_engine
+
+    def _remove_connection_listener(self, engine: AsyncEngine | None) -> None:
+        if engine is None or self._connection_listener_engine is not engine.sync_engine:
+            return
+        event.remove(engine.sync_engine, "connect", self._connection_listener)
+        self._connection_listener_engine = None
 
     def _sanitize_database_url(self):
         """Create the engine for the database."""
@@ -408,6 +430,9 @@ class DatabaseService(Service):
                 logger.error(f"Invalid poolclass '{poolclass_key}' specified. Using default pool class.")
                 kwargs.pop("poolclass", None)
 
+        if self.database_url.startswith("sqlite+aiosqlite:"):
+            kwargs["poolclass"] = SQLiteStaticPool if kwargs.get("poolclass") is sa.pool.StaticPool else SQLiteNullPool
+
         return create_async_engine(
             self.database_url,
             connect_args=self._get_connect_args(),
@@ -430,13 +455,19 @@ class DatabaseService(Service):
                 "check_same_thread": False,
                 "timeout": settings.db_connect_timeout,
             }
-        # For PostgreSQL, set the timezone to UTC
+        # For PostgreSQL, set the timezone to UTC and disable server-side prepared
+        # statements, mirroring alembic/env.py's migration-engine connect_args. A
+        # stable backend connection is required for the lifetime of a prepared
+        # statement, which PgBouncer transaction-pooling mode does not guarantee.
         if settings.database_url and settings.database_url.startswith(("postgresql", "postgres")):
-            return {"options": "-c timezone=utc"}
+            return {"options": "-c timezone=utc", "prepare_threshold": None}
         return {}
 
     def on_connection(self, dbapi_connection, _connection_record) -> None:
         if isinstance(dbapi_connection, sqlite3.Connection | dialect_sqlite.aiosqlite.AsyncAdapt_aiosqlite_connection):
+            from langflow.services.audit.search_sql import register_sqlite_search_functions
+
+            register_sqlite_search_functions(dbapi_connection)
             pragmas: dict = self.settings_service.settings.sqlite_pragmas or {}
             pragmas_list = []
             for key, val in pragmas.items():
@@ -467,15 +498,29 @@ class DatabaseService(Service):
         if self.settings_service.settings.use_noop_database:
             yield NoopSession()
         else:
-            # Use async_session_maker - the recommended SQLAlchemy 2.0+ pattern
-            # Provides efficient session creation and proper connection pooling
-            async with self.async_session_maker() as session:
+            session = self.async_session_maker()
+            try:
                 yield session
+            finally:
+                # AsyncSession.__aexit__ shields close(), but lets the owner
+                # exit on cancellation while close still uses the database.
+                # Join cleanup so lifespan shutdown cannot close the loop first.
+                cleanup = asyncio.create_task(session.close())
+                try:
+                    await asyncio.shield(cleanup)
+                except asyncio.CancelledError:
+                    while not cleanup.done():
+                        try:
+                            await asyncio.shield(cleanup)
+                        except asyncio.CancelledError:
+                            continue
+                    cleanup.result()
+                    raise
 
     async def ensure_postgresql_version(self) -> None:
         """If the database is PostgreSQL, ensure it is version 15 or higher.
 
-        Langflow's schema uses UNIQUE NULLS DISTINCT, which is only supported in PostgreSQL 15+.
+        OpenXFlow's schema uses UNIQUE NULLS DISTINCT, which is only supported in PostgreSQL 15+.
         Logs the message and raises UnsupportedPostgreSQLVersionError if the version is too old.
         """
         if not self.database_url.startswith(("postgresql", "postgres")):
@@ -878,6 +923,7 @@ class DatabaseService(Service):
             raise
         finally:
             try:
+                self._remove_connection_listener(self.engine)
                 await self.engine.dispose()
             finally:
                 release_sqlite_process_safety(self.database_url, owner=self)

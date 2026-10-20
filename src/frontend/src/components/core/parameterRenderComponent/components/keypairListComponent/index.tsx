@@ -11,6 +11,19 @@ import {
 import { cn } from "@/utils/utils";
 import IconComponent from "../../../../common/genericIconComponent";
 
+type KeypairListProps = {
+  // biome-ignore lint/suspicious/noExplicitAny: legacy component value
+  value: any;
+  // biome-ignore lint/suspicious/noExplicitAny: legacy handler shape
+  handleOnNewValue: any;
+  disabled: boolean;
+  editNode?: boolean;
+  isList?: boolean;
+  id: string;
+  showParameter?: boolean;
+  ariaLabelledBy?: string;
+};
+
 const KeypairListComponent = ({
   value,
   handleOnNewValue,
@@ -20,7 +33,7 @@ const KeypairListComponent = ({
   id,
   showParameter = true,
   ariaLabelledBy,
-}) => {
+}: KeypairListProps) => {
   const { t } = useTranslation();
   const getTestId = (prefix, index) =>
     `${editNode ? "editNode" : ""}${prefix}${index}`;

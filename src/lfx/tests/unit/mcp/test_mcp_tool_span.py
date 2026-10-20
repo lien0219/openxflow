@@ -61,7 +61,7 @@ mcp.run(transport="stdio")
 '''
 
 PROBE = f"""
-import asyncio, json, sys
+import asyncio, json, shlex, sys
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -83,7 +83,7 @@ SENTINEL = {SENTINEL!r}
 
 async def main():
     client = MCPStdioClient()
-    await client.connect_to_server(f"{{sys.executable}} {{SERVER_PATH}}")
+    await client.connect_to_server(shlex.join([sys.executable, SERVER_PATH]))
 
     # The real helper, not a stand-in span: async_start opens it with make_current=False, and
     # that is the path where parenting was silently wrong.

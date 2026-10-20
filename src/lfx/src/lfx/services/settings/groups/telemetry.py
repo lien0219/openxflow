@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from lfx.services.telemetry.constants import DEFAULT_SEGMENT_WRITE_KEY
+
 
 class TelemetrySettings(BaseModel):
     """Telemetry, error tracking, and tracing settings."""
@@ -13,13 +15,16 @@ class TelemetrySettings(BaseModel):
 
     # Telemetry
     do_not_track: bool = False
-    """If set to True, Langflow will not track telemetry."""
-    telemetry_base_url: str = "https://langflow.gateway.scarf.sh"
+    """If set to True, OpenXFlow will not track telemetry."""
+    segment_write_key: str = DEFAULT_SEGMENT_WRITE_KEY
+    """Segment source write key. Official release artifacts include the production default."""
+    segment_api_url: str = "https://api.segment.io/v1/track"
+    """Segment HTTP Tracking API endpoint."""
 
     transactions_storage_enabled: bool = True
-    """If set to True, Langflow will track transactions between flows."""
+    """If set to True, OpenXFlow will track transactions between flows."""
     vertex_builds_storage_enabled: bool = True
-    """If set to True, Langflow will keep track of each vertex builds (outputs) in the UI for any flow."""
+    """If set to True, OpenXFlow will keep track of each vertex builds (outputs) in the UI for any flow."""
     sync_result_storage_enabled: bool = False
     """If set to True, a completed ``mode=sync`` workflow run caches its outputs to ``Job.result``
     (and its session to ``job_metadata``) so a later GET status on that job_id returns them.

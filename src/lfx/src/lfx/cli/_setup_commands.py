@@ -40,7 +40,7 @@ def register(app: typer.Typer) -> None:
             example=example,
         )
 
-    @app.command(name="login", help="Validate credentials against a remote Langflow instance", rich_help_panel="Setup")
+    @app.command(name="login", help="Validate credentials against a remote OpenXFlow instance", rich_help_panel="Setup")
     def login_command_wrapper(
         env: str | None = typer.Option(
             None,
@@ -56,15 +56,15 @@ def register(app: typer.Typer) -> None:
         target: str | None = typer.Option(
             None,
             "--target",
-            help="Langflow instance URL (inline override — skips config file lookup).",
+            help="OpenXFlow instance URL (inline override — skips config file lookup).",
         ),
         api_key: str | None = typer.Option(
             None,
             "--api-key",
-            help="API key for the Langflow instance (used with --target or to override config).",
+            help="API key for the OpenXFlow instance (used with --target or to override config).",
         ),
     ) -> None:
-        """Test connectivity and authentication for a Langflow environment (lazy-loaded)."""
+        """Test connectivity and authentication for an OpenXFlow environment (lazy-loaded)."""
         from lfx.cli.login import login_command
 
         login_command(

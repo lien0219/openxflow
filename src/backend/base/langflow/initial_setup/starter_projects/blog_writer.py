@@ -27,7 +27,7 @@ Blog:
 
     text_input = TextInputComponent(_display_name="Instructions")
     text_input.set(
-        input_value="Use the references above for style to write a new blog/tutorial about Langflow and AI. "
+        input_value="Use the references above for style to write a new blog/tutorial about OpenXFlow and AI. "
         "Suggest non-covered topics."
     )
 

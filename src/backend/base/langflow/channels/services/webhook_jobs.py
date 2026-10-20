@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from lfx.log.logger import logger
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
+
+if TYPE_CHECKING:
+    from sqlmodel.ext.asyncio.session import AsyncSession
 
 from langflow.channels.services.runtime_config import (
     durable_webhook_job_config,
@@ -185,7 +188,8 @@ def _claimable(now):  # type: ignore[no-untyped-def]
 def retry_delay_seconds(attempts: int) -> float:
     """Return bounded exponential retry delay for a one-based attempt count."""
     if attempts <= 0:
-        raise ValueError("attempts must be positive")
+        message = "attempts must be positive"
+        raise ValueError(message)
     config = durable_webhook_job_config()
     return min(
         config.retry_max_seconds,
@@ -488,10 +492,8 @@ class DurableWebhookJobWorker:
         while not self._stop_event.is_set():
             job = await self._claim_one()
             if job is None:
-                try:
+                with suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(self._stop_event.wait(), timeout=config.poll_seconds)
-                except asyncio.TimeoutError:
-                    pass
                 continue
             try:
                 await self._process(job)
@@ -522,13 +524,11 @@ class DurableWebhookJobWorker:
             except Exception:  # noqa: BLE001
                 record_durable_webhook_maintenance_error()
                 await logger.aexception("Unable to maintain durable channel webhook jobs")
-            try:
+            with suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(
                     self._stop_event.wait(),
                     timeout=config.cleanup_interval_seconds,
                 )
-            except asyncio.TimeoutError:
-                pass
 
     async def _claim_one(self) -> ChannelWebhookJob | None:
         try:
@@ -621,5 +621,4 @@ async def durable_webhook_job_lifespan(_app):  # type: ignore[no-untyped-def]
         yield
     finally:
         await worker.stop()
-        task.cancel()
         await asyncio.gather(task, return_exceptions=True)

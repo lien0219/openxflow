@@ -1,7 +1,9 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { useUtilityStore } from "@/stores/utilityStore";
 import { AccountMenu } from "../index";
+
+const mockNavigate = jest.fn();
 
 jest.mock("react-icons/fa", () => ({
   FaGithub: () => <span data-testid="github-icon" />,
@@ -17,12 +19,21 @@ jest.mock("@/controllers/API/queries/auth", () => ({
   useLogout: () => ({ mutate: jest.fn() }),
 }));
 
+jest.mock(
+  "@/customization/components/custom-account-menu-community-links",
+  () => ({
+    CustomAccountMenuCommunityLinks: () => (
+      <div data-testid="custom-account-menu-community-links" />
+    ),
+  }),
+);
+
 jest.mock("@/customization/components/custom-profile-icon", () => ({
   CustomProfileIcon: () => <div data-testid="custom-profile-icon" />,
 }));
 
 jest.mock("@/customization/hooks/use-custom-navigate", () => ({
-  useCustomNavigate: () => jest.fn(),
+  useCustomNavigate: () => mockNavigate,
 }));
 
 jest.mock("@/customization/feature-flags", () => ({
@@ -72,6 +83,7 @@ jest.mock("../../ThemeButtons/index", () => ({
 
 describe("AccountMenu", () => {
   beforeEach(() => {
+    mockNavigate.mockClear();
     act(() => {
       useUtilityStore.setState({ hideLogoutButton: false });
     });
@@ -101,17 +113,29 @@ describe("AccountMenu", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows only OpenXFlow documentation and repository links", () => {
+  it("keeps the OpenXFlow documentation link", () => {
     render(<AccountMenu />);
 
     expect(screen.getByTestId("menu_docs_button").closest("a")).toHaveAttribute(
       "href",
       "https://github.com/lien0219/openxflow#readme",
     );
+  });
+
+  it("keeps settings navigation in the OSS account menu", () => {
+    render(<AccountMenu />);
+
+    fireEvent.click(screen.getByRole("button", { name: /settings/i }));
+
+    expect(mockNavigate).toHaveBeenCalledWith("/settings");
+  });
+
+  it("renders the community links through the customization seam", () => {
+    render(<AccountMenu />);
+
     expect(
-      screen.getByTestId("menu_github_button").closest("a"),
-    ).toHaveAttribute("href", "https://github.com/lien0219/openxflow");
-    expect(screen.queryByTestId("menu_discord_button")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("menu_twitter_button")).not.toBeInTheDocument();
+      screen.getByTestId("custom-account-menu-community-links"),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("menu_github_button")).not.toBeInTheDocument();
   });
 });

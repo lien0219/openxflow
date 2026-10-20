@@ -113,7 +113,7 @@ jest.mock("@/utils/utils", () => ({
 const defaultProps = {
   selectedPlatform: "macoslinux",
   setSelectedPlatform: jest.fn(),
-  selectedTransport: "sse",
+  selectedTransport: "sse" as const,
   setSelectedTransport: jest.fn(),
   isDarkMode: false,
   isCopied: false,

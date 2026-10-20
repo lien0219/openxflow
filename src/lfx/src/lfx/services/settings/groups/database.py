@@ -20,13 +20,13 @@ class DatabaseSettings(BaseModel):
     (i.e. in the package directory)."""
 
     database_url: str | None = None
-    """Database URL for Langflow. If not provided, Langflow will use a SQLite database.
+    """Database URL for OpenXFlow. If not provided, OpenXFlow will use a SQLite database.
     The driver shall be an async one like `sqlite+aiosqlite` (`sqlite` and `postgresql`
     will be automatically converted to the async drivers `sqlite+aiosqlite` and
     `postgresql+psycopg` respectively)."""
 
     database_connection_retry: bool = False
-    """If True, Langflow will retry to connect to the database if it fails."""
+    """If True, OpenXFlow will retry to connect to the database if it fails."""
 
     pool_size: int = 20
     """The number of connections to keep open in the connection pool.
@@ -42,7 +42,7 @@ class DatabaseSettings(BaseModel):
 
     migration_lock_namespace: str | None = None
     """Optional namespace identifier for PostgreSQL advisory lock during migrations.
-    If not provided, a hash of the database URL will be used. Useful when multiple Langflow
+    If not provided, a hash of the database URL will be used. Useful when multiple OpenXFlow
     instances share the same database and need coordinated migration locking."""
 
     sqlite_pragmas: dict | None = {

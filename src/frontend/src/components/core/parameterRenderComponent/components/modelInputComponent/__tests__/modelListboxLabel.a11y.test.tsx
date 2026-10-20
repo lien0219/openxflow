@@ -16,9 +16,9 @@ window.HTMLElement.prototype.scrollIntoView = jest.fn();
 const option = (name: string, provider: string): ModelOption =>
   ({
     name,
+    icon: "",
     provider,
-    enabled: true,
-  }) as ModelOption;
+  }) satisfies ModelOption;
 
 const groupedOptions = {
   OpenAI: [option("gpt-4o", "OpenAI")],

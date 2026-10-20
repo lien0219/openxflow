@@ -104,7 +104,12 @@ const makeProvider = (
   updated_at: null,
 });
 
-const makeDeployment = (id = "dep-1", name = "My Bot"): Deployment => ({
+const makeDeployment = (
+  id = "dep-1",
+  name = "My Bot",
+  _providerSnapshotId = "snap-1",
+  _versionTag = "v-1",
+): Deployment => ({
   id,
   provider_id: "prov-1",
   description: null,

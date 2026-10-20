@@ -1,6 +1,4 @@
 import { render, waitFor } from "@testing-library/react";
-import React from "react";
-import * as ReactSortableModule from "react-sortablejs";
 import SortableListComponent from "./index";
 
 // Mock ListSelectionComponent to avoid its complexity
@@ -32,6 +30,7 @@ describe("SortableListComponent reproduction", () => {
       name: "test-list",
       value: [{ name: "item1" }, { name: "item2" }],
       handleOnNewValue: handleOnNewValue,
+      editNode: false,
       disabled: false,
       recommended: false,
       placeholder: "Select items",

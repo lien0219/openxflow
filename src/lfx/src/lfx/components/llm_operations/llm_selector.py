@@ -188,7 +188,7 @@ class LLMSelectorComponent(Component):
             self.status = ""
 
     def _get_api_model_id_for_langflow_model(self, langflow_model_name: str) -> str | None:
-        """Attempt to find the OpenRouter API ID for a given Langflow model name."""
+        """Attempt to find the OpenRouter API ID for a given OpenXFlow model name."""
         if not langflow_model_name:
             return None
 
@@ -218,13 +218,13 @@ class LLMSelectorComponent(Component):
                 return self._model_name_to_api_id[name_variant]
 
         self.log(
-            f"Could not map Langflow model name '{langflow_model_name}' "
+            f"Could not map OpenXFlow model name '{langflow_model_name}' "
             f"(tried variants: {unique_names_to_check}) to an OpenRouter API ID."
         )
         return None
 
     def _get_model_specs_dict(self, langflow_model_name: str) -> dict[str, Any]:
-        """Get a dictionary of relevant model specifications for a given Langflow model name."""
+        """Get a dictionary of relevant model specifications for a given OpenXFlow model name."""
         if not self.use_openrouter_specs or not self._models_api_cache:
             return {
                 "id": langflow_model_name,
@@ -236,7 +236,7 @@ class LLMSelectorComponent(Component):
 
         if not api_model_id or api_model_id not in self._models_api_cache:
             log_msg = (
-                f"No cached API data found for Langflow model '{langflow_model_name}' "
+                f"No cached API data found for OpenXFlow model '{langflow_model_name}' "
                 f"(mapped API ID: {api_model_id}). Returning basic info."
             )
             self.log(log_msg)
@@ -306,7 +306,7 @@ If no model seems suitable, pick the first model in the list (index 0) as a fall
 
         successful_result: Message | None = None
         try:
-            self.log(f"Starting model routing with {len(self.models)} available Langflow models.")
+            self.log(f"Starting model routing with {len(self.models)} available OpenXFlow models.")
             self.log(f"Optimization preference: {self.optimization}")
             self.log(f"Input length: {len(self.input_value)} characters")
 
@@ -332,7 +332,7 @@ If no model seems suitable, pick the first model in the list (index 0) as a fall
 
                 model_specs_for_judge.append({"index": i, "langflow_name": langflow_model_name, "specs": spec_dict})
                 self.log(
-                    f"Prepared specs for Langflow model {i} ('{langflow_model_name}'): {spec_dict.get('name', 'N/A')}"
+                    f"Prepared specs for OpenXFlow model {i} ('{langflow_model_name}'): {spec_dict.get('name', 'N/A')}"
                 )
 
             estimated_tokens = len(self.input_value.split()) * 1.3
@@ -372,11 +372,11 @@ Return ONLY the index number:"""
             specs_source = (
                 "OpenRouter API"
                 if self.use_openrouter_specs and self._models_api_cache
-                else "Basic (Langflow model names only)"
+                else "Basic (OpenXFlow model names only)"
             )
             self._routing_decision = f"""Model Selection Decision:
 - Selected Model Index: {selected_index}
-- Selected Langflow Model Name: {self._selected_model_name}
+- Selected OpenXFlow Model Name: {self._selected_model_name}
 - Selected API Model ID (if resolved): {self._selected_api_model_id}
 - Optimization Preference: {self.optimization}
 - Input Query Length: {len(self.input_value)} characters (~{int(estimated_tokens)} tokens)
@@ -385,7 +385,7 @@ Return ONLY the index number:"""
 
             log_msg = (
                 f"DECISION by Judge LLM: Selected model index {selected_index} -> "
-                f"Langflow Name: '{self._selected_model_name}', API ID: '{self._selected_api_model_id}'"
+                f"OpenXFlow Name: '{self._selected_model_name}', API ID: '{self._selected_api_model_id}'"
             )
             self.log(log_msg)
 
@@ -421,7 +421,7 @@ Return ONLY the index number:"""
                     self._selected_api_model_id = "fallback_model"
                 self._routing_decision = f"""Fallback Decision:
 - Error During Routing: {error_msg}
-- Fallback Model Langflow Name: {self._selected_model_name}
+- Fallback Model OpenXFlow Name: {self._selected_model_name}
 - Fallback Model API ID (if resolved): {self._selected_api_model_id}
 - Reason: Automatic fallback enabled"""
 

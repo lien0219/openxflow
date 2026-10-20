@@ -1,6 +1,9 @@
 """Tests for URLComponent input type configuration."""
 
+import os
+import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -38,6 +41,30 @@ class TestURLComponentInputTypes:
         """Redirects must be followed by default so canonical http->https / www hops resolve."""
         follow_redirects_input = next(inp for inp in url_component.inputs if inp.name == "follow_redirects")
         assert follow_redirects_input.value is True
+
+    def test_import_does_not_load_dotenv_into_process_environment(self):
+        """Importing a component must not apply the repository .env to the test process."""
+        project_root = Path(__file__).parents[6]
+        script = (
+            "import os; "
+            "assert os.getenv('LANGFLOW_SSRF_PROTECTION_ENABLED') is None; "
+            "assert os.getenv('LANGFLOW_SSRF_ALLOWED_HOSTS') is None; "
+            "import lfx.components.data_source.url; "
+            "assert os.getenv('LANGFLOW_SSRF_PROTECTION_ENABLED') is None; "
+            "assert os.getenv('LANGFLOW_SSRF_ALLOWED_HOSTS') is None"
+        )
+        env = os.environ.copy()
+        env.pop("LANGFLOW_SSRF_PROTECTION_ENABLED", None)
+        env.pop("LANGFLOW_SSRF_ALLOWED_HOSTS", None)
+        result = subprocess.run(  # noqa: S603 - fixed test script using this interpreter, no shell
+            [sys.executable, "-c", script],
+            cwd=project_root,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr or result.stdout
 
 
 class TestHeadersForRedirect:

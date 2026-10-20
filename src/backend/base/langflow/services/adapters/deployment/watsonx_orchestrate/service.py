@@ -953,7 +953,7 @@ class WatsonxOrchestrateDeploymentService(BaseDeploymentService):
         without touching the tool's name, metadata, or connection bindings.
 
         The tool name is fetched from wxO at call time, not derived from the
-        Langflow flow name. This is intentional: the user may have set a
+        OpenXFlow flow name. This is intentional: the user may have set a
         custom tool name during initial deployment, or renamed the tool
         directly in the wxO console. Either way, the provider is the source
         of truth for the tool name.
@@ -962,7 +962,7 @@ class WatsonxOrchestrateDeploymentService(BaseDeploymentService):
 
         * **Tool renamed in wxO console** — The new name is picked up
           automatically on the next update since we always fetch it fresh.
-          Langflow never stores the tool name locally.
+          OpenXFlow never stores the tool name locally.
         * **Tool deleted in wxO** — ``get_drafts_by_ids`` returns empty
           and we raise ``InvalidContentError`` before any mutation.
         * **Tool exists but name is empty/null** — Defensive check raises
@@ -983,7 +983,7 @@ class WatsonxOrchestrateDeploymentService(BaseDeploymentService):
         by name.  A rename preserves identity; a delete+recreate does not.
 
         **Blast-radius boundary:** callers must verify that ``snapshot_id``
-        is tracked by a Langflow attachment record before calling this
+        is tracked by an OpenXFlow attachment record before calling this
         method; this prevents accidental overwrites of externally managed
         WXO tools.
         """
@@ -992,7 +992,7 @@ class WatsonxOrchestrateDeploymentService(BaseDeploymentService):
         clients = await self._get_provider_clients(user_id=user_id, db=db)
 
         # Fetch the existing tool to preserve its wxO name — the tool may have
-        # been deployed with a custom name that differs from the Langflow flow
+        # been deployed with a custom name that differs from the OpenXFlow flow
         # name, and we must not overwrite it with the flow name.
         existing_tools = await asyncio.to_thread(clients.tool.get_drafts_by_ids, [snapshot_id])
         if not existing_tools or not isinstance(existing_tools[0], dict):

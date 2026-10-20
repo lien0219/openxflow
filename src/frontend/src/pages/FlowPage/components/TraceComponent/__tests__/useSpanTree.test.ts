@@ -340,7 +340,12 @@ describe("useSpanTree", () => {
 
       const { result, rerender } = renderHook(
         ({ spans, selectedSpanId }) => useSpanTree({ spans, selectedSpanId }),
-        { initialProps: { spans: traceA, selectedSpanId: null } },
+        {
+          initialProps: {
+            spans: traceA,
+            selectedSpanId: null as string | null,
+          },
+        },
       );
 
       expect(result.current.focusedId).toBe("a1");
@@ -373,7 +378,12 @@ describe("useSpanTree", () => {
 
       const { result, rerender } = renderHook(
         ({ spans, selectedSpanId }) => useSpanTree({ spans, selectedSpanId }),
-        { initialProps: { spans: traceA, selectedSpanId: null } },
+        {
+          initialProps: {
+            spans: traceA,
+            selectedSpanId: null as string | null,
+          },
+        },
       );
 
       rerender({ spans: traceB, selectedSpanId: "b2" });

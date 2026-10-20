@@ -300,6 +300,18 @@ storage_service = "nonexistent.module:NonexistentClass"
 class TestServiceCreation:
     """Tests for creating real services with dependency injection."""
 
+    def test_factory_creates_protocol_cache_without_readiness_lifecycle(self, service_manager):
+        """Factory-created caches must work before an application has initialized services."""
+        from lfx.services.shared_component_cache.factory import SharedComponentCacheServiceFactory
+
+        service_manager.register_factory(SharedComponentCacheServiceFactory())
+
+        cache = service_manager.get(ServiceType.SHARED_COMPONENT_CACHE_SERVICE)
+        cache.set("tools", ["tool"])
+
+        assert cache.get("tools") == ["tool"]
+        assert service_manager.get(ServiceType.SHARED_COMPONENT_CACHE_SERVICE) is cache
+
     def test_create_storage_service(self, service_manager):
         """Test creating LocalStorageService."""
         service_manager.register_service_class(ServiceType.STORAGE_SERVICE, LocalStorageService)
@@ -592,10 +604,11 @@ variable_service = "lfx.services.variable.service:VariableService"
 class _SpyService(Service):
     """Minimal Service that records teardown and can be flipped to raise."""
 
-    def __init__(self, name: str, *, fail: bool = False) -> None:
+    def __init__(self, name: str, *, fail: bool = False, order: list[str] | None = None) -> None:
         super().__init__()
         self._name = name
         self._fail = fail
+        self._order = order
         self.torn_down = False
 
     @property
@@ -604,6 +617,8 @@ class _SpyService(Service):
 
     async def teardown(self) -> None:
         self.torn_down = True
+        if self._order is not None:
+            self._order.append(self._name)
         if self._fail:
             msg = f"{self._name} teardown boom"
             raise RuntimeError(msg)
@@ -611,6 +626,17 @@ class _SpyService(Service):
 
 class TestServiceManagerTeardown:
     """``teardown(raise_on_error=...)`` — strict mode for fork-safety-critical disposal."""
+
+    async def test_tears_down_services_in_reverse_creation_order(self, service_manager):
+        order = []
+        dependency = _SpyService("dependency", order=order)
+        dependent = _SpyService("dependent", order=order)
+        service_manager.services[ServiceType.DATABASE_SERVICE] = dependency
+        service_manager.services[ServiceType.STORAGE_SERVICE] = dependent
+
+        await service_manager.teardown()
+
+        assert order == ["dependent", "dependency"]
 
     async def test_best_effort_swallows_errors_by_default(self, service_manager):
         bad = _SpyService("bad_service", fail=True)

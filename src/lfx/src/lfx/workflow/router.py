@@ -45,6 +45,7 @@ from lfx.services.variable.request_scope import (
     reset_no_env_fallback,
     reset_request_variables,
 )
+from lfx.utils.async_helpers import RUN_CANCEL_GRACE_SECONDS, cancel_and_wait
 from lfx.workflow.actions import WorkflowAction
 from lfx.workflow.adapters import (
     STREAM_ADAPTERS,
@@ -83,7 +84,7 @@ class _WorkflowEventQueue:
 
     ``EventManager`` dispatches with ``put_nowait``, so a plain bounded
     ``asyncio.Queue`` would silently drop frames via ``QueueFull`` when the SSE
-    client falls behind. Ported from the langflow backend v2 stream wrapper: the
+    client falls behind. Ported from the OpenXFlow backend v2 stream wrapper: the
     first overflow flips the queue closed and enqueues a single ``error`` event
     followed by the terminal sentinel, so the consumer surfaces the failure and
     ends the stream cleanly.
@@ -92,6 +93,7 @@ class _WorkflowEventQueue:
     def __init__(self, maxsize: int) -> None:
         self._queue: asyncio.Queue[_QueueItem] = asyncio.Queue(maxsize=maxsize)
         self._overflowed = False
+        self._closed = False
         self._loop = asyncio.get_running_loop()
         self._overflow_task: asyncio.Task[None] | None = None
 
@@ -103,12 +105,12 @@ class _WorkflowEventQueue:
         return await self._queue.get()
 
     async def put(self, item: _QueueItem) -> None:
-        if self._overflowed:
+        if self._overflowed or self._closed:
             return
         await self._queue.put(item)
 
     def put_nowait(self, item: _QueueItem) -> None:
-        if self._overflowed:
+        if self._overflowed or self._closed:
             return
         try:
             self._queue.put_nowait(item)
@@ -125,6 +127,16 @@ class _WorkflowEventQueue:
         }
         await self._queue.put((f"error-{uuid4()}", json.dumps(payload).encode("utf-8"), time.time()))
         await self._queue.put((None, None, time.time()))
+
+    def close(self) -> None:
+        """Mark the consumer gone: later puts return at once and a blocked put is released.
+
+        Nothing reads the queue after the consumer stops, so the run's terminal sentinel
+        ``put`` on a full queue would otherwise block forever and pin the run task.
+        """
+        self._closed = True
+        while not self._queue.empty():
+            self._queue.get_nowait()
 
     async def aclose(self) -> None:
         if self._overflow_task is not None and not self._overflow_task.done():
@@ -255,7 +267,7 @@ def _terminal_node_ids(graph: Graph) -> list[str]:
 def _validate_output_ids(output_ids: list[str] | None, terminal_node_ids: list[str]) -> None:
     """Reject ``output_ids`` the flow does not produce, before running.
 
-    Mirrors the langflow backend v2 sync path: an unknown id is a 422 up front
+    Mirrors the OpenXFlow backend v2 sync path: an unknown id is a 422 up front
     rather than wasted compute followed by a completed response with no selected
     output. Validated against the flow's terminal (sink) nodes, the same set the
     converter resolves selections against.
@@ -281,7 +293,7 @@ async def run_workflow_sync(
 ) -> WorkflowExecutionResponse:
     """Run a flow to completion and build a v2 ``WorkflowExecutionResponse``.
 
-    Uses ``run_graph_internal`` (the same primitive the langflow backend sync
+    Uses ``run_graph_internal`` (the same primitive the OpenXFlow backend sync
     path uses) so the result is the aggregated ``RunOutputs`` shape the shared
     converter expects. Request-level ``globals`` are applied as request-scoped
     variables; unknown ``output_ids`` are rejected up front (422); component-level
@@ -417,11 +429,13 @@ async def stream_workflow_frames(
                 yield _format_sse(event.data_json, seq)
                 seq += 1
     finally:
-        if not run_task.done():
-            run_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await run_task
-        await queue.aclose()
+        queue.close()
+        # One cancel, not one per event-loop tick from a cancelled response scope; see
+        # cancel_and_wait for why a bare ``await run_task`` here re-cancels the run.
+        try:
+            await cancel_and_wait(run_task, grace_seconds=RUN_CANCEL_GRACE_SECONDS)
+        finally:
+            await queue.aclose()
 
 
 def create_workflow_router(
@@ -457,7 +471,7 @@ def create_workflow_router(
 
     ``developer_api_guard`` controls the ``developer_api_enabled`` 403 guard. It
     defaults to ``True`` but is an opt-in that no production mount enables: both
-    the langflow backend and bare ``lfx serve`` pass ``False``, and the v2
+    the OpenXFlow backend and bare ``lfx serve`` pass ``False``, and the v2
     ``/workflows`` surface never carried a developer-API gate (byte-identical to
     today's behavior). Bare ``lfx serve`` also has no settings service to read,
     so the guard could not run there anyway.

@@ -9,7 +9,7 @@ join it under their own absolute base directory.
 
 Why HMAC-SHA256 truncated to 32 hex chars (128 bits):
     - 128 bits is far past any practical collision risk for the realistic ceiling
-      on Langflow tenants per instance.
+      on OpenXFlow tenants per instance.
     - Hashing with a server-side pepper prevents directory listings of
       ``<base>/users/`` from leaking the set of user IDs that have ever used the
       tool.

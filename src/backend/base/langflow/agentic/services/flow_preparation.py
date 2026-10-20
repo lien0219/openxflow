@@ -237,7 +237,7 @@ def inject_lfx_components_path(flow_data: dict) -> dict:
     The bundled LangflowAssistant flow hardcodes a relative path that only
     resolves from the monorepo root. In any packaged install the process CWD
     is different and the Directory component raises "Path ... must exist and
-    be a directory.", causing the Langflow Assistant to fail with
+    be a directory.", causing the OpenXFlow Assistant to fail with
     "An internal error occurred while executing the flow." on first use.
 
     This function walks the flow nodes and, for each Directory node whose

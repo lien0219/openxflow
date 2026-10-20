@@ -23,7 +23,7 @@ class McpSettings(BaseModel):
     stdio or Streamable HTTP session to become ready. It does not change the per-attempt 2 s
     cap on the Streamable HTTP ``initialize`` handshake, so a slow-to-start server is only
     tolerated over stdio. The default is sized for a cold stdio server inside a packaged
-    interpreter (Langflow Desktop's bundled ``langflow.agentic.mcp`` takes 18-25 s to import
+    interpreter (OpenXFlow Desktop's bundled ``langflow.agentic.mcp`` takes 18-25 s to import
     on first launch), not a warm developer venv.
 
     It also acts as a floor for ``mcp_tool_execution_timeout``: tool calls wait for the larger
@@ -69,7 +69,7 @@ class McpSettings(BaseModel):
 
     # MCP Server
     mcp_server_enabled: bool = True
-    """If set to False, Langflow will not enable the MCP server."""
+    """If set to False, OpenXFlow will not enable the MCP server."""
 
     mcp_sse_enabled: bool = True
     """If set to False, the legacy SSE transport and its message endpoint answer 404.
@@ -81,14 +81,14 @@ class McpSettings(BaseModel):
     still speak SSE; Streamable HTTP is unaffected either way.
     Env var: LANGFLOW_MCP_SSE_ENABLED."""
     mcp_server_enable_progress_notifications: bool = False
-    """If set to False, Langflow will not send progress notifications in the MCP server."""
+    """If set to False, OpenXFlow will not send progress notifications in the MCP server."""
 
     # Add projects to MCP servers automatically on creation
     add_projects_to_mcp_servers: bool = True
     """If set to True, newly created projects will be added to the user's MCP servers config automatically."""
 
     skip_mcp_auto_init: bool = False
-    """If set to True, Langflow skips the background MCP server auto-initialization on startup.
+    """If set to True, OpenXFlow skips the background MCP server auto-initialization on startup.
 
     The startup task reconciles every project's MCP server config, which for apikey/none
     projects can spawn ``uvx mcp-proxy`` and open an outbound connection. On an offline or
@@ -98,14 +98,14 @@ class McpSettings(BaseModel):
 
     # MCP Composer
     mcp_composer_enabled: bool = True
-    """If set to False, Langflow will not start the MCP Composer service."""
+    """If set to False, OpenXFlow will not start the MCP Composer service."""
     mcp_composer_version: str = "==0.1.0.8.10"
     """Version constraint for mcp-composer when using uvx. Uses PEP 440 syntax."""
 
     mcp_sdk_constraint: str = "mcp~=1.28"
-    """Requirement injected as ``uvx --with`` when Langflow launches an MCP server through uvx.
+    """Requirement injected as ``uvx --with`` when OpenXFlow launches an MCP server through uvx.
 
-    ``uvx`` resolves each server into its own ephemeral environment, so Langflow's own
+    ``uvx`` resolves each server into its own ephemeral environment, so OpenXFlow's own
     ``mcp`` pin does not apply there. ``mcp-proxy`` and ``mcp-composer`` still declare an
     unbounded ``mcp>=1.x``, and the 2.0 SDK removed ``request_ctx`` and renamed ``McpError``,
     so an unconstrained resolve installs a release those packages cannot import. Keep the
@@ -117,7 +117,7 @@ class McpSettings(BaseModel):
 
     # A2A protocol
     a2a_enabled: bool = False
-    """If set to True, Langflow serves spec-valid A2A agent cards at a per-flow
+    """If set to True, OpenXFlow serves spec-valid A2A agent cards at a per-flow
     discovery endpoint for agent-typed, a2a_enabled flows. Default off (opt-in).
     Env var: LANGFLOW_A2A_ENABLED."""
     a2a_allow_private_webhooks: bool = False
@@ -161,7 +161,7 @@ class McpSettings(BaseModel):
 
     Because the list is authoritative, naming a loader or interpreter variable here
     re-enables that code-execution vector; list only application credentials and configuration
-    your servers actually need. Langflow always injects ``PATH`` itself, so it need not be
+    your servers actually need. OpenXFlow always injects ``PATH`` itself, so it need not be
     listed. Env var: LANGFLOW_MCP_SERVER_ENV_ALLOWLIST.
     """
 

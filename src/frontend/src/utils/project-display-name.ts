@@ -1,20 +1,23 @@
 import type { FolderType, ProjectListType } from "@/pages/MainPage/entities";
 
 type ProjectNameTranslator = (
-  key: "project.ownedBy",
-  options: { name: string; owner: string },
+  key: "project.ownedBy" | "assistant.title",
+  options?: { name: string; owner: string },
 ) => string;
 
 export const getProjectDisplayName = (
   project: Pick<FolderType, "id" | "name" | "owner_username" | "is_owner">,
   t: ProjectNameTranslator,
 ): string => {
+  // Keep the legacy database name stable for lookup and deletion protection.
+  const name =
+    project.name === "Langflow Assistant" ? t("assistant.title") : project.name;
   if (project.is_owner !== false || !project.owner_username) {
-    return project.name;
+    return name;
   }
 
   return t("project.ownedBy", {
-    name: project.name,
+    name,
     owner: project.owner_username,
   });
 };

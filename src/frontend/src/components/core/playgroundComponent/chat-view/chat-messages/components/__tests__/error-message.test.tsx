@@ -46,6 +46,7 @@ jest.mock("../../utils/extract-error-message", () => ({
 }));
 
 const makeErrorBlock = (reason: string): ContentBlock => ({
+  type: "group",
   title: "error",
   allow_markdown: true,
   component: "Component",

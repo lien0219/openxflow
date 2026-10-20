@@ -103,6 +103,7 @@ class TestOllamaEmbeddingsComponent(ComponentTestBaseWithoutClient):
     # Build Embeddings Tests
     # =========================================================================
 
+    @patch("lfx.utils.util.get_container_host", new=lambda: None)
     def test_build_embeddings_basic(self, mock_ollama_embeddings, component_class, default_kwargs):
         """Test build_embeddings with basic parameters."""
         mock_instance = MagicMock()
@@ -117,6 +118,7 @@ class TestOllamaEmbeddingsComponent(ComponentTestBaseWithoutClient):
         )
         assert result == mock_instance
 
+    @patch("lfx.utils.util.get_container_host", new=lambda: None)
     def test_build_embeddings_with_api_key(self, mock_ollama_embeddings, component_class):
         """Test build_embeddings passes headers via client_kwargs when API key is set."""
         mock_instance = MagicMock()
@@ -168,6 +170,7 @@ class TestOllamaEmbeddingsComponent(ComponentTestBaseWithoutClient):
     # URL Handling Tests - /v1 Suffix Stripping
     # =========================================================================
 
+    @patch("lfx.utils.util.get_container_host", new=lambda: None)
     def test_build_embeddings_strips_v1_suffix_and_logs_warning(
         self, mock_ollama_logger, mock_ollama_embeddings, component_class
     ):
@@ -192,6 +195,7 @@ class TestOllamaEmbeddingsComponent(ComponentTestBaseWithoutClient):
         call_kwargs = mock_ollama_embeddings.call_args[1]
         assert call_kwargs["base_url"] == "http://localhost:11434"
 
+    @patch("lfx.utils.util.get_container_host", new=lambda: None)
     def test_build_embeddings_strips_v1_trailing_slash(
         self, mock_ollama_logger, mock_ollama_embeddings, component_class
     ):
@@ -411,6 +415,7 @@ class TestOllamaEmbeddingsComponent(ComponentTestBaseWithoutClient):
     @pytest.mark.asyncio
     @patch("lfx.components.ollama.ollama_embeddings.httpx.AsyncClient.post")
     @patch("lfx.components.ollama.ollama_embeddings.httpx.AsyncClient.get")
+    @patch("lfx.utils.util.get_container_host", new=lambda: None)
     async def test_get_model_with_v1_suffix_stripped(self, mock_get, mock_post, component_class):
         """Test that get_model strips /v1 suffix when fetching models."""
         component = component_class()
@@ -559,6 +564,7 @@ class TestOllamaEmbeddingsComponent(ComponentTestBaseWithoutClient):
     @pytest.mark.asyncio
     @patch("lfx.components.ollama.ollama_embeddings.httpx.AsyncClient.post")
     @patch("lfx.components.ollama.ollama_embeddings.httpx.AsyncClient.get")
+    @patch("lfx.utils.util.get_container_host", new=lambda: None)
     async def test_get_model_url_normalization_trailing_slash(self, mock_get, mock_post, component_class):
         """Test that get_model normalizes URLs with trailing slashes."""
         component = component_class()
@@ -590,6 +596,7 @@ class TestOllamaEmbeddingsComponent(ComponentTestBaseWithoutClient):
     @pytest.mark.asyncio
     @patch("lfx.components.ollama.ollama_embeddings.httpx.AsyncClient.post")
     @patch("lfx.components.ollama.ollama_embeddings.httpx.AsyncClient.get")
+    @patch("lfx.utils.util.get_container_host", new=lambda: None)
     async def test_get_model_url_normalization_v1_trailing_slash(self, mock_get, mock_post, component_class):
         """Test that get_model normalizes URLs with /v1/ (trailing slash after v1)."""
         component = component_class()
@@ -710,6 +717,7 @@ class TestOllamaEmbeddingsComponent(ComponentTestBaseWithoutClient):
 
     @pytest.mark.asyncio
     @patch("lfx.components.ollama.ollama_embeddings.httpx.AsyncClient.get")
+    @patch("lfx.utils.util.get_container_host", new=lambda: None)
     async def test_is_valid_ollama_url_with_v1_suffix(self, mock_get, component_class):
         """Test that is_valid_ollama_url strips /v1 suffix when validating."""
         component = component_class()

@@ -1,0 +1,58 @@
+name: openxflow
+
+services:
+  openxflow:
+    image: "${OPENXFLOW_IMAGE:?OPENXFLOW_IMAGE is required}"
+    user: "1000:0"
+    container_name: openxflow
+    restart: unless-stopped
+    stop_grace_period: 30s
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - "${OPENXFLOW_ENV_FILE:-./.env}"
+    environment:
+      LANGFLOW_HOST: "0.0.0.0"
+      LANGFLOW_PORT: "7860"
+      LANGFLOW_DEPLOYMENT_PROFILE: "prod"
+      LANGFLOW_AUTO_LOGIN: "false"
+      LANGFLOW_NEW_USER_IS_ACTIVE: "false"
+      LANGFLOW_CONFIG_DIR: "/app/data/config"
+      LANGFLOW_SAVE_DB_IN_CONFIG_DIR: "false"
+      LANGFLOW_DATABASE_URL: "${LANGFLOW_DATABASE_URL:?LANGFLOW_DATABASE_URL is required}"
+      LANGFLOW_SECRET_KEY: "${LANGFLOW_SECRET_KEY:?LANGFLOW_SECRET_KEY is required}"
+      LANGFLOW_STORAGE_TYPE: "${LANGFLOW_STORAGE_TYPE:?LANGFLOW_STORAGE_TYPE is required}"
+      PGVECTOR_CONNECTION_STRING: "${PGVECTOR_CONNECTION_STRING:?PGVECTOR_CONNECTION_STRING is required}"
+      LANGFLOW_CACHE_TYPE: "${LANGFLOW_CACHE_TYPE:-redis}"
+      LANGFLOW_REDIS_URL: "${LANGFLOW_REDIS_URL:?LANGFLOW_REDIS_URL is required}"
+      LANGFLOW_JOB_QUEUE_TYPE: "${LANGFLOW_JOB_QUEUE_TYPE:-redis}"
+      LANGFLOW_REDIS_QUEUE_URL: "${LANGFLOW_REDIS_QUEUE_URL:?LANGFLOW_REDIS_QUEUE_URL is required}"
+      LANGFLOW_RATE_LIMIT_STORAGE_URI: "${LANGFLOW_RATE_LIMIT_STORAGE_URI:-}"
+      LANGFLOW_STORE_ENVIRONMENT_VARIABLES: "false"
+      LANGFLOW_SSRF_PROTECTION_ENABLED: "${LANGFLOW_SSRF_PROTECTION_ENABLED:-true}"
+      LANGFLOW_LOG_LEVEL: "${LANGFLOW_LOG_LEVEL:-INFO}"
+      LANGFLOW_LOG_FILE: ""
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      AWS_DEFAULT_REGION: "${AWS_DEFAULT_REGION:?AWS_DEFAULT_REGION is required}"
+      AWS_ENDPOINT_URL: "${AWS_ENDPOINT_URL:-}"
+      AWS_S3_FORCE_PATH_STYLE: "${AWS_S3_FORCE_PATH_STYLE:-false}"
+      LANGFLOW_OBJECT_STORAGE_BUCKET_NAME: "${LANGFLOW_OBJECT_STORAGE_BUCKET_NAME:?LANGFLOW_OBJECT_STORAGE_BUCKET_NAME is required}"
+      LANGFLOW_CACHE_SIGNING_KEY: "${LANGFLOW_CACHE_SIGNING_KEY:?LANGFLOW_CACHE_SIGNING_KEY is required}"
+    command: ["langflow", "run", "--workers", "1"]
+    ports:
+      - "${OPENXFLOW_BIND_ADDRESS:-127.0.0.1}:${OPENXFLOW_PORT:-7860}:7860"
+    volumes:
+      - "${OPENXFLOW_DATA_DIR:-./data}:/app/data"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7860/health_check >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"

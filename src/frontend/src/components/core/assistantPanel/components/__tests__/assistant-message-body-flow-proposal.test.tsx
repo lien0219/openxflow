@@ -126,7 +126,7 @@ function buildProposalMessage(): AssistantMessage {
     continuationExpected: false,
     result: {
       content: "Built a Chat Flow...",
-      validated: undefined,
+      validated: false,
       hasFlow: true,
     },
     pendingFlowProposal: {

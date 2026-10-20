@@ -123,7 +123,10 @@ class TestKillProcessOnPort:
     @pytest.mark.asyncio
     async def test_kill_process_on_port_no_process(self, mcp_service):
         """Test that _kill_process_on_port returns False when no process is found."""
-        with patch("asyncio.to_thread") as mock_to_thread:
+        with (
+            patch("lfx.services.mcp_composer.service.platform.system", return_value="Linux"),
+            patch("asyncio.to_thread") as mock_to_thread,
+        ):
             # Mock lsof returning no processes
             mock_result = MagicMock()
             mock_result.returncode = 1  # lsof returns 1 when no matches
@@ -137,7 +140,10 @@ class TestKillProcessOnPort:
     @pytest.mark.asyncio
     async def test_kill_process_on_port_success(self, mcp_service):
         """Test that _kill_process_on_port successfully kills a process."""
-        with patch("asyncio.to_thread") as mock_to_thread:
+        with (
+            patch("lfx.services.mcp_composer.service.platform.system", return_value="Linux"),
+            patch("asyncio.to_thread") as mock_to_thread,
+        ):
             # Mock lsof returning a PID
             mock_lsof_result = MagicMock()
             mock_lsof_result.returncode = 0
@@ -160,7 +166,10 @@ class TestKillProcessOnPort:
     @pytest.mark.asyncio
     async def test_kill_process_on_port_multiple_pids(self, mcp_service):
         """Test that _kill_process_on_port handles multiple PIDs."""
-        with patch("asyncio.to_thread") as mock_to_thread:
+        with (
+            patch("lfx.services.mcp_composer.service.platform.system", return_value="Linux"),
+            patch("asyncio.to_thread") as mock_to_thread,
+        ):
             # Mock lsof returning multiple PIDs
             mock_lsof_result = MagicMock()
             mock_lsof_result.returncode = 0
@@ -179,7 +188,10 @@ class TestKillProcessOnPort:
     @pytest.mark.asyncio
     async def test_kill_process_on_port_kill_fails(self, mcp_service):
         """Test that _kill_process_on_port handles kill command failure."""
-        with patch("asyncio.to_thread") as mock_to_thread:
+        with (
+            patch("lfx.services.mcp_composer.service.platform.system", return_value="Linux"),
+            patch("asyncio.to_thread") as mock_to_thread,
+        ):
             # Mock lsof returning a PID
             mock_lsof_result = MagicMock()
             mock_lsof_result.returncode = 0

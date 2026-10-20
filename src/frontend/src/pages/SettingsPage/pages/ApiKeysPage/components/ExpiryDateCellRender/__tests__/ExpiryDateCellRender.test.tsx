@@ -14,9 +14,7 @@ const renderWithProvider = (ui: React.ReactElement) =>
 
 describe("ExpiryDateCellRender", () => {
   it("renders DateReader when a date value is provided", () => {
-    renderWithProvider(
-      <ExpiryDateCellRender value="2025-06-01T00:00:00Z" node={undefined} />,
-    );
+    renderWithProvider(<ExpiryDateCellRender value="2025-06-01T00:00:00Z" />);
     expect(screen.getByTestId("date-reader")).toBeInTheDocument();
     expect(screen.getByTestId("date-reader")).toHaveTextContent(
       "2025-06-01T00:00:00Z",
@@ -24,21 +22,19 @@ describe("ExpiryDateCellRender", () => {
   });
 
   it("renders infinity symbol when value is null", () => {
-    renderWithProvider(<ExpiryDateCellRender value={null} node={undefined} />);
+    renderWithProvider(<ExpiryDateCellRender value={null} />);
     expect(screen.getByText("∞")).toBeInTheDocument();
     expect(screen.queryByTestId("date-reader")).not.toBeInTheDocument();
   });
 
   it("renders infinity symbol when value is undefined", () => {
-    renderWithProvider(
-      <ExpiryDateCellRender value={undefined} node={undefined} />,
-    );
+    renderWithProvider(<ExpiryDateCellRender value={undefined} />);
     expect(screen.getByText("∞")).toBeInTheDocument();
     expect(screen.queryByTestId("date-reader")).not.toBeInTheDocument();
   });
 
   it("renders infinity symbol when value is an empty string", () => {
-    renderWithProvider(<ExpiryDateCellRender value="" node={undefined} />);
+    renderWithProvider(<ExpiryDateCellRender value="" />);
     expect(screen.getByText("∞")).toBeInTheDocument();
   });
 });

@@ -31,7 +31,7 @@ describe("useDocumentTitle", () => {
   it("follows a title that resolves after the first render", () => {
     const { rerender } = renderHook(
       ({ title }: { title?: string }) => useDocumentTitle(title),
-      { initialProps: { title: undefined } },
+      { initialProps: { title: undefined as string | undefined } },
     );
     expect(document.title).toBe("OpenXFlow");
 

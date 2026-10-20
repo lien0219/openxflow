@@ -5,20 +5,34 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class PathSettings(BaseModel):
-    """Filesystem paths Langflow reads from and writes to."""
+    """Filesystem paths OpenXFlow reads from and writes to."""
 
     config_dir: str | None = None
-    """Base directory for Langflow data (db, logs, caches)."""
+    """Base directory for OpenXFlow data (db, logs, caches)."""
 
     knowledge_bases_dir: str | None = "~/.langflow/knowledge_bases"
     """The directory to store knowledge bases."""
+
+    knowledge_base_auto_migrate: bool = True
+    """Upgrade supported local Chroma stores on first startup, retaining the source.
+
+    Set LANGFLOW_KNOWLEDGE_BASE_AUTO_MIGRATE=false to require operator recovery.
+    Automatic migration requires a single worker on a local filesystem.
+    """
+
+    knowledge_base_storage_pool_size: int = Field(default=20, gt=0)
+    """Per-process PostgreSQL connections reserved for remote KB coordination.
+
+    Set LANGFLOW_KNOWLEDGE_BASE_STORAGE_POOL_SIZE to match expected concurrent
+    operations. This pool is separate from the application database pool.
+    """
 
     kb_disk_reconcile_enabled: bool = False
     """Whether startup scans ``knowledge_bases_dir`` for KB directories lacking a DB row.
 
     The ``knowledge_base`` table is the sole authority for KB metadata; the on-disk
     ``embedding_metadata.json`` sidecar is no longer written or read by any steady-state
-    code path. This reconcile exists only to adopt directories left by a Langflow version
+    code path. This reconcile exists only to adopt directories left by an OpenXFlow version
     that predates that change, so it is off by default and pays no boot cost.
 
     Set ``LANGFLOW_KB_DISK_RECONCILE_ENABLED=true`` to re-enable it at startup, or run it

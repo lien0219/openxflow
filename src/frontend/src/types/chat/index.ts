@@ -29,9 +29,9 @@ export type ChatMessageType = {
 };
 
 export type SourceType = {
-  id: string;
-  display_name: string;
-  source: string;
+  id?: string;
+  display_name?: string;
+  source?: string;
 };
 
 export type UsageType = {

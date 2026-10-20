@@ -256,17 +256,19 @@ describe("updateMessage — streaming token preservation (UI-014)", () => {
     // Act — a streaming token chunk arrives. The message-event-handler builds
     // a Message that has the partial-state property but does NOT carry the
     // content_blocks (tokens only carry chunk + id + sender/timestamp).
-    updateMessage({
-      id: "msg-1",
-      flow_id: "flow-1",
-      session_id: "s1",
-      text: "Pika",
-      sender: "Machine",
-      sender_name: "AI",
-      timestamp: existing.timestamp,
-      files: [],
-      properties: { state: "partial" } as Message["properties"],
-    } as Message);
+    updateMessage(
+      buildMessage({
+        id: "msg-1",
+        flow_id: "flow-1",
+        session_id: "s1",
+        text: "Pika",
+        sender: "Machine",
+        sender_name: "AI",
+        timestamp: existing.timestamp,
+        files: [],
+        properties: { state: "partial" } as Message["properties"],
+      }),
+    );
 
     // Assert — the tool-step content_blocks must survive the token update.
     const updated = queryClient.getQueryData<Message[]>(QUERY_KEY);
@@ -296,17 +298,19 @@ describe("updateMessage — streaming token preservation (UI-014)", () => {
     });
     queryClient.setQueryData(QUERY_KEY, [existing]);
 
-    updateMessage({
-      id: "msg-1",
-      flow_id: "flow-1",
-      session_id: "s1",
-      text: "world",
-      sender: "Machine",
-      sender_name: "AI",
-      timestamp: existing.timestamp,
-      files: [],
-      properties: { state: "partial" } as Message["properties"],
-    } as Message);
+    updateMessage(
+      buildMessage({
+        id: "msg-1",
+        flow_id: "flow-1",
+        session_id: "s1",
+        text: "world",
+        sender: "Machine",
+        sender_name: "AI",
+        timestamp: existing.timestamp,
+        files: [],
+        properties: { state: "partial" } as Message["properties"],
+      }),
+    );
 
     const updated = queryClient.getQueryData<Message[]>(QUERY_KEY);
     expect(updated![0].text).toBe("Hello world");

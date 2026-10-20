@@ -98,7 +98,10 @@ async def real_services_job_service(real_services_db_url: str) -> AsyncGenerator
     sqlite_process_lock = None
 
     try:
-        # Keep environment-backed validation and all session helpers on the test DB.
+        # ``database_url`` is validated on assignment, and its validator replaces any
+        # assigned value with LANGFLOW_DATABASE_URL (or the default SQLite path). An
+        # assignment alone therefore binds the default database and the postgres param
+        # silently runs on SQLite; route the URL through the env var the validator reads.
         os.environ["LANGFLOW_DATABASE_URL"] = real_services_db_url
         db_service = DatabaseServiceFactory().create(settings_service)
         manager.services[ServiceType.DATABASE_SERVICE] = db_service

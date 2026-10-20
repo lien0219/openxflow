@@ -35,7 +35,7 @@ export function useFlowEvents(flowId: string | undefined): UseFlowEventsReturn {
   const mountedRef = useRef(true);
   const activeSinceRef = useRef<number>(0);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollRef = useRef<() => Promise<void>>();
+  const pollRef = useRef<(() => Promise<void>) | null>(null);
 
   const clearInterval_ = useCallback(() => {
     if (intervalRef.current) {

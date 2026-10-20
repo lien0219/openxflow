@@ -13,6 +13,27 @@ import sys
 import pytest
 
 
+def _install_no_network_connect_guard(monkeypatch, socket):
+    """Reject application network connects while allowing asyncio's Windows self-pipe."""
+    original_connect = socket.socket.connect
+
+    def guarded_connect(sock, address, *args, **kwargs):
+        is_loopback = isinstance(address, tuple) and address and address[0] in {"127.0.0.1", "::1"}
+        frame = sys._getframe(1)
+        while frame is not None:
+            if (
+                is_loopback
+                and frame.f_globals.get("__name__") == "socket"
+                and frame.f_code.co_name == "_fallback_socketpair"
+            ):
+                return original_connect(sock, address, *args, **kwargs)
+            frame = frame.f_back
+        msg = "prewarm opened a network connection"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
+
+
 @pytest.fixture(autouse=True)
 def _reset_service_manager():
     """Isolate the process-wide ServiceManager singleton between tests in this module.
@@ -55,11 +76,7 @@ def test_warmup_run_opens_no_socket(monkeypatch):
 
     from lfx.preload import prewarm_core_imports
 
-    def _boom(_self, *_args, **_kwargs):
-        msg = "prewarm opened a network connection"
-        raise AssertionError(msg)
-
-    monkeypatch.setattr(socket.socket, "connect", _boom)
+    _install_no_network_connect_guard(monkeypatch, socket)
 
     result = prewarm_core_imports()
 
@@ -332,11 +349,7 @@ def test_prewarm_flow_run_executes_model_free_flow_with_no_network(monkeypatch):
 
     from lfx.preload import prewarm_flow
 
-    def _boom(_self, *_args, **_kwargs):
-        msg = "prewarm_flow opened a network connection"
-        raise AssertionError(msg)
-
-    monkeypatch.setattr(socket.socket, "connect", _boom)
+    _install_no_network_connect_guard(monkeypatch, socket)
 
     result = prewarm_flow(_hermetic_flow_payload(), run=True)
 

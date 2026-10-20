@@ -115,7 +115,7 @@ def test_sqlite_process_lock_is_reference_counted_across_service_owners(tmp_path
     )
 
     def child_exit_code() -> int:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 - the child receives a fixed interpreter and inline probe
             [sys.executable, "-c", probe, str(database_path)],
             check=False,
             capture_output=True,
@@ -246,9 +246,10 @@ async def test_session_scope_rolls_back_inactive_failed_session(monkeypatch) -> 
     monkeypatch.setattr(deps, "get_db_service", lambda: _FakeDBService(session))
     monkeypatch.setattr(deps.logger, "aexception", AsyncMock())
 
-    with pytest.raises(RuntimeError, match="boom"):
+    msg = "boom"
+    with pytest.raises(RuntimeError, match=msg):
         async with deps.session_scope():
-            raise RuntimeError("boom")
+            raise RuntimeError(msg)
 
     assert session.rollback_calls == 1
 
@@ -381,7 +382,8 @@ class _DispatchService:
 
 class _FailingDispatchService(_DispatchService):
     async def handle(self, _event):
-        raise RuntimeError("dispatch failed")
+        msg = "dispatch failed"
+        raise RuntimeError(msg)
 
 
 def _connection(connection_id):

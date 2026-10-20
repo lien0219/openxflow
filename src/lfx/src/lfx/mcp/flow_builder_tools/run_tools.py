@@ -358,7 +358,7 @@ class RunFlow(Component):
 
 
 class GenerateComponent(Component):
-    """Generate, validate and register a NEW custom Langflow component.
+    """Generate, validate and register a NEW custom OpenXFlow component.
 
     This is what lets ONE agent loop handle "create a component that does X
     and use it in a flow" without an intent router or phase orchestration:
@@ -373,7 +373,7 @@ class GenerateComponent(Component):
 
     display_name = "Generate Component"
     description = (
-        "Create a brand-new custom Langflow component from a natural-language description. "
+        "Create a brand-new custom OpenXFlow component from a natural-language description. "
         "Use this when the user asks for a component/tool that does not exist yet. On success "
         "the component is validated and registered — then call search_components to find it by "
         "its class name and add it to the flow. Returns the generated component's class name."

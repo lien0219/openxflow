@@ -37,7 +37,7 @@ def resolve_agent_description(description: str | None, *, agent_display_name: st
     """
     if description and (desc := description.strip()):
         return desc
-    return f"Langflow deployment {agent_display_name}"
+    return f"OpenXFlow deployment {agent_display_name}"
 
 
 def require_tool_id(tool_response: dict[str, Any]) -> str:

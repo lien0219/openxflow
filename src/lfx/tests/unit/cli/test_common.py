@@ -49,7 +49,8 @@ class TestPortUtilities:
         """Test checking if a port is free."""
         # Find a free port first
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("", 0))
+            s.bind(("127.0.0.1", 0))
+            s.listen(1)
             free_port = s.getsockname()[1]
 
         # Port should be free after closing socket
