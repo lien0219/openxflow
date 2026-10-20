@@ -19,10 +19,13 @@ def load():
     return yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=Loader)
 
 
-def test_only_closed_merged_main_pr_can_start_workflow():
+def test_workflow_builds_pr_artifacts_and_publishes_only_after_merge():
     workflow = load()
     assert set(workflow["on"]) == {"pull_request"}
-    assert workflow["on"]["pull_request"] == {"types": ["closed"], "branches": ["main"]}
+    assert workflow["on"]["pull_request"] == {
+        "types": ["opened", "synchronize", "reopened", "closed"],
+        "branches": ["main"],
+    }
     admission = workflow["jobs"]["validate-merge"]["if"]
     for expression in [
         "github.repository == 'lien0219/openxflow'",
@@ -33,6 +36,14 @@ def test_only_closed_merged_main_pr_can_start_workflow():
         "github.event.pull_request.merge_commit_sha != ''",
     ]:
         assert expression in admission
+    preview = workflow["jobs"]["preview-package"]
+    assert "github.event.action != 'closed'" in preview["if"]
+    checkout = next(step for step in preview["steps"] if step.get("name") == "Check out PR head")
+    assert checkout["with"]["ref"] == "${{ github.event.pull_request.head.sha }}"
+    build = next(step for step in preview["steps"] if step.get("name") == "Build the PR OCI package")
+    assert build["with"]["push"] == "false"
+    assert build["with"]["outputs"] == "type=oci,dest=/tmp/openxflow-pr.oci.tar"
+    assert any(step.get("uses", "").startswith("actions/upload-artifact@") for step in preview["steps"])
     for forbidden in ["workflow_dispatch", "workflow_call", "workflow_run", "schedule", "pull_request_target"]:
         assert forbidden not in workflow["on"]
 
@@ -70,8 +81,9 @@ def test_retry_runtime_probes_use_the_verified_reuse_coordinate():
 
 
 def test_workflow_has_no_untrusted_code_trigger_or_manual_sha_input():
+    workflow = load()
     source = WORKFLOW.read_text(encoding="utf-8")
     assert "pull_request_target" not in source
     assert "workflow_dispatch" not in source
     assert "inputs:" not in source
-    assert "github.event.pull_request.head.sha" not in source
+    assert "github.event.pull_request.head.sha" not in workflow["jobs"]["validate-merge"]["if"]

@@ -394,7 +394,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       # SeaweedFS's S3 gateway: MinIO no longer publishes pullable images. A service
       # container cannot pass it the "server" command, so start it here. With no S3
