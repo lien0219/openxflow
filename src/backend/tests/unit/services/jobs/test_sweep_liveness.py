@@ -109,21 +109,45 @@ async def test_keep_alive_spares_a_running_job_from_the_sweep():
 
 
 @pytest.mark.usefixtures("client")
-async def test_keep_alive_stops_once_the_job_ends():
+@pytest.mark.parametrize("beat_before_finish", [True, False])
+async def test_keep_alive_stops_once_the_job_ends(monkeypatch, beat_before_finish):
     """No heartbeat lands after the job leaves IN_PROGRESS, even if nobody stops it."""
     service = JobService()
     job_id = uuid4()
     await service.create_job(job_id=job_id, flow_id=uuid4(), user_id=uuid4(), status=JobStatus.IN_PROGRESS)
+    beat = service._beat
+    allow_beat = asyncio.Event()
+    beat_finished = asyncio.Event()
+
+    async def gated_beat(job):
+        await allow_beat.wait()
+        allow_beat.clear()
+        result = await beat(job)
+        beat_finished.set()
+        return result
+
+    monkeypatch.setattr(service, "_beat", gated_beat)
     await service.start_keep_alive(job_id, interval_s=0.1)
+    task, _stop = service._keep_alives[job_id]
+    try:
+        if beat_before_finish:
+            allow_beat.set()
+            await asyncio.wait_for(beat_finished.wait(), timeout=5)
+        metadata = (await service.get_job_by_job_id(job_id)).job_metadata
+        if beat_before_finish:
+            assert metadata["heartbeat_at"]
+        else:
+            assert metadata is None
 
-    await service.update_job_status(job_id, JobStatus.CANCELLED, finished_timestamp=True)
-    await asyncio.sleep(0.5)
-    stamp = (await service.get_job_by_job_id(job_id)).job_metadata["heartbeat_at"]
-    await asyncio.sleep(0.3)
+        await service.update_job_status(job_id, JobStatus.CANCELLED, finished_timestamp=True)
+        allow_beat.set()
+        await asyncio.wait_for(asyncio.shield(task), timeout=5)
 
-    assert (await service.get_job_by_job_id(job_id)).job_metadata["heartbeat_at"] == stamp
-    assert job_id not in service._keep_alives
-    await service.stop_keep_alive(job_id)  # Already ended on its own; still safe.
+        assert (await service.get_job_by_job_id(job_id)).job_metadata == metadata
+        assert job_id not in service._keep_alives
+    finally:
+        allow_beat.set()
+        await service.stop_keep_alive(job_id)  # Already ended on its own; still safe.
 
 
 @pytest.mark.usefixtures("client")

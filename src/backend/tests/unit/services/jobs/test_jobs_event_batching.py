@@ -1,7 +1,6 @@
 """Durability, cancellation, and pool usage for batched event appends."""
 
 import asyncio
-import time
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
@@ -330,33 +329,53 @@ async def test_invalid_event_does_not_fail_another_job(event_store):
     assert events[0].payload == {"value": "persisted"}
 
 
-async def test_solo_append_skips_the_batching_window(event_store, monkeypatch):
-    """A lone append has nothing to batch with -- the window would be a pure latency tax."""
+@pytest.fixture
+def batching_window(monkeypatch):
+    started = asyncio.Event()
+    release = asyncio.Event()
+    sleep = asyncio.sleep
+
+    async def controlled_sleep(delay):
+        if delay == 0.2:
+            started.set()
+            await release.wait()
+        else:
+            await sleep(delay)
+
     monkeypatch.setattr(jobs_module, "_APPEND_EVENT_BATCH_WINDOW_S", 0.2)
+    monkeypatch.setattr(jobs_module.asyncio, "sleep", controlled_sleep)
+    return started, release
+
+
+async def test_solo_append_skips_the_batching_window(event_store, batching_window):
+    """A lone append has nothing to batch with -- the window would be a pure latency tax."""
+    window_started, release_window = batching_window
+    release_window.set()
     service = JobService()
-    start = time.monotonic()
     seq = await service.append_event(uuid4(), "event", {})
-    elapsed = time.monotonic() - start
     assert seq == 1
     assert event_store.checkouts == 1
-    assert elapsed < 0.1, f"solo append waited {elapsed:.3f}s -- the window should have been skipped"
+    # Observe the window itself; SQLite I/O and CI scheduling are not its latency.
+    assert not window_started.is_set(), "solo append entered the batching window"
+    assert len(await event_store.events()) == 1
 
 
-async def test_contended_appends_still_wait_the_window(event_store, monkeypatch):
+async def test_contended_appends_still_wait_the_window(event_store, batching_window):
     """Concurrent appends must still share one transaction -- this is what the window is for."""
-    monkeypatch.setattr(jobs_module, "_APPEND_EVENT_BATCH_WINDOW_S", 0.2)
+    window_started, release_window = batching_window
     service = JobService()
-    start = time.monotonic()
-    # Different job_ids: seq is scoped per job, so both legitimately get seq 1 whether
-    # or not they're batched -- checkouts and elapsed time are the real proof here.
-    seqs = await asyncio.gather(
-        service.append_event(uuid4(), "event", {}),
-        service.append_event(uuid4(), "event", {}),
-    )
-    elapsed = time.monotonic() - start
-    assert seqs == [1, 1]
-    assert event_store.checkouts == 1
-    assert elapsed >= 0.15, f"contended appends only waited {elapsed:.3f}s -- batching window was skipped"
+    tasks = [asyncio.create_task(service.append_event(uuid4(), "event", {})) for _ in range(2)]
+    try:
+        await asyncio.wait_for(window_started.wait(), timeout=2)
+        assert event_store.checkouts == 0
+        assert all(not task.done() for task in tasks)
+        release_window.set()
+        assert await asyncio.wait_for(asyncio.gather(*tasks), timeout=2) == [1, 1]
+        assert event_store.checkouts == 1
+        assert len(await event_store.events()) == 2
+    finally:
+        release_window.set()
+        await _finish_tasks(tasks)
 
 
 def test_append_lock_rebinds_across_event_loops():

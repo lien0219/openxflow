@@ -189,3 +189,83 @@ async def test_sqlite_checkout_error_is_propagated(sqlite_service):
         sa.event.remove(sqlite_service.engine.sync_engine, "connect", capture_connection)
         for connection in connections:
             await connection.close()
+
+
+@pytest.mark.parametrize("sqlite_service", ["file"], indirect=True)
+@pytest.mark.parametrize("stage", ["rollback", "close"])
+@pytest.mark.parametrize("cancel_count", [1, 2])
+async def test_cancel_during_session_exit_waits_for_sqlite_cleanup(sqlite_service, monkeypatch, stage, cancel_count):
+    """A session owner must not exit while its shielded close still uses SQLite."""
+    loop = asyncio.get_running_loop()
+    started = asyncio.Event()
+    resume = threading.Event()
+    exiting = threading.Event()
+    workers = []
+    connections = []
+
+    def pause(at_stage):
+        if exiting.is_set() and at_stage == stage:
+            loop.call_soon_threadsafe(started.set)
+            if not resume.wait(timeout=10):
+                msg = "Test did not release SQLite cleanup"
+                raise TimeoutError(msg)
+
+    class TrackedConnection(sqlite3.Connection):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            connections.append(self)
+            workers.append(threading.current_thread())
+
+        def rollback(self):
+            pause("rollback")
+            return super().rollback()
+
+        def close(self):
+            pause("close")
+            return super().close()
+
+    original_connect = aiosqlite.connect
+    cleanup_done = asyncio.Event()
+
+    def tracked_connect(*args, **kwargs):
+        connection = original_connect(*args, factory=TrackedConnection, **kwargs)
+        original_close = connection.close
+
+        async def close():
+            try:
+                await original_close()
+            finally:
+                cleanup_done.set()
+
+        connection.close = close
+        return connection
+
+    monkeypatch.setattr(aiosqlite, "connect", tracked_connect)
+
+    async def query():
+        async with sqlite_service._with_session() as session:
+            await session.execute(sa.text("SELECT 1"))
+            exiting.set()
+
+    task = asyncio.create_task(query())
+    try:
+        await asyncio.wait_for(started.wait(), timeout=5)
+        for _ in range(cancel_count):
+            task.cancel()
+            await asyncio.sleep(0)
+        assert not task.done(), "session owner exited before SQLite cleanup finished"
+        resume.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=5)
+        assert cleanup_done.is_set()
+        for connection in connections:
+            with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+                connection.execute("SELECT 1")
+    finally:
+        resume.set()
+        with suppress(asyncio.CancelledError):
+            await task
+        await asyncio.wait_for(cleanup_done.wait(), timeout=5)
+        for worker in workers:
+            await asyncio.to_thread(worker.join, 1)
+            assert not worker.is_alive()

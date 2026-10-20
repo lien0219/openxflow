@@ -498,10 +498,24 @@ class DatabaseService(Service):
         if self.settings_service.settings.use_noop_database:
             yield NoopSession()
         else:
-            # Use async_session_maker - the recommended SQLAlchemy 2.0+ pattern
-            # Provides efficient session creation and proper connection pooling
-            async with self.async_session_maker() as session:
+            session = self.async_session_maker()
+            try:
                 yield session
+            finally:
+                # AsyncSession.__aexit__ shields close(), but lets the owner
+                # exit on cancellation while close still uses the database.
+                # Join cleanup so lifespan shutdown cannot close the loop first.
+                cleanup = asyncio.create_task(session.close())
+                try:
+                    await asyncio.shield(cleanup)
+                except asyncio.CancelledError:
+                    while not cleanup.done():
+                        try:
+                            await asyncio.shield(cleanup)
+                        except asyncio.CancelledError:
+                            continue
+                    cleanup.result()
+                    raise
 
     async def ensure_postgresql_version(self) -> None:
         """If the database is PostgreSQL, ensure it is version 15 or higher.

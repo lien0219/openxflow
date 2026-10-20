@@ -272,28 +272,17 @@ async def test_log_vertex_build_with_different_limits(
 
 
 @pytest.mark.asyncio
-async def test_concurrent_log_vertex_build(vertex_build_data, mock_settings):
+async def test_concurrent_log_vertex_build(async_session, vertex_build_data, mock_settings):
     """Test concurrent build logging."""
     with patch("langflow.services.database.models.vertex_builds.crud.get_settings_service") as mock_settings_service:
         mock_settings_service.return_value.settings = mock_settings
 
         import asyncio
 
-        from sqlalchemy.ext.asyncio import create_async_engine
-        from sqlalchemy.pool import StaticPool
-        from sqlmodel import SQLModel
         from sqlmodel.ext.asyncio.session import AsyncSession
 
-        # Create a new engine for each session to avoid concurrency issues
-        engine = create_async_engine(
-            "sqlite+aiosqlite://",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
-
-        # Create tables
-        async with engine.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.create_all)
+        # The fixture owns the engine and disposes it before its event loop ends.
+        engine = async_session.bind
 
         # Create multiple builds concurrently
         async def create_build():

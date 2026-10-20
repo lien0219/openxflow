@@ -18,9 +18,11 @@ from urllib.parse import unquote
 
 from filelock import FileLock
 from filelock import Timeout as FileLockTimeout
+from sqlalchemy import event
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.sql.elements import TextClause
+from sqlalchemy.util.concurrency import await_only
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -323,6 +325,14 @@ def install_sqlite_session_guard(
             return
         await coordinator.acquire(owner)
         guard_held = True
+
+    def before_flush(_session: Any, _flush_context: Any, _instances: Any) -> None:
+        # ORM reads such as get(), scalar(), and stream() can autoflush without
+        # calling the async execute/flush wrappers below. Acquire at the actual
+        # flush boundary too, before SQLite takes its transaction write lock.
+        await_only(ensure_guard())
+
+    event.listen(session.sync_session, "before_flush", before_flush)
 
     def release_guard() -> None:
         nonlocal guard_held
