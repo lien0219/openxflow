@@ -24390,7 +24390,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": null
+                  "version": "1.12.0"
                 }
               ],
               "total_dependencies": 3
@@ -25931,7 +25931,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": null
+                  "version": "1.12.0"
                 }
               ],
               "total_dependencies": 4
@@ -27656,7 +27656,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": null
+                  "version": "1.12.0"
                 }
               ],
               "total_dependencies": 3
@@ -32945,6 +32945,6 @@
     "num_components": 131,
     "num_modules": 18
   },
-  "sha256": "916694fdc10f896e2709ea587d35f77a7f96296d133e3179acf48d67e0ec5da4",
+  "sha256": "21b8812a93cc00fb16c1c94dfda4025208cc16932aa04891be649cd2e7001cc0",
   "version": "1.13.0"
 }
