@@ -91,7 +91,7 @@ jobs:
           sbom: true
 
       - name: Scan the unpushed PR OCI package
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           input: /tmp/openxflow-pr.oci.tar
           format: table
@@ -404,7 +404,7 @@ jobs:
           docker run --rm --entrypoint langflow openxflow-runtime-probe:local --help >/dev/null
 
       - name: Scan the unpushed OCI archive (or recovered retry)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           input: /tmp/openxflow.oci.tar
           format: table
