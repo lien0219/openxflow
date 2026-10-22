@@ -48,7 +48,6 @@ def test_workflow_builds_pr_artifacts_and_publishes_only_after_merge():
         assert forbidden not in workflow["on"]
 
 
-
 def test_scanners_use_pinned_resolvable_trivy_action():
     # Avoid tag-resolution failures such as trivy-action v0.28.0 indirectly
     # pulling the removed setup-trivy@v0.2.1.
@@ -56,14 +55,14 @@ def test_scanners_use_pinned_resolvable_trivy_action():
     expected = "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"
     for job_name in ("preview-package", "build-and-verify"):
         scans = [
-            step for step in workflow["jobs"][job_name]["steps"]
+            step
+            for step in workflow["jobs"][job_name]["steps"]
             if step.get("name", "").startswith(("Scan the unpushed", "Scan the unpushed OCI"))
         ]
         assert len(scans) == 1
         assert scans[0]["uses"] == expected
         assert scans[0]["with"]["exit-code"] == "1"
         assert scans[0]["with"]["severity"] == "CRITICAL,HIGH"
-
 
 
 def test_build_has_no_registry_write_before_scan():
