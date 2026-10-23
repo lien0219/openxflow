@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+import psutil
 from lfx.log.logger import logger
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -212,16 +213,12 @@ class _Outbox:
 
 
 def _pid_alive(pid: int) -> bool:
-    """Return True if ``pid`` corresponds to a live process."""
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+    """Check process existence without signaling or terminating the worker.
+
+    Unlike POSIX, Windows treats ``os.kill(pid, 0)`` as termination and raises
+    WinError 87 for missing PIDs. psutil handles these platform differences.
+    """
+    return pid > 0 and psutil.pid_exists(pid)
 
 
 class TelemetryWriterService(Service):
