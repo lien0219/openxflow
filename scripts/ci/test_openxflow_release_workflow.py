@@ -49,20 +49,29 @@ def test_workflow_builds_pr_artifacts_and_publishes_only_after_merge():
 
 
 def test_scanners_use_pinned_resolvable_trivy_action():
-    # Avoid tag-resolution failures such as trivy-action v0.28.0 indirectly
-    # pulling the removed setup-trivy@v0.2.1.
     workflow = load()
     expected = "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"
-    for job_name in ("preview-package", "build-and-verify"):
-        scans = [
-            step
-            for step in workflow["jobs"][job_name]["steps"]
-            if step.get("name", "").startswith(("Scan the unpushed", "Scan the unpushed OCI"))
-        ]
-        assert len(scans) == 1
-        assert scans[0]["uses"] == expected
-        assert scans[0]["with"]["exit-code"] == "1"
-        assert scans[0]["with"]["severity"] == "CRITICAL,HIGH"
+    for job_name, prefix in (
+        ("preview-package", "/tmp/openxflow-pr"),  # noqa: S108 - workflow fixture path
+        ("build-and-verify", "/tmp/openxflow"),  # noqa: S108 - workflow fixture path
+    ):
+        steps = workflow["jobs"][job_name]["steps"]
+        prepare = next(step for step in steps if step.get("name", "").startswith("Prepare per-architecture Trivy"))
+        assert "skopeo copy --override-os linux --override-arch" in prepare["run"]
+        assert "docker-archive:" in prepare["run"]
+        for arch in ("amd64", "arm64"):
+            scans = [
+                step
+                for step in steps
+                if step.get("name", "").endswith(f"{arch} image")
+                and step.get("uses", "").startswith("aquasecurity/trivy-action@")
+            ]
+            assert len(scans) == 1
+            assert scans[0]["uses"] == expected
+            assert scans[0]["with"]["input"] == f"{prefix}-{arch}.docker.tar"
+            assert scans[0]["with"]["exit-code"] == "1"
+            assert scans[0]["with"]["severity"] == "CRITICAL,HIGH"
+            assert scans[0]["with"]["scanners"] == "vuln,secret"
 
 
 def test_build_has_no_registry_write_before_scan():
@@ -72,7 +81,12 @@ def test_build_has_no_registry_write_before_scan():
     build = source[build_start:publish_start]
     assert "push: false" in build
     assert "outputs: type=oci,dest=/tmp/openxflow.oci.tar" in build
-    assert build.index("Scan the unpushed OCI archive") > build.index("Build a multi-architecture OCI archive")
+    build_at = build.index("Build a multi-architecture OCI archive")
+    prepare_at = build.index("Prepare per-architecture Trivy scan inputs (production)")
+    amd64_at = build.index("Scan the unpushed production amd64 image")
+    arm64_at = build.index("Scan the unpushed production arm64 image")
+    verify_at = build.index("Verify OCI attestations, both architectures, and runtime probes")
+    assert build_at < prepare_at < amd64_at < arm64_at < verify_at
     assert 'skopeo copy --all --preserve-digests "oci-archive:' not in build
 
 

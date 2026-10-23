@@ -90,10 +90,41 @@ jobs:
           provenance: mode=max
           sbom: true
 
-      - name: Scan the unpushed PR OCI package
+      # Trivy's --input accepts Docker save tarballs or an unpacked OCI layout,
+      # not a Buildx type=oci tar archive. Convert each platform separately so
+      # both architectures receive the same blocking vulnerability/secret scan.
+      - name: Prepare per-architecture Trivy scan inputs (PR)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq skopeo jq
+          for arch in amd64 arm64; do
+            output="/tmp/openxflow-pr-${arch}.docker.tar"
+            skopeo copy --override-os linux --override-arch "$arch" \
+              "oci-archive:/tmp/openxflow-pr.oci.tar" \
+              "docker-archive:${output}:openxflow-scan:${arch}"
+            actual="$(skopeo inspect "docker-archive:${output}" | jq -r '.Architecture // empty')"
+            if [ "$actual" != "$arch" ]; then
+              echo "::error::Expected $arch scan input, got ${actual:-missing}"
+              exit 1
+            fi
+          done
+
+      - name: Scan the unpushed PR amd64 image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: /tmp/openxflow-pr.oci.tar
+          input: /tmp/openxflow-pr-amd64.docker.tar
+          format: table
+          exit-code: "1"
+          ignore-unfixed: "false"
+          severity: CRITICAL,HIGH
+          scanners: vuln,secret
+
+      - name: Scan the unpushed PR arm64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          input: /tmp/openxflow-pr-arm64.docker.tar
           format: table
           exit-code: "1"
           ignore-unfixed: "false"
@@ -403,10 +434,41 @@ jobs:
             'import importlib.util; assert importlib.util.find_spec("langflow"); assert importlib.util.find_spec("pgvector")'
           docker run --rm --entrypoint langflow openxflow-runtime-probe:local --help >/dev/null
 
-      - name: Scan the unpushed OCI archive (or recovered retry)
+      # Trivy's --input accepts Docker save tarballs or an unpacked OCI layout,
+      # not a Buildx type=oci tar archive. Convert each platform separately so
+      # both architectures receive the same blocking vulnerability/secret scan.
+      - name: Prepare per-architecture Trivy scan inputs (production)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq skopeo jq
+          for arch in amd64 arm64; do
+            output="/tmp/openxflow-${arch}.docker.tar"
+            skopeo copy --override-os linux --override-arch "$arch" \
+              "oci-archive:/tmp/openxflow.oci.tar" \
+              "docker-archive:${output}:openxflow-scan:${arch}"
+            actual="$(skopeo inspect "docker-archive:${output}" | jq -r '.Architecture // empty')"
+            if [ "$actual" != "$arch" ]; then
+              echo "::error::Expected $arch scan input, got ${actual:-missing}"
+              exit 1
+            fi
+          done
+
+      - name: Scan the unpushed production amd64 image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: /tmp/openxflow.oci.tar
+          input: /tmp/openxflow-amd64.docker.tar
+          format: table
+          exit-code: "1"
+          ignore-unfixed: "false"
+          severity: CRITICAL,HIGH
+          scanners: vuln,secret
+
+      - name: Scan the unpushed production arm64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          input: /tmp/openxflow-arm64.docker.tar
           format: table
           exit-code: "1"
           ignore-unfixed: "false"
