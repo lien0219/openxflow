@@ -52,8 +52,8 @@ def test_scanners_use_pinned_resolvable_trivy_action():
     workflow = load()
     expected = "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"
     for job_name, prefix in (
-        ("preview-package", "/tmp/openxflow-pr"),
-        ("build-and-verify", "/tmp/openxflow"),
+        ("preview-package", "/tmp/openxflow-pr"),  # noqa: S108 - workflow fixture path
+        ("build-and-verify", "/tmp/openxflow"),  # noqa: S108 - workflow fixture path
     ):
         steps = workflow["jobs"][job_name]["steps"]
         prepare = next(step for step in steps if step.get("name", "").startswith("Prepare per-architecture Trivy"))
@@ -81,7 +81,12 @@ def test_build_has_no_registry_write_before_scan():
     build = source[build_start:publish_start]
     assert "push: false" in build
     assert "outputs: type=oci,dest=/tmp/openxflow.oci.tar" in build
-    assert build.index("Scan the unpushed OCI archive") > build.index("Build a multi-architecture OCI archive")
+    build_at = build.index("Build a multi-architecture OCI archive")
+    prepare_at = build.index("Prepare per-architecture Trivy scan inputs (production)")
+    amd64_at = build.index("Scan the unpushed production amd64 image")
+    arm64_at = build.index("Scan the unpushed production arm64 image")
+    verify_at = build.index("Verify OCI attestations, both architectures, and runtime probes")
+    assert build_at < prepare_at < amd64_at < arm64_at < verify_at
     assert 'skopeo copy --all --preserve-digests "oci-archive:' not in build
 
 
