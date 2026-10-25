@@ -16,7 +16,9 @@ dependencies = [
     # xlsx path survives torch/docling becoming opt-in.
     "openpyxl>=3.1.5,<4.0.0",
     "pydantic>=2.0.0,<2.14",
-    "pillow>=12.3.0,<13.0.0",
+    # Pillow 13 ships security fixes but dropped Python 3.10 support.
+    "pillow>=12.3.0,<13.0.0; python_version < '3.11'",
+    "pillow>=13.0.0,<14.0.0; python_version >= '3.11'",
     "fastapi>=0.135.0,<1.0.0",
     # [standard] adds uvloop + httptools (fast loop + HTTP parser) for the `lfx serve` worker path.
     "uvicorn[standard]>=0.34.3,<1.0.0",
