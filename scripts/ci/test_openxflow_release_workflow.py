@@ -74,6 +74,35 @@ def test_scanners_use_pinned_resolvable_trivy_action():
             assert scans[0]["with"]["scanners"] == "vuln,secret"
 
 
+def test_trivy_reports_survive_failed_security_scans():
+    workflow = load()
+    for job, profile in (
+        ("preview-package", "PR"),
+        ("build-and-verify", "production"),
+    ):
+        steps = workflow["jobs"][job]["steps"]
+        output_prefix = profile.lower()
+        for arch in ("amd64", "arm64"):
+            scan = next(
+                step
+                for step in steps
+                if step.get("name") == f"Scan the unpushed {profile} {arch} image"
+            )
+            assert scan["with"]["format"] == "json"
+            assert scan["with"]["output"] == f"/tmp/openxflow-trivy/{output_prefix}-{arch}.json"
+            assert scan["with"]["exit-code"] == "1"
+            assert scan["with"]["severity"] == "CRITICAL,HIGH"
+            assert scan["with"]["scanners"] == "vuln,secret"
+        retention = next(
+            step
+            for step in steps
+            if step.get("name", "").startswith("Retain ")
+            and "Trivy" in step.get("name", "")
+        )
+        assert retention["if"] == "always()"
+        assert retention["with"]["path"] == "/tmp/openxflow-trivy/"
+
+
 def test_build_has_no_registry_write_before_scan():
     source = WORKFLOW.read_text(encoding="utf-8")
     build_start = source.index("  build-and-verify:")
