@@ -146,7 +146,7 @@ def test_workflow_has_no_untrusted_code_trigger_or_manual_sha_input():
 
 def test_sdk_secret_exception_is_narrow_and_expires():
     """Only the confirmed SDK false positive may bypass the secret gate."""
-    from datetime import date
+    from datetime import date, datetime, timezone
 
     exceptions = yaml.safe_load((ROOT / ".trivyignore.yaml").read_text(encoding="utf-8"))
     assert set(exceptions) == {"secrets"}
@@ -155,7 +155,7 @@ def test_sdk_secret_exception_is_narrow_and_expires():
     assert set(item) == {"id", "paths", "expired_at", "statement"}
     assert item["id"] == "gcp-service-account"
     assert item["paths"] == ["**/site-packages/ibm_watsonx_ai/connections.py"]
-    assert date.today() <= item["expired_at"] <= date(2026, 12, 31)
+    assert datetime.now(timezone.utc).date() <= item["expired_at"] <= date(2026, 12, 31)
     assert item["statement"].strip()
     for job_name in ("preview-package", "build-and-verify"):
         scans = [s for s in load()["jobs"][job_name]["steps"] if s.get("name", "").startswith("Scan the unpushed")]
