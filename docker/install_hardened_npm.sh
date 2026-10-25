@@ -2,11 +2,12 @@
 
 set -eu
 
-NPM_VERSION="12.0.2"
+NPM_VERSION="12.2.1"
 IP_ADDRESS_VERSION="10.7.1"
 BRACE_EXPANSION_VERSION="5.0.12"
 TAR_VERSION="7.5.22"
-UNDICI_VERSION="6.28.1"
+UNDICI_VERSION="6.29.1"
+HTTP_CACHE_SEMANTICS_VERSION="4.3.0"
 npm_cache="$(npm config get cache)"
 
 case "$npm_cache" in
@@ -38,9 +39,10 @@ npm install --prefix "$patch_root" \
     "ip-address@${IP_ADDRESS_VERSION}" \
     "brace-expansion@${BRACE_EXPANSION_VERSION}" \
     "tar@${TAR_VERSION}" \
-    "undici@${UNDICI_VERSION}"
+    "undici@${UNDICI_VERSION}" \
+    "http-cache-semantics@${HTTP_CACHE_SEMANTICS_VERSION}"
 
-for package in ip-address brace-expansion tar undici; do
+for package in ip-address brace-expansion tar undici http-cache-semantics; do
     rm -rf "$npm_root/$package"
     cp -a "$patch_root/node_modules/$package" "$npm_root/$package"
 done
@@ -51,7 +53,8 @@ const expected = {
   "ip-address": "10.7.1",
   "brace-expansion": "5.0.12",
   tar: "7.5.22",
-  undici: "6.28.1",
+  undici: "6.29.1",
+  "http-cache-semantics": "4.3.0",
   sigstore: "5.0.0",
   "@sigstore/core": "4.0.1",
   "tinyglobby/node_modules/picomatch": "4.0.5",

@@ -95,7 +95,8 @@ dependencies = [
     "pip>=26.2.1,<27.0.0",
     "setuptools>=83.0.0,<84.0.0",
     "nanoid>=2.0.0,<3.0.0",
-    "filelock>=3.20.1,<4.0.0",
+    "filelock>=3.20.3,<3.20.4; python_version < '3.11'",
+    "filelock>=4.2.1,<5.0.0; python_version >= '3.11'",
     "dingtalk-stream>=0.24.3,<0.25.0",
     "grandalf>=0.8.0,<1.0.0",
     "spider-client>=0.0.27,<1.0.0",
@@ -103,7 +104,7 @@ dependencies = [
     "assemblyai>=0.33.0,<1.0.0",
     "fastapi-pagination>=0.13.1,<1.0.0",
     "defusedxml>=0.7.1,<1.0.0",
-    "pypdf>=6.19.0,<7.0.0",
+    "pypdf>=6.21.2,<7.0.0",
     "validators>=0.34.0,<1.0.0",
     "networkx>=3.4.2,<4.0.0",
     "json-repair>=0.30.3,<1.0.0",
@@ -287,7 +288,7 @@ langsmith = ["langsmith>=0.3.42,<1.0.0"]
 arize = ["arize-phoenix-otel>=0.6.1"]
 
 # Individual document loaders
-pypdf = ["pypdf>=6.19.0,<7.0.0"]
+pypdf = ["pypdf>=6.21.2,<7.0.0"]
 docx = ["python-docx>=1.1.0"]
 pytube = ["pytube==15.0.0"]
 
@@ -305,7 +306,11 @@ fake-useragent = ["fake-useragent>=2.0.0"]
 # duckduckgo: the runtime dep for the extracted lfx-duckduckgo bundle.
 # Public consumers should install lfx-duckduckgo directly. The compatibility
 # extra remains so older explicit langflow-base[duckduckgo] installs still work.
-duckduckgo = ["ddgs>=9.0.0"]
+duckduckgo = [
+    "ddgs>=9.0.0",
+    "brotli>=1.2.1,<2.0.0; platform_python_implementation == 'CPython'",
+    "brotlicffi>=1.2.1.0,<2.0.0; platform_python_implementation != 'CPython'",
+]
 yfinance = ["yfinance==0.2.50"]
 wolframalpha = ["wolframalpha==5.1.3"]
 

@@ -3,7 +3,7 @@
 
 ARG UV_VERSION=0.10.4
 ARG PYTHON_IMAGE=registry.access.redhat.com/ubi10/python-314-minimal
-ARG NODE_VERSION=24.21.0
+ARG NODE_VERSION=24.22.1
 
 ################################
 # BUILDER-BASE
@@ -117,6 +117,9 @@ RUN microdnf update -y \
     && microdnf install -y curl git libpq gnupg xz tar shadow-utils \
     && microdnf clean all
 RUN python3.14 -m pip install --no-cache-dir --upgrade "pip==26.2.1"
+COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
+RUN sh /tmp/patch_hardened_pip_vendor.sh \
+    && rm -f /tmp/patch_hardened_pip_vendor.sh
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 COPY --from=builder /usr/local/bin/uvx /usr/local/bin/uvx
 # NODE_VERSION and the npm major below are coupled: npm 12 requires Node
@@ -129,13 +132,25 @@ RUN ARCH=$(uname -m) \
     && if [ "$ARCH" = "x86_64" ]; then NODE_ARCH="x64"; \
        elif [ "$ARCH" = "aarch64" ]; then NODE_ARCH="arm64"; \
        else NODE_ARCH="$ARCH"; fi \
-    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
-    | tar -xJ -C /usr/local --strip-components=1 \
+    && case "${NODE_VERSION}:${NODE_ARCH}" in \
+        24.22.1:x64) NODE_SHA256=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6 ;; \
+        24.22.1:arm64) NODE_SHA256=dbabf7a1cbf947e6059ffad2c27b80041db97dea1e553b62afdee7f13fca336e ;; \
+        *) echo "No reviewed Node checksum for ${NODE_VERSION}:${NODE_ARCH}" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSLo /tmp/node.tar.xz \
+        "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
+    && printf '%s  /tmp/node.tar.xz\n' "$NODE_SHA256" | sha256sum --check --strict \
+    && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+    && rm -f /tmp/node.tar.xz \
     && sh /tmp/install_hardened_npm.sh \
     && rm -f /tmp/install_hardened_npm.sh
 RUN useradd user -u 1000 -g 0 --no-create-home --home-dir /app/data
 
 COPY --from=builder --chown=1000 /app/.venv /app/.venv
+COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
+RUN sh /tmp/patch_hardened_pip_vendor.sh \
+    && rm -f /tmp/patch_hardened_pip_vendor.sh \
+    && find /app/.venv -type d -path '*/pip/_vendor' -exec chown -R 1000:0 {} +
 ENV PATH="/app/.venv/bin:$PATH"
 ENV HOME=/app/data
 ENV BASH_ENV="" \

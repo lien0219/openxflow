@@ -270,7 +270,14 @@ override-dependencies = [
     # Security: Force upgraded versions to prevent transitive deps from pulling older vulnerable versions
     "orjson>=3.11.6",
     "gunicorn>=25.3.0",
-    "pypdf>=6.19.0,<7.0.0",  # Force a patched pypdf 6.x release
+    "pypdf>=6.21.2,<7.0.0",  # Bound recursive PDF parsing and malformed page traversal.
+    "black>=26.10.1,<27.0.0",  # CVE-2026-114134
+    "datamodel-code-generator>=0.81.0,<0.87.0",  # CVE-2026-107377: Protobuf import path traversal.
+    "setuptools>=83.0.0,<84.0.0",
+    # 4.2.1 fixes ReadWriteLock races but requires Python >=3.11. 3.20.3
+    # predates ReadWriteLock (3.20.4); older Unix/Windows MEDIUM issues remain.
+    "filelock>=3.20.3,<3.20.4; python_version < '3.11'",
+    "filelock>=4.2.1,<5.0.0; python_version >= '3.11'",
     "cryptography>=50.0.0",  # GHSA-g6cj-pr64-35w5 is fixed in 50.0.0
     "nltk>=3.10.3",
     "Markdown>=3.8.0",
@@ -296,6 +303,8 @@ override-dependencies = [
     "python-liquid>=2.2.0,<3.0.0",  # CVE-2026-45017
     "GitPython>=3.1.58",  # GHSA-wvpp-8hx9-p66j, GHSA-jm78-9fvv-mhgr, GHSA-hmq2-w58f-27jc, GHSA-4gmw-gg2m-w46p, GHSA-9rj7-rf2p-w77r, GHSA-hh9p-6wh2-4mfc
     "h2>=4.4.1",  # CVE-2026-71554
+    "brotli>=1.2.1,<2.0.0; platform_python_implementation == 'CPython'",  # CVE-2026-111497
+    "brotlicffi>=1.2.1.0,<2.0.0; platform_python_implementation != 'CPython'",  # CVE-2026-111497
 ]
 
 [tool.codespell]

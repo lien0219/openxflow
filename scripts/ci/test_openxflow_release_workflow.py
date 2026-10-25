@@ -83,24 +83,19 @@ def test_trivy_reports_survive_failed_security_scans():
         steps = workflow["jobs"][job]["steps"]
         output_prefix = profile.lower()
         for arch in ("amd64", "arm64"):
-            scan = next(
-                step
-                for step in steps
-                if step.get("name") == f"Scan the unpushed {profile} {arch} image"
-            )
+            scan = next(step for step in steps if step.get("name") == f"Scan the unpushed {profile} {arch} image")
             assert scan["with"]["format"] == "json"
-            assert scan["with"]["output"] == f"/tmp/openxflow-trivy/{output_prefix}-{arch}.json"
+            assert scan["with"]["output"] == f"/tmp/openxflow-trivy/{output_prefix}-{arch}.json"  # noqa: S108 - workflow artifact path contract
             assert scan["with"]["exit-code"] == "1"
+            assert scan["with"]["ignore-unfixed"] == "false"
             assert scan["with"]["severity"] == "CRITICAL,HIGH"
             assert scan["with"]["scanners"] == "vuln,secret"
+            assert scan.get("continue-on-error") in (None, False, "false")
         retention = next(
-            step
-            for step in steps
-            if step.get("name", "").startswith("Retain ")
-            and "Trivy" in step.get("name", "")
+            step for step in steps if step.get("name", "").startswith("Retain ") and "Trivy" in step.get("name", "")
         )
         assert retention["if"] == "always()"
-        assert retention["with"]["path"] == "/tmp/openxflow-trivy/"
+        assert retention["with"]["path"] == "/tmp/openxflow-trivy/"  # noqa: S108 - workflow artifact path contract
 
 
 def test_build_has_no_registry_write_before_scan():
