@@ -125,6 +125,7 @@ jobs:
           ignore-unfixed: "false"
           severity: CRITICAL,HIGH
           scanners: vuln,secret
+          trivyignores: .trivyignore.yaml
 
       - name: Scan the unpushed PR arm64 image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -136,6 +137,7 @@ jobs:
           ignore-unfixed: "false"
           severity: CRITICAL,HIGH
           scanners: vuln,secret
+          trivyignores: .trivyignore.yaml
 
       - name: Verify PR package attestations and runtime probes
         shell: bash
@@ -484,6 +486,7 @@ jobs:
           ignore-unfixed: "false"
           severity: CRITICAL,HIGH
           scanners: vuln,secret
+          trivyignores: .trivyignore.yaml
 
       - name: Scan the unpushed production arm64 image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -495,6 +498,7 @@ jobs:
           ignore-unfixed: "false"
           severity: CRITICAL,HIGH
           scanners: vuln,secret
+          trivyignores: .trivyignore.yaml
 
       - name: Retain production Trivy reports
         if: always()
