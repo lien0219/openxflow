@@ -111,11 +111,16 @@ jobs:
             fi
           done
 
+      - name: Prepare Trivy evidence folder (PR)
+        shell: bash
+        run: mkdir -p /tmp/openxflow-trivy
+
       - name: Scan the unpushed PR amd64 image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           input: /tmp/openxflow-pr-amd64.docker.tar
-          format: table
+          format: json
+          output: /tmp/openxflow-trivy/pr-amd64.json
           exit-code: "1"
           ignore-unfixed: "false"
           severity: CRITICAL,HIGH
@@ -125,7 +130,8 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           input: /tmp/openxflow-pr-arm64.docker.tar
-          format: table
+          format: json
+          output: /tmp/openxflow-trivy/pr-arm64.json
           exit-code: "1"
           ignore-unfixed: "false"
           severity: CRITICAL,HIGH
@@ -139,6 +145,15 @@ jobs:
             --archive /tmp/openxflow-pr.oci.tar \
             --plan /tmp/openxflow-pr-plan.json \
             --output-dir /tmp/openxflow-pr-image-verification
+
+      - name: Retain failed and successful Trivy PR reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openxflow-pr-trivy-${{ github.event.pull_request.number }}-${{ steps.preview-plan.outputs.source }}
+          path: /tmp/openxflow-trivy/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Retain PR image verification evidence
         if: always()
@@ -455,11 +470,16 @@ jobs:
             fi
           done
 
+      - name: Prepare Trivy evidence folder (production)
+        shell: bash
+        run: mkdir -p /tmp/openxflow-trivy
+
       - name: Scan the unpushed production amd64 image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           input: /tmp/openxflow-amd64.docker.tar
-          format: table
+          format: json
+          output: /tmp/openxflow-trivy/production-amd64.json
           exit-code: "1"
           ignore-unfixed: "false"
           severity: CRITICAL,HIGH
@@ -469,11 +489,21 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           input: /tmp/openxflow-arm64.docker.tar
-          format: table
+          format: json
+          output: /tmp/openxflow-trivy/production-arm64.json
           exit-code: "1"
           ignore-unfixed: "false"
           severity: CRITICAL,HIGH
           scanners: vuln,secret
+
+      - name: Retain production Trivy reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openxflow-production-trivy-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/openxflow-trivy/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Verify OCI attestations, both architectures, and runtime probes
         shell: bash
