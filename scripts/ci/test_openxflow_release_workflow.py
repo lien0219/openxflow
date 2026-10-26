@@ -164,10 +164,7 @@ def test_sdk_secret_exception_is_narrow_and_expires():
 
     finding = "/app/.venv/lib/python3.14/site-packages/ibm_watsonx_ai/__pycache__/connections.cpython-314.pyc"
     assert any(fnmatch(finding, pattern) for pattern in item["paths"])
-    other_module = (
-        "/app/.venv/lib/python3.14/site-packages/other/"
-        "__pycache__/connection.cpython-314.pyc"
-    )
+    other_module = "/app/.venv/lib/python3.14/site-packages/other/__pycache__/connection.cpython-314.pyc"
     assert not any(fnmatch(other_module, pattern) for pattern in item["paths"])
     assert datetime.now(timezone.utc).date() <= item["expired_at"] <= date(2026, 12, 31)
     assert item["statement"].strip()

@@ -33,6 +33,16 @@ def test_runtime_image_has_openxflow_provenance_and_upstream_attribution() -> No
     assert "FROM runtime AS full" in dockerfile
 
 
+def test_all_image_targets_inherit_exposed_http_port_from_runtime() -> None:
+    """Docker inspect must report 7860/tcp for base, full and bundle images."""
+    runtime = _stage("runtime")
+    assert "LANGFLOW_HOST=0.0.0.0" in runtime
+    assert "LANGFLOW_PORT=7860" in runtime
+    assert re.search(r"(?m)^EXPOSE 7860/tcp$", runtime)
+    for target in ("base", "full", "full-bundles"):
+        assert f"FROM runtime AS {target}" in DOCKERFILE.read_text(encoding="utf-8")
+
+
 def test_production_workflow_never_emits_latest() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert ":latest" not in workflow.lower()

@@ -261,6 +261,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # Keep auto-login disabled in every public target through the shared runtime stage.
 ENV LANGFLOW_AUTO_LOGIN=false
 
+# Publish the declared HTTP port in the image configuration for every target
+# inheriting this runtime stage. Listening still uses LANGFLOW_HOST/PORT above.
+EXPOSE 7860/tcp
+
 USER user
 WORKDIR /app
 
