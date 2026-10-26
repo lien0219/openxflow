@@ -173,6 +173,40 @@ def validate_oci_index(index: dict[str, Any], files: dict[str, bytes]) -> dict[s
     return result
 
 
+def resolve_inspected_oci_index(
+    archive_index: dict[str, Any], files: dict[str, bytes], inspected: dict[str, Any], raw: bytes
+) -> dict[str, Any]:
+    """Match Skopeo's selected index to the exact image stored in the OCI layout.
+
+    Buildx OCI exports may wrap the multi-platform image index in a single
+    descriptor in index.json. Skopeo resolves that descriptor and prints the
+    referenced index rather than the outer layout index. Prove the selected
+    index is the SHA-256-addressed blob in the archive before accepting it.
+    """
+    _require(isinstance(inspected.get("manifests"), list), "skopeo raw inspection has no image manifests")
+    if inspected == archive_index:
+        return archive_index
+
+    descriptors = archive_index.get("manifests") or []
+    _require(len(descriptors) == 1, "ambiguous OCI layout index; expected a single image-index descriptor")
+    descriptor = descriptors[0]
+    _require(
+        descriptor.get("mediaType")
+        in {
+            "application/vnd.oci.image.index.v1+json",
+            "application/vnd.docker.distribution.manifest.list.v2+json",
+        },
+        "OCI layout descriptor is not a multi-platform image index",
+    )
+    selected_digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+    _require(
+        _descriptor_digest(descriptor) == selected_digest,
+        "skopeo raw index is not referenced by the OCI layout",
+    )
+    _require(_read_blob(files, selected_digest) == raw, "skopeo raw index bytes differ from OCI archive blob")
+    return inspected
+
+
 def skopeo_inspect_archive(archive: Path) -> tuple[dict[str, Any], bytes]:
     raw = _run_required(["skopeo", "inspect", "--raw", f"oci-archive:{archive}"])
     raw_bytes = raw.encode("utf-8")
@@ -209,7 +243,7 @@ def build_trivy_command(archive: Path, scanner: str, report: Path) -> list[str]:
         "HIGH,CRITICAL",
         "--ignore-unfixed=false",
         "--ignorefile",
-        "/dev/null",
+        str(Path(__file__).resolve().parents[2] / ".trivyignore.yaml"),
         "--format",
         "json",
         "--output",
@@ -342,10 +376,8 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         inspected, raw = skopeo_inspect_archive(archive)
         identity["digest"] = "sha256:" + hashlib.sha256(raw.strip()).hexdigest()
         index, files = read_oci_archive(archive)
-        _require(
-            inspected.get("manifests") == index.get("manifests"), "skopeo raw index differs from OCI archive index"
-        )
-        structure = validate_oci_index(index, files)
+        selected_index = resolve_inspected_oci_index(index, files, inspected, raw)
+        structure = validate_oci_index(selected_index, files)
         report["attestations"] = {}
         attestation_dir = output / "attestations"
         attestation_dir.mkdir(exist_ok=True)

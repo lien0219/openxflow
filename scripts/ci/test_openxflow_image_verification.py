@@ -12,6 +12,7 @@ from scripts.ci.openxflow_verify_image import (
     VerificationError,
     build_copy_command,
     build_trivy_command,
+    resolve_inspected_oci_index,
     summarize_trivy,
     validate_oci_index,
     validate_plan,
@@ -99,7 +100,7 @@ def test_commands_pin_overrides_and_strict_trivy_policy(tmp_path: Path) -> None:
     assert "amd64" in copy
     trivy = build_trivy_command(tmp_path / "amd64.tar", "vuln", tmp_path / "vuln.json")
     assert "--ignore-unfixed=false" in trivy
-    assert trivy[trivy.index("--ignorefile") + 1] == "/dev/null"
+    assert Path(trivy[trivy.index("--ignorefile") + 1]).name == ".trivyignore.yaml"
 
 
 def test_trivy_summary_counts_findings(tmp_path: Path) -> None:
@@ -109,3 +110,44 @@ def test_trivy_summary_counts_findings(tmp_path: Path) -> None:
     )
     summary = summarize_trivy(report, "vuln")
     assert summary["finding_count"] == 1
+
+
+def test_skopeo_selected_index_matches_single_sha256_addressed_oci_layout_blob() -> None:
+    """An OCI layout wrapper is legitimate only when its selected digest matches."""
+    selected, files = _archive_files()
+    raw = json.dumps(selected, separators=(",", ":")).encode("utf-8")
+    digest, _ = _blob(raw)
+    files[f"blobs/sha256/{digest[7:]}"] = raw
+    layout = {
+        "schemaVersion": 2,
+        "manifests": [
+            {
+                "mediaType": "application/vnd.oci.image.index.v1+json",
+                "digest": digest,
+                "size": len(raw),
+                "annotations": {"org.opencontainers.image.ref.name": "openxflow"},
+            }
+        ],
+    }
+    verified = resolve_inspected_oci_index(layout, files, selected, raw)
+    assert set(validate_oci_index(verified, files)["platforms"]) == {"amd64", "arm64"}
+
+
+def test_skopeo_index_identity_fails_closed_on_foreign_or_tampered_blobs() -> None:
+    selected, files = _archive_files()
+    raw = json.dumps(selected).encode("utf-8")
+    digest, _ = _blob(raw)
+    files[f"blobs/sha256/{digest[7:]}"] = raw
+    layout = {
+        "schemaVersion": 2,
+        "manifests": [{"mediaType": "application/vnd.oci.image.index.v1+json", "digest": digest}],
+    }
+    assert resolve_inspected_oci_index(selected, files, selected, raw) == selected
+    with pytest.raises(VerificationError, match="not referenced"):
+        resolve_inspected_oci_index(layout, files, selected, raw + b" ")
+    files[f"blobs/sha256/{digest[7:]}"] = b"tampered"
+    with pytest.raises(VerificationError, match="digest mismatch"):
+        resolve_inspected_oci_index(layout, files, selected, raw)
+    layout["manifests"].append(dict(layout["manifests"][0]))
+    with pytest.raises(VerificationError, match="ambiguous"):
+        resolve_inspected_oci_index(layout, files, selected, raw)
