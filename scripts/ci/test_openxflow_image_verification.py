@@ -11,6 +11,7 @@ import pytest
 from scripts.ci.openxflow_verify_image import (
     VerificationError,
     build_copy_command,
+    build_smoke_run_command,
     build_trivy_command,
     resolve_inspected_oci_index,
     summarize_trivy,
@@ -151,3 +152,22 @@ def test_skopeo_index_identity_fails_closed_on_foreign_or_tampered_blobs() -> No
     layout["manifests"].append(dict(layout["manifests"][0]))
     with pytest.raises(VerificationError, match="ambiguous"):
         resolve_inspected_oci_index(layout, files, selected, raw)
+
+
+def test_authenticated_offline_smoke_requires_ephemeral_superuser_credentials() -> None:
+    """CI must supply credentials while preserving production's no-auto-login default."""
+    password = "x" * 48  # Synthetic input, not a real credential.
+    command = build_smoke_run_command("image:test", "smoke-one", password)
+    assert command[:4] == ["docker", "run", "--detach", "--network"]
+    assert command[4] == "none"
+    assert command[-1] == "image:test"
+    envs = [command[pos + 1] for pos, item in enumerate(command[:-1]) if item == "--env"]
+    assert "LANGFLOW_AUTO_LOGIN=false" in envs
+    assert "LANGFLOW_SUPERUSER=langflow" in envs
+    assert f"LANGFLOW_SUPERUSER_PASSWORD={password}" in envs
+    assert "LANGFLOW_DATABASE_URL=sqlite:////app/data/openxflow-verify.db" in envs
+    assert "LANGFLOW_CONFIG_DIR=/app/data/config" in envs
+    assert "--user" in command
+    assert command[command.index("--user") + 1] == "1000:0"
+    with pytest.raises(VerificationError, match="must be strong"):
+        build_smoke_run_command("image:test", "smoke-one", "short")

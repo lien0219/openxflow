@@ -16,6 +16,7 @@ import gzip
 import hashlib
 import json
 import re
+import secrets
 import subprocess
 import tarfile
 import time
@@ -307,34 +308,45 @@ def _probe(tag: str) -> None:
     )
 
 
+def build_smoke_run_command(tag: str, name: str, password: str) -> list[str]:
+    """Run offline with an ephemeral superuser; never weaken image auth defaults."""
+    _require(len(password) >= 32, "smoke-test password must be strong")
+    return [
+        "docker",
+        "run",
+        "--detach",
+        "--network",
+        "none",
+        "--user",
+        "1000:0",
+        "--name",
+        name,
+        "--env",
+        "LANGFLOW_DATABASE_URL=sqlite:////app/data/openxflow-verify.db",
+        "--env",
+        "LANGFLOW_CONFIG_DIR=/app/data/config",
+        "--env",
+        "LANGFLOW_AUTO_LOGIN=false",
+        "--env",
+        "LANGFLOW_SUPERUSER=langflow",
+        "--env",
+        f"LANGFLOW_SUPERUSER_PASSWORD={password}",
+        "--env",
+        "LANGFLOW_HOST=0.0.0.0",
+        "--env",
+        "LANGFLOW_PORT=7860",
+        tag,
+    ]
+
+
 def _smoke(tag: str, arch: str, names: list[str]) -> None:
     name = f"openxflow-verify-{uuid.uuid4().hex[:16]}-{arch}"
     names.append(name)
+    # Credentials are unique to this isolated, disposable container. They are
+    # never printed, committed, or embedded into the production image.
+    password = secrets.token_urlsafe(32)
     try:
-        result = _run(
-            [
-                "docker",
-                "run",
-                "--detach",
-                "--network",
-                "none",
-                "--user",
-                "1000:0",
-                "--name",
-                name,
-                "--env",
-                "LANGFLOW_DATABASE_URL=sqlite:////app/data/openxflow-verify.db",
-                "--env",
-                "LANGFLOW_CONFIG_DIR=/app/data/config",
-                "--env",
-                "LANGFLOW_AUTO_LOGIN=false",
-                "--env",
-                "LANGFLOW_HOST=0.0.0.0",
-                "--env",
-                "LANGFLOW_PORT=7860",
-                tag,
-            ]
-        )
+        result = _run(build_smoke_run_command(tag, name, password))
         if result.returncode:
             raise VerificationError(f"docker smoke container failed to start ({arch}): {result.stderr[-1000:]}")
         script = """\
