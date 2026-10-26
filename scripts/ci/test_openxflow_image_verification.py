@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from scripts.ci.openxflow_verify_image import (
     build_copy_command,
     build_smoke_run_command,
     build_trivy_command,
+    smoke_startup_timeout,
     resolve_inspected_oci_index,
     summarize_trivy,
     validate_oci_index,
@@ -171,3 +173,42 @@ def test_authenticated_offline_smoke_requires_ephemeral_superuser_credentials() 
     assert command[command.index("--user") + 1] == "1000:0"
     with pytest.raises(VerificationError, match="must be strong"):
         build_smoke_run_command("image:test", "smoke-one", "short")
+
+
+def test_emulated_arm64_smoke_has_bounded_longer_startup_window() -> None:
+    assert smoke_startup_timeout("arm64") > smoke_startup_timeout("amd64") > 0
+    with pytest.raises(VerificationError, match="unsupported"):
+        smoke_startup_timeout("other")
+
+
+def test_failed_smoke_reports_stderr_and_exits_early(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.ci import openxflow_verify_image as verifier
+
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args[:2] == ["docker", "exec"]:
+            return subprocess.CompletedProcess(args, 1, "", "connection refused")
+        if args[:3] == ["docker", "inspect", "--format"]:
+            return subprocess.CompletedProcess(args, 0, "false\n", "")
+        if args[:2] == ["docker", "logs"]:
+            return subprocess.CompletedProcess(args, 0, "", "Startup failed: missing database")
+        return subprocess.CompletedProcess(args, 0, "container-id", "")
+
+    monkeypatch.setattr(verifier, "_run", fake_run)
+    names: list[str] = []
+    with pytest.raises(VerificationError, match="Startup failed: missing database"):
+        verifier._smoke("image:test", "arm64", names)
+    assert len(names) == 1
+    assert any(command[:2] == ["docker", "rm"] for command in calls)
+    assert not any(command[:2] == ["docker", "exec"] for command in calls[2:])
+
+
+def test_smoke_environment_skips_network_refresh_but_keeps_authentication() -> None:
+    command = build_smoke_run_command("image:test", "smoke-two", "x" * 48)
+    variables = [command[i + 1] for i, part in enumerate(command[:-1]) if part == "--env"]
+    assert "LANGFLOW_AUTO_LOGIN=false" in variables
+    assert "LANGFLOW_SKIP_MCP_AUTO_INIT=true" in variables
+    assert "LANGFLOW_MODELS_DEV_REFRESH=false" in variables
+    assert "DO_NOT_TRACK=true" in variables

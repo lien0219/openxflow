@@ -27,6 +27,11 @@ from typing import Any
 SEMVER = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
 SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")
 PLATFORMS = ("amd64", "arm64")
+SMOKE_MIN_PASSWORD_LENGTH = 32
+# arm64 is emulated with QEMU on the AMD64 GitHub runner. Its Python startup
+# and first database migration can take substantially longer than native AMD64.
+SMOKE_STARTUP_TIMEOUT_S = {"amd64": 120, "arm64": 360}
+SMOKE_POLL_INTERVAL_S = 2
 PREDICATE_PROVENANCE = {
     "https://slsa.dev/provenance/v0.2",
     "https://slsa.dev/provenance/v1",
@@ -310,7 +315,7 @@ def _probe(tag: str) -> None:
 
 def build_smoke_run_command(tag: str, name: str, password: str) -> list[str]:
     """Run offline with an ephemeral superuser; never weaken image auth defaults."""
-    _require(len(password) >= 32, "smoke-test password must be strong")
+    _require(len(password) >= SMOKE_MIN_PASSWORD_LENGTH, "smoke-test password must be strong")
     return [
         "docker",
         "run",
@@ -335,8 +340,29 @@ def build_smoke_run_command(tag: str, name: str, password: str) -> list[str]:
         "LANGFLOW_HOST=0.0.0.0",
         "--env",
         "LANGFLOW_PORT=7860",
+        "--env",
+        "LANGFLOW_SKIP_MCP_AUTO_INIT=true",
+        "--env",
+        "LANGFLOW_MODELS_DEV_REFRESH=false",
+        "--env",
+        "DO_NOT_TRACK=true",
         tag,
     ]
+
+
+def smoke_startup_timeout(arch: str) -> int:
+    """Allow QEMU-emulated ARM64 enough time without weakening readiness."""
+    _require(arch in SMOKE_STARTUP_TIMEOUT_S, f"unsupported smoke-test architecture: {arch}")
+    return SMOKE_STARTUP_TIMEOUT_S[arch]
+
+
+def _smoke_diagnostics(name: str) -> str:
+    """Include container exit state and *both* Docker log streams."""
+    state = _run(["docker", "inspect", "--format", "{{.State.Status}} exit={{.State.ExitCode}}", name])
+    state_summary = (state.stdout or state.stderr).strip() or "unavailable"
+    logs = _run(["docker", "logs", "--tail", "100", name])
+    output = "\n".join(part for part in (logs.stdout, logs.stderr) if part).strip()
+    return f"container state: {state_summary}\ncontainer logs:\n{output[-4000:] or '(empty)'}"
 
 
 def _smoke(tag: str, arch: str, names: list[str]) -> None:
@@ -357,14 +383,27 @@ for path in ('/health_check', '/'):
     assert response.status == 200 and body, path
 print('smoke pass')
 """
-        deadline = time.monotonic() + 90
+        deadline = time.monotonic() + smoke_startup_timeout(arch)
+        last_probe = ""
         while time.monotonic() < deadline:
             probe = _run(["docker", "exec", name, "python", "-c", script])
             if probe.returncode == 0:
                 return
-            time.sleep(2)
-        logs = _run(["docker", "logs", name]).stdout[-2000:]
-        raise VerificationError(f"docker smoke did not reach /health_check and / ({arch})\n{logs}")
+            last_probe = (probe.stderr or probe.stdout).strip()[-500:]
+            running = _run(["docker", "inspect", "--format", "{{.State.Running}}", name])
+            if running.returncode or running.stdout.strip().lower() != "true":
+                diagnostics = _smoke_diagnostics(name)
+                raise VerificationError(
+                    f"docker smoke container exited before readiness ({arch})\n"
+                    f"{diagnostics}\nlast readiness probe: {last_probe}"
+                )
+            time.sleep(SMOKE_POLL_INTERVAL_S)
+        diagnostics = _smoke_diagnostics(name)
+        raise VerificationError(
+            f"docker smoke did not reach /health_check and / ({arch}) "
+            f"within {smoke_startup_timeout(arch)}s\n"
+            f"{diagnostics}\nlast readiness probe: {last_probe}"
+        )
     finally:
         _run(["docker", "rm", "--force", name])
 
