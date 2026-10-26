@@ -154,7 +154,17 @@ def test_sdk_secret_exception_is_narrow_and_expires():
     item = exceptions["secrets"][0]
     assert set(item) == {"id", "paths", "expired_at", "statement"}
     assert item["id"] == "gcp-service-account"
-    assert item["paths"] == ["**/site-packages/ibm_watsonx_ai/connections.py"]
+    assert item["paths"] == [
+        "**/site-packages/ibm_watsonx_ai/connections.py",
+        "**/site-packages/ibm_watsonx_ai/__pycache__/connections.cpython-314.pyc",
+    ]
+    # The bytecode false-positive was observed in the actual Trivy JSON evidence
+    # for the amd64 image, not in the source file. Keep its scope exact.
+    from fnmatch import fnmatch
+
+    finding = "/app/.venv/lib/python3.14/site-packages/ibm_watsonx_ai/__pycache__/connections.cpython-314.pyc"
+    assert any(fnmatch(finding, pattern) for pattern in item["paths"])
+    assert not any(fnmatch("/app/.venv/lib/python3.14/site-packages/other/__pycache__/connection.cpython-314.pyc", pattern) for pattern in item["paths"])
     assert datetime.now(timezone.utc).date() <= item["expired_at"] <= date(2026, 12, 31)
     assert item["statement"].strip()
     for job_name in ("preview-package", "build-and-verify"):

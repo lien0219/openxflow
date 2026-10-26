@@ -4,8 +4,9 @@ secrets:
   - id: gcp-service-account
     paths:
       - "**/site-packages/ibm_watsonx_ai/connections.py"
+      - "**/site-packages/ibm_watsonx_ai/__pycache__/connections.cpython-314.pyc"
     expired_at: 2026-12-31
     statement: >-
       IBM Watson SDK example property mapping includes the literal identifier
       gcp_service_account; no service-account JSON private key is embedded.
-      Only this rule in this SDK source file is excluded.
+      Only this rule in this SDK source file and its deterministic CPython 3.14\n      compiled bytecode are excluded; all other findings still block.
