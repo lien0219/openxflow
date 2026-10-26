@@ -74,6 +74,30 @@ def test_scanners_use_pinned_resolvable_trivy_action():
             assert scans[0]["with"]["scanners"] == "vuln,secret"
 
 
+def test_trivy_reports_survive_failed_security_scans():
+    workflow = load()
+    for job, profile in (
+        ("preview-package", "PR"),
+        ("build-and-verify", "production"),
+    ):
+        steps = workflow["jobs"][job]["steps"]
+        output_prefix = profile.lower()
+        for arch in ("amd64", "arm64"):
+            scan = next(step for step in steps if step.get("name") == f"Scan the unpushed {profile} {arch} image")
+            assert scan["with"]["format"] == "json"
+            assert scan["with"]["output"] == f"/tmp/openxflow-trivy/{output_prefix}-{arch}.json"  # noqa: S108 - workflow artifact path contract
+            assert scan["with"]["exit-code"] == "1"
+            assert scan["with"]["ignore-unfixed"] == "false"
+            assert scan["with"]["severity"] == "CRITICAL,HIGH"
+            assert scan["with"]["scanners"] == "vuln,secret"
+            assert scan.get("continue-on-error") in (None, False, "false")
+        retention = next(
+            step for step in steps if step.get("name", "").startswith("Retain ") and "Trivy" in step.get("name", "")
+        )
+        assert retention["if"] == "always()"
+        assert retention["with"]["path"] == "/tmp/openxflow-trivy/"  # noqa: S108 - workflow artifact path contract
+
+
 def test_build_has_no_registry_write_before_scan():
     source = WORKFLOW.read_text(encoding="utf-8")
     build_start = source.index("  build-and-verify:")
@@ -118,3 +142,25 @@ def test_workflow_has_no_untrusted_code_trigger_or_manual_sha_input():
     assert "workflow_dispatch" not in source
     assert "inputs:" not in source
     assert "github.event.pull_request.head.sha" not in workflow["jobs"]["validate-merge"]["if"]
+
+
+def test_sdk_secret_exception_is_narrow_and_expires():
+    """Only the confirmed SDK false positive may bypass the secret gate."""
+    from datetime import date, datetime, timezone
+
+    exceptions = yaml.safe_load((ROOT / ".trivyignore.yaml").read_text(encoding="utf-8"))
+    assert set(exceptions) == {"secrets"}
+    assert len(exceptions["secrets"]) == 1
+    item = exceptions["secrets"][0]
+    assert set(item) == {"id", "paths", "expired_at", "statement"}
+    assert item["id"] == "gcp-service-account"
+    assert item["paths"] == ["**/site-packages/ibm_watsonx_ai/connections.py"]
+    assert datetime.now(timezone.utc).date() <= item["expired_at"] <= date(2026, 12, 31)
+    assert item["statement"].strip()
+    for job_name in ("preview-package", "build-and-verify"):
+        scans = [s for s in load()["jobs"][job_name]["steps"] if s.get("name", "").startswith("Scan the unpushed")]
+        assert len(scans) == 2
+        for scan in scans:
+            assert scan["with"]["trivyignores"] == ".trivyignore.yaml"
+            assert scan["with"]["scanners"] == "vuln,secret"
+            assert scan["with"]["exit-code"] == "1"

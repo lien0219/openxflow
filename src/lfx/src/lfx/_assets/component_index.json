@@ -19445,7 +19445,7 @@
               "dependencies": [
                 {
                   "name": "aiohttp",
-                  "version": "3.14.3"
+                  "version": "3.14.5"
                 },
                 {
                   "name": "lfx",
@@ -32945,6 +32945,6 @@
     "num_components": 131,
     "num_modules": 18
   },
-  "sha256": "21b8812a93cc00fb16c1c94dfda4025208cc16932aa04891be649cd2e7001cc0",
+  "sha256": "047761ff7eee959154ac5dca32b4389f6e705922cca420925933ac92399d7a1e",
   "version": "1.13.0"
 }

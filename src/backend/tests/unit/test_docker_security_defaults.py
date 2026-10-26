@@ -219,8 +219,9 @@ def test_full_target_checks_only_default_workspace_distributions() -> None:
 
 def test_published_images_pin_hardened_package_managers() -> None:
     install_script = (REPO_ROOT / "docker" / "install_hardened_npm.sh").read_text(encoding="utf-8")
+    pip_vendor_script = (REPO_ROOT / "docker" / "patch_hardened_pip_vendor.sh").read_text(encoding="utf-8")
 
-    assert 'NPM_VERSION="12.0.2"' in install_script
+    assert 'NPM_VERSION="12.2.1"' in install_script
     assert 'npm install --global "npm@${NPM_VERSION}"' in install_script
     assert 'actual_npm_version="$(npm --version)"' in install_script
     assert 'if [ "$actual_npm_version" != "$NPM_VERSION" ]; then' in install_script
@@ -229,13 +230,19 @@ def test_published_images_pin_hardened_package_managers() -> None:
         ("IP_ADDRESS_VERSION", "10.7.1", "ip-address", '"ip-address": "10.7.1"'),
         ("BRACE_EXPANSION_VERSION", "5.0.12", "brace-expansion", '"brace-expansion": "5.0.12"'),
         ("TAR_VERSION", "7.5.22", "tar", 'tar: "7.5.22"'),
-        ("UNDICI_VERSION", "6.28.1", "undici", 'undici: "6.28.1"'),
+        ("UNDICI_VERSION", "6.29.1", "undici", 'undici: "6.29.1"'),
+        (
+            "HTTP_CACHE_SEMANTICS_VERSION",
+            "4.3.0",
+            "http-cache-semantics",
+            '"http-cache-semantics": "4.3.0"',
+        ),
     ):
         assert f'{variable}="{version}"' in install_script
         assert f'"{package}@${{{variable}}}"' in install_script
         assert validation_entry in install_script
 
-    assert "for package in ip-address brace-expansion tar undici; do" in install_script
+    assert "for package in ip-address brace-expansion tar undici http-cache-semantics; do" in install_script
     for validation_entry in (
         'sigstore: "5.0.0"',
         '"@sigstore/core": "4.0.1"',
@@ -244,6 +251,34 @@ def test_published_images_pin_hardened_package_managers() -> None:
         assert validation_entry in install_script
     assert "npm ls --global --all --omit=dev" in install_script
     assert 'rm -rf "$npm_cache" /tmp/node-compile-cache' in install_script
+    for package, version in (
+        ("certifi", "2026.10.23"),
+        ("msgpack", "1.2.1"),
+        ("setuptools", "78.1.1"),
+        ("urllib3", "2.8.0"),
+    ):
+        assert f"{package}=={version} --hash=sha256:" in pip_vendor_script
+    assert "--require-hashes" in pip_vendor_script
+    assert "msgpack_hash" in pip_vendor_script
+    assert (
+        "e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1"  # pragma: allowlist secret
+        in pip_vendor_script
+    )
+    assert (
+        "c3a9c4211ff4c309edb8b8c4f1cbfa7ae324c4ba9f91ff254e3d305b9fd54561"  # pragma: allowlist secret
+        in pip_vendor_script
+    )
+    assert (
+        "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3"  # pragma: allowlist secret
+        in pip_vendor_script
+    )
+    assert 'files("pip._vendor.certifi")' in pip_vendor_script
+    assert 'get_path("pip._vendor.certifi",' in pip_vendor_script
+    assert 'read_text("pip._vendor.certifi",' in pip_vendor_script
+    assert "unexpected urllib3 brotli vendoring block" in pip_vendor_script
+    assert '"br" not in urllib3.util.request.ACCEPT_ENCODING' in pip_vendor_script
+    assert 'shutil.ignore_patterns("tests", "api_tests.txt")' in pip_vendor_script
+    assert 'assert str(pkg_resources.Requirement.parse("openxflow>=1")) == "openxflow>=1"' in pip_vendor_script
 
     for dockerfile in (
         "build_and_push.Dockerfile",
@@ -252,6 +287,8 @@ def test_published_images_pin_hardened_package_managers() -> None:
     ):
         source = (REPO_ROOT / "docker" / dockerfile).read_text(encoding="utf-8")
         assert 'python3.14 -m pip install --no-cache-dir --upgrade "pip==26.2.1"' in source
+        assert "COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh" in source
+        assert "sh /tmp/patch_hardened_pip_vendor.sh" in source
         assert "sh /tmp/install_hardened_npm.sh" in source
 
     backend_project = tomllib.loads(

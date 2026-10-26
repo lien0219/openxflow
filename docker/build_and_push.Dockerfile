@@ -5,7 +5,7 @@
 # so the base and full targets cannot silently resolve different build tools.
 ARG UV_VERSION=0.10.4
 ARG PYTHON_IMAGE=registry.access.redhat.com/ubi10/python-314-minimal@sha256:3754d6dacac3177e62637420cadf7dcf438e390f664c527b0457a79653a47488
-ARG NODE_VERSION=24.21.0
+ARG NODE_VERSION=24.22.1
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv-installer
 
@@ -41,8 +41,8 @@ RUN microdnf install -y \
        elif [ "$ARCH" = "aarch64" ]; then NODE_ARCH="arm64"; \
        else echo "Unsupported Node architecture: $ARCH" >&2; exit 1; fi \
     && case "${NODE_VERSION}:${NODE_ARCH}" in \
-        24.21.0:x64) NODE_SHA256=fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6 ;; \
-        24.21.0:arm64) NODE_SHA256=6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2 ;; \
+        24.22.1:x64) NODE_SHA256=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6 ;; \
+        24.22.1:arm64) NODE_SHA256=dbabf7a1cbf947e6059ffad2c27b80041db97dea1e553b62afdee7f13fca336e ;; \
         *) echo "No reviewed Node checksum for ${NODE_VERSION}:${NODE_ARCH}" >&2; exit 1 ;; \
        esac \
     && curl -fsSLo /tmp/node.tar.xz \
@@ -208,6 +208,9 @@ RUN microdnf update -y \
     && microdnf clean all
 
 RUN python3.14 -m pip install --no-cache-dir --upgrade "pip==26.2.1"
+COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
+RUN sh /tmp/patch_hardened_pip_vendor.sh \
+    && rm -f /tmp/patch_hardened_pip_vendor.sh
 
 COPY --from=builder-base /usr/local/bin/uv /usr/local/bin/uv
 COPY --from=builder-base /usr/local/bin/uvx /usr/local/bin/uvx
@@ -270,8 +273,14 @@ CMD ["langflow", "run"]
 FROM runtime AS base
 
 COPY --from=base-builder --chown=1000:0 /app/.venv /app/.venv
+USER root
+COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
+RUN sh /tmp/patch_hardened_pip_vendor.sh \
+    && rm -f /tmp/patch_hardened_pip_vendor.sh \
+    && find /app/.venv -type d -path '*/pip/_vendor' -exec chown -R 1000:0 {} +
 LABEL org.opencontainers.image.title="OpenXFlow" \
       com.openxflow.image.profile="base"
+USER user
 
 ################################
 # FULL-BUNDLES IMAGE
@@ -280,8 +289,14 @@ LABEL org.opencontainers.image.title="OpenXFlow" \
 FROM runtime AS full-bundles
 
 COPY --from=full-bundles-builder --chown=1000:0 /app/.venv /app/.venv
+USER root
+COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
+RUN sh /tmp/patch_hardened_pip_vendor.sh \
+    && rm -f /tmp/patch_hardened_pip_vendor.sh \
+    && find /app/.venv -type d -path '*/pip/_vendor' -exec chown -R 1000:0 {} +
 LABEL org.opencontainers.image.title="OpenXFlow" \
       com.openxflow.image.profile="full-bundles"
+USER user
 
 ################################
 # DEFAULT IMAGE (default/final target)
@@ -290,5 +305,11 @@ LABEL org.opencontainers.image.title="OpenXFlow" \
 FROM runtime AS full
 
 COPY --from=full-builder --chown=1000:0 /app/.venv /app/.venv
+USER root
+COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
+RUN sh /tmp/patch_hardened_pip_vendor.sh \
+    && rm -f /tmp/patch_hardened_pip_vendor.sh \
+    && find /app/.venv -type d -path '*/pip/_vendor' -exec chown -R 1000:0 {} +
 LABEL org.opencontainers.image.title="OpenXFlow" \
       com.openxflow.image.profile="full"
+USER user
