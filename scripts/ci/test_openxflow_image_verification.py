@@ -16,7 +16,6 @@ from scripts.ci.openxflow_verify_image import (
     build_trivy_command,
     probe_smoke_endpoints,
     resolve_inspected_oci_index,
-    smoke_image,
     smoke_startup_timeout,
     summarize_trivy,
     validate_oci_index,
