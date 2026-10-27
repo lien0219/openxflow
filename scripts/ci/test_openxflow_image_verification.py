@@ -14,8 +14,10 @@ from scripts.ci.openxflow_verify_image import (
     build_copy_command,
     build_smoke_run_command,
     build_trivy_command,
-    smoke_startup_timeout,
+    probe_smoke_endpoints,
     resolve_inspected_oci_index,
+    smoke_image,
+    smoke_startup_timeout,
     summarize_trivy,
     validate_oci_index,
     validate_plan,
@@ -199,7 +201,7 @@ def test_failed_smoke_reports_stderr_and_exits_early(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(verifier, "_run", fake_run)
     names: list[str] = []
     with pytest.raises(VerificationError, match="Startup failed: missing database"):
-        verifier._smoke("image:test", "arm64", names)
+        verifier.smoke_image("image:test", "arm64", names)
     assert len(names) == 1
     assert any(command[:2] == ["docker", "rm"] for command in calls)
     assert not any(command[:2] == ["docker", "exec"] for command in calls[2:])
@@ -211,4 +213,54 @@ def test_smoke_environment_skips_network_refresh_but_keeps_authentication() -> N
     assert "LANGFLOW_AUTO_LOGIN=false" in variables
     assert "LANGFLOW_SKIP_MCP_AUTO_INIT=true" in variables
     assert "LANGFLOW_MODELS_DEV_REFRESH=false" in variables
+    assert "LANGFLOW_WORKERS=1" in variables
+    assert "LITELLM_LOCAL_MODEL_COST_MAP=true" in variables
+    assert "LITELLM_OFFLINE_MODE=true" in variables
     assert "DO_NOT_TRACK=true" in variables
+
+
+def test_curl_smoke_probe_requires_both_real_http_endpoints(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts.ci import openxflow_verify_image as verifier
+
+    requests: list[list[str]] = []
+
+    def successful_http(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        requests.append(args)
+        return subprocess.CompletedProcess(args, 0, "healthy", "")
+
+    monkeypatch.setattr(verifier, "_run", successful_http)
+    assert probe_smoke_endpoints("test-container") == (True, "")
+    assert len(requests) == 2
+    assert requests[0][-1] == "http://127.0.0.1:7860/health_check"
+    assert requests[1][-1] == "http://127.0.0.1:7860/"
+    for command in requests:
+        assert command[:4] == ["docker", "exec", "test-container", "curl"]
+        assert "--fail" in command
+        assert "--max-time" in command
+
+    requests.clear()
+
+    def failed_http(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        requests.append(args)
+        return subprocess.CompletedProcess(args, 22, "", "HTTP 503")
+
+    monkeypatch.setattr(verifier, "_run", failed_http)
+    ready, reason = probe_smoke_endpoints("test-container")
+    assert not ready
+    assert "503" in reason
+    assert len(requests) == 1
+
+
+def test_curl_smoke_probe_rejects_empty_http_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.ci import openxflow_verify_image as verifier
+
+    monkeypatch.setattr(
+        verifier,
+        "_run",
+        lambda args: subprocess.CompletedProcess(args, 0, "", ""),
+    )
+    ready, reason = probe_smoke_endpoints("test-container")
+    assert not ready
+    assert "/health_check" in reason

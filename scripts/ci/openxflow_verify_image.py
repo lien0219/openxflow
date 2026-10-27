@@ -30,7 +30,7 @@ PLATFORMS = ("amd64", "arm64")
 SMOKE_MIN_PASSWORD_LENGTH = 32
 # arm64 is emulated with QEMU on the AMD64 GitHub runner. Its Python startup
 # and first database migration can take substantially longer than native AMD64.
-SMOKE_STARTUP_TIMEOUT_S = {"amd64": 120, "arm64": 360}
+SMOKE_STARTUP_TIMEOUT_S = {"amd64": 120, "arm64": 600}
 SMOKE_POLL_INTERVAL_S = 2
 PREDICATE_PROVENANCE = {
     "https://slsa.dev/provenance/v0.2",
@@ -345,6 +345,12 @@ def build_smoke_run_command(tag: str, name: str, password: str) -> list[str]:
         "--env",
         "LANGFLOW_MODELS_DEV_REFRESH=false",
         "--env",
+        "LANGFLOW_WORKERS=1",
+        "--env",
+        "LITELLM_OFFLINE_MODE=true",
+        "--env",
+        "LITELLM_LOCAL_MODEL_COST_MAP=true",
+        "--env",
         "DO_NOT_TRACK=true",
         tag,
     ]
@@ -365,7 +371,32 @@ def _smoke_diagnostics(name: str) -> str:
     return f"container state: {state_summary}\ncontainer logs:\n{output[-4000:] or '(empty)'}"
 
 
-def _smoke(tag: str, arch: str, names: list[str]) -> None:
+def probe_smoke_endpoints(name: str) -> tuple[bool, str]:
+    """Verify both endpoints with curl, avoiding slow Python startup under QEMU."""
+    for path in ("/health_check", "/"):
+        command = [
+            "docker",
+            "exec",
+            name,
+            "curl",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--connect-timeout",
+            "2",
+            "--max-time",
+            "5",
+            f"http://127.0.0.1:7860{path}",
+        ]
+        result = _run(command)
+        if result.returncode or not result.stdout.strip():
+            detail = (result.stderr or result.stdout).strip()[-500:]
+            return False, f"{path}: {detail or 'empty or unsuccessful HTTP response'}"
+    return True, ""
+
+
+def smoke_image(tag: str, arch: str, names: list[str]) -> None:
+    """Require a fully started, authenticated HTTP service before accepting an image."""
     name = f"openxflow-verify-{uuid.uuid4().hex[:16]}-{arch}"
     names.append(name)
     # Credentials are unique to this isolated, disposable container. They are
@@ -375,21 +406,12 @@ def _smoke(tag: str, arch: str, names: list[str]) -> None:
         result = _run(build_smoke_run_command(tag, name, password))
         if result.returncode:
             raise VerificationError(f"docker smoke container failed to start ({arch}): {result.stderr[-1000:]}")
-        script = """\
-import urllib.request
-for path in ('/health_check', '/'):
-    response = urllib.request.urlopen('http://127.0.0.1:7860' + path, timeout=3)
-    body = response.read()
-    assert response.status == 200 and body, path
-print('smoke pass')
-"""
         deadline = time.monotonic() + smoke_startup_timeout(arch)
         last_probe = ""
         while time.monotonic() < deadline:
-            probe = _run(["docker", "exec", name, "python", "-c", script])
-            if probe.returncode == 0:
+            ready, last_probe = probe_smoke_endpoints(name)
+            if ready:
                 return
-            last_probe = (probe.stderr or probe.stdout).strip()[-500:]
             running = _run(["docker", "inspect", "--format", "{{.State.Running}}", name])
             if running.returncode or running.stdout.strip().lower() != "true":
                 diagnostics = _smoke_diagnostics(name)
@@ -450,7 +472,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
             image = _docker_inspect(tag)
             _inspect_image(image, plan)
             _probe(tag)
-            _smoke(tag, arch, cleanup_names)
+            smoke_image(tag, arch, cleanup_names)
             arch_findings = {"platform": arch, "trivy": []}
             for scanner in ("vuln", "secret"):
                 trivy_report = output / f"trivy-{arch}-{scanner}.json"
