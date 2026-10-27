@@ -1550,14 +1550,25 @@ class TestIngestionLocking:
 
     @pytest.mark.asyncio
     async def test_lock_released_on_task_exception(self, tmp_path):
-        """Lock must be released via finally even when the task raises inside the lock body."""
+        """An exception inside the SQLite fallback lock must release it."""
         import langflow.services.memory_base.task as task_module
 
         memory_base_id = uuid.uuid4()
+        lock_key = (memory_base_id, "s1")
+        task_module._session_ingestion_locks.pop(lock_key, None)
+        # Hold a strong reference because the lock registry uses weak references.
+        lock = task_module._get_or_create_session_lock(lock_key)
 
-        task_module._session_ingestion_locks.pop((memory_base_id, "s1"), None)
+        async def fail_while_locked(*_args, **_kwargs):
+            assert lock.locked(), "The exception must occur inside the acquired lock"
+            raise RuntimeError("DB exploded inside lock")
 
+        # This test covers the asyncio fallback lock, not database process
+        # ownership. A real shared SQLite checkout races other pytest-xdist
+        # workers and can fail before the injected exception is even reached.
         with (
+            patch("langflow.services.memory_base.task.session_scope", _fake_scope(AsyncMock())),
+            patch("langflow.services.memory_base.task._is_postgres", AsyncMock(return_value=False)),
             patch(
                 "langflow.services.memory_base.task.resolve_local_store_path",
                 return_value=tmp_path,
@@ -1568,8 +1579,8 @@ class TestIngestionLocking:
             ),
             patch(
                 "langflow.services.memory_base.task._fetch_pending_messages",
-                AsyncMock(side_effect=RuntimeError("DB exploded inside lock")),
-            ),
+                AsyncMock(side_effect=fail_while_locked),
+            ) as pending,
             pytest.raises(RuntimeError, match="DB exploded inside lock"),
         ):
             await task_module.ingest_memory_task(
@@ -1584,7 +1595,7 @@ class TestIngestionLocking:
                 ),
             )
 
-        lock = task_module._session_ingestion_locks[(memory_base_id, "s1")]
+        pending.assert_awaited_once()
         assert not lock.locked(), "Lock must be released after exception (finally block must have run)"
 
     @pytest.mark.asyncio
