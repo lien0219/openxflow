@@ -253,7 +253,7 @@ def test_published_images_pin_hardened_package_managers() -> None:
     assert 'rm -rf "$npm_cache" /tmp/node-compile-cache' in install_script
     for package, version in (
         ("certifi", "2026.10.23"),
-        ("msgpack", "1.2.1"),
+        ("msgpack", "1.2.3"),
         ("setuptools", "78.1.1"),
         ("urllib3", "2.8.0"),
     ):
