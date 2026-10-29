@@ -65,7 +65,7 @@ jobs:
           for arch, expected in zip(("x86_64", "aarch64"), matches):
               wheels = [
                   item for item in data["urls"]
-                  if "cp314-cp314" in item["filename"]
+                  if "-cp314-cp314-" in item["filename"]
                   and ("manylinux2014_" + arch) in item["filename"]
               ]
               assert len(wheels) == 1, (arch, [v["filename"] for v in wheels])
