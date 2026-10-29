@@ -19,6 +19,27 @@ def load():
     return yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=Loader)
 
 
+def test_production_merged_pr_does_not_export_github_actions_cache():
+    """Release builds may read cached layers but cannot depend on exporting them."""
+    workflow = load()
+    steps = workflow["jobs"]["build-and-verify"]["steps"]
+    build = next(
+        step for step in steps
+        if step.get("name") == "Build a multi-architecture OCI archive without publishing"
+    )
+    assert build["with"]["cache-from"] == "type=gha,scope=openxflow-production-full"
+    assert "cache-to" not in build["with"]
+    assert build["with"]["push"] == "false"
+    assert build["with"]["outputs"] == "type=oci,dest=/tmp/openxflow.oci.tar"
+
+
+def test_failed_v011_publication_requires_explicit_recovery_marker():
+    """Bound a failed release retry to the exact previous protected main commit."""
+    marker = ROOT / "deploy/release-recovery/v0.1.1"
+    assert marker.read_text(encoding="utf-8") == "40e135d45307424f0589108d43d7d915246dccda\n"
+    assert (ROOT / "deploy/IMAGE_VERSION").read_text(encoding="utf-8") == "0.1.1\n"
+
+
 def test_workflow_builds_pr_artifacts_and_publishes_only_after_merge():
     workflow = load()
     assert set(workflow["on"]) == {"pull_request"}

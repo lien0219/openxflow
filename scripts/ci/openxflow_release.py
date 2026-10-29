@@ -221,15 +221,35 @@ def plan_release(api, git):
     before, version = git.version(boundary), git.version(source)
     require(version is not None, "Missing IMAGE_VERSION")
     changed = validate_transition(before, version)
+    recovered = False if changed else release_recovery_requested(git, boundary, source, version)
     return {
         "source": source,
         "version": version,
         "before": before,
         "boundary": boundary,
-        "changed": changed,
+        "changed": changed or recovered,
+        "recovered": recovered,
         "pr": number,
         "created": git.run("show", "-s", "--format=%cI", source),
     }
+
+
+def release_recovery_requested(git, boundary, source, version):
+    """Recover an unpublished version only via a marker added by this merged PR.
+
+    The marker contains the exact prior protected-main commit. Ordinary
+    unchanged-version PRs are never eligible for version publishing.
+    """
+    path = f"deploy/release-recovery/v{version}"
+    if git.run("ls-tree", boundary, "--", path):
+        return False
+    if not git.run("ls-tree", source, "--", path):
+        return False
+    expected = git.run("show", f"{source}:{path}")
+    require(SHA.fullmatch(expected), "Recovery marker needs an exact main commit SHA")
+    require(expected == boundary, "Recovery marker does not match the prior main commit")
+    require(git.version(boundary) == version, "Recovery requires an unchanged product version")
+    return True
 
 
 def validate_coordinate_version(git, plan, version, target):
