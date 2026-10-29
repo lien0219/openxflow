@@ -172,11 +172,10 @@ def validate_rules(rules):
         {"pull_request", "non_fast_forward", "deletion", "required_status_checks"} <= types,
         "main requires PR, no force push/deletion, and required checks",
     )
-    reviews = [rule.get("parameters", {}) for rule in rules if rule["type"] == "pull_request"]
-    require(
-        any(r.get("require_code_owner_review") and r.get("required_approving_review_count", 0) >= 1 for r in reviews),
-        "main requires an approving Code Owner review",
-    )
+    # GitHub enforces its own PR approval policy before merging. Do not
+    # additionally require a Code Owner review here: a single-maintainer
+    # repository can deliberately require zero approvals while keeping the
+    # PR, status-check, no-force-push and no-deletion rules in effect.
     checks = [rule.get("parameters", {}) for rule in rules if rule["type"] == "required_status_checks"]
     contexts = {check["context"] for rule in checks for check in rule.get("required_status_checks", [])}
     require(

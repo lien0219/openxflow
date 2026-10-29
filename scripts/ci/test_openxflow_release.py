@@ -208,14 +208,29 @@ def test_bootstrap_requires_effective_main_rules():
         rules.pop(index)
         with pytest.raises(ReleaseContractError):
             validate_rules(rules)
+
+    for invalid_checks in ([], [{"context": "OpenXFlow release policy"}]):
+        rules = good_rules()
+        rules[3]["parameters"]["required_status_checks"] = invalid_checks
+        with pytest.raises(ReleaseContractError):
+            validate_rules(rules)
+
     rules = good_rules()
-    rules[0]["parameters"]["require_code_owner_review"] = False
+    rules[3]["parameters"]["strict_required_status_checks_policy"] = False
     with pytest.raises(ReleaseContractError):
         validate_rules(rules)
+
+
+@pytest.mark.parametrize(
+    ("required_approvals", "code_owner_review"),
+    [(0, False), (0, True), (1, False), (1, True)],
+)
+def test_release_admission_respects_github_managed_approval_policy(required_approvals, code_owner_review):
+    """Approval policy belongs to GitHub; release still enforces PR and strict CI."""
     rules = good_rules()
-    rules[3]["parameters"]["required_status_checks"] = []
-    with pytest.raises(ReleaseContractError):
-        validate_rules(rules)
+    rules[0]["parameters"]["required_approving_review_count"] = required_approvals
+    rules[0]["parameters"]["require_code_owner_review"] = code_owner_review
+    validate_rules(rules)
 
 
 def test_seed_is_valid_without_freezing_future_bumps():
