@@ -100,10 +100,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should-proceed: ${{ steps.check-pypi.outputs.success }}
+      status: ${{ steps.check-pypi.outputs.status }}
     steps:
       - name: Check PyPI package update
         id: check-pypi
         run: |
+          # Nightly publishing only runs in the canonical Langflow repository. Do not
+          # block fork PRs on the global PyPI package's daily upload schedule.
+          if [[ "${{ github.repository }}" != "langflow-ai/langflow" ]]; then
+            echo "Nightly PyPI check is not applicable to ${{ github.repository }}"
+            echo "success=true" >> $GITHUB_OUTPUT
+            echo "status=not-applicable" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           # Get today's date in ISO format for comparison
           TODAY=$(date -u +"%Y-%m-%d")
           echo "Today's date: $TODAY"
@@ -118,6 +128,7 @@ jobs:
           if [ "$HTTP_STATUS" -ne 200 ]; then
             echo "Error: PyPI API returned HTTP status $HTTP_STATUS"
             echo "success=false" >> $GITHUB_OUTPUT
+            echo "status=unavailable" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -127,6 +138,7 @@ jobs:
             echo "Response preview:"
             head -n 10 response.json
             echo "success=false" >> $GITHUB_OUTPUT
+            echo "status=unavailable" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -136,6 +148,7 @@ jobs:
           if [ -z "$LATEST_VERSION" ]; then
             echo "Could not find a nightly (.devN) release"
             echo "success=false" >> $GITHUB_OUTPUT
+            echo "status=unavailable" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -145,6 +158,7 @@ jobs:
           if [ -z "$RELEASE_DATE" ]; then
             echo "Could not extract release date"
             echo "success=false" >> $GITHUB_OUTPUT
+            echo "status=unavailable" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -155,9 +169,11 @@ jobs:
           if [[ "$RELEASE_DATE" == "$TODAY" ]]; then
             echo "Package was updated today"
             echo "success=true" >> $GITHUB_OUTPUT
+            echo "status=healthy" >> $GITHUB_OUTPUT
           else
             echo "Package was not updated today"
             echo "success=false" >> $GITHUB_OUTPUT
+            echo "status=stale" >> $GITHUB_OUTPUT
           fi
 
           # Clean up
@@ -394,7 +410,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       # SeaweedFS's S3 gateway: MinIO no longer publishes pullable images. A service
       # container cannot pass it the "server" command, so start it here. With no S3
@@ -557,7 +573,7 @@ jobs:
           echo "=== CI Status Summary ==="
           echo "Should run tests: ${{ needs.set-ci-condition.outputs.should-run-tests }}"
           echo "Should run CI: ${{ needs.set-ci-condition.outputs.should-run-ci }}"
-          echo "Nightly build status: ${{ needs.check-nightly-status.outputs.should-proceed }}"
+          echo "Nightly build status: ${{ needs.check-nightly-status.outputs.status }}"
           echo "Event type: ${{ github.event_name }}"
           echo "Docs only changes: $DOCS_ONLY"
           echo "Path filter decision: ${{ needs.path-filter.result }}"
@@ -620,9 +636,9 @@ jobs:
             echo "  2. Re-run the workflow if needed"
 
           elif [[ "${{ needs.check-nightly-status.outputs.should-proceed }}" != "true" && "${{ github.event_name }}" != "workflow_dispatch" && "$DOCS_ONLY" != "true" ]]; then
-            echo "🚫 CI BLOCKED: Nightly build is broken"
+            echo "🚫 CI BLOCKED: Nightly package is stale or unavailable"
             echo ""
-            echo "The nightly PyPI package was not updated today, indicating the nightly build failed."
+            echo "The latest nightly PyPI package was not updated today or its status could not be verified."
             echo ""
             echo "🔧 Next steps:"
             echo "  1. Work with the team to investigate and fix the nightly build"
@@ -637,7 +653,11 @@ jobs:
             echo "🎉 Your changes are ready:"
             echo "  - All tests passed"
             echo "  - Code quality checks passed"
-            echo "  - Nightly build is healthy"
+            if [[ "${{ needs.check-nightly-status.outputs.status }}" == "not-applicable" ]]; then
+              echo "  - Nightly status check is not applicable to this repository"
+            else
+              echo "  - Nightly build is healthy"
+            fi
           fi
 
           echo ""

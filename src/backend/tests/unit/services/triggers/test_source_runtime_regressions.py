@@ -255,14 +255,44 @@ async def test_gmail_cleanup_preserves_sibling_watch_even_after_opt_out(
 
 @pytest.mark.usefixtures("client")
 async def test_heartbeat_keeps_long_work_owned():
+    """Verify a committed lease extension instead of racing a 900 ms SQLite TTL."""
     name = f"long-work-{uuid4()}"
+    ttl_s = 15.0
     async with session_scope() as session:
-        assert await leases.acquire(session, name=name, owner="first", ttl_s=0.9)
-    task = asyncio.create_task(run_guarded(asyncio.sleep(2), name=name, owner="first", ttl_s=0.9))
-    await asyncio.sleep(1.3)
-    async with session_scope() as session:
-        assert not await leases.acquire(session, name=name, owner="second", ttl_s=10)
-    await task
+        assert await leases.acquire(session, name=name, owner="first", ttl_s=ttl_s)
+        initial = (await session.exec(select(TriggerLease).where(TriggerLease.name == name))).one()
+        original_expiry = initial.expires_at
+
+    renewed = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def on_heartbeat(_session, *, now, ttl_s):  # noqa: ARG001
+        renewed.set()
+
+    task = asyncio.create_task(
+        run_guarded(finish.wait(), name=name, owner="first", ttl_s=ttl_s, heartbeat=on_heartbeat)
+    )
+    try:
+        # The real renewal must complete, including the SQLite commit, before
+        # a competing owner is checked. A generous TTL avoids event-loop/DB
+        # contention turning a valid heartbeat into a spurious lease loss.
+        await asyncio.wait_for(renewed.wait(), timeout=25)
+        for _ in range(50):
+            async with session_scope() as session:
+                lease = (await session.exec(select(TriggerLease).where(TriggerLease.name == name))).one()
+                if lease.expires_at > original_expiry:
+                    assert lease.owner == "first"
+                    assert not await leases.acquire(session, name=name, owner="second", ttl_s=ttl_s)
+                    break
+            await asyncio.sleep(0.1)
+        else:
+            pytest.fail("heartbeat did not persist a lease extension")
+    finally:
+        finish.set()
+        if not task.done():
+            await asyncio.wait_for(task, timeout=10)
+        else:
+            await task
 
 
 @pytest.mark.usefixtures("client")

@@ -243,8 +243,11 @@ async def test_persistent_failures_back_off_and_surface_the_error_then_a_success
     from langflow.services.deps import get_settings_service
 
     settings = get_settings_service().settings
-    monkeypatch.setattr(settings, "listener_backoff_base_s", 0.01)
-    monkeypatch.setattr(settings, "listener_backoff_cap_s", 0.02)
+    # Retries below are deliberately forced via _spawn without waiting for
+    # the backoff timer. Use a realistic window so async error persistence and
+    # runner contention cannot consume the entire 20 ms window before assert.
+    monkeypatch.setattr(settings, "listener_backoff_base_s", 5.0)
+    monkeypatch.setattr(settings, "listener_backoff_cap_s", 10.0)
 
     adapter = adapter_registry(RecordingAdapter(fail_with=RuntimeError("provider said no")))
     connection_id = await make_connection()
@@ -263,7 +266,9 @@ async def test_persistent_failures_back_off_and_surface_the_error_then_a_success
     await asyncio.gather(worker.task, return_exceptions=True)
 
     assert worker.consecutive_failures >= 5
+    assert worker.next_attempt_at is not None, "failure must schedule a retry"
     assert worker.resting() is True, "a failed connection must rest before the next attempt"
+    assert worker.resting(now=worker.next_attempt_at) is False, "the retry may resume when backoff expires"
     _state_value, last_error = await _state(trigger_id)
     assert "could not hold this connection" in (last_error or "")
     # The trigger stays armed: a flapping provider is not an owner misconfiguration.

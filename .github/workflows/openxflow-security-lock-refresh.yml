@@ -1,0 +1,82 @@
+name: OpenXFlow Security Lockfile Refresh Evidence
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - pyproject.toml
+      - docker/patch_hardened_pip_vendor.sh
+      - .github/workflows/openxflow-security-lock-refresh.yml
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.4"
+          enable-cache: true
+      - name: Re-lock four patched security dependencies
+        run: |
+          set -euo pipefail
+          uv lock --upgrade-package authlib --upgrade-package dnspython --upgrade-package msgpack --upgrade-package pymongo
+          uv lock --check
+          python - <<'PY'
+          import tomllib
+          from packaging.version import Version
+          with open("uv.lock", "rb") as f:
+              locked = tomllib.load(f)
+          versions = {}
+          for package in locked["package"]:
+              versions.setdefault(package["name"], set()).add(Version(package["version"]))
+          floors = {"authlib": "1.9.1", "msgpack": "1.2.3", "pymongo": "4.18.3"}
+          for pkg, floor in floors.items():
+              assert versions[pkg] and min(versions[pkg]) >= Version(floor), (pkg, versions[pkg])
+              print(f"{pkg}={sorted(versions[pkg])} >= {floor}")
+          assert Version("2.9.0") in versions["dnspython"], versions["dnspython"]
+          print("dnspython resolves >=2.9.0 for the production Python 3.14 environment")
+          PY
+      - name: Commit resolver-generated lockfile to develop
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- uv.lock && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "fix(deps): resolve patched security dependencies in uv.lock"
+          git push origin "HEAD:develop"
+      - name: Verify architecture-specific pip vendor wheel hashes from PyPI
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+          import re
+          import urllib.request
+
+          data = json.load(urllib.request.urlopen("https://pypi.org/pypi/msgpack/1.2.3/json", timeout=30))
+          script = pathlib.Path("docker/patch_hardened_pip_vendor.sh").read_text()
+          matches = re.findall(r'msgpack_hash="([a-f0-9]{64})"', script)
+          assert len(matches) == 2
+          for arch, expected in zip(("x86_64", "aarch64"), matches):
+              wheels = [
+                  item for item in data["urls"]
+                  if "-cp314-cp314-" in item["filename"]
+                  and ("manylinux2014_" + arch) in item["filename"]
+              ]
+              assert len(wheels) == 1, (arch, [v["filename"] for v in wheels])
+              actual = wheels[0]["digests"]["sha256"]
+              assert actual == expected, (arch, "pinned SHA256 mismatch", actual, expected)
+              print(f"{arch}: PyPI SHA256 verified")
+          PY
+      - name: Upload resolver-generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: openxflow-patched-uv-lock
+          path: uv.lock
+          if-no-files-found: error
+          retention-days: 7

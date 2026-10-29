@@ -29,6 +29,10 @@ def _requirement(requirements: list[str], name: str) -> Requirement:
     return matches[0]
 
 
+def _requirements(requirements: list[str], name: str) -> list[Requirement]:
+    return [Requirement(spec) for spec in requirements if Requirement(spec).name.lower() == name.lower()]
+
+
 def _assert_specifier(requirement: Requirement, operator: str, version: str) -> None:
     assert any(spec.operator == operator and spec.version == version for spec in requirement.specifier), requirement
 
@@ -47,11 +51,39 @@ def test_workspace_security_overrides_enforce_patched_versions() -> None:
     _assert_floor(gitpython, "3.1.58")
 
     pypdf = _requirement(overrides, "pypdf")
-    _assert_floor(pypdf, "6.19.0")
+    _assert_floor(pypdf, "6.21.2")
     _assert_specifier(pypdf, "<", "7.0.0")
 
     h2 = _requirement(overrides, "h2")
     _assert_floor(h2, "4.4.1")
+
+    black = _requirement(overrides, "black")
+    _assert_floor(black, "26.10.1")
+
+    generator = _requirement(overrides, "datamodel-code-generator")
+    _assert_floor(generator, "0.81.0")
+
+    msgpack = _requirement(overrides, "msgpack")
+    _assert_floor(msgpack, "1.2.1")
+
+    certifi = _requirement(overrides, "certifi")
+    _assert_floor(certifi, "2026.10.19")
+
+    for name, minimum in (("pypdf", "6.21.2"), ("setuptools", "83.0.0")):
+        _assert_floor(_requirement(overrides, name), minimum)
+
+    filelock_requirements = _requirements(overrides, "filelock")
+    assert len(filelock_requirements) == 2
+    python_310 = next(
+        requirement for requirement in filelock_requirements if requirement.marker.evaluate({"python_version": "3.10"})
+    )
+    python_311_plus = next(
+        requirement for requirement in filelock_requirements if requirement.marker.evaluate({"python_version": "3.11"})
+    )
+    _assert_floor(python_310, "3.20.3")
+    _assert_specifier(python_310, "<", "3.20.4")
+    _assert_floor(python_311_plus, "4.2.1")
+    _assert_specifier(python_311_plus, "<", "5.0.0")
 
 
 def test_workspace_security_constraints_enforce_patched_versions() -> None:
@@ -96,13 +128,39 @@ def test_published_packages_enforce_patched_pypdf_floor() -> None:
     for relative_path in ("src/backend/base/pyproject.toml", "src/lfx/pyproject.toml"):
         dependencies = _load_pyproject(relative_path)["project"]["dependencies"]
         pypdf = _requirement(dependencies, "pypdf")
-        _assert_floor(pypdf, "6.19.0")
+        _assert_floor(pypdf, "6.21.2")
         _assert_specifier(pypdf, "<", "7.0.0")
 
     base_extras = _load_pyproject("src/backend/base/pyproject.toml")["project"]["optional-dependencies"]
     pypdf_extra = _requirement(base_extras["pypdf"], "pypdf")
-    _assert_floor(pypdf_extra, "6.19.0")
+    _assert_floor(pypdf_extra, "6.21.2")
     _assert_specifier(pypdf_extra, "<", "7.0.0")
+
+
+def test_filelock_security_markers_cover_every_supported_python() -> None:
+    for path in ("pyproject.toml", "src/backend/base/pyproject.toml", "src/lfx/pyproject.toml"):
+        project = _load_pyproject(path)
+        requirements = (
+            project["tool"]["uv"]["override-dependencies"]
+            if path == "pyproject.toml"
+            else project["project"]["dependencies"]
+        )
+        for minor in range(10, 15):
+            matches = [
+                requirement
+                for requirement in _requirements(requirements, "filelock")
+                if requirement.marker is None or requirement.marker.evaluate({"python_version": f"3.{minor}"})
+            ]
+            assert len(matches) == 1, (path, minor, matches)
+            requirement = matches[0]
+            if minor == 10:
+                assert "3.20.3" in requirement.specifier
+                assert "3.20.4" not in requirement.specifier
+                assert "4.2.1" not in requirement.specifier
+            else:
+                _assert_floor(requirement, "4.2.1")
+                assert "4.2.4" in requirement.specifier
+                assert "4.2.0" not in requirement.specifier
 
 
 def test_published_packages_enforce_patched_mcp_floor() -> None:

@@ -19,10 +19,13 @@ def load():
     return yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=Loader)
 
 
-def test_only_closed_merged_main_pr_can_start_workflow():
+def test_workflow_builds_pr_artifacts_and_publishes_only_after_merge():
     workflow = load()
     assert set(workflow["on"]) == {"pull_request"}
-    assert workflow["on"]["pull_request"] == {"types": ["closed"], "branches": ["main"]}
+    assert workflow["on"]["pull_request"] == {
+        "types": ["opened", "synchronize", "reopened", "closed"],
+        "branches": ["main"],
+    }
     admission = workflow["jobs"]["validate-merge"]["if"]
     for expression in [
         "github.repository == 'lien0219/openxflow'",
@@ -33,8 +36,66 @@ def test_only_closed_merged_main_pr_can_start_workflow():
         "github.event.pull_request.merge_commit_sha != ''",
     ]:
         assert expression in admission
+    preview = workflow["jobs"]["preview-package"]
+    assert "github.event.action != 'closed'" in preview["if"]
+    checkout = next(step for step in preview["steps"] if step.get("name") == "Check out PR head")
+    assert checkout["with"]["ref"] == "${{ github.event.pull_request.head.sha }}"
+    build = next(step for step in preview["steps"] if step.get("name") == "Build the PR OCI package")
+    assert build["with"]["push"] == "false"
+    assert build["with"]["outputs"] == "type=oci,dest=/tmp/openxflow-pr.oci.tar"
+    assert any(step.get("uses", "").startswith("actions/upload-artifact@") for step in preview["steps"])
     for forbidden in ["workflow_dispatch", "workflow_call", "workflow_run", "schedule", "pull_request_target"]:
         assert forbidden not in workflow["on"]
+
+
+def test_scanners_use_pinned_resolvable_trivy_action():
+    workflow = load()
+    expected = "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"
+    for job_name, prefix in (
+        ("preview-package", "/tmp/openxflow-pr"),  # noqa: S108 - workflow fixture path
+        ("build-and-verify", "/tmp/openxflow"),  # noqa: S108 - workflow fixture path
+    ):
+        steps = workflow["jobs"][job_name]["steps"]
+        prepare = next(step for step in steps if step.get("name", "").startswith("Prepare per-architecture Trivy"))
+        assert "skopeo copy --override-os linux --override-arch" in prepare["run"]
+        assert "docker-archive:" in prepare["run"]
+        for arch in ("amd64", "arm64"):
+            scans = [
+                step
+                for step in steps
+                if step.get("name", "").endswith(f"{arch} image")
+                and step.get("uses", "").startswith("aquasecurity/trivy-action@")
+            ]
+            assert len(scans) == 1
+            assert scans[0]["uses"] == expected
+            assert scans[0]["with"]["input"] == f"{prefix}-{arch}.docker.tar"
+            assert scans[0]["with"]["exit-code"] == "1"
+            assert scans[0]["with"]["severity"] == "CRITICAL,HIGH"
+            assert scans[0]["with"]["scanners"] == "vuln,secret"
+
+
+def test_trivy_reports_survive_failed_security_scans():
+    workflow = load()
+    for job, profile in (
+        ("preview-package", "PR"),
+        ("build-and-verify", "production"),
+    ):
+        steps = workflow["jobs"][job]["steps"]
+        output_prefix = profile.lower()
+        for arch in ("amd64", "arm64"):
+            scan = next(step for step in steps if step.get("name") == f"Scan the unpushed {profile} {arch} image")
+            assert scan["with"]["format"] == "json"
+            assert scan["with"]["output"] == f"/tmp/openxflow-trivy/{output_prefix}-{arch}.json"  # noqa: S108 - workflow artifact path contract
+            assert scan["with"]["exit-code"] == "1"
+            assert scan["with"]["ignore-unfixed"] == "false"
+            assert scan["with"]["severity"] == "CRITICAL,HIGH"
+            assert scan["with"]["scanners"] == "vuln,secret"
+            assert scan.get("continue-on-error") in (None, False, "false")
+        retention = next(
+            step for step in steps if step.get("name", "").startswith("Retain ") and "Trivy" in step.get("name", "")
+        )
+        assert retention["if"] == "always()"
+        assert retention["with"]["path"] == "/tmp/openxflow-trivy/"  # noqa: S108 - workflow artifact path contract
 
 
 def test_build_has_no_registry_write_before_scan():
@@ -44,7 +105,12 @@ def test_build_has_no_registry_write_before_scan():
     build = source[build_start:publish_start]
     assert "push: false" in build
     assert "outputs: type=oci,dest=/tmp/openxflow.oci.tar" in build
-    assert build.index("Scan the unpushed OCI archive") > build.index("Build a multi-architecture OCI archive")
+    build_at = build.index("Build a multi-architecture OCI archive")
+    prepare_at = build.index("Prepare per-architecture Trivy scan inputs (production)")
+    amd64_at = build.index("Scan the unpushed production amd64 image")
+    arm64_at = build.index("Scan the unpushed production arm64 image")
+    verify_at = build.index("Verify OCI attestations, both architectures, and runtime probes")
+    assert build_at < prepare_at < amd64_at < arm64_at < verify_at
     assert 'skopeo copy --all --preserve-digests "oci-archive:' not in build
 
 
@@ -70,8 +136,42 @@ def test_retry_runtime_probes_use_the_verified_reuse_coordinate():
 
 
 def test_workflow_has_no_untrusted_code_trigger_or_manual_sha_input():
+    workflow = load()
     source = WORKFLOW.read_text(encoding="utf-8")
     assert "pull_request_target" not in source
     assert "workflow_dispatch" not in source
     assert "inputs:" not in source
-    assert "github.event.pull_request.head.sha" not in source
+    assert "github.event.pull_request.head.sha" not in workflow["jobs"]["validate-merge"]["if"]
+
+
+def test_sdk_secret_exception_is_narrow_and_expires():
+    """Only the confirmed SDK false positive may bypass the secret gate."""
+    from datetime import date, datetime, timezone
+
+    exceptions = yaml.safe_load((ROOT / ".trivyignore.yaml").read_text(encoding="utf-8"))
+    assert set(exceptions) == {"secrets"}
+    assert len(exceptions["secrets"]) == 1
+    item = exceptions["secrets"][0]
+    assert set(item) == {"id", "paths", "expired_at", "statement"}
+    assert item["id"] == "gcp-service-account"
+    assert item["paths"] == [
+        "**/site-packages/ibm_watsonx_ai/connections.py",
+        "**/site-packages/ibm_watsonx_ai/__pycache__/connections.cpython-314.pyc",
+    ]
+    # The bytecode false-positive was observed in the actual Trivy JSON evidence
+    # for the amd64 image, not in the source file. Keep its scope exact.
+    from fnmatch import fnmatch
+
+    finding = "/app/.venv/lib/python3.14/site-packages/ibm_watsonx_ai/__pycache__/connections.cpython-314.pyc"
+    assert any(fnmatch(finding, pattern) for pattern in item["paths"])
+    other_module = "/app/.venv/lib/python3.14/site-packages/other/__pycache__/connection.cpython-314.pyc"
+    assert not any(fnmatch(other_module, pattern) for pattern in item["paths"])
+    assert datetime.now(timezone.utc).date() <= item["expired_at"] <= date(2026, 12, 31)
+    assert item["statement"].strip()
+    for job_name in ("preview-package", "build-and-verify"):
+        scans = [s for s in load()["jobs"][job_name]["steps"] if s.get("name", "").startswith("Scan the unpushed")]
+        assert len(scans) == 2
+        for scan in scans:
+            assert scan["with"]["trivyignores"] == ".trivyignore.yaml"
+            assert scan["with"]["scanners"] == "vuln,secret"
+            assert scan["with"]["exit-code"] == "1"

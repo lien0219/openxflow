@@ -349,7 +349,8 @@ async def test_replacement_deadlock_retry_exhaustion_is_generic_503(
         raise _deadlock_error(statement, message)
 
     monkeypatch.setattr(AsyncSession, "flush", always_deadlock)
-    monkeypatch.setattr(projects_module.asyncio, "sleep", AsyncMock())
+    # Keep the short retry delay real: patching asyncio.sleep also changes the
+    # lifespan's background loops and can make the event-loop monitor spin.
 
     # Spy on _replace_project_operation_once so the retry budget is checked
     # against the number of whole-operation attempts, not just flush calls.

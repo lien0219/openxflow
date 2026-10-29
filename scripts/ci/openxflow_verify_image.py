@@ -16,6 +16,7 @@ import gzip
 import hashlib
 import json
 import re
+import secrets
 import subprocess
 import tarfile
 import time
@@ -26,6 +27,11 @@ from typing import Any
 SEMVER = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
 SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")
 PLATFORMS = ("amd64", "arm64")
+SMOKE_MIN_PASSWORD_LENGTH = 32
+# arm64 is emulated with QEMU on the AMD64 GitHub runner. Its Python startup
+# and first database migration can take substantially longer than native AMD64.
+SMOKE_STARTUP_TIMEOUT_S = {"amd64": 120, "arm64": 600}
+SMOKE_POLL_INTERVAL_S = 2
 PREDICATE_PROVENANCE = {
     "https://slsa.dev/provenance/v0.2",
     "https://slsa.dev/provenance/v1",
@@ -173,6 +179,40 @@ def validate_oci_index(index: dict[str, Any], files: dict[str, bytes]) -> dict[s
     return result
 
 
+def resolve_inspected_oci_index(
+    archive_index: dict[str, Any], files: dict[str, bytes], inspected: dict[str, Any], raw: bytes
+) -> dict[str, Any]:
+    """Match Skopeo's selected index to the exact image stored in the OCI layout.
+
+    Buildx OCI exports may wrap the multi-platform image index in a single
+    descriptor in index.json. Skopeo resolves that descriptor and prints the
+    referenced index rather than the outer layout index. Prove the selected
+    index is the SHA-256-addressed blob in the archive before accepting it.
+    """
+    _require(isinstance(inspected.get("manifests"), list), "skopeo raw inspection has no image manifests")
+    if inspected == archive_index:
+        return archive_index
+
+    descriptors = archive_index.get("manifests") or []
+    _require(len(descriptors) == 1, "ambiguous OCI layout index; expected a single image-index descriptor")
+    descriptor = descriptors[0]
+    _require(
+        descriptor.get("mediaType")
+        in {
+            "application/vnd.oci.image.index.v1+json",
+            "application/vnd.docker.distribution.manifest.list.v2+json",
+        },
+        "OCI layout descriptor is not a multi-platform image index",
+    )
+    selected_digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+    _require(
+        _descriptor_digest(descriptor) == selected_digest,
+        "skopeo raw index is not referenced by the OCI layout",
+    )
+    _require(_read_blob(files, selected_digest) == raw, "skopeo raw index bytes differ from OCI archive blob")
+    return inspected
+
+
 def skopeo_inspect_archive(archive: Path) -> tuple[dict[str, Any], bytes]:
     raw = _run_required(["skopeo", "inspect", "--raw", f"oci-archive:{archive}"])
     raw_bytes = raw.encode("utf-8")
@@ -209,7 +249,7 @@ def build_trivy_command(archive: Path, scanner: str, report: Path) -> list[str]:
         "HIGH,CRITICAL",
         "--ignore-unfixed=false",
         "--ignorefile",
-        "/dev/null",
+        str(Path(__file__).resolve().parents[2] / ".trivyignore.yaml"),
         "--format",
         "json",
         "--output",
@@ -273,52 +313,119 @@ def _probe(tag: str) -> None:
     )
 
 
-def _smoke(tag: str, arch: str, names: list[str]) -> None:
+def build_smoke_run_command(tag: str, name: str, password: str) -> list[str]:
+    """Run offline with an ephemeral superuser; never weaken image auth defaults."""
+    _require(len(password) >= SMOKE_MIN_PASSWORD_LENGTH, "smoke-test password must be strong")
+    return [
+        "docker",
+        "run",
+        "--detach",
+        "--network",
+        "none",
+        "--user",
+        "1000:0",
+        "--name",
+        name,
+        "--env",
+        "LANGFLOW_DATABASE_URL=sqlite:////app/data/openxflow-verify.db",
+        "--env",
+        "LANGFLOW_CONFIG_DIR=/app/data/config",
+        "--env",
+        "LANGFLOW_AUTO_LOGIN=false",
+        "--env",
+        "LANGFLOW_SUPERUSER=langflow",
+        "--env",
+        f"LANGFLOW_SUPERUSER_PASSWORD={password}",
+        "--env",
+        "LANGFLOW_HOST=0.0.0.0",
+        "--env",
+        "LANGFLOW_PORT=7860",
+        "--env",
+        "LANGFLOW_SKIP_MCP_AUTO_INIT=true",
+        "--env",
+        "LANGFLOW_MODELS_DEV_REFRESH=false",
+        "--env",
+        "LANGFLOW_WORKERS=1",
+        "--env",
+        "LITELLM_OFFLINE_MODE=true",
+        "--env",
+        "LITELLM_LOCAL_MODEL_COST_MAP=true",
+        "--env",
+        "DO_NOT_TRACK=true",
+        tag,
+    ]
+
+
+def smoke_startup_timeout(arch: str) -> int:
+    """Allow QEMU-emulated ARM64 enough time without weakening readiness."""
+    _require(arch in SMOKE_STARTUP_TIMEOUT_S, f"unsupported smoke-test architecture: {arch}")
+    return SMOKE_STARTUP_TIMEOUT_S[arch]
+
+
+def _smoke_diagnostics(name: str) -> str:
+    """Include container exit state and *both* Docker log streams."""
+    state = _run(["docker", "inspect", "--format", "{{.State.Status}} exit={{.State.ExitCode}}", name])
+    state_summary = (state.stdout or state.stderr).strip() or "unavailable"
+    logs = _run(["docker", "logs", "--tail", "100", name])
+    output = "\n".join(part for part in (logs.stdout, logs.stderr) if part).strip()
+    return f"container state: {state_summary}\ncontainer logs:\n{output[-4000:] or '(empty)'}"
+
+
+def probe_smoke_endpoints(name: str) -> tuple[bool, str]:
+    """Verify both endpoints with curl, avoiding slow Python startup under QEMU."""
+    for path in ("/health_check", "/"):
+        command = [
+            "docker",
+            "exec",
+            name,
+            "curl",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--connect-timeout",
+            "2",
+            "--max-time",
+            "5",
+            f"http://127.0.0.1:7860{path}",
+        ]
+        result = _run(command)
+        if result.returncode or not result.stdout.strip():
+            detail = (result.stderr or result.stdout).strip()[-500:]
+            return False, f"{path}: {detail or 'empty or unsuccessful HTTP response'}"
+    return True, ""
+
+
+def smoke_image(tag: str, arch: str, names: list[str]) -> None:
+    """Require a fully started, authenticated HTTP service before accepting an image."""
     name = f"openxflow-verify-{uuid.uuid4().hex[:16]}-{arch}"
     names.append(name)
+    # Credentials are unique to this isolated, disposable container. They are
+    # never printed, committed, or embedded into the production image.
+    password = secrets.token_urlsafe(32)
     try:
-        result = _run(
-            [
-                "docker",
-                "run",
-                "--detach",
-                "--network",
-                "none",
-                "--user",
-                "1000:0",
-                "--name",
-                name,
-                "--env",
-                "LANGFLOW_DATABASE_URL=sqlite:////app/data/openxflow-verify.db",
-                "--env",
-                "LANGFLOW_CONFIG_DIR=/app/data/config",
-                "--env",
-                "LANGFLOW_AUTO_LOGIN=false",
-                "--env",
-                "LANGFLOW_HOST=0.0.0.0",
-                "--env",
-                "LANGFLOW_PORT=7860",
-                tag,
-            ]
-        )
+        result = _run(build_smoke_run_command(tag, name, password))
         if result.returncode:
             raise VerificationError(f"docker smoke container failed to start ({arch}): {result.stderr[-1000:]}")
-        script = """\
-import urllib.request
-for path in ('/health_check', '/'):
-    response = urllib.request.urlopen('http://127.0.0.1:7860' + path, timeout=3)
-    body = response.read()
-    assert response.status == 200 and body, path
-print('smoke pass')
-"""
-        deadline = time.monotonic() + 90
+        deadline = time.monotonic() + smoke_startup_timeout(arch)
+        last_probe = ""
         while time.monotonic() < deadline:
-            probe = _run(["docker", "exec", name, "python", "-c", script])
-            if probe.returncode == 0:
+            ready, last_probe = probe_smoke_endpoints(name)
+            if ready:
                 return
-            time.sleep(2)
-        logs = _run(["docker", "logs", name]).stdout[-2000:]
-        raise VerificationError(f"docker smoke did not reach /health_check and / ({arch})\n{logs}")
+            running = _run(["docker", "inspect", "--format", "{{.State.Running}}", name])
+            if running.returncode or running.stdout.strip().lower() != "true":
+                diagnostics = _smoke_diagnostics(name)
+                raise VerificationError(
+                    f"docker smoke container exited before readiness ({arch})\n"
+                    f"{diagnostics}\nlast readiness probe: {last_probe}"
+                )
+            time.sleep(SMOKE_POLL_INTERVAL_S)
+        diagnostics = _smoke_diagnostics(name)
+        raise VerificationError(
+            f"docker smoke did not reach /health_check and / ({arch}) "
+            f"within {smoke_startup_timeout(arch)}s\n"
+            f"{diagnostics}\nlast readiness probe: {last_probe}"
+        )
     finally:
         _run(["docker", "rm", "--force", name])
 
@@ -342,10 +449,8 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         inspected, raw = skopeo_inspect_archive(archive)
         identity["digest"] = "sha256:" + hashlib.sha256(raw.strip()).hexdigest()
         index, files = read_oci_archive(archive)
-        _require(
-            inspected.get("manifests") == index.get("manifests"), "skopeo raw index differs from OCI archive index"
-        )
-        structure = validate_oci_index(index, files)
+        selected_index = resolve_inspected_oci_index(index, files, inspected, raw)
+        structure = validate_oci_index(selected_index, files)
         report["attestations"] = {}
         attestation_dir = output / "attestations"
         attestation_dir.mkdir(exist_ok=True)
@@ -367,7 +472,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
             image = _docker_inspect(tag)
             _inspect_image(image, plan)
             _probe(tag)
-            _smoke(tag, arch, cleanup_names)
+            smoke_image(tag, arch, cleanup_names)
             arch_findings = {"platform": arch, "trivy": []}
             for scanner in ("vuln", "secret"):
                 trivy_report = output / f"trivy-{arch}-{scanner}.json"
