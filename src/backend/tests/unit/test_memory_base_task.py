@@ -1559,9 +1559,12 @@ class TestIngestionLocking:
         # Hold a strong reference because the lock registry uses weak references.
         lock = task_module._get_or_create_session_lock(lock_key)
 
+        class InjectedLockFailure(RuntimeError):
+            """An injected failure raised only after acquiring the session lock."""
+
         async def fail_while_locked(*_args, **_kwargs):
             assert lock.locked(), "The exception must occur inside the acquired lock"
-            raise RuntimeError("DB exploded inside lock")
+            raise InjectedLockFailure
 
         # This test covers the asyncio fallback lock, not database process
         # ownership. A real shared SQLite checkout races other pytest-xdist
@@ -1581,7 +1584,7 @@ class TestIngestionLocking:
                 "langflow.services.memory_base.task._fetch_pending_messages",
                 AsyncMock(side_effect=fail_while_locked),
             ) as pending,
-            pytest.raises(RuntimeError, match="DB exploded inside lock"),
+            pytest.raises(InjectedLockFailure),
         ):
             await task_module.ingest_memory_task(
                 request=task_module.IngestionRequest(
