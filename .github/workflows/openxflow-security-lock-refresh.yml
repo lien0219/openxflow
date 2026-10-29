@@ -50,6 +50,29 @@ jobs:
           git add uv.lock
           git commit -m "fix(deps): resolve patched security dependencies in uv.lock"
           git push origin "HEAD:develop"
+      - name: Verify architecture-specific pip vendor wheel hashes from PyPI
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+          import re
+          import urllib.request
+
+          data = json.load(urllib.request.urlopen("https://pypi.org/pypi/msgpack/1.2.3/json", timeout=30))
+          script = pathlib.Path("docker/patch_hardened_pip_vendor.sh").read_text()
+          matches = re.findall(r'msgpack_hash="([a-f0-9]{64})"', script)
+          assert len(matches) == 2
+          for arch, expected in zip(("x86_64", "aarch64"), matches):
+              wheels = [
+                  item for item in data["urls"]
+                  if "cp314-cp314" in item["filename"]
+                  and ("manylinux2014_" + arch) in item["filename"]
+              ]
+              assert len(wheels) == 1, (arch, [v["filename"] for v in wheels])
+              actual = wheels[0]["digests"]["sha256"]
+              assert actual == expected, (arch, "pinned SHA256 mismatch", actual, expected)
+              print(f"{arch}: PyPI SHA256 verified")
+          PY
       - name: Upload resolver-generated lockfile
         uses: actions/upload-artifact@v4
         with:
