@@ -9,7 +9,7 @@ on:
       - .github/workflows/openxflow-security-lock-refresh.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   regenerate-lock:
@@ -41,6 +41,15 @@ jobs:
           assert Version("2.9.0") in versions["dnspython"], versions["dnspython"]
           print("dnspython resolves >=2.9.0 for the production Python 3.14 environment")
           PY
+      - name: Commit resolver-generated lockfile to develop
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- uv.lock && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "fix(deps): resolve patched security dependencies in uv.lock"
+          git push origin "HEAD:develop"
       - name: Upload resolver-generated lockfile
         uses: actions/upload-artifact@v4
         with:
