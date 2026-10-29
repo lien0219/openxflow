@@ -1,0 +1,46 @@
+name: OpenXFlow Security Lockfile Refresh Evidence
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - pyproject.toml
+      - docker/patch_hardened_pip_vendor.sh
+      - .github/workflows/openxflow-security-lock-refresh.yml
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.4"
+          enable-cache: true
+      - name: Re-lock four patched security dependencies
+        run: |
+          set -euo pipefail
+          uv lock --upgrade-package authlib --upgrade-package dnspython --upgrade-package msgpack --upgrade-package pymongo
+          uv lock --check
+          python - <<'PY'
+          import tomllib
+          from packaging.version import Version
+          with open("uv.lock", "rb") as f:
+              locked = tomllib.load(f)
+          versions = {p["name"]: Version(p["version"]) for p in locked["package"]}
+          floors = {"authlib": "1.9.1", "dnspython": "2.9.0", "msgpack": "1.2.3", "pymongo": "4.18.3"}
+          for pkg, floor in floors.items():
+              assert versions[pkg] >= Version(floor), (pkg, versions[pkg])
+              print(f"{pkg}={versions[pkg]} >= {floor}")
+          PY
+      - name: Upload resolver-generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: openxflow-patched-uv-lock
+          path: uv.lock
+          if-no-files-found: error
+          retention-days: 7

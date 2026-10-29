@@ -8,10 +8,10 @@ trap 'rm -rf "$stage_dir"' EXIT
 
 case "$(uname -m)" in
     x86_64)
-        msgpack_hash="0e2bf9280bceb5efca998435904b5d3e9fdbcc11d90dc9df30aec7973252b720" # pragma: allowlist secret -- public wheel integrity hash
+        msgpack_hash="d8ef3a66e4b52d2d7fdd90df2984670124b2ff7546d76bb25dcf68ef47f7df58" # pragma: allowlist secret -- public wheel integrity hash
         ;;
     aarch64)
-        msgpack_hash="ca0dacff965c47afdc3749a8469d7302a8f801d6a28758d55120d75e66ce6889" # pragma: allowlist secret -- public wheel integrity hash
+        msgpack_hash="9324c54995641c3d1f92a9d55093c8cde0ffa2fbc87a467a688ef60428393220" # pragma: allowlist secret -- public wheel integrity hash
         ;;
     *)
         echo "Unsupported architecture for pinned msgpack wheel: $(uname -m)" >&2
@@ -21,7 +21,7 @@ esac
 
 cat > "$stage_dir/requirements.txt" <<EOF
 certifi==2026.10.23 --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
-msgpack==1.2.1 --hash=sha256:${msgpack_hash}
+msgpack==1.2.3 --hash=sha256:${msgpack_hash}
 setuptools==78.1.1 --hash=sha256:c3a9c4211ff4c309edb8b8c4f1cbfa7ae324c4ba9f91ff254e3d305b9fd54561
 urllib3==2.8.0 --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3
 EOF
@@ -135,7 +135,7 @@ if not roots:
 
 versions = {
     "certifi": "2026.10.23",
-    "msgpack": "1.2.1",
+    "msgpack": "1.2.3",
     "setuptools": "78.1.1",
     "urllib3": "2.8.0",
 }
@@ -213,7 +213,7 @@ from pathlib import Path
 from pip._vendor import certifi, msgpack, pkg_resources, urllib3
 
 assert certifi.__version__ == "2026.10.23", certifi.__version__
-assert msgpack.__version__ == "1.2.1", msgpack.__version__
+assert msgpack.__version__ == "1.2.3", msgpack.__version__
 assert urllib3.__version__ == "2.8.0", urllib3.__version__
 assert "br" not in urllib3.util.request.ACCEPT_ENCODING, urllib3.util.request.ACCEPT_ENCODING
 assert urllib3.util.request.ACCEPT_ENCODING in {"gzip,deflate", "gzip,deflate,zstd"}
