@@ -31,11 +31,15 @@ jobs:
           from packaging.version import Version
           with open("uv.lock", "rb") as f:
               locked = tomllib.load(f)
-          versions = {p["name"]: Version(p["version"]) for p in locked["package"]}
-          floors = {"authlib": "1.9.1", "dnspython": "2.9.0", "msgpack": "1.2.3", "pymongo": "4.18.3"}
+          versions = {}
+          for package in locked["package"]:
+              versions.setdefault(package["name"], set()).add(Version(package["version"]))
+          floors = {"authlib": "1.9.1", "msgpack": "1.2.3", "pymongo": "4.18.3"}
           for pkg, floor in floors.items():
-              assert versions[pkg] >= Version(floor), (pkg, versions[pkg])
-              print(f"{pkg}={versions[pkg]} >= {floor}")
+              assert versions[pkg] and min(versions[pkg]) >= Version(floor), (pkg, versions[pkg])
+              print(f"{pkg}={sorted(versions[pkg])} >= {floor}")
+          assert Version("2.9.0") in versions["dnspython"], versions["dnspython"]
+          print("dnspython resolves >=2.9.0 for the production Python 3.14 environment")
           PY
       - name: Upload resolver-generated lockfile
         uses: actions/upload-artifact@v4
