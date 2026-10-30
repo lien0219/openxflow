@@ -12,6 +12,7 @@ from openxflow_release import (
     find_boundary,
     parse_version,
     read_version,
+    release_recovery_requested,
     validate_event,
     validate_rules,
     validate_transition,
@@ -178,6 +179,45 @@ def test_ambiguous_rebase_evidence_fails_closed(repo):
         find_boundary(git, source, lambda _: False, 1)
     with pytest.raises(ReleaseContractError, match="bound"):
         find_boundary(git, source, lambda _: True, 1)
+
+
+def test_explicit_version_recovery_is_scoped_to_one_merged_pr(repo):
+    cmd, commit, git, _ = repo
+    failed_release_main = commit("0.1.1")
+    marker = Path(git.directory) / "deploy/release-recovery/v0.1.1"
+    marker.parent.mkdir(parents=True)
+    marker.write_text(failed_release_main + "\n", encoding="utf-8")
+    recovery_source = commit()
+
+    assert release_recovery_requested(git, failed_release_main, recovery_source, "0.1.1")
+    assert not validate_transition(git.version(failed_release_main), git.version(recovery_source))
+
+    next_source = commit()
+    assert not release_recovery_requested(git, recovery_source, next_source, "0.1.1")
+    assert not release_recovery_requested(git, failed_release_main, recovery_source, "0.1.2")
+    assert git.ancestor(failed_release_main, recovery_source)
+    assert cmd("show", f"{recovery_source}:deploy/release-recovery/v0.1.1") == failed_release_main
+
+
+def test_version_recovery_denies_incorrect_or_unverified_main_boundary(repo):
+    _, commit, git, _ = repo
+    failed_release_main = commit("0.1.1")
+    marker = Path(git.directory) / "deploy/release-recovery/v0.1.1"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("not-a-commit\n", encoding="utf-8")
+    invalid_source = commit()
+    with pytest.raises(ReleaseContractError, match="exact main commit SHA"):
+        release_recovery_requested(git, failed_release_main, invalid_source, "0.1.1")
+
+    marker.write_text("a" * 40 + "\n", encoding="utf-8")
+    wrong_source = commit()
+    # A mismatched marker must fail when treated as a newly introduced
+    # recovery marker at the original protected-main boundary.
+    with pytest.raises(ReleaseContractError, match="prior main commit"):
+        release_recovery_requested(git, failed_release_main, wrong_source, "0.1.1")
+    # If a marker already exists in the previous commit, a later edit must
+    # never be eligible to claim the same release version.
+    assert not release_recovery_requested(git, invalid_source, wrong_source, "0.1.1")
 
 
 def good_rules():

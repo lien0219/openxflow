@@ -426,8 +426,8 @@ jobs:
             org.opencontainers.image.created=${{ needs.validate-merge.outputs.created }}
             org.opencontainers.image.source=https://github.com/lien0219/openxflow
             org.opencontainers.image.url=https://github.com/lien0219/openxflow
+          # PR-closed events can read cache but may not export it.
           cache-from: type=gha,scope=openxflow-production-full
-          cache-to: type=gha,mode=max,scope=openxflow-production-full
           provenance: mode=max
           sbom: true
 
