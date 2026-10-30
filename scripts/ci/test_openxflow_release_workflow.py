@@ -24,8 +24,7 @@ def test_production_merged_pr_does_not_export_github_actions_cache():
     workflow = load()
     steps = workflow["jobs"]["build-and-verify"]["steps"]
     build = next(
-        step for step in steps
-        if step.get("name") == "Build a multi-architecture OCI archive without publishing"
+        step for step in steps if step.get("name") == "Build a multi-architecture OCI archive without publishing"
     )
     assert build["with"]["cache-from"] == "type=gha,scope=openxflow-production-full"
     assert "cache-to" not in build["with"]
