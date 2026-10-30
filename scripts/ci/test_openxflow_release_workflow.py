@@ -38,6 +38,29 @@ def test_failed_v011_publication_requires_explicit_recovery_marker():
     assert marker.read_text(encoding="utf-8") == "40e135d45307424f0589108d43d7d915246dccda\n"
 
 
+def test_runtime_probe_builds_from_the_same_nonroot_dockerfile_as_oci_package():
+    """A repository without root Dockerfile must use the supported image recipe."""
+    workflow = load()
+    steps = workflow["jobs"]["build-and-verify"]["steps"]
+    probe = next(
+        step for step in steps if step.get("name") == "Build amd64 runtime probe image without publishing"
+    )
+    script = probe["run"]
+    assert "docker buildx build --platform linux/amd64 --target full --load" in script
+    assert "--file ./docker/build_and_push.Dockerfile" in script
+    assert "-t openxflow-runtime-probe:local ." in script
+    assert "docker run --rm --entrypoint python" in script
+    assert "docker run --rm --entrypoint langflow" in script
+    assert not (ROOT / "Dockerfile").exists()
+    assert (ROOT / "docker/build_and_push.Dockerfile").is_file()
+
+
+def test_v011_recovery_retry_is_bound_to_failed_previous_main():
+    """The recovery retry may not point to any arbitrary release boundary."""
+    marker = ROOT / "deploy/release-recovery/v0.1.1-retry-67299848f702"
+    assert marker.read_text(encoding="utf-8") == "67299848f702b542475922c67dff6e407d236ef5\n"
+
+
 def test_workflow_builds_pr_artifacts_and_publishes_only_after_merge():
     workflow = load()
     assert set(workflow["on"]) == {"pull_request"}
