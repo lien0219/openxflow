@@ -33,10 +33,9 @@ def test_production_merged_pr_does_not_export_github_actions_cache():
 
 
 def test_failed_v011_publication_requires_explicit_recovery_marker():
-    """Bound a failed release retry to the exact previous protected main commit."""
+    """Bind the historical v0.1.1 recovery to its original protected main commit."""
     marker = ROOT / "deploy/release-recovery/v0.1.1"
     assert marker.read_text(encoding="utf-8") == "40e135d45307424f0589108d43d7d915246dccda\n"
-    assert (ROOT / "deploy/IMAGE_VERSION").read_text(encoding="utf-8") == "0.1.1\n"
 
 
 def test_workflow_builds_pr_artifacts_and_publishes_only_after_merge():
