@@ -42,9 +42,7 @@ def test_runtime_probe_builds_from_the_same_nonroot_dockerfile_as_oci_package():
     """A repository without root Dockerfile must use the supported image recipe."""
     workflow = load()
     steps = workflow["jobs"]["build-and-verify"]["steps"]
-    probe = next(
-        step for step in steps if step.get("name") == "Build amd64 runtime probe image without publishing"
-    )
+    probe = next(step for step in steps if step.get("name") == "Build amd64 runtime probe image without publishing")
     script = probe["run"]
     assert "docker buildx build --platform linux/amd64 --target full --load" in script
     assert "--file ./docker/build_and_push.Dockerfile" in script
