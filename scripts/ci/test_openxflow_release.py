@@ -229,10 +229,7 @@ def test_second_recovery_after_failed_previous_main_publication(repo):
     original_marker.write_text(original_main + "\n", encoding="utf-8")
     failed_first_retry = commit()
 
-    retry_path = (
-        Path(git.directory)
-        / f"deploy/release-recovery/v0.1.1-retry-{failed_first_retry[:12]}"
-    )
+    retry_path = Path(git.directory) / f"deploy/release-recovery/v0.1.1-retry-{failed_first_retry[:12]}"
     retry_path.write_text(failed_first_retry + "\n", encoding="utf-8")
     recovered_source = commit()
 
@@ -251,10 +248,7 @@ def test_second_recovery_rejects_mismatched_boundary_or_original_marker_change(r
     original_marker.write_text(original_main + "\n", encoding="utf-8")
     previous_main = commit()
 
-    retry_path = (
-        Path(git.directory)
-        / f"deploy/release-recovery/v0.1.1-retry-{previous_main[:12]}"
-    )
+    retry_path = Path(git.directory) / f"deploy/release-recovery/v0.1.1-retry-{previous_main[:12]}"
     retry_path.write_text("a" * 40 + "\n", encoding="utf-8")
     invalid_source = commit()
     with pytest.raises(ReleaseContractError, match="prior main commit"):
