@@ -443,6 +443,7 @@ jobs:
             exit 0
           fi
           docker buildx build --platform linux/amd64 --target full --load \
+            --file ./docker/build_and_push.Dockerfile \
             --build-arg OPENXFLOW_VERSION="$VERSION" \
             --build-arg OPENXFLOW_REVISION="$SOURCE" \
             --build-arg OPENXFLOW_SOURCE=https://github.com/lien0219/openxflow \
