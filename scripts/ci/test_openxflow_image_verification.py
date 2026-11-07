@@ -124,7 +124,9 @@ def test_release_image_profiles_install_current_security_fixes() -> None:
     profiles = {
         "base": content.split("FROM full-dependencies AS full-builder", 1)[0],
         "full": content.split("FROM full-builder AS full-bundles-builder", 1)[0],
-        "full-bundles": content.split("FROM full-bundles-builder", 1)[1].split("FROM ${PYTHON_IMAGE} AS runtime", 1)[0],
+        "full-bundles": content.split("FROM full-builder AS full-bundles-builder", 1)[1].split(
+            "FROM ${PYTHON_IMAGE} AS runtime", 1
+        )[0],
     }
     patched = ("joserfc==1.7.5", "oauthlib==4.0.1", "pyasn1==0.6.5", "pypdf==6.21.4")
     for profile, stage in profiles.items():
