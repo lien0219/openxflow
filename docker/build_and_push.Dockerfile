@@ -138,12 +138,13 @@ RUN python3.14 /tmp/install_release_wheels.py /tmp/release-artifacts \
     --frontend-source /app/src/backend/base/langflow/frontend
 
 # Temporarily pin the four Trivy remediations after wheel installation.
-# --no-deps avoids unrelated dependency drift; pip check fails closed.
+# --no-deps avoids unrelated dependency drift; reinstall pypdf to resolve
+# inconsistent installed metadata. pip check and isolated Python fail closed.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python /app/.venv/bin/python --no-deps \
+    uv pip install --python /app/.venv/bin/python --no-deps --reinstall-package pypdf \
         "joserfc==1.7.5" "oauthlib==4.0.1" "pyasn1==0.6.5" "pypdf==6.21.4" \
     && uv pip check --python /app/.venv/bin/python \
-    && /app/.venv/bin/python -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"'
+    && /app/.venv/bin/python -I -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"'
 
 FROM full-dependencies AS full-builder
 
@@ -180,12 +181,13 @@ RUN python3.14 /tmp/install_release_wheels.py /tmp/release-artifacts \
     --frontend-source /app/src/backend/base/langflow/frontend
 
 # Temporarily pin the four Trivy remediations after wheel installation.
-# --no-deps avoids unrelated dependency drift; pip check fails closed.
+# --no-deps avoids unrelated dependency drift; reinstall pypdf to resolve
+# inconsistent installed metadata. pip check and isolated Python fail closed.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python /app/.venv/bin/python --no-deps \
+    uv pip install --python /app/.venv/bin/python --no-deps --reinstall-package pypdf \
         "joserfc==1.7.5" "oauthlib==4.0.1" "pyasn1==0.6.5" "pypdf==6.21.4" \
     && uv pip check --python /app/.venv/bin/python \
-    && /app/.venv/bin/python -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"'
+    && /app/.venv/bin/python -I -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"'
 
 FROM full-builder AS full-bundles-builder
 
@@ -199,10 +201,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --python /app/.venv/bin/python \
         --mode main \
         --frontend-source /app/src/backend/base/langflow/frontend \
-    && uv pip install --python /app/.venv/bin/python --no-deps \
+    && uv pip install --python /app/.venv/bin/python --no-deps --reinstall-package pypdf \
         "joserfc==1.7.5" "oauthlib==4.0.1" "pyasn1==0.6.5" "pypdf==6.21.4" \
     && uv pip check --python /app/.venv/bin/python \
-    && /app/.venv/bin/python -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"' \
+    && /app/.venv/bin/python -I -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"' \
     && /app/.venv/bin/python -c 'import importlib.metadata as m; from packaging.requirements import Requirement; names = {d.metadata["Name"].lower() for d in m.distributions()}; requirements = [Requirement(value) for value in (m.requires("langflow") or ())]; required = {requirement.name.lower() for requirement in requirements if requirement.marker is not None and requirement.marker.evaluate({"extra": "bundles"})}; missing = sorted(required - names); assert not missing, f"full-bundles image is missing distributions: {missing}"'
 
 ################################
