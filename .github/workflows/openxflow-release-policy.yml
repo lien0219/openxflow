@@ -47,7 +47,7 @@ jobs:
           push: false
           load: false
           outputs: type=cacheonly
-          cache-from: type=gha,scope=openxflow-policy-full
-          cache-to: type=gha,mode=max,scope=openxflow-policy-full
+          # Shared GHA layer cache previously produced missing-blob failures.
+          # Run this release rehearsal without a remote BuildKit cache.
           provenance: false
           sbom: false
