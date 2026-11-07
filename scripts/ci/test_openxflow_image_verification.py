@@ -176,7 +176,9 @@ def test_trivy_secret_report_redacts_match_content(tmp_path: Path) -> None:
     assert "sensitive-test-placeholder" not in json.dumps(summary)
 
 
-@pytest.mark.parametrize("payload", [{}, {"Results": None}, {"Results": [{}]}, {"Results": [{"Vulnerabilities": "invalid"}]}])
+@pytest.mark.parametrize(
+    "payload", [{}, {"Results": None}, {"Results": [{}]}, {"Results": [{"Vulnerabilities": "invalid"}]}]
+)
 def test_trivy_rejects_invalid_report_shapes(tmp_path: Path, payload: dict) -> None:
     report = tmp_path / "invalid.json"
     report.write_text(json.dumps(payload), encoding="utf-8")
