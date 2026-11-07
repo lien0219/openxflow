@@ -21,6 +21,7 @@ import subprocess
 import tarfile
 import time
 import uuid
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -262,10 +263,44 @@ def summarize_trivy(report: Path, scanner: str) -> dict[str, Any]:
         payload = json.loads(report.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise VerificationError(f"invalid Trivy {scanner} report: {report}") from exc
-    findings = []
-    for result in payload.get("Results", []):
-        findings.extend(result.get("Vulnerabilities", []) if scanner == "vuln" else result.get("Secrets", []))
+    _require(isinstance(payload, dict) and isinstance(payload.get("Results"), list), "invalid Trivy report results")
+    findings: list[dict[str, Any]] = []
+    key = "Vulnerabilities" if scanner == "vuln" else "Secrets"
+    for result in payload["Results"]:
+        _require(isinstance(result, dict), "invalid Trivy result entry")
+        entries = result.get(key) or []
+        _require(isinstance(entries, list), f"invalid Trivy {key} entries")
+        for finding in entries:
+            _require(isinstance(finding, dict), f"invalid Trivy {key} finding")
+            fields = (
+                ("VulnerabilityID", "PkgName", "InstalledVersion", "FixedVersion", "Severity")
+                if scanner == "vuln"
+                else ("RuleID", "Severity", "Category")
+            )
+            findings.append({"Target": result.get("Target"), **{field: finding.get(field) for field in fields}})
+    # The raw secret report may contain credential matches. Never retain those
+    # matches in a public CI artifact or print them in the verification summary.
+    if scanner == "secret":
+        report.write_text(json.dumps({"Results": [{"Secrets": findings}]}, indent=2) + "\n", encoding="utf-8")
     return {"scanner": scanner, "report": str(report), "finding_count": len(findings), "findings": findings}
+
+
+def trivy_failure_message(summary: dict[str, Any], arch: str) -> str:
+    """Provide actionable finding IDs without exposing secret match contents."""
+    examples = []
+    for item in summary["findings"][:8]:
+        if summary["scanner"] == "vuln":
+            examples.append(
+                f"{item.get('VulnerabilityID')} {item.get('PkgName')}@{item.get('InstalledVersion')} "
+                f"-> {item.get('FixedVersion') or 'no fix'} ({item.get('Severity')})"
+            )
+        else:
+            examples.append(f"{item.get('RuleID')} ({item.get('Severity')})")
+    suffix = f"; first findings: {'; '.join(examples)}" if examples else ""
+    return (
+        f"Trivy {summary['scanner']} findings for linux/{arch}: {summary['finding_count']}"
+        f"{suffix}; report: {summary['report']}"
+    )
 
 
 def _docker_inspect(tag: str) -> dict[str, Any]:
@@ -437,6 +472,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
     plan = validate_plan(json.loads(Path(args.plan).read_text(encoding="utf-8")))
     findings: list[dict[str, Any]] = []
     cleanup_names: list[str] = []
+    archive_copies: list[Path] = []
     identity: dict[str, Any] = {
         "schema": 1,
         "source": plan["source"],
@@ -462,6 +498,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
                 report["attestations"][arch][kind] = str(path)
         for arch in PLATFORMS:
             archive_copy = output / f"openxflow-{arch}.docker.tar"
+            archive_copies.append(archive_copy)
             tag = f"openxflow-verify-{plan['source'][:12]}-{arch}"
             _run_required(build_copy_command(archive, archive_copy, arch, tag))
             loaded = _run_required(["docker", "load", "--input", str(archive_copy)])
@@ -474,13 +511,13 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
             _probe(tag)
             smoke_image(tag, arch, cleanup_names)
             arch_findings = {"platform": arch, "trivy": []}
+            findings.append(arch_findings)
             for scanner in ("vuln", "secret"):
                 trivy_report = output / f"trivy-{arch}-{scanner}.json"
                 _run_required(build_trivy_command(archive_copy, scanner, trivy_report))
                 summary = summarize_trivy(trivy_report, scanner)
                 arch_findings["trivy"].append(summary)
-                _require(summary["finding_count"] == 0, f"Trivy {scanner} findings for linux/{arch}")
-            findings.append(arch_findings)
+                _require(summary["finding_count"] == 0, trivy_failure_message(summary, arch))
             _run(["docker", "image", "rm", "--force", tag])
             archive_copy.unlink(missing_ok=True)
         report["status"] = "PASS"
@@ -490,6 +527,10 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
     finally:
         for name in cleanup_names:
             _run(["docker", "rm", "--force", name])
+        # Failed scans must not upload an 800 MB Docker archive as diagnostic evidence.
+        for archive_copy in archive_copies:
+            with suppress(OSError):
+                archive_copy.unlink(missing_ok=True)
     (output / "verification.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
 

@@ -220,6 +220,46 @@ def test_version_recovery_denies_incorrect_or_unverified_main_boundary(repo):
     assert not release_recovery_requested(git, invalid_source, wrong_source, "0.1.1")
 
 
+def test_second_recovery_after_failed_previous_main_publication(repo):
+    """A new, explicitly anchored retry can publish an unchanged version."""
+    _, commit, git, _ = repo
+    original_main = commit("0.1.1")
+    original_marker = Path(git.directory) / "deploy/release-recovery/v0.1.1"
+    original_marker.parent.mkdir(parents=True)
+    original_marker.write_text(original_main + "\n", encoding="utf-8")
+    failed_first_retry = commit()
+
+    retry_path = Path(git.directory) / f"deploy/release-recovery/v0.1.1-retry-{failed_first_retry[:12]}"
+    retry_path.write_text(failed_first_retry + "\n", encoding="utf-8")
+    recovered_source = commit()
+
+    assert release_recovery_requested(git, failed_first_retry, recovered_source, "0.1.1")
+    assert not release_recovery_requested(git, failed_first_retry, recovered_source, "0.1.2")
+    next_main = commit()
+    assert not release_recovery_requested(git, recovered_source, next_main, "0.1.1")
+
+
+def test_second_recovery_rejects_mismatched_boundary_or_original_marker_change(repo):
+    """A retry cannot reuse an old marker or rewrite the historical one."""
+    _, commit, git, _ = repo
+    original_main = commit("0.1.1")
+    original_marker = Path(git.directory) / "deploy/release-recovery/v0.1.1"
+    original_marker.parent.mkdir(parents=True)
+    original_marker.write_text(original_main + "\n", encoding="utf-8")
+    previous_main = commit()
+
+    retry_path = Path(git.directory) / f"deploy/release-recovery/v0.1.1-retry-{previous_main[:12]}"
+    retry_path.write_text("a" * 40 + "\n", encoding="utf-8")
+    invalid_source = commit()
+    with pytest.raises(ReleaseContractError, match="prior main commit"):
+        release_recovery_requested(git, previous_main, invalid_source, "0.1.1")
+
+    original_marker.write_text("b" * 40 + "\n", encoding="utf-8")
+    tampered_source = commit()
+    with pytest.raises(ReleaseContractError, match="Original recovery marker"):
+        release_recovery_requested(git, previous_main, tampered_source, "0.1.1")
+
+
 def good_rules():
     return [
         {

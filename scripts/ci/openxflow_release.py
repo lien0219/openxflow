@@ -235,16 +235,33 @@ def plan_release(api, git):
 
 
 def release_recovery_requested(git, boundary, source, version):
-    """Recover an unpublished version only via a marker added by this merged PR.
+    """Recover an unpublished version through an explicit single-PR marker.
 
-    The marker contains the exact prior protected-main commit. Ordinary
-    unchanged-version PRs are never eligible for version publishing.
+    The first attempt introduces vX.Y.Z. For a subsequent failed attempt,
+    introduce vX.Y.Z-retry-<previous-main-SHA-prefix>. Every attempt must
+    add a *new* marker naming its exact previous protected-main commit.
+    Normal unchanged-version merges remain ineligible for publication.
     """
-    path = f"deploy/release-recovery/v{version}"
-    if git.run("ls-tree", boundary, "--", path):
-        return False
-    if not git.run("ls-tree", source, "--", path):
-        return False
+    original = f"deploy/release-recovery/v{version}"
+    if git.run("ls-tree", boundary, "--", original):
+        path = f"{original}-retry-{boundary[:12]}"
+        if git.run("ls-tree", boundary, "--", path):
+            return False
+        if not git.run("ls-tree", source, "--", path):
+            return False
+        original_sha = git.run("show", f"{boundary}:{original}")
+        require(SHA.fullmatch(original_sha), "Original recovery marker must contain a commit SHA")
+        require(
+            git.run("show", f"{source}:{original}") == original_sha,
+            "Original recovery marker must remain unchanged",
+        )
+    else:
+        path = original
+        if git.run("ls-tree", boundary, "--", path):
+            return False
+        if not git.run("ls-tree", source, "--", path):
+            return False
+
     expected = git.run("show", f"{source}:{path}")
     require(SHA.fullmatch(expected), "Recovery marker needs an exact main commit SHA")
     require(expected == boundary, "Recovery marker does not match the prior main commit")
