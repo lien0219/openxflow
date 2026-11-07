@@ -18,6 +18,7 @@ from scripts.ci.openxflow_verify_image import (
     resolve_inspected_oci_index,
     smoke_startup_timeout,
     summarize_trivy,
+    trivy_failure_message,
     validate_oci_index,
     validate_plan,
 )
@@ -114,6 +115,76 @@ def test_trivy_summary_counts_findings(tmp_path: Path) -> None:
     )
     summary = summarize_trivy(report, "vuln")
     assert summary["finding_count"] == 1
+
+
+def test_trivy_failure_includes_package_and_fixed_version_without_skipping_gate(tmp_path: Path) -> None:
+    report = tmp_path / "vuln.json"
+    report.write_text(
+        json.dumps(
+            {
+                "Results": [
+                    {
+                        "Target": "python-pkg",
+                        "Vulnerabilities": [
+                            {
+                                "VulnerabilityID": "CVE-2026-12345",
+                                "PkgName": "sample-lib",
+                                "InstalledVersion": "1.0",
+                                "FixedVersion": "1.1",
+                                "Severity": "HIGH",
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    summary = summarize_trivy(report, "vuln")
+    assert summary["finding_count"] == 1
+    assert "CVE-2026-12345" in trivy_failure_message(summary, "amd64")
+    assert "sample-lib@1.0 -> 1.1" in trivy_failure_message(summary, "amd64")
+
+
+def test_trivy_secret_report_redacts_match_content(tmp_path: Path) -> None:
+    report = tmp_path / "secrets.json"
+    report.write_text(
+        json.dumps(
+            {
+                "Results": [
+                    {
+                        "Target": "/app/config.py",
+                        "Secrets": [
+                            {
+                                "RuleID": "generic-secret",
+                                "Severity": "HIGH",
+                                "Category": "General",
+                                "Match": "sensitive-test-placeholder",
+                                "Code": {"Lines": [{"Content": "sensitive-test-placeholder"}]},
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    summary = summarize_trivy(report, "secret")
+    assert summary["finding_count"] == 1
+    assert "generic-secret" in trivy_failure_message(summary, "amd64")
+    assert "sensitive-test-placeholder" not in report.read_text(encoding="utf-8")
+    assert "sensitive-test-placeholder" not in json.dumps(summary)
+
+
+@pytest.mark.parametrize("payload", [{}, {"Results": None}, {"Results": [{}]}, {"Results": [{"Vulnerabilities": "invalid"}]}])
+def test_trivy_rejects_invalid_report_shapes(tmp_path: Path, payload: dict) -> None:
+    report = tmp_path / "invalid.json"
+    report.write_text(json.dumps(payload), encoding="utf-8")
+    if payload == {"Results": [{}]}:
+        assert summarize_trivy(report, "vuln")["finding_count"] == 0
+    else:
+        with pytest.raises(VerificationError, match="invalid Trivy"):
+            summarize_trivy(report, "vuln")
 
 
 def test_skopeo_selected_index_matches_single_sha256_addressed_oci_layout_blob() -> None:
