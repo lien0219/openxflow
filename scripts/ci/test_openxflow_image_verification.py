@@ -117,6 +117,22 @@ def test_trivy_summary_counts_findings(tmp_path: Path) -> None:
     assert summary["finding_count"] == 1
 
 
+def test_release_image_profiles_install_current_security_fixes() -> None:
+    """All supported image profiles must ship patched wheels, not frozen vulnerable ones."""
+    dockerfile = Path(__file__).resolve().parents[2] / "docker/build_and_push.Dockerfile"
+    content = dockerfile.read_text(encoding="utf-8")
+    profiles = {
+        "base": content.split("FROM full-dependencies AS full-builder", 1)[0],
+        "full": content.split("FROM full-builder AS full-bundles-builder", 1)[0],
+        "full-bundles": content.split("FROM full-bundles-builder", 1)[1].split("FROM ${PYTHON_IMAGE} AS runtime", 1)[0],
+    }
+    patched = ("joserfc==1.7.5", "oauthlib==4.0.1", "pyasn1==0.6.5", "pypdf==6.21.4")
+    for profile, stage in profiles.items():
+        for requirement in patched:
+            assert f'"{requirement}"' in stage, f"{profile} missing {requirement}"
+        assert "uv pip check --python /app/.venv/bin/python" in stage
+
+
 def test_trivy_failure_includes_package_and_fixed_version_without_skipping_gate(tmp_path: Path) -> None:
     report = tmp_path / "vuln.json"
     report.write_text(
