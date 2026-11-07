@@ -64,7 +64,7 @@ jobs:
           require_tests: true
 
       - name: Add Jest Coverage PR Comment
-        uses: MishaKav/jest-coverage-comment@v1.0.36
+        uses: MishaKav/jest-coverage-comment@v1.0.38
         if: github.event_name == 'pull_request'
         with:
           coverage-summary-path: src/frontend/coverage/jest/coverage-summary.json
