@@ -21,6 +21,7 @@ import subprocess
 import tarfile
 import time
 import uuid
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -528,10 +529,8 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
             _run(["docker", "rm", "--force", name])
         # Failed scans must not upload an 800 MB Docker archive as diagnostic evidence.
         for archive_copy in archive_copies:
-            try:
+            with suppress(OSError):
                 archive_copy.unlink(missing_ok=True)
-            except OSError:
-                pass
     (output / "verification.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
 
