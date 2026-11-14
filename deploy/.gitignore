@@ -4,4 +4,5 @@ pgadmin
 .deployed-image.tmp
 .deploy.lock
 .upgrade-gate.json
+deployment-plan.json
 data/

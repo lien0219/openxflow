@@ -1,0 +1,92 @@
+# Start these services before deploying the API with docker-compose.prod.yml.
+# Both files intentionally use the same project and default network.
+name: openxflow
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg16-bookworm@sha256:484e838076e04939d27d3e176e91c86eea96236126023be8d3059761122e579f
+    restart: unless-stopped
+    stop_grace_period: 1m
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: openxflow
+      POSTGRES_DB: openxflow
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+    volumes:
+      - single-node-postgres-data:/var/lib/postgresql/data
+      - ./single-node/initdb/01-vector.sql:/docker-entrypoint-initdb.d/01-vector.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    logging: *default-logging
+
+  redis:
+    image: redis:7.4.8-alpine@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+    restart: unless-stopped
+    stop_grace_period: 1m
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --requirepass
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+    volumes:
+      - single-node-redis-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli --no-auth-warning ping | grep -qx PONG'
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 10s
+    logging: *default-logging
+
+  objectstore:
+    image: chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0
+    restart: unless-stopped
+    stop_grace_period: 1m
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}"
+      AWS_DEFAULT_REGION: "${AWS_DEFAULT_REGION:-us-east-1}"
+      S3_BUCKET: "${LANGFLOW_OBJECT_STORAGE_BUCKET_NAME:?LANGFLOW_OBJECT_STORAGE_BUCKET_NAME is required}"
+    command: ["mini", "-dir=/data", "-ip=objectstore", "-ip.bind=0.0.0.0", "-webdav=false", "-admin.ui=false"]
+    volumes:
+      - single-node-s3-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsSI --aws-sigv4 "aws:amz:$${AWS_DEFAULT_REGION}:s3"
+          --user "$${AWS_ACCESS_KEY_ID}:$${AWS_SECRET_ACCESS_KEY}"
+          "http://127.0.0.1:8333/$${S3_BUCKET}" >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    logging: *default-logging
+
+volumes:
+  single-node-postgres-data:
+  single-node-redis-data:
+  single-node-s3-data:
