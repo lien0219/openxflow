@@ -23,6 +23,8 @@ jobs:
           access_token: ${{ secrets.GITHUB_TOKEN }}
           issue: false
           timeout: 15
+          # Go's default \w class excludes Chinese descriptions.
+          title_pattern: '^[\w-]+(\([\w-]+\))?!?: \S.*$'
 
   label:
     needs: validate-pr
