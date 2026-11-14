@@ -8,6 +8,7 @@ import { useStartNewFlow } from "@/components/core/flowBuilderWelcome/hooks/use-
 import { Button } from "@/components/ui/button";
 import { DotBackgroundDemo } from "@/components/ui/dot-background";
 import { BUG_REPORT_URL, DOCS_URL, GITHUB_URL } from "@/constants/constants";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import useUploadFlow from "@/hooks/flows/use-upload-flow";
 import useAlertStore from "@/stores/alertStore";
 import useFlowsManagerStore from "@/stores/flowsManagerStore";
@@ -134,39 +135,41 @@ export const EmptyPageCommunity = ({
                 </Button>
               )}
             </div>
-            <div className="z-50 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-              <Button
-                unstyled
-                className="flex items-center gap-1 hover:text-foreground"
-                onClick={() =>
-                  window.open(GITHUB_URL, "_blank", "noopener,noreferrer")
-                }
-                data-testid="empty_page_github_button"
-              >
-                <FaGithub className="h-4 w-4" aria-hidden="true" />
-                GitHub
-              </Button>
-              <span aria-hidden="true">·</span>
-              <Button
-                unstyled
-                className="hover:text-foreground"
-                onClick={() =>
-                  window.open(DOCS_URL, "_blank", "noopener,noreferrer")
-                }
-              >
-                {t("page.homeDocumentation")}
-              </Button>
-              <span aria-hidden="true">·</span>
-              <Button
-                unstyled
-                className="hover:text-foreground"
-                onClick={() =>
-                  window.open(BUG_REPORT_URL, "_blank", "noopener,noreferrer")
-                }
-              >
-                {t("page.homeReportIssue")}
-              </Button>
-            </div>
+            {ENABLE_EXTERNAL_LINKS && (
+              <div className="z-50 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                <Button
+                  unstyled
+                  className="flex items-center gap-1 hover:text-foreground"
+                  onClick={() =>
+                    window.open(GITHUB_URL, "_blank", "noopener,noreferrer")
+                  }
+                  data-testid="empty_page_github_button"
+                >
+                  <FaGithub className="h-4 w-4" aria-hidden="true" />
+                  GitHub
+                </Button>
+                <span aria-hidden="true">·</span>
+                <Button
+                  unstyled
+                  className="hover:text-foreground"
+                  onClick={() =>
+                    window.open(DOCS_URL, "_blank", "noopener,noreferrer")
+                  }
+                >
+                  {t("page.homeDocumentation")}
+                </Button>
+                <span aria-hidden="true">·</span>
+                <Button
+                  unstyled
+                  className="hover:text-foreground"
+                  onClick={() =>
+                    window.open(BUG_REPORT_URL, "_blank", "noopener,noreferrer")
+                  }
+                >
+                  {t("page.homeReportIssue")}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </CardsWrapComponent>

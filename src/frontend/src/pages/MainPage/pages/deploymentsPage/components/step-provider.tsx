@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Badge } from "@/components/ui/badge";
 import { useGetProviderAccounts } from "@/controllers/API/queries/deployment-provider-accounts/use-get-provider-accounts";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import { decorateWxoUrl } from "@/utils/decorate-wxo-url";
 import { cn } from "@/utils/utils";
 import { useDeploymentStepper } from "../contexts/deployment-stepper-context";
@@ -167,33 +168,35 @@ export default function StepProvider() {
             Beta
           </Badge>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {t("deployments.wxoConfigureCredentials")}{" "}
-          <a
-            href={decorateWxoUrl(
-              "https://www.ibm.com/products/watsonx-orchestrate#pricing",
-              "signup-pricing",
-            )}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-primary hover:underline"
-          >
-            {t("deployments.wxoSignUp")}
-          </a>
-          . {t("deployments.wxoAlreadyHaveAccount")}{" "}
-          <a
-            href={decorateWxoUrl(
-              "https://www.ibm.com/docs/en/watsonx/watson-orchestrate/base?topic=api-getting-started",
-              "docs-credentials",
-            )}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-primary hover:underline"
-          >
-            {t("deployments.wxoFindCredentials")}
-          </a>
-          .
-        </p>
+        {ENABLE_EXTERNAL_LINKS && (
+          <p className="text-sm text-muted-foreground">
+            {t("deployments.wxoConfigureCredentials")}{" "}
+            <a
+              href={decorateWxoUrl(
+                "https://www.ibm.com/products/watsonx-orchestrate#pricing",
+                "signup-pricing",
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-primary hover:underline"
+            >
+              {t("deployments.wxoSignUp")}
+            </a>
+            . {t("deployments.wxoAlreadyHaveAccount")}{" "}
+            <a
+              href={decorateWxoUrl(
+                "https://www.ibm.com/docs/en/watsonx/watson-orchestrate/base?topic=api-getting-started",
+                "docs-credentials",
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-primary hover:underline"
+            >
+              {t("deployments.wxoFindCredentials")}
+            </a>
+            .
+          </p>
+        )}
       </div>
 
       {hasEnvironments ? (

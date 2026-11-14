@@ -71,17 +71,14 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Rendering", () => {
-  it("renders modal title and description", () => {
+  it("renders modal title without promotional content", () => {
     renderModal();
     expect(screen.getByText("Add Environment")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        (_, el) =>
-          el?.textContent?.startsWith(
-            "Configure your watsonx Orchestrate credentials below.",
-          ) ?? false,
+      screen.queryByText(
+        /Configure your watsonx Orchestrate credentials below\./,
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
   });
 
   it("shows watsonx Orchestrate provider badge", () => {
@@ -97,21 +94,15 @@ describe("Rendering", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders signup and credentials help links", () => {
+  it("hides external signup and credentials help links", () => {
     renderModal();
 
     expect(
-      screen.getByRole("link", { name: "Sign up for watsonx Orchestrate" }),
-    ).toHaveAttribute(
-      "href",
-      "https://www.ibm.com/products/watsonx-orchestrate?utm_source=langflow&utm_medium=integration&utm_campaign=wxo-integration&utm_content=signup-pricing#pricing",
-    );
+      screen.queryByRole("link", { name: "Sign up for watsonx Orchestrate" }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Find your credentials" }),
-    ).toHaveAttribute(
-      "href",
-      "https://www.ibm.com/docs/en/watsonx/watson-orchestrate/base?topic=api-getting-started&utm_source=langflow&utm_medium=integration&utm_campaign=wxo-integration&utm_content=docs-credentials",
-    );
+      screen.queryByRole("link", { name: "Find your credentials" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders form fields: Name, API Key, Service Instance URL", () => {

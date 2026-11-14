@@ -6,6 +6,7 @@ import MultiselectComponent from "@/components/core/parameterRenderComponent/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ProviderVariable } from "@/constants/providerConstants";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import useAlertStore from "@/stores/alertStore";
 import DisconnectWarning from "./DisconnectWarning";
 import type { Provider } from "./types";
@@ -150,7 +151,7 @@ const ProviderConfigurationForm = ({
         {requiresConfiguration ? (
           <>
             {t("modelProviders.configurePrefix")}{" "}
-            {selectedProvider.api_docs_url ? (
+            {ENABLE_EXTERNAL_LINKS && selectedProvider.api_docs_url ? (
               <a
                 href={selectedProvider.api_docs_url}
                 target="_blank"

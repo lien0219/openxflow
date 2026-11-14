@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Button } from "@/components/ui/button";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import { DEFAULT_SUBMIT_LABEL } from "../constants";
 import type { StepperModalFooterProps } from "../types";
 
@@ -25,7 +26,7 @@ export function StepperModalFooter({
   const resolvedNextLabel = nextLabel ?? t("stepper.nextStep");
   const resolvedBackLabel = backLabel ?? t("stepper.back");
   const resolvedHelpLabel = helpLabel ?? t("stepper.needHelp");
-  const showHelp = helpHref || onHelp;
+  const showHelp = helpHref ? ENABLE_EXTERNAL_LINKS : Boolean(onHelp);
 
   return (
     <div className="flex w-full items-center justify-between">

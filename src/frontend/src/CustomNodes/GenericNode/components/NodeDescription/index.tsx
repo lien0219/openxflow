@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { Textarea } from "@/components/ui/textarea";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import useFlowStore from "@/stores/flowStore";
 import useFlowsManagerStore from "@/stores/flowsManagerStore";
 import { handleKeyDown } from "@/utils/reactflowUtils";
@@ -93,17 +94,20 @@ export default function NodeDescription({
           mdClassName,
         )}
         components={{
-          a: ({ node, ...props }) => (
-            <a {...props} target="_blank" rel="noopener noreferrer">
-              {props.children}
-            </a>
-          ),
+          a: ({ node, ...props }) =>
+            ENABLE_EXTERNAL_LINKS || stickyNote ? (
+              <a {...props} target="_blank" rel="noopener noreferrer">
+                {props.children}
+              </a>
+            ) : (
+              <span>{props.children}</span>
+            ),
         }}
       >
         {String(description)}
       </MemoizedMarkdown>
     );
-  }, [description, emptyPlaceholder, mdClassName]);
+  }, [description, emptyPlaceholder, mdClassName, stickyNote]);
 
   const handleBlurFn = () => {
     if (readOnly) {

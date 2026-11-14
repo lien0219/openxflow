@@ -6,7 +6,10 @@ import { ForwardedIconComponent } from "@/components/common/genericIconComponent
 import { Button } from "@/components/ui/button";
 import { DOCS_URL } from "@/constants/constants";
 import type { MCPTransport } from "@/controllers/API/queries/mcp/use-patch-install-mcp";
-import { ENABLE_MCP_COMPOSER } from "@/customization/feature-flags";
+import {
+  ENABLE_EXTERNAL_LINKS,
+  ENABLE_MCP_COMPOSER,
+} from "@/customization/feature-flags";
 import { useCustomIsLocalConnection } from "@/customization/hooks/use-custom-is-local-connection";
 import useTheme from "@/customization/hooks/use-custom-theme";
 import AuthModal from "@/modals/authModal";
@@ -75,15 +78,17 @@ const McpServerTab = ({ folderName }: { folderName: string }) => {
           </div>
           <div className="pb-4 text-mmd text-muted-foreground">
             {t("mcp.serverDescription")}
-            <a
-              className="text-accent-pink-foreground"
-              href={DOCS_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {" "}
-              {t("mcp.serverGuideLink")}
-            </a>
+            {ENABLE_EXTERNAL_LINKS && (
+              <a
+                className="text-accent-pink-foreground"
+                href={DOCS_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {" "}
+                {t("mcp.serverGuideLink")}
+              </a>
+            )}
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useUtilityStore } from "@/stores/utilityStore";
 import { AccountMenu } from "../index";
 
 const mockNavigate = jest.fn();
+let mockImageVersion: string | null = null;
 
 jest.mock("react-icons/fa", () => ({
   FaGithub: () => <span data-testid="github-icon" />,
@@ -38,6 +39,7 @@ jest.mock("@/customization/hooks/use-custom-navigate", () => ({
 
 jest.mock("@/customization/feature-flags", () => ({
   ENABLE_DATASTAX_LANGFLOW: false,
+  ENABLE_EXTERNAL_LINKS: false,
 }));
 
 jest.mock("@/stores/authStore", () => ({
@@ -48,8 +50,17 @@ jest.mock("@/stores/authStore", () => ({
 
 jest.mock("@/stores/darkStore", () => ({
   useDarkStore: (
-    selector: (state: { version: string; latestVersion: string }) => unknown,
-  ) => selector({ version: "1.0.0", latestVersion: "1.0.0" }),
+    selector: (state: {
+      version: string;
+      latestVersion: string;
+      imageVersion: string | null;
+    }) => unknown,
+  ) =>
+    selector({
+      version: "1.0.0",
+      latestVersion: "1.0.0",
+      imageVersion: mockImageVersion,
+    }),
 }));
 
 jest.mock("../../HeaderMenu/index", () => ({
@@ -84,6 +95,7 @@ jest.mock("../../ThemeButtons/index", () => ({
 describe("AccountMenu", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
+    mockImageVersion = null;
     act(() => {
       useUtilityStore.setState({ hideLogoutButton: false });
     });
@@ -101,6 +113,24 @@ describe("AccountMenu", () => {
     expect(screen.getByRole("button", { name: /logout/i })).toBeInTheDocument();
   });
 
+  it("shows the image version without comparing it to the upstream package", () => {
+    mockImageVersion = "0.4.2";
+    render(<AccountMenu />);
+
+    expect(screen.getByText("0.4.2")).toBeInTheDocument();
+    expect(screen.queryByText(/1\.0\.0/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/latest|update available/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("falls back to the package version when image metadata is unavailable", () => {
+    render(<AccountMenu />);
+
+    expect(screen.getByText(/1\.0\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/latest/i)).toBeInTheDocument();
+  });
+
   it("hides logout when hideLogoutButton is true", () => {
     act(() => {
       useUtilityStore.setState({ hideLogoutButton: true });
@@ -113,13 +143,10 @@ describe("AccountMenu", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps the OpenXFlow documentation link", () => {
+  it("hides the external documentation link", () => {
     render(<AccountMenu />);
 
-    expect(screen.getByTestId("menu_docs_button").closest("a")).toHaveAttribute(
-      "href",
-      "https://github.com/lien0219/openxflow#readme",
-    );
+    expect(screen.queryByTestId("menu_docs_button")).not.toBeInTheDocument();
   });
 
   it("keeps settings navigation in the OSS account menu", () => {

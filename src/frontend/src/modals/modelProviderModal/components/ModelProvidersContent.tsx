@@ -102,10 +102,10 @@ const ModelProvidersContent = ({
     !hasProviderOwnedEmptyState(syncedSelectedProvider.provider);
 
   return (
-    <div className="flex flex-row w-full h-full overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-row overflow-hidden">
       <div
         className={cn(
-          "flex p-2 flex-col flex-shrink-0 transition-all duration-300 ease-in-out",
+          "flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden p-2 transition-all duration-300 ease-in-out",
           syncedSelectedProvider ? "w-1/3 border-r" : "w-full",
         )}
       >
@@ -120,21 +120,26 @@ const ModelProvidersContent = ({
             defaultValue: "Search providers…",
           })}
           data-testid="provider-search-input"
-          className="mb-2"
+          className="mb-2 shrink-0"
         />
-        <ProviderList
-          modelType={modelType}
-          onProviderSelect={handleProviderSelect}
-          selectedProviderName={syncedSelectedProvider?.provider ?? null}
-          query={providerQuery}
-          flowId={flowId}
-          projectId={projectId}
-        />
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
+          data-testid="provider-list-scroll"
+        >
+          <ProviderList
+            modelType={modelType}
+            onProviderSelect={handleProviderSelect}
+            selectedProviderName={syncedSelectedProvider?.provider ?? null}
+            query={providerQuery}
+            flowId={flowId}
+            projectId={projectId}
+          />
+        </div>
       </div>
 
       <div
         className={cn(
-          "flex min-h-0 flex-col gap-1 transition-all duration-300 ease-in-out",
+          "flex min-h-0 min-w-0 flex-col gap-1 transition-all duration-300 ease-in-out",
           syncedSelectedProvider
             ? "w-2/3 opacity-100 translate-x-0"
             : "w-0 opacity-0 translate-x-full",

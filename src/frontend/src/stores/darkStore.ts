@@ -33,6 +33,7 @@ export const useDarkStore = create<DarkStoreType>((set, get) => ({
     : DEFAULT_THEME_PRESET,
   stars: startedStars,
   version: "",
+  imageVersion: null,
   latestVersion: "",
   refreshLatestVersion: (v: string) => {
     set(() => ({ latestVersion: v }));
@@ -47,6 +48,9 @@ export const useDarkStore = create<DarkStoreType>((set, get) => ({
   },
   refreshVersion: (v) => {
     set(() => ({ version: v }));
+  },
+  refreshImageVersion: (v) => {
+    set(() => ({ imageVersion: v }));
   },
   refreshStars: () => {
     if (import.meta.env.CI) {

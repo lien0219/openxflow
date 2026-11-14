@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { ProviderScopeParams } from "@/controllers/API/helpers/provider-scope";
 import { useGetEnabledModels } from "@/controllers/API/queries/models/use-get-enabled-models";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 
 import { Model } from "@/modals/modelProviderModal/components/types";
 import type { ModelType, ModelTypeFilter } from "@/types/models";
@@ -603,14 +604,16 @@ const ModelSelection = ({
                 ? t("modelProviders.ollamaNoModelsEmbeddings")
                 : t("modelProviders.ollamaNoModelsAll")}
           </p>
-          <a
-            href="https://ollama.com/library"
-            target="_blank"
-            rel="noreferrer"
-            className="mt-6 text-xs font-medium text-primary underline underline-offset-4 hover:opacity-80 transition-opacity"
-          >
-            {t("modelProviders.checkOllamaLibrary")}
-          </a>
+          {ENABLE_EXTERNAL_LINKS && (
+            <a
+              href="https://ollama.com/library"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-6 text-xs font-medium text-primary underline underline-offset-4 hover:opacity-80 transition-opacity"
+            >
+              {t("modelProviders.checkOllamaLibrary")}
+            </a>
+          )}
         </div>
       ) : awaitsCredentialDiscovery && noModelsAvailable ? (
         <div

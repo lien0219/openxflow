@@ -49,8 +49,8 @@ const ModelProviderModal = ({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <DialogContent className="flex flex-col overflow-hidden rounded-xl p-0 max-w-[768px] h-[560px] gap-0">
-        <DialogHeader className="flex w-full border-b px-4 py-3">
+      <DialogContent className="flex h-[560px] max-h-[calc(100dvh-2rem)] max-w-[768px] flex-col gap-0 overflow-hidden rounded-xl p-0">
+        <DialogHeader className="flex w-full shrink-0 border-b px-4 py-3">
           <div className="flex justify-start items-center gap-3">
             <DialogTitle className="text-[13px] font-semibold">
               {t("modelProviders.title")}
@@ -58,7 +58,7 @@ const ModelProviderModal = ({
           </div>
         </DialogHeader>
 
-        <div className="h-[513px] overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <ModelProvidersContent
             key={`${flowId ?? ""}:${projectId ?? ""}`}
             modelType={modelType}

@@ -23,7 +23,7 @@ export default function ModelProvidersPage() {
           </p>
         </div>
       </div>
-      <div className="flex w-full h-[calc(100vh-305px)] border rounded-lg overflow-hidden">
+      <div className="flex h-[calc(100dvh-305px)] min-h-60 w-full overflow-hidden rounded-lg border">
         <ModelProvidersContent modelType="all" />
       </div>
     </div>

@@ -70,15 +70,12 @@ describe("NoInputView", () => {
     expect(stopBuilding).toHaveBeenCalledTimes(1);
   });
 
-  it("displays instruction text with link to documentation", () => {
+  it("keeps instruction text without the external documentation link", () => {
     render(<NoInputView {...defaultProps} />);
     expect(screen.getByText(/Add a/)).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: "Chat Input" });
-    expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute(
-      "href",
-      "https://github.com/lien0219/openxflow#readme",
-    );
-    expect(link).toHaveAttribute("target", "_blank");
+    expect(screen.getByText("Chat Input")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Chat Input" }),
+    ).not.toBeInTheDocument();
   });
 });

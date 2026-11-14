@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DOCS_URL } from "@/constants/constants";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import { cn } from "@/utils/utils";
 import BaseModal from "../baseModal";
 import { useCreateMemoryModal } from "./useCreateMemoryModal";
@@ -243,18 +244,20 @@ export default function CreateMemoryModal({
                     content={
                       <span>
                         {t("memory.preprocessingInstructionsHint")}{" "}
-                        <a
-                          href={DOCS_URL}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-0.5 text-tooltip-foreground underline opacity-80 hover:opacity-100"
-                        >
-                          {t("memory.seePromptExamples")}
-                          <ForwardedIconComponent
-                            name="ExternalLink"
-                            className="h-3 w-3"
-                          />
-                        </a>
+                        {ENABLE_EXTERNAL_LINKS && (
+                          <a
+                            href={DOCS_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-tooltip-foreground underline opacity-80 hover:opacity-100"
+                          >
+                            {t("memory.seePromptExamples")}
+                            <ForwardedIconComponent
+                              name="ExternalLink"
+                              className="h-3 w-3"
+                            />
+                          </a>
+                        )}
                       </span>
                     }
                     side="right"

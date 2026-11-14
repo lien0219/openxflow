@@ -98,7 +98,8 @@ describe("ModelSelection live-discovery empty state", () => {
     expect(
       screen.queryByTestId("live-discovery-empty-state"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Check Ollama Library")).toBeInTheDocument();
+    expect(screen.getByText("No models available")).toBeInTheDocument();
+    expect(screen.queryByText("Check Ollama Library")).not.toBeInTheDocument();
   });
 
   it("renders nothing special for static-catalog providers", () => {

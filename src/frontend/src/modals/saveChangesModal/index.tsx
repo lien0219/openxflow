@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import Loading from "@/components/ui/loading";
 import { DOCS_URL } from "@/constants/constants";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import ConfirmationModal from "../confirmationModal";
 
 export function SaveChangesModal({
@@ -68,16 +69,21 @@ export function SaveChangesModal({
                 time: lastSaved ?? t("flow.lastSavedNever"),
               })}
             </div>
-            {t("flow.unsavedChangesLost")}{" "}
-            <a
-              target="_blank"
-              className="text-accent-pink-foreground hover:underline"
-              href={DOCS_URL}
-              rel="noopener"
-            >
-              {t("flow.enableAutoSaving")}
-            </a>{" "}
-            {t("flow.toAvoidLosingProgress")}
+            {t("flow.unsavedChangesLost")}
+            {ENABLE_EXTERNAL_LINKS && (
+              <>
+                {" "}
+                <a
+                  target="_blank"
+                  className="text-accent-pink-foreground hover:underline"
+                  href={DOCS_URL}
+                  rel="noopener"
+                >
+                  {t("flow.enableAutoSaving")}
+                </a>{" "}
+                {t("flow.toAvoidLosingProgress")}
+              </>
+            )}
           </>
         )}
       </ConfirmationModal.Content>

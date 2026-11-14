@@ -426,14 +426,11 @@ describe("MemoryDetailsHeader", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows read the docs link in activate tooltip with correct href", () => {
+  it("hides the external docs link in the activate tooltip", () => {
     render(<MemoryDetailsHeader {...makeProps()} />);
-    const link = screen.getByRole("link", { name: /read the docs/i });
-    expect(link).toHaveAttribute(
-      "href",
-      "https://github.com/lien0219/openxflow#readme",
-    );
-    expect(link).toHaveAttribute("target", "_blank");
+    expect(
+      screen.queryByRole("link", { name: /read the docs/i }),
+    ).not.toBeInTheDocument();
   });
 
   describe("All Sessions dropdown option", () => {

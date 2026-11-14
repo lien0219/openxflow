@@ -352,7 +352,9 @@ describe("ModelSelection", () => {
           /models installed for Ollama. Please pull the models you want to use./i,
         ),
       ).toBeInTheDocument();
-      expect(screen.getByText("Check Ollama Library")).toBeInTheDocument();
+      expect(
+        screen.queryByText("Check Ollama Library"),
+      ).not.toBeInTheDocument();
     });
   });
 

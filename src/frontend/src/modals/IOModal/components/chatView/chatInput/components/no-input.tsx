@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/ui/loading";
 import { DOCS_URL } from "@/constants/constants";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 
 const Trans = TransComponent as unknown as React.FC<TransProps<string>>;
 
@@ -55,13 +56,15 @@ const NoInputView: React.FC<NoInputViewProps> = ({
           <Trans
             i18nKey="playground.noInputHint"
             components={{
-              1: (
+              1: ENABLE_EXTERNAL_LINKS ? (
                 <a
                   className="underline underline-offset-4"
                   target="_blank"
                   href={DOCS_URL}
                   rel="noopener noreferrer"
                 />
+              ) : (
+                <span />
               ),
             }}
           />

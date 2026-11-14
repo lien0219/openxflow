@@ -2,6 +2,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { ForwardedIconComponent } from "@/components/common/genericIconComponent";
 import { SelectContentWithoutPortal, SelectItem } from "@/components/ui/select";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import ToolbarSelectItem from "@/pages/FlowPage/components/nodeToolbarComponent/toolbarSelectItem";
 import type { NoteDataType } from "@/types/flow";
 
@@ -34,18 +35,20 @@ export const SelectItems = memo(
             dataTestId="copy-button-modal"
           />
         </SelectItem>
-        <SelectItem
-          variant="plain"
-          value="documentation"
-          disabled={data.node?.documentation === ""}
-        >
-          <ToolbarSelectItem
-            shortcut={shortcuts.find((obj) => obj.name === "Docs")?.shortcut!}
-            value={t("nodeToolbar.docs")}
-            icon="FileText"
-            dataTestId="docs-button-modal"
-          />
-        </SelectItem>
+        {ENABLE_EXTERNAL_LINKS && (
+          <SelectItem
+            variant="plain"
+            value="documentation"
+            disabled={data.node?.documentation === ""}
+          >
+            <ToolbarSelectItem
+              shortcut={shortcuts.find((obj) => obj.name === "Docs")?.shortcut!}
+              value={t("nodeToolbar.docs")}
+              icon="FileText"
+              dataTestId="docs-button-modal"
+            />
+          </SelectItem>
+        )}
         <SelectItem
           variant="plain"
           value="delete"

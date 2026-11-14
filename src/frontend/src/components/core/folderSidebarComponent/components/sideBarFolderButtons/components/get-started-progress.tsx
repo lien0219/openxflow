@@ -6,6 +6,7 @@ import ShadTooltip from "@/components/common/shadTooltipComponent";
 import { Button } from "@/components/ui/button";
 import { DISCORD_URL, GITHUB_URL } from "@/constants/constants";
 import { useGetUserData, useUpdateUser } from "@/controllers/API/queries/auth";
+import { ENABLE_SOCIAL_LINKS } from "@/customization/feature-flags";
 import ModalsComponent from "@/pages/MainPage/components/modalsComponent";
 import useFlowsManagerStore from "@/stores/flowsManagerStore";
 import { useUtilityStore } from "@/stores/utilityStore";
@@ -41,26 +42,18 @@ export const GetStartedProgress: FC<{
   const hasFlows = flows && flows?.length > 0;
 
   const percentageGetStarted = useMemo(() => {
-    const stepValue = 33;
-    let totalPercentage = 0;
+    const totalSteps = ENABLE_SOCIAL_LINKS ? 3 : 1;
+    let completedSteps = hasFlows ? 1 : 0;
 
-    if (userData?.optins?.github_starred) {
-      totalPercentage += stepValue;
+    if (ENABLE_SOCIAL_LINKS && userData?.optins?.github_starred) {
+      completedSteps += 1;
     }
 
-    if (userData?.optins?.discord_clicked) {
-      totalPercentage += stepValue;
+    if (ENABLE_SOCIAL_LINKS && userData?.optins?.discord_clicked) {
+      completedSteps += 1;
     }
 
-    if (hasFlows) {
-      totalPercentage += stepValue;
-    }
-
-    if (totalPercentage === 99) {
-      return 100;
-    }
-
-    return Math.min(totalPercentage, 100);
+    return Math.round((completedSteps / totalSteps) * 100);
   }, [userData?.optins, hasFlows]);
 
   const handleUserTrack = (key: string) => {
@@ -90,7 +83,7 @@ export const GetStartedProgress: FC<{
   };
 
   return (
-    <div className="mt-3 h-[10.8rem] w-full">
+    <div className="mt-3 w-full">
       <div className="mb-2 flex items-center justify-between">
         <span
           className="text-sm font-medium"
@@ -131,96 +124,102 @@ export const GetStartedProgress: FC<{
       </div>
 
       <div className="mt-2 space-y-1">
-        <Button
-          data-testid="github_starred_btn_get_started"
-          unstyled
-          className={cn(
-            "w-full",
-            isGithubStarredChild && "pointer-events-none",
-          )}
-          onClick={(e) => {
-            if (isGithubStarredChild) {
-              e.preventDefault();
-              return;
-            }
-            handleUserTrack("github_starred");
-          }}
-        >
-          <div
-            className={cn(
-              "flex min-w-0 items-center gap-2 rounded-md px-2 py-[10px] hover:bg-muted",
-              isGithubStarredChild && "pointer-events-none",
-            )}
-          >
-            {isGithubStarredChild ? (
-              <span data-testid="github_starred_icon_get_started">
-                <IconComponent
-                  name="Check"
-                  className="h-4 w-4 shrink-0 text-accent-emerald-foreground"
-                />
-              </span>
-            ) : (
-              <FaGithub className="h-4 w-4 shrink-0" aria-hidden="true" />
-            )}
-            <ShadTooltip content={t("sidebar.starRepo")} side="right">
-              <span
+        {ENABLE_SOCIAL_LINKS && (
+          <>
+            <Button
+              data-testid="github_starred_btn_get_started"
+              unstyled
+              className={cn(
+                "w-full",
+                isGithubStarredChild && "pointer-events-none",
+              )}
+              onClick={(e) => {
+                if (isGithubStarredChild) {
+                  e.preventDefault();
+                  return;
+                }
+                handleUserTrack("github_starred");
+              }}
+            >
+              <div
                 className={cn(
-                  "truncate text-sm",
-                  isGithubStarredChild && "text-muted-foreground line-through",
+                  "flex min-w-0 items-center gap-2 rounded-md px-2 py-[10px] hover:bg-muted",
+                  isGithubStarredChild && "pointer-events-none",
                 )}
               >
-                {t("sidebar.starRepo")}
-              </span>
-            </ShadTooltip>
-          </div>
-        </Button>
+                {isGithubStarredChild ? (
+                  <span data-testid="github_starred_icon_get_started">
+                    <IconComponent
+                      name="Check"
+                      className="h-4 w-4 shrink-0 text-accent-emerald-foreground"
+                    />
+                  </span>
+                ) : (
+                  <FaGithub className="h-4 w-4 shrink-0" aria-hidden="true" />
+                )}
+                <ShadTooltip content={t("sidebar.starRepo")} side="right">
+                  <span
+                    className={cn(
+                      "truncate text-sm",
+                      isGithubStarredChild &&
+                        "text-muted-foreground line-through",
+                    )}
+                  >
+                    {t("sidebar.starRepo")}
+                  </span>
+                </ShadTooltip>
+              </div>
+            </Button>
 
-        <Button
-          data-testid="discord_joined_btn_get_started"
-          unstyled
-          className={cn(
-            "w-full",
-            isDiscordJoinedChild && "pointer-events-none",
-          )}
-          onClick={(e) => {
-            if (isDiscordJoinedChild) {
-              e.preventDefault();
-              return;
-            }
-            handleUserTrack("discord_clicked");
-          }}
-        >
-          <div
-            className={cn(
-              "flex min-w-0 items-center gap-2 rounded-md p-2 py-[10px] hover:bg-muted",
-              isDiscordJoinedChild && "pointer-events-none",
-            )}
-          >
-            {isDiscordJoinedChild ? (
-              <span data-testid="discord_joined_icon_get_started">
-                <IconComponent
-                  name="Check"
-                  className="h-4 w-4 shrink-0 text-accent-emerald-foreground"
-                />
-              </span>
-            ) : (
-              <FaDiscord
-                className="h-4 w-4 shrink-0 text-[#5865F2]"
-                aria-hidden="true"
-              />
-            )}
-            <ShadTooltip content={t("sidebar.joinCommunity")} side="right">
-              <span
+            <Button
+              data-testid="discord_joined_btn_get_started"
+              unstyled
+              className={cn(
+                "w-full",
+                isDiscordJoinedChild && "pointer-events-none",
+              )}
+              onClick={(e) => {
+                if (isDiscordJoinedChild) {
+                  e.preventDefault();
+                  return;
+                }
+                handleUserTrack("discord_clicked");
+              }}
+            >
+              <div
                 className={cn(
-                  "truncate text-sm",
-                  isDiscordJoinedChild && "text-muted-foreground line-through",
+                  "flex min-w-0 items-center gap-2 rounded-md p-2 py-[10px] hover:bg-muted",
+                  isDiscordJoinedChild && "pointer-events-none",
                 )}
               >
-                {t("sidebar.joinCommunity")}
-              </span>
-            </ShadTooltip>
-          </div>
-        </Button>
+                {isDiscordJoinedChild ? (
+                  <span data-testid="discord_joined_icon_get_started">
+                    <IconComponent
+                      name="Check"
+                      className="h-4 w-4 shrink-0 text-accent-emerald-foreground"
+                    />
+                  </span>
+                ) : (
+                  <FaDiscord
+                    className="h-4 w-4 shrink-0 text-[#5865F2]"
+                    aria-hidden="true"
+                  />
+                )}
+                <ShadTooltip content={t("sidebar.joinCommunity")} side="right">
+                  <span
+                    className={cn(
+                      "truncate text-sm",
+                      isDiscordJoinedChild &&
+                        "text-muted-foreground line-through",
+                    )}
+                  >
+                    {t("sidebar.joinCommunity")}
+                  </span>
+                </ShadTooltip>
+              </div>
+            </Button>
+          </>
+        )}
 
         {!hideNewFlowButton && (
           <Button

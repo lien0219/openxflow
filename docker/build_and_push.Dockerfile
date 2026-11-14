@@ -271,6 +271,7 @@ LABEL org.opencontainers.image.title="OpenXFlow" \
       com.openxflow.upstream.license="MIT"
 
 ENV PATH="/app/.venv/bin:$PATH" \
+    OPENXFLOW_VERSION="${OPENXFLOW_VERSION}" \
     HOME=/app/data \
     BASH_ENV="" \
     ENV="" \
