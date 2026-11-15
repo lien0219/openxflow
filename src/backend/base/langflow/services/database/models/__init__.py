@@ -22,6 +22,7 @@ from .auth import (
     encrypt_sso_client_secret,
     is_sso_client_secret_envelope,
 )
+from .auth.refresh_token import RefreshTokenSession
 from .catalog_policy import CatalogPolicyMode, CatalogPolicyRule, CatalogPolicyScope, CatalogResourceKind
 from .channel import (
     ChannelActiveWorkflowSelection,
@@ -139,6 +140,7 @@ __all__ = [
     "PolicyBundleActive",
     "PolicyBundleRevision",
     "ProjectReplacementOperation",
+    "RefreshTokenSession",
     "SSOConfig",
     "SSOConfigCreate",
     "SSOConfigRead",

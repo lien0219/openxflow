@@ -11,7 +11,7 @@ on:
         description: "Python Versions"
         required: false
         type: string
-        default: "['3.10', '3.14']"
+        default: "['3.10', '3.11', '3.14', '3.15']"
       frontend-max-shards:
         description: "Maximum concurrent Playwright shards (1-70)"
         required: false
@@ -36,7 +36,7 @@ on:
         description: "Runner to use for the tests"
         required: false
         type: string
-        default: "ubuntu-latest"
+        default: "ubuntu-24.04"
   workflow_dispatch:
     inputs:
       run-all-tests:
@@ -57,16 +57,17 @@ on:
         description: "Python Versions"
         required: false
         type: string
-        default: "['3.10', '3.14']"
+        default: "['3.10', '3.11', '3.14', '3.15']"
       runs-on:
         description: "Runner to use for the tests"
         required: false
         type: choice
         options:
+          - ubuntu-24.04
           - ubuntu-latest
           - self-hosted
           - '["self-hosted", "linux", "ARM64", "langflow-ai-arm64-40gb-ephemeral"]'
-        default: ubuntu-latest
+        default: ubuntu-24.04
   pull_request:
     # ready_for_review matters: every job below is gated on the PR not being a draft, so a PR
     # opened as a draft and later marked ready has no run where that gate was ever true.
@@ -286,7 +287,7 @@ jobs:
       )
     uses: ./.github/workflows/python_test.yml
     with:
-      python-versions: ${{ inputs.python-versions || '["3.10", "3.14"]' }}
+      python-versions: ${{ inputs.python-versions || '["3.10", "3.11", "3.14", "3.15"]' }}
       runs-on: ${{ inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
       ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
     secrets:
@@ -353,7 +354,7 @@ jobs:
       tests_folder: ${{ inputs.frontend-tests-folder || 'tests' }}
       max-shards: ${{ inputs.frontend-max-shards || 16 }}
       release: ${{ inputs.release || inputs.run-all-tests || false }}
-      runs-on: ${{ inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
+      runs-on: ${{ inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-24.04' }}
       ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
   test-docs-build:
     needs: path-filter

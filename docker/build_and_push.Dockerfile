@@ -5,7 +5,7 @@
 # so the base and full targets cannot silently resolve different build tools.
 ARG UV_VERSION=0.10.4
 ARG PYTHON_IMAGE=registry.access.redhat.com/ubi10/python-314-minimal@sha256:3754d6dacac3177e62637420cadf7dcf438e390f664c527b0457a79653a47488
-ARG NODE_VERSION=24.22.1
+ARG NODE_VERSION=24.22.2
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv-installer
 
@@ -32,6 +32,8 @@ RUN microdnf install -y \
         gcc \
         gcc-c++ \
         git \
+        libxml2-devel \
+        libxslt-devel \
         make \
         python3.14-devel \
         tar \
@@ -41,8 +43,8 @@ RUN microdnf install -y \
        elif [ "$ARCH" = "aarch64" ]; then NODE_ARCH="arm64"; \
        else echo "Unsupported Node architecture: $ARCH" >&2; exit 1; fi \
     && case "${NODE_VERSION}:${NODE_ARCH}" in \
-        24.22.1:x64) NODE_SHA256=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6 ;; \
-        24.22.1:arm64) NODE_SHA256=dbabf7a1cbf947e6059ffad2c27b80041db97dea1e553b62afdee7f13fca336e ;; \
+        24.22.2:x64) NODE_SHA256=48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75 ;; \
+        24.22.2:arm64) NODE_SHA256=eb187837a2230d4047161ac0be008584e16b46f726e9c9490ee35dc6b17d9ba8 ;; \
         *) echo "No reviewed Node checksum for ${NODE_VERSION}:${NODE_ARCH}" >&2; exit 1 ;; \
        esac \
     && curl -fsSLo /tmp/node.tar.xz \
@@ -70,6 +72,7 @@ COPY ./src/lfx/pyproject.toml /app/src/lfx/pyproject.toml
 COPY ./src/sdk/README.md /app/src/sdk/README.md
 COPY ./src/sdk/pyproject.toml /app/src/sdk/pyproject.toml
 COPY ./scripts/ci/rewrite_langflow_base_constraint.sh /tmp/rewrite_langflow_base_constraint.sh
+COPY ./docker/build_lxml.sh /tmp/build_lxml.sh
 
 # Every directory under src/bundles is a uv workspace member. Copy the tree
 # once so adding a bundle does not also require another Dockerfile edit.
@@ -144,7 +147,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /app/.venv/bin/python --no-deps --reinstall-package pypdf \
         "joserfc==1.7.5" "oauthlib==4.0.1" "pyasn1==0.6.5" "pypdf==6.21.4" \
     && uv pip check --python /app/.venv/bin/python \
-    && /app/.venv/bin/python -I -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"'
+    && /app/.venv/bin/python -I -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"' \
+    && sh /tmp/build_lxml.sh
 
 FROM full-dependencies AS full-builder
 
@@ -187,7 +191,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /app/.venv/bin/python --no-deps --reinstall-package pypdf \
         "joserfc==1.7.5" "oauthlib==4.0.1" "pyasn1==0.6.5" "pypdf==6.21.4" \
     && uv pip check --python /app/.venv/bin/python \
-    && /app/.venv/bin/python -I -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"'
+    && /app/.venv/bin/python -I -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"' \
+    && sh /tmp/build_lxml.sh
 
 FROM full-builder AS full-bundles-builder
 
@@ -205,7 +210,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         "joserfc==1.7.5" "oauthlib==4.0.1" "pyasn1==0.6.5" "pypdf==6.21.4" \
     && uv pip check --python /app/.venv/bin/python \
     && /app/.venv/bin/python -I -c 'import importlib.metadata as m; pinned = {"joserfc": "1.7.5", "oauthlib": "4.0.1", "pyasn1": "0.6.5", "pypdf": "6.21.4"}; actual = {k: m.version(k) for k in pinned}; assert actual == pinned, f"security dependency mismatch: {actual}"' \
-    && /app/.venv/bin/python -c 'import importlib.metadata as m; from packaging.requirements import Requirement; names = {d.metadata["Name"].lower() for d in m.distributions()}; requirements = [Requirement(value) for value in (m.requires("langflow") or ())]; required = {requirement.name.lower() for requirement in requirements if requirement.marker is not None and requirement.marker.evaluate({"extra": "bundles"})}; missing = sorted(required - names); assert not missing, f"full-bundles image is missing distributions: {missing}"'
+    && /app/.venv/bin/python -c 'import importlib.metadata as m; from packaging.requirements import Requirement; names = {d.metadata["Name"].lower() for d in m.distributions()}; requirements = [Requirement(value) for value in (m.requires("langflow") or ())]; required = {requirement.name.lower() for requirement in requirements if requirement.marker is not None and requirement.marker.evaluate({"extra": "bundles"})}; missing = sorted(required - names); assert not missing, f"full-bundles image is missing distributions: {missing}"' \
+    && sh /tmp/build_lxml.sh
 
 ################################
 # SHARED RUNTIME
@@ -225,7 +231,12 @@ ARG OPENXFLOW_SOURCE="https://github.com/lien0219/openxflow"
 ARG OPENXFLOW_URL="https://github.com/lien0219/openxflow"
 
 RUN microdnf update -y \
-    && microdnf install -y curl git gnupg libpq shadow-utils tar xz \
+    && microdnf install -y curl git libpq libxml2 libxslt shadow-utils tar xz \
+    && useradd user -u 1000 -g 0 --no-create-home --home-dir /app/data \
+    && mkdir -p /app/data /app/langflow \
+    && chown -R 1000:0 /app/data /app/langflow \
+    && chmod -R g+rwX /app/data /app/langflow \
+    && microdnf remove -y shadow-utils \
     && microdnf clean all
 
 RUN python3.14 -m pip install --no-cache-dir --upgrade "pip==26.2.1"
@@ -246,11 +257,6 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && sh /tmp/install_hardened_npm.sh \
     && rm -f /tmp/install_hardened_npm.sh
-
-RUN useradd user -u 1000 -g 0 --no-create-home --home-dir /app/data \
-    && mkdir -p /app/data /app/langflow \
-    && chown -R 1000:0 /app/data /app/langflow \
-    && chmod -R g+rwX /app/data /app/langflow
 
 # Give uid 1000 a writable npm cache. The image ships Node so users can spawn
 # stdio MCP servers via npx, while the UBI HOME is not owned by that uid.
@@ -287,6 +293,8 @@ ENV LANGFLOW_AUTO_LOGIN=false
 # inheriting this runtime stage. Listening still uses LANGFLOW_HOST/PORT above.
 EXPOSE 7860/tcp
 
+COPY --chown=1000:0 ./scripts/ci/verify_lxml_runtime.py /tmp/verify_lxml_runtime.py
+
 USER user
 WORKDIR /app
 
@@ -307,6 +315,7 @@ RUN sh /tmp/patch_hardened_pip_vendor.sh \
 LABEL org.opencontainers.image.title="OpenXFlow" \
       com.openxflow.image.profile="base"
 USER user
+RUN /app/.venv/bin/python /tmp/verify_lxml_runtime.py && rm /tmp/verify_lxml_runtime.py
 
 ################################
 # FULL-BUNDLES IMAGE
@@ -323,6 +332,7 @@ RUN sh /tmp/patch_hardened_pip_vendor.sh \
 LABEL org.opencontainers.image.title="OpenXFlow" \
       com.openxflow.image.profile="full-bundles"
 USER user
+RUN /app/.venv/bin/python /tmp/verify_lxml_runtime.py && rm /tmp/verify_lxml_runtime.py
 
 ################################
 # DEFAULT IMAGE (default/final target)
@@ -339,3 +349,4 @@ RUN sh /tmp/patch_hardened_pip_vendor.sh \
 LABEL org.opencontainers.image.title="OpenXFlow" \
       com.openxflow.image.profile="full"
 USER user
+RUN /app/.venv/bin/python /tmp/verify_lxml_runtime.py && rm /tmp/verify_lxml_runtime.py

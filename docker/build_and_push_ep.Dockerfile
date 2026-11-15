@@ -3,7 +3,7 @@
 
 ARG UV_VERSION=0.10.4
 ARG PYTHON_IMAGE=registry.access.redhat.com/ubi10/python-314-minimal
-ARG NODE_VERSION=24.22.1
+ARG NODE_VERSION=24.22.2
 
 ################################
 # BUILDER-BASE
@@ -37,6 +37,7 @@ RUN microdnf install -y tar xz \
     # deps for building python deps
     gcc gcc-c++ make python3.14-devel \
     git \
+    libxml2-devel libxslt-devel \
     # npm
     npm \
     # gcc
@@ -54,6 +55,7 @@ COPY ./src/lfx/pyproject.toml /app/src/lfx/pyproject.toml
 COPY ./src/sdk/README.md /app/src/sdk/README.md
 COPY ./src/sdk/pyproject.toml /app/src/sdk/pyproject.toml
 COPY ./scripts/ci/rewrite_langflow_base_constraint.sh /tmp/rewrite_langflow_base_constraint.sh
+COPY ./docker/build_lxml.sh /tmp/build_lxml.sh
 # Workspace bundles (LE-1023 pilot+): every directory under ``src/bundles``
 # is a uv workspace member, so each bundle's pyproject.toml must be present
 # for ``uv sync --no-install-project`` to resolve the workspace.  Copy the
@@ -105,7 +107,8 @@ COPY ./scripts/ci/install_release_wheels.py /tmp/install_release_wheels.py
 RUN python3.14 /tmp/install_release_wheels.py /tmp/release-artifacts \
     --python /app/.venv/bin/python \
     --mode main \
-    --frontend-source /app/src/backend/base/langflow/frontend
+    --frontend-source /app/src/backend/base/langflow/frontend \
+    && sh /tmp/build_lxml.sh
 
 ################################
 # RUNTIME
@@ -114,7 +117,9 @@ RUN python3.14 /tmp/install_release_wheels.py /tmp/release-artifacts \
 FROM ${PYTHON_IMAGE} AS runtime
 USER root
 RUN microdnf update -y \
-    && microdnf install -y curl git libpq gnupg xz tar shadow-utils \
+    && microdnf install -y curl git libpq libxml2 libxslt shadow-utils tar xz \
+    && useradd user -u 1000 -g 0 --no-create-home --home-dir /app/data \
+    && microdnf remove -y shadow-utils \
     && microdnf clean all
 RUN python3.14 -m pip install --no-cache-dir --upgrade "pip==26.2.1"
 COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
@@ -133,8 +138,8 @@ RUN ARCH=$(uname -m) \
        elif [ "$ARCH" = "aarch64" ]; then NODE_ARCH="arm64"; \
        else NODE_ARCH="$ARCH"; fi \
     && case "${NODE_VERSION}:${NODE_ARCH}" in \
-        24.22.1:x64) NODE_SHA256=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6 ;; \
-        24.22.1:arm64) NODE_SHA256=dbabf7a1cbf947e6059ffad2c27b80041db97dea1e553b62afdee7f13fca336e ;; \
+        24.22.2:x64) NODE_SHA256=48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75 ;; \
+        24.22.2:arm64) NODE_SHA256=eb187837a2230d4047161ac0be008584e16b46f726e9c9490ee35dc6b17d9ba8 ;; \
         *) echo "No reviewed Node checksum for ${NODE_VERSION}:${NODE_ARCH}" >&2; exit 1 ;; \
        esac \
     && curl -fsSLo /tmp/node.tar.xz \
@@ -144,13 +149,13 @@ RUN ARCH=$(uname -m) \
     && rm -f /tmp/node.tar.xz \
     && sh /tmp/install_hardened_npm.sh \
     && rm -f /tmp/install_hardened_npm.sh
-RUN useradd user -u 1000 -g 0 --no-create-home --home-dir /app/data
-
 COPY --from=builder --chown=1000 /app/.venv /app/.venv
 COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
 RUN sh /tmp/patch_hardened_pip_vendor.sh \
     && rm -f /tmp/patch_hardened_pip_vendor.sh \
     && find /app/.venv -type d -path '*/pip/_vendor' -exec chown -R 1000:0 {} +
+COPY --chown=1000:0 ./scripts/ci/verify_lxml_runtime.py /tmp/verify_lxml_runtime.py
+RUN /app/.venv/bin/python /tmp/verify_lxml_runtime.py && rm /tmp/verify_lxml_runtime.py
 ENV PATH="/app/.venv/bin:$PATH"
 ENV HOME=/app/data
 ENV BASH_ENV="" \

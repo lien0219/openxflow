@@ -25,6 +25,7 @@ from lfx.utils.end_user_storage import (
     forget_end_user_folder,
     legacy_end_user_folder_segment,
 )
+from lfx.utils.file_path_security import flow_storage_scope, user_storage_scope
 from sqlmodel import select
 
 from langflow.services.data_subjects.knowledge_base_steps import builder_directories, builder_upgrade_runs
@@ -32,6 +33,7 @@ from langflow.services.data_subjects.memory_base_storage import KIND_MEMORY_BASE
 from langflow.services.database.models.flow.model import Flow
 from langflow.services.database.models.knowledge_base.model import KnowledgeBaseRecord
 from langflow.services.database.models.knowledge_base_storage_migration import KnowledgeBaseStorageMigration
+from langflow.services.database.models.user.model import User
 from langflow.services.deps import get_settings_service, get_storage_service
 from langflow.services.knowledge_base_storage.legacy_directories import (
     LegacyDirectories,
@@ -57,6 +59,7 @@ KIND_FS_SANDBOX = "fs_sandbox"
 KIND_SAVE_FILE_DIR = "save_file_dir"
 KIND_SKIPPED = "skipped"
 SKIPPED_SHARED_ACROSS_FLOWS = "end_user_storage_shared_across_flows"
+SKIPPED_AMBIGUOUS_USER_NAMESPACE = "builder_user_namespace_collides_with_flow"
 _SAFE_SEGMENT = re.compile(r"[^A-Za-z0-9_.-]")
 _RESERVED_SEGMENTS = frozenset({"flows", "profile_pictures", "knowledge_bases", "fs_sandbox", "alembic", "logs"})
 
@@ -90,8 +93,15 @@ def _save_file_segment(raw_id: str) -> str | None:
 
 async def builder_storage_plan(session: AsyncSession, ctx: EraseContext) -> list[dict[str, str]]:
     flow_ids = (await session.exec(select(Flow.id).where(Flow.user_id == ctx.subject_user_id))).all()
-    plan = [_item(KIND_NAMESPACE, str(ctx.subject_user_id))]
-    plan.extend(_item(KIND_NAMESPACE, str(flow_id)) for flow_id in flow_ids)
+    plan = [_item(KIND_NAMESPACE, user_storage_scope(ctx.subject_user_id))]
+    if await session.get(Flow, ctx.subject_user_id) is None:
+        plan.append(_item(KIND_NAMESPACE, str(ctx.subject_user_id)))
+    else:
+        plan.append(_item(KIND_SKIPPED, SKIPPED_AMBIGUOUS_USER_NAMESPACE))
+    for flow_id in flow_ids:
+        if await session.get(User, flow_id) is None:
+            plan.append(_item(KIND_NAMESPACE, str(flow_id)))
+        plan.append(_item(KIND_NAMESPACE, flow_storage_scope(flow_id)))
     plan.append(_item(KIND_FLOWS_DIR, str(ctx.subject_user_id)))
     plan.append(_item(KIND_FS_SANDBOX, str(ctx.subject_user_id)))
     if ctx.username:

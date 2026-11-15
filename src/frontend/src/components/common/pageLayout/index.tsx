@@ -32,7 +32,7 @@ export default function PageLayout({
       data-theme-page="standard"
     >
       <div
-        className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col"
+        className="mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col"
         data-theme-region="page-container"
       >
         <div
@@ -77,7 +77,10 @@ export default function PageLayout({
         <div className="flex shrink-0 px-6">
           <Separator className="flex" />
         </div>
-        <div className="flex flex-1 p-6 pt-7" data-theme-region="page-content">
+        <div
+          className="flex min-h-0 flex-1 p-6 pt-7"
+          data-theme-region="page-content"
+        >
           {children}
         </div>
       </div>

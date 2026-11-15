@@ -110,10 +110,10 @@ env:
   # — "Path Validation Error ... no cache is being saved" on every job, so no
   # shard ever hit the cache and all 70 re-downloaded Chromium every run.
   PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/ms-playwright
-  PLAYWRIGHT_VERSION: "1.60.0"
+  PLAYWRIGHT_VERSION: "1.64.1"
   LANGFLOW_FEATURE_WXO_DEPLOYMENTS: "true"
 
-# Playwright 1.60.0 cannot install Chromium on Ubuntu 26.04. Normalize legacy
+# Keep the browser runners pinned to the reviewed Ubuntu image. Normalize legacy
 # callers that pass ubuntu-latest while preserving Windows and self-hosted runners.
 jobs:
   determine-test-suite:
@@ -493,7 +493,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: all-blob-reports-raw
-          pattern: blob-report-${{ runner.os }}-*-attempt-*
+          pattern: blob-report-${{ runner.os }}-*-of-${{ needs.determine-test-suite.outputs.shard_count }}-attempt-*
 
       - name: Check report count, merge, and validate
         id: validate
@@ -526,10 +526,16 @@ jobs:
           # descending, and keep the first row per shard so the newest attempt
           # wins. Avoids associative arrays, which need bash 4+ (macOS ships 3.2).
           manifest=$(mktemp)
+          zip_count=$(find "$raw_dir" -type f -name '*.zip' | wc -l | tr -d ' ')
           find "$raw_dir" -type f -name '*.zip' -print | while IFS= read -r zip; do
             artifact=$(basename "$(dirname "$zip")")
             fields=$(printf '%s\n' "$artifact" \
               | sed -nE 's/.*-([0-9]+)-of-[0-9]+-attempt-([0-9]+)$/\1 \2/p')
+            # download-artifact flattens a single matching artifact. Its pattern
+            # above fixes the total; accept only the sole ZIP for a one-shard run.
+            if [[ -z "$fields" && "$EXPECTED_REPORTS" == "1" && "$zip_count" == "1" && "$(dirname "$zip")" == "$raw_dir" ]]; then
+              fields="1 0"
+            fi
             if [[ -z "$fields" ]]; then
               echo "Ignoring unrecognized blob report artifact: $artifact" >&2
               continue
@@ -554,7 +560,11 @@ jobs:
           rm -rf "$report_dir"
           mkdir -p "$report_dir"
           while IFS=$'\t' read -r shard attempt zip; do
-            echo "Shard $shard <- attempt $attempt"
+            if [[ "$attempt" == "0" ]]; then
+              echo "Shard $shard <- flattened singleton download"
+            else
+              echo "Shard $shard <- attempt $attempt"
+            fi
             cp "$zip" "$report_dir/"
           done < "$manifest"
 
