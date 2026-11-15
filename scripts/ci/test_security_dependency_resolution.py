@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import runpy
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import tomllib
+import yaml
 from packaging.markers import Marker
 from packaging.requirements import Requirement
 from packaging.version import Version
@@ -18,6 +21,64 @@ MANIFESTS = [
     "src/lfx/pyproject.toml",
     "src/bundles/nextplaid/pyproject.toml",
 ]
+
+
+def _security_lock_refresh_verifier() -> str:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/openxflow-security-lock-refresh.yml").read_text())
+    steps = workflow["jobs"]["regenerate-lock"]["steps"]
+    command = next(step["run"] for step in steps if step.get("name") == "Re-lock four patched security dependencies")
+    return command.split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+
+
+def _run_security_lock_refresh_verifier(
+    tmp_path: Path, production_dns_version: str
+) -> subprocess.CompletedProcess[str]:
+    (tmp_path / "uv.lock").write_text(
+        f"""version = 1
+revision = 3
+requires-python = ">=3.10,<3.15"
+
+[[package]]
+name = "authlib"
+version = "1.9.6"
+
+[[package]]
+name = "msgpack"
+version = "1.2.4"
+
+[[package]]
+name = "pymongo"
+version = "4.20.0"
+
+[[package]]
+name = "dnspython"
+version = "2.8.0"
+resolution-markers = ["python_full_version < '3.11'"]
+
+[[package]]
+name = "dnspython"
+version = "{production_dns_version}"
+resolution-markers = ["python_full_version >= '3.11'"]
+""",
+        encoding="utf-8",
+    )
+    return subprocess.run(  # noqa: S603 - fixed interpreter and repository-controlled verifier
+        [sys.executable, "-c", _security_lock_refresh_verifier()],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_security_lock_refresh_accepts_newer_patched_dns_version(tmp_path: Path) -> None:
+    result = _run_security_lock_refresh_verifier(tmp_path, "2.9.2")
+    assert result.returncode == 0, result.stderr
+
+
+def test_security_lock_refresh_rejects_vulnerable_production_dns_version(tmp_path: Path) -> None:
+    result = _run_security_lock_refresh_verifier(tmp_path, "2.9.0")
+    assert result.returncode != 0
 
 
 def locked_packages(environment: dict[str, str]) -> dict[str, str]:

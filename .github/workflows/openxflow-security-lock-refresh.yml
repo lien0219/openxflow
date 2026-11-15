@@ -28,6 +28,7 @@ jobs:
           uv lock --check
           python - <<'PY'
           import tomllib
+          from packaging.markers import Marker
           from packaging.version import Version
           with open("uv.lock", "rb") as f:
               locked = tomllib.load(f)
@@ -38,8 +39,23 @@ jobs:
           for pkg, floor in floors.items():
               assert versions[pkg] and min(versions[pkg]) >= Version(floor), (pkg, versions[pkg])
               print(f"{pkg}={sorted(versions[pkg])} >= {floor}")
-          assert Version("2.9.0") in versions["dnspython"], versions["dnspython"]
-          print("dnspython resolves >=2.9.0 for the production Python 3.14 environment")
+          production = {
+              "python_version": "3.14",
+              "python_full_version": "3.14.0",
+              "sys_platform": "linux",
+              "platform_machine": "x86_64",
+          }
+          production_dns = {
+              Version(package["version"])
+              for package in locked["package"]
+              if package["name"] == "dnspython"
+              and (
+                  not package.get("resolution-markers")
+                  or any(Marker(marker).evaluate(production) for marker in package["resolution-markers"])
+              )
+          }
+          assert len(production_dns) == 1 and min(production_dns) >= Version("2.9.1"), production_dns
+          print(f"dnspython={sorted(production_dns)} >= 2.9.1 for the production Python 3.14 environment")
           PY
       - name: Commit resolver-generated lockfile to develop
         run: |
