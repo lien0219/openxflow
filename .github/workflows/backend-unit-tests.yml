@@ -89,13 +89,47 @@ jobs:
           name: backend-baseline-${{ needs.plan.outputs.namespace }}-py${{ matrix.python-version }}-s${{ inputs.shards }}-w${{ inputs.workers }}-${{ inputs.distribution }}
           path: ci-durations/durations.json
           retention-days: 7
+  preflight:
+    name: Backend preflight - Python ${{ matrix.python-version }}
+    needs: plan
+    runs-on: ${{ startsWith(inputs.runs-on, '[') && fromJSON(inputs.runs-on) || inputs.runs-on }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.python-versions) }}
+    env:
+      UV_MANAGED_PYTHON: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: astral-sh/setup-uv@v10.0.0
+        with:
+          version: latest-known
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: ${{ matrix.python-version }}
+          prune-cache: false
+      - name: Install the project
+        run: uv sync --frozen
+      - name: Run CI contract tests
+        if: matrix.python-version == '3.11'
+        run: uv run --no-sync pytest scripts/ci -q
+      - name: Run process integration tests
+        run: |
+          uv run --no-sync python -m pytest \
+            src/backend/tests/unit/base/knowledge_bases/test_upgrade_controller.py \
+            -m 'not api_key_required' --reruns=0 --instafail -ra -q
   test:
     name: Unit Tests - Python ${{ matrix.python-version }} - Group ${{ matrix.group }}
-    needs: [plan, baseline]
+    needs: [plan, baseline, preflight]
     runs-on: ${{ startsWith(inputs.runs-on, '[') && fromJSON(inputs.runs-on) || inputs.runs-on }}
     timeout-minutes: 60
-    # Python 3.15 is a preview lane: it reports ecosystem readiness without failing the run.
-    continue-on-error: ${{ matrix.python-version == '3.15' }}
     strategy:
       fail-fast: false
       matrix:
@@ -113,16 +147,11 @@ jobs:
           node-version: '22'
       - uses: astral-sh/setup-uv@v10.0.0
         with:
-          # The uv bundled with this setup-uv only knows CPython 3.15 release candidates;
-          # uv 0.13.0 is the first release that installs 3.15.0 final.
-          version: ${{ matrix.python-version == '3.15' && '0.13.0' || 'latest-known' }}
+          version: latest-known
           enable-cache: true
           cache-dependency-glob: uv.lock
           python-version: ${{ matrix.python-version }}
           prune-cache: false
-      - name: Set up Python preview builds
-        if: matrix.python-version == '3.15'
-        uses: ./.github/actions/setup-python-preview
       - name: Install the project
         run: uv sync --frozen
       - uses: actions/download-artifact@v8
@@ -149,7 +178,9 @@ jobs:
           export CI_TEST_COMMIT
           /usr/bin/time -v -o test-results/resources.txt \
             uv run --no-sync python -m pytest src/backend/tests/unit \
-            --ignore=src/backend/tests/unit/template -m 'not api_key_required' \
+            --ignore=src/backend/tests/unit/template \
+            --ignore=src/backend/tests/unit/base/knowledge_bases/test_upgrade_controller.py \
+            -m 'not api_key_required' \
             -n "$WORKERS" --dist "$DISTRIBUTION" --max-worker-restart=1 \
             --splits "$SHARDS" --group "$GROUP" --splitting-algorithm least_duration \
             --durations-path ci-durations/durations.json --durations=20 \
@@ -180,10 +211,8 @@ jobs:
   report:
     name: Backend performance - Python ${{ matrix.python-version }}
     needs: [plan, test]
-    if: always() && needs.plan.result == 'success'
+    if: needs.plan.result == 'success' && needs.test.result == 'success'
     runs-on: ubuntu-latest
-    # A failed Python 3.15 preview group leaves incomplete timings; do not fail the run on it.
-    continue-on-error: ${{ matrix.python-version == '3.15' }}
     strategy:
       fail-fast: false
       matrix:

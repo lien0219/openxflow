@@ -78,8 +78,6 @@ jobs:
     # langflow-specific and cannot follow them into the bundle's lfx-only venv. This job is
     # their home -- same suite, bundles installed.
     name: Unit Tests (bundles installed) - Python ${{ matrix.python-version }}
-    # Python 3.15 is a preview lane: it reports ecosystem readiness without failing the run.
-    continue-on-error: ${{ matrix.python-version == '3.15' }}
     runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -95,15 +93,12 @@ jobs:
       - name: "Setup Environment"
         uses: astral-sh/setup-uv@v10.0.0
         with:
-          version: ${{ matrix.python-version == '3.15' && '0.13.0' || 'latest-known' }}
+          version: latest-known
           enable-cache: true
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}
           prune-cache: false
 
-      - name: Set up Python preview builds
-        if: matrix.python-version == '3.15'
-        uses: ./.github/actions/setup-python-preview
       - name: Install the project with the bundles extra
         run: uv sync --extra bundles
 
@@ -168,8 +163,6 @@ jobs:
 
   integration-tests:
     name: Integration Tests - Python ${{ matrix.python-version }}
-    # Python 3.15 is a preview lane: it reports ecosystem readiness without failing the run.
-    continue-on-error: ${{ matrix.python-version == '3.15' }}
     runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -182,16 +175,11 @@ jobs:
       - name: "Setup Environment"
         uses: astral-sh/setup-uv@v10.0.0
         with:
-          # The uv bundled with this setup-uv only knows CPython 3.15 release candidates;
-          # uv 0.13.0 is the first release that installs 3.15.0 final.
-          version: ${{ matrix.python-version == '3.15' && '0.13.0' || 'latest-known' }}
+          version: latest-known
           enable-cache: true
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}
           prune-cache: false
-      - name: Set up Python preview builds
-        if: matrix.python-version == '3.15'
-        uses: ./.github/actions/setup-python-preview
       - name: Install the project
         run: uv sync
       - name: Run integration tests
@@ -202,8 +190,6 @@ jobs:
 
   lfx-tests:
     name: LFX Tests - Python ${{ matrix.python-version }}
-    # Python 3.15 is a preview lane: it reports ecosystem readiness without failing the run.
-    continue-on-error: ${{ matrix.python-version == '3.15' }}
     runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -216,16 +202,11 @@ jobs:
       - name: "Setup Environment"
         uses: astral-sh/setup-uv@v10.0.0
         with:
-          # The uv bundled with this setup-uv only knows CPython 3.15 release candidates;
-          # uv 0.13.0 is the first release that installs 3.15.0 final.
-          version: ${{ matrix.python-version == '3.15' && '0.13.0' || 'latest-known' }}
+          version: latest-known
           enable-cache: true
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}
           prune-cache: false
-      - name: Set up Python preview builds
-        if: matrix.python-version == '3.15'
-        uses: ./.github/actions/setup-python-preview
       # The compatibility tests read historical flows and component indexes from these tags.
       - name: Fetch source release tags
         run: git fetch --depth=1 --force https://github.com/langflow-ai/langflow.git tag v1.12.6 tag v1.13.0
@@ -257,8 +238,6 @@ jobs:
 
   test-cli:
     name: Test CLI - Python ${{ matrix.python-version }}
-    # Python 3.15 is a preview lane: it reports ecosystem readiness without failing the run.
-    continue-on-error: ${{ matrix.python-version == '3.15' }}
     runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -272,9 +251,7 @@ jobs:
       - name: "Setup Environment"
         uses: astral-sh/setup-uv@v10.0.0
         with:
-          # The uv bundled with this setup-uv only knows CPython 3.15 release candidates;
-          # uv 0.13.0 is the first release that installs 3.15.0 final.
-          version: ${{ matrix.python-version == '3.15' && '0.13.0' || 'latest-known' }}
+          version: latest-known
           enable-cache: true
           cache-dependency-glob: "uv.lock"
           python-version: ${{ matrix.python-version }}

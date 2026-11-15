@@ -17,7 +17,6 @@ CROSS_PLATFORM_WORKFLOW_PATH = WORKFLOWS_DIR / "cross-platform-test.yml"
 DB_MIGRATION_WORKFLOW_PATH = WORKFLOWS_DIR / "db-migration-validation.yml"
 PYTHON_TEST_WORKFLOW_PATH = WORKFLOWS_DIR / "python_test.yml"
 SUPPORTED_PYTHON_VERSIONS = {"3.10", "3.11", "3.12", "3.13", "3.14"}
-PREVIEW_PYTHON_VERSIONS = {"3.15"}
 
 
 def _job_block(path: Path, start_job: str, end_job: str) -> str:
@@ -31,23 +30,20 @@ def test_release_and_nightly_use_current_python_matrix() -> None:
     for name, job_name in [("release.yml", "ci"), ("nightly_build.yml", "backend-unit-tests")]:
         jobs = yaml.safe_load((WORKFLOWS_DIR / name).read_text(encoding="utf-8"))["jobs"]
         versions = ast.literal_eval(jobs[job_name]["with"]["python-versions"])
-        assert set(versions) == SUPPORTED_PYTHON_VERSIONS | PREVIEW_PYTHON_VERSIONS, name
+        assert set(versions) == SUPPORTED_PYTHON_VERSIONS, name
 
 
-def test_installation_gate_requires_stable_python_and_isolates_preview() -> None:
+def test_installation_gate_uses_supported_python_versions_only() -> None:
     jobs = yaml.safe_load(CROSS_PLATFORM_WORKFLOW_PATH.read_text(encoding="utf-8"))["jobs"]
     stable = jobs["test-installation-stable"]
-    preview = jobs["test-installation-experimental"]
+    assert "test-installation-experimental" not in jobs
     assert not stable.get("continue-on-error", False)
-    assert preview["continue-on-error"] is True
-    assert preview["strategy"]["fail-fast"] is False
     for os_name in ("linux", "macos", "windows"):
         versions = {leg["python-version"] for leg in stable["strategy"]["matrix"]["include"] if leg["os"] == os_name}
         assert versions == SUPPORTED_PYTHON_VERSIONS, os_name
-    assert {leg["python-version"] for leg in preview["strategy"]["matrix"]["include"]} == PREVIEW_PYTHON_VERSIONS
 
 
-def test_release_python_preview_failures_cannot_cancel_required_jobs() -> None:
+def test_release_jobs_do_not_mask_unsupported_python_versions() -> None:
     matrix_jobs = {
         "backend-unit-tests.yml": ["test", "report"],
         "python_test.yml": ["bundle-guarded-tests", "integration-tests", "lfx-tests", "test-cli"],
@@ -59,7 +55,8 @@ def test_release_python_preview_failures_cannot_cancel_required_jobs() -> None:
         jobs = yaml.safe_load((WORKFLOWS_DIR / name).read_text(encoding="utf-8"))["jobs"]
         for job_name in job_names:
             job = jobs[job_name]
-            assert job["continue-on-error"] == "${{ matrix.python-version == '3.15' }}", (name, job_name)
+            assert "continue-on-error" not in job, (name, job_name)
+            assert "3.15" not in str(job), (name, job_name)
             assert job["strategy"]["fail-fast"] is False, (name, job_name)
 
 

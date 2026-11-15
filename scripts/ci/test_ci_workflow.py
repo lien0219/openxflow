@@ -69,6 +69,37 @@ def test_lfx_historical_tags_come_from_the_source_repository() -> None:
     assert "tag v1.12.6 tag v1.13.0" in fetch["run"]
 
 
+def test_backend_preflight_blocks_expensive_shards_and_owns_process_integration() -> None:
+    jobs = _load(".github/workflows/backend-unit-tests.yml")["jobs"]
+
+    preflight = jobs["preflight"]
+    assert preflight["needs"] == "plan"
+    assert "preflight" in jobs["test"]["needs"]
+    assert preflight["strategy"]["fail-fast"] == "false"
+    assert preflight["strategy"]["matrix"]["python-version"] == "${{ fromJSON(inputs.python-versions) }}"
+
+    preflight_steps = {step.get("name"): step for step in preflight["steps"]}
+    contracts = preflight_steps["Run CI contract tests"]["run"]
+    process_integration = preflight_steps["Run process integration tests"]["run"]
+    shard_tests = next(step["run"] for step in jobs["test"]["steps"] if step.get("name") == "Run unit tests")
+
+    process_path = "src/backend/tests/unit/base/knowledge_bases/test_upgrade_controller.py"
+    assert "pytest scripts/ci" in contracts
+    assert preflight_steps["Run CI contract tests"]["if"] == "matrix.python-version == '3.11'"
+    assert process_path in process_integration
+    assert " -n " not in process_integration
+    assert f"--ignore={process_path}" in shard_tests
+
+
+def test_backend_performance_report_does_not_duplicate_test_failures() -> None:
+    report = _load(".github/workflows/backend-unit-tests.yml")["jobs"]["report"]
+    condition = report["if"]
+
+    assert "always()" not in condition
+    assert "needs.plan.result == 'success'" in condition
+    assert "needs.test.result == 'success'" in condition
+
+
 @pytest.mark.parametrize(
     ("title", "valid"),
     [
