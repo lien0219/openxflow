@@ -1,6 +1,12 @@
 name: CI Scripts Tests
 
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit to validate when called from branch CI"
+        required: false
+        type: string
   pull_request:
     paths:
       - "scripts/ci/**"
@@ -17,6 +23,12 @@ on:
       - ".github/workflows/release.yml"
       - ".github/workflows/docker-build-v2.yml"
       - "pyproject.toml"
+      - "uv.lock"
+      - "docker/**"
+      - "src/lfx/pyproject.toml"
+      - "src/backend/base/pyproject.toml"
+      - "scripts/build_component_index.py"
+      - "src/lfx/src/lfx/_assets/component_index.json"
       - "src/bundles/*/pyproject.toml"
       - "src/bundles/*/src/*/**/capabilities.v1.json"
       - "src/bundles/lfx-bundles/src/lfx_bundles/*/__init__.py"
@@ -95,6 +107,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v7

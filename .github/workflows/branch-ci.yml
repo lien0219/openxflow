@@ -65,4 +65,14 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ github.sha }}
+      # Upstream integrations need the complete job set, even after a small follow-up fix.
+      run-all-tests: ${{ startsWith(github.ref, 'refs/heads/sync/') }}
     secrets: inherit # pragma: allowlist secret
+
+  ci-scripts:
+    name: PR preflight scripts
+    needs: plan
+    if: needs.plan.outputs.run-ci == 'true'
+    uses: ./.github/workflows/ci-scripts-test.yml
+    with:
+      ref: ${{ github.sha }}

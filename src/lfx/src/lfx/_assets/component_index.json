@@ -24390,7 +24390,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": null
+                  "version": "1.12.0"
                 }
               ],
               "total_dependencies": 3
@@ -25931,7 +25931,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": null
+                  "version": "1.12.0"
                 }
               ],
               "total_dependencies": 4
@@ -27656,7 +27656,7 @@
                 },
                 {
                   "name": "jq",
-                  "version": null
+                  "version": "1.12.0"
                 }
               ],
               "total_dependencies": 3
@@ -31973,7 +31973,7 @@
                 },
                 {
                   "name": "yfinance",
-                  "version": null
+                  "version": "0.2.50"
                 }
               ],
               "total_dependencies": 4
@@ -32949,6 +32949,6 @@
     "num_components": 131,
     "num_modules": 18
   },
-  "sha256": "85cd738096b9a334d491f4e6a2fba8b089db62be53471ef0018dd862d03e0f1b",
+  "sha256": "4b56de4378f82cf13fc93e71791fdc3f89ec1bf8f1bd957e83d66afd553fc789",
   "version": "1.13.2"
 }
