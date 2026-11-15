@@ -172,7 +172,7 @@ describe("MemoryKnowledgeBaseSection", () => {
       />,
     );
     expect(
-      screen.getByText(/Stop the other OpenXFlow instance/),
+      screen.getByText(/Stop all other OpenXFlow processes on this host/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /retry upgrade/i }),

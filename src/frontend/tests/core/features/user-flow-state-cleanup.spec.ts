@@ -42,7 +42,6 @@ test(
         writable: true,
         configurable: true,
       });
-      sessionStorage.setItem("testMockAutoLogin", "true");
     });
 
     // Create random usernames, passwords and flow names for the test

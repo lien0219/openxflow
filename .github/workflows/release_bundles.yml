@@ -137,7 +137,10 @@ jobs:
         include:
           - os: linux
             runner: ubuntu-latest
-            python-version: "3.10"
+            python-version: "3.11"
+          - os: linux
+            runner: ubuntu-latest
+            python-version: "3.14"
           - os: linux
             runner: ubuntu-latest
             python-version: "3.12"

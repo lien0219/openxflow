@@ -7,7 +7,7 @@
 
 ARG UV_VERSION=0.10.4
 ARG PYTHON_IMAGE=registry.access.redhat.com/ubi10/python-314-minimal
-ARG NODE_VERSION=24.22.1
+ARG NODE_VERSION=24.22.2
 
 ################################
 # BUILDER
@@ -28,6 +28,7 @@ RUN microdnf install -y tar xz \
         gcc gcc-c++ make python3.14-devel \
         gcc \
         git \
+        libxml2-devel libxslt-devel \
         curl \
     && microdnf clean all
 
@@ -35,6 +36,7 @@ RUN microdnf install -y tar xz \
 COPY ./src/backend ./src/backend
 COPY ./src/lfx ./src/lfx
 COPY ./src/sdk ./src/sdk
+COPY ./docker/build_lxml.sh /tmp/build_lxml.sh
 
 # Create venv and install langflow-base with dependencies
 # Using uv pip instead of uv sync to avoid workspace complexities
@@ -48,11 +50,13 @@ ENV VIRTUAL_ENV="/app/.venv"
 # Install the runnable base with PostgreSQL. ``complete`` is retained as an
 # empty 1.12 compatibility alias. Provider extensions are intentionally absent;
 # use a Langflow application image or install the required extension packages.
+# Build lxml against UBI's patched XML libraries instead of its bundled copies.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install \
+    uv pip install "lxml==6.1.1" \
         ./src/sdk \
         ./src/lfx \
-        "./src/backend/base[complete,postgresql]"
+        "./src/backend/base[complete,postgresql]" \
+    && sh /tmp/build_lxml.sh
 
 ################################
 # RUNTIME
@@ -61,12 +65,9 @@ FROM ${PYTHON_IMAGE} AS runtime
 USER root
 # Install minimal runtime dependencies
 RUN microdnf update -y \
-    && microdnf install -y tar xz \
-        curl \
-        git \
-        libpq \
-        gnupg \
-        xz tar \
+    && microdnf install -y curl git libpq libxml2 libxslt shadow-utils tar xz \
+    && useradd --uid 1000 --gid 0 --no-create-home --home-dir /app/data user \
+    && microdnf remove -y shadow-utils \
     && microdnf clean all
 RUN python3.14 -m pip install --no-cache-dir --upgrade "pip==26.2.1"
 COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
@@ -86,8 +87,8 @@ RUN ARCH=$(uname -m) \
        elif [ "$ARCH" = "aarch64" ]; then NODE_ARCH="arm64"; \
        else NODE_ARCH="$ARCH"; fi \
     && case "${NODE_VERSION}:${NODE_ARCH}" in \
-        24.22.1:x64) NODE_SHA256=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6 ;; \
-        24.22.1:arm64) NODE_SHA256=dbabf7a1cbf947e6059ffad2c27b80041db97dea1e553b62afdee7f13fca336e ;; \
+        24.22.2:x64) NODE_SHA256=48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75 ;; \
+        24.22.2:arm64) NODE_SHA256=eb187837a2230d4047161ac0be008584e16b46f726e9c9490ee35dc6b17d9ba8 ;; \
         *) echo "No reviewed Node checksum for ${NODE_VERSION}:${NODE_ARCH}" >&2; exit 1 ;; \
        esac \
     && curl -fsSLo /tmp/node.tar.xz \
@@ -98,15 +99,14 @@ RUN ARCH=$(uname -m) \
     && sh /tmp/install_hardened_npm.sh \
     && rm -f /tmp/install_hardened_npm.sh
 
-# Create non-root user
-RUN useradd --uid 1000 --gid 0 --no-create-home --home-dir /app/data user
-
 # Copy only the virtual environment
 COPY --from=builder --chown=1000:0 /app/.venv /app/.venv
 COPY ./docker/patch_hardened_pip_vendor.sh /tmp/patch_hardened_pip_vendor.sh
 RUN sh /tmp/patch_hardened_pip_vendor.sh \
     && rm -f /tmp/patch_hardened_pip_vendor.sh \
     && find /app/.venv -type d -path '*/pip/_vendor' -exec chown -R 1000:0 {} +
+COPY --chown=1000:0 ./scripts/ci/verify_lxml_runtime.py /tmp/verify_lxml_runtime.py
+RUN /app/.venv/bin/python /tmp/verify_lxml_runtime.py && rm /tmp/verify_lxml_runtime.py
 ENV PATH="/app/.venv/bin:$PATH"
 ENV HOME=/app/data
 ENV BASH_ENV="" \

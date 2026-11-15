@@ -276,7 +276,7 @@ jobs:
   #   needs: create-nightly-tag
   #   uses: ./.github/workflows/integration_tests.yml
   #   with:
-  #     python-versions: '["3.10", "3.11", "3.12", "3.13"]'
+  #     python-versions: '["3.11", "3.12", "3.13"]'
   #     ref: ${{ needs.create-nightly-tag.outputs.tag }}
 
   stress-tests:

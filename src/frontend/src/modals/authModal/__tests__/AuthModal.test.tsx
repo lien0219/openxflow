@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AuthModal from "../index";
 
@@ -16,19 +17,17 @@ jest.mock("@/utils/stringManipulation", () => ({
   toSpaceCase: (str: string) => str.replace(/_/g, " "),
 }));
 
-// Mock UI components
-jest.mock("@/components/common/genericIconComponent", () => ({
-  __esModule: true,
-  default: ({ name, className, ...props }: any) => (
-    <span data-testid={`icon-${name}`} className={className} {...props}>
-      {name}
-    </span>
-  ),
-}));
-
 // Mock custom link
 jest.mock("@/customization/components/custom-link", () => ({
-  CustomLink: ({ children, to, className }: any) => (
+  CustomLink: ({
+    children,
+    to,
+    className,
+  }: {
+    children: ReactNode;
+    to: string;
+    className?: string;
+  }) => (
     <a href={to} className={className}>
       {children}
     </a>
@@ -168,16 +167,22 @@ describe("AuthModal OAuth Port Synchronization", () => {
     await user.type(portInput, "9001");
 
     const clientIdInput = screen.getByLabelText(/Client ID/i);
-    await user.type(clientIdInput, "test-client-id");
+    await user.click(clientIdInput);
+    await user.paste("test-client-id");
 
     const clientSecretInput = screen.getByLabelText(/Client Secret/i);
-    await user.type(clientSecretInput, "test-secret");
+    await user.click(clientSecretInput);
+    await user.paste("test-secret");
 
+    // Paste long configuration values as a user would. Per-character typing
+    // can outlive Jest's test timeout on CI and interfere with the next test.
     const authUrlInput = screen.getByLabelText(/Authorization URL/i);
-    await user.type(authUrlInput, "http://localhost:9001/auth/authorize");
+    await user.click(authUrlInput);
+    await user.paste("http://localhost:9001/auth/authorize");
 
     const tokenUrlInput = screen.getByLabelText(/Token URL/i);
-    await user.type(tokenUrlInput, "http://localhost:9001/auth/token");
+    await user.click(tokenUrlInput);
+    await user.paste("http://localhost:9001/auth/token");
 
     // Click Save
     const saveButton = screen.getByRole("button", { name: /Save/i });
@@ -216,7 +221,7 @@ describe("AuthModal OAuth Port Synchronization", () => {
     // Manually edit Server URL to something different
     const serverUrlInput = screen.getByLabelText(/Server URL/i);
     await user.clear(serverUrlInput);
-    await user.type(serverUrlInput, "http://custom.example.com:9001");
+    await user.paste("http://custom.example.com:9001");
 
     // Verify the manual edit is preserved
     expect(serverUrlInput).toHaveValue("http://custom.example.com:9001");

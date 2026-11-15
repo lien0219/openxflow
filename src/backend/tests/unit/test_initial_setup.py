@@ -404,7 +404,10 @@ async def test_load_bundles_from_urls():
 
     try:
         assert len(components_paths) == 1
-        assert "langflow-bundles-68428ce16729a385fe1bcc0f1ec91fd5f5f420b9/components" in components_paths[0]
+        assert SyncPath(components_paths[0]).parts[-2:] == (
+            "langflow-bundles-68428ce16729a385fe1bcc0f1ec91fd5f5f420b9",
+            "components",
+        )
 
         content = await (Path(components_paths[0]) / "embeddings" / "openai2.py").read_text(encoding="utf-8")
         assert "OpenAIEmbeddings2Component" in content

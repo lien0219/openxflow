@@ -52,29 +52,20 @@ def test_branch_push_and_pr_lifecycle_are_covered() -> None:
 
 
 @pytest.mark.parametrize(
-    ("draft", "head", "conclusion", "has_run", "run_ci"),
+    ("draft", "head", "run_ci"),
     [
-        (False, "current", None, True, False),
-        (False, "current", "success", True, False),
-        (False, "current", "failure", True, False),
-        (True, "current", None, True, True),
-        (False, "old", None, True, True),
-        (False, "current", "cancelled", True, True),
-        (False, "current", "skipped", True, True),
-        (False, "current", None, False, True),
-        (False, "no-pr", None, False, True),
+        (False, "current", False),
+        (True, "current", True),
+        (False, "old", True),
+        (False, "no-pr", True),
     ],
 )
-def test_push_is_deduplicated_only_when_the_same_commit_has_a_pr_run(
-    *, draft: bool, head: str, conclusion: str | None, has_run: bool, run_ci: bool
-) -> None:
+def test_open_pr_owns_validation_for_its_exact_head(*, draft: bool, head: str, run_ci: bool) -> None:
     steps = _workflow("branch-ci.yml")["jobs"]["plan"]["steps"]
     script = next(step["with"]["script"] for step in steps if step.get("id") == "pr-ci")
     fixture = {
         "draft": draft,
         "head": head,
-        "conclusion": conclusion,
-        "has_run": has_run,
     }
     harness = """
 const fixture = JSON.parse(process.argv[2]);
@@ -83,9 +74,7 @@ const context = {repo: {owner: 'example', repo: 'app'}, ref: 'refs/heads/develop
 const github = {
   paginate: async () => fixture.head === 'no-pr' ? [] : [{number: 7, draft: fixture.draft,
     head: {sha: fixture.head, repo: {full_name: 'example/app'}}}],
-  rest: {pulls: {list: {}}, actions: {listWorkflowRuns: async () => ({data: {workflow_runs:
-    fixture.has_run ? [{head_sha: 'current', conclusion: fixture.conclusion, pull_requests: [{number: 7}]}] : []
-  }})}}
+  rest: {pulls: {list: {}}}
 };
 const summary = {addHeading() {return this}, addRaw() {return this}, async write() {}};
 const core = {setOutput: (name, value) => outputs[name] = String(value), summary, info() {}};
