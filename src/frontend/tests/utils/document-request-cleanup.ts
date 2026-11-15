@@ -7,6 +7,7 @@ export async function installDocumentRequestCleanup(
   trackers: PendingRequestTracker<Request>[],
 ): Promise<() => void> {
   const navigationCandidates = new Map<Frame, Set<Request>>();
+  const replacementCandidates = new Map<Frame, Set<Request>>();
   const frameForRequest = (request: Request): Frame | undefined => {
     try {
       return request.frame();
@@ -16,9 +17,19 @@ export async function installDocumentRequestCleanup(
     }
   };
   const onRequest = (request: Request) => {
-    if (!request.isNavigationRequest()) return;
     const frame = frameForRequest(request);
     if (!frame) return;
+    if (!request.isNavigationRequest()) {
+      // An interval or an already-queued XHR can start in the old document
+      // after the navigation request. Keep observing until replacement, too.
+      if (
+        request.resourceType() === "xhr" ||
+        request.resourceType() === "fetch"
+      ) {
+        navigationCandidates.get(frame)?.add(request);
+      }
+      return;
+    }
     navigationCandidates.set(
       frame,
       new Set(
@@ -38,6 +49,7 @@ export async function installDocumentRequestCleanup(
 
   const onFrameDetached = (frame: Frame) => {
     navigationCandidates.delete(frame);
+    replacementCandidates.delete(frame);
     for (const tracker of trackers) {
       for (const request of tracker.snapshot()) {
         if (
@@ -49,21 +61,28 @@ export async function installDocumentRequestCleanup(
       }
     }
   };
+  const onFrameNavigated = (frame: Frame) => {
+    const candidates = navigationCandidates.get(frame);
+    if (!candidates) return;
+    // Commit precedes the new document's requests. Freeze the old document's
+    // set here, rather than when its asynchronous binding reaches Node.
+    replacementCandidates.set(frame, candidates);
+    navigationCandidates.delete(frame);
+  };
 
   await page.exposeBinding(
     "__langflowPlaywrightDocumentStarted",
     ({ frame }) => {
-      const abandoned = navigationCandidates.get(frame);
-      navigationCandidates.delete(frame);
+      const abandoned = replacementCandidates.get(frame);
+      replacementCandidates.delete(frame);
       for (const request of abandoned ?? []) {
         for (const tracker of trackers) tracker.finish(request);
       }
     },
   );
   await page.addInitScript(() => {
-    // Init scripts run for a replacement document, not history/hash changes or
-    // aborted navigations. The captured set excludes requests from this new
-    // document even if its scripts run before the binding reaches Node.
+    // Init scripts confirm a replacement document, not history/hash changes
+    // or aborted navigations. The commit already froze the abandoned set.
     void (
       globalThis as typeof globalThis & {
         __langflowPlaywrightDocumentStarted: () => Promise<void>;
@@ -72,10 +91,13 @@ export async function installDocumentRequestCleanup(
   });
   page.on("request", onRequest);
   page.on("framedetached", onFrameDetached);
+  page.on("framenavigated", onFrameNavigated);
 
   return () => {
     page.off("request", onRequest);
     page.off("framedetached", onFrameDetached);
+    page.off("framenavigated", onFrameNavigated);
     navigationCandidates.clear();
+    replacementCandidates.clear();
   };
 }

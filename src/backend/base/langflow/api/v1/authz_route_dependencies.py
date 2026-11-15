@@ -6,6 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
+from sqlalchemy import inspect
 
 from langflow.api.utils import CurrentActiveUser, DbSession
 from langflow.api.v1.flows_helpers import _canonicalize_flow_destination, _read_flow
@@ -13,6 +14,7 @@ from langflow.services.authorization import FlowAction, ensure_flow_permission
 from langflow.services.authorization.fetch import deny_to_404
 from langflow.services.database.models.flow.model import Flow, FlowCreate
 from langflow.services.database.models.folder.model import Folder
+from langflow.services.database.models.user.model import User
 
 _FLOW_WRITE_DENIED_DETAIL = "You don't have permission to edit this flow."
 _FLOW_DELETE_DENIED_DETAIL = "You don't have permission to delete this flow."
@@ -96,6 +98,11 @@ async def require_flow_create_permission(
         current_user.id,
         widen_for_authz=True,
     )
+    # A concurrent default-project insert can roll back this shared session,
+    # expiring the authenticated ORM user. Restore it asynchronously before
+    # the guard (and then the route handler) reads any of its attributes.
+    if isinstance(current_user, User) and inspect(current_user).expired:
+        await session.refresh(current_user)
     _, destination_folder_id = destination
     # Read the owner off the *resolved* destination rather than the payload:
     # canonicalization may have redirected an unusable folder_id to the

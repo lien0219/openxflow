@@ -2,9 +2,13 @@ import type { LangflowPage } from "../types";
 
 /**
  * Stub the /api/v1/auto_login endpoint so the app falls back to manual
- * sign-in, then perform the username/password login flow.
+ * sign-in. The caller performs the username/password login flow.
  *
- * Replaces the 3 inline copies of this route+init-script+login block.
+ * Keep the environment override on every document, including reloads.
+ * Do not set testMockAutoLogin here: restoring that forced-redirect flag
+ * after sign-in makes the authenticated login and home guards redirect
+ * to one another indefinitely. The disabled auto-login response is enough
+ * for an unauthenticated session to reach the login page.
  *
  * The caller is responsible for the subsequent assertions (e.g. waiting
  * for the mainpage_title).
@@ -39,6 +43,5 @@ export async function mockAutoLoginDisabled(page: LangflowPage): Promise<void> {
       writable: true,
       configurable: true,
     });
-    sessionStorage.setItem("testMockAutoLogin", "true");
   });
 }

@@ -131,6 +131,43 @@ lifecycleTest.describe("document request cleanup", () => {
   );
 
   lifecycleTest(
+    "retires old-document XHRs delivered after navigation starts",
+    { tag: ["@release", "@workspace"] },
+    async ({ lifecycle: { page, url, trackers, startXhr } }) => {
+      const oldRequest = await startXhr("/api/hang/late-old-document");
+      // Reproduce the CI event order: the old document's request arrives in
+      // Node after the replacement navigation request, before it commits.
+      for (const tracker of trackers) tracker.finish(oldRequest);
+      page.removeAllListeners("requestfinished");
+      page.removeAllListeners("requestfailed");
+      const deliverOldRequest = (request: Request) => {
+        if (request.isNavigationRequest()) {
+          for (const tracker of trackers) tracker.start(oldRequest);
+          page.emit("request", oldRequest);
+        }
+      };
+      page.on("request", deliverOldRequest);
+      const newRequested = page.waitForEvent(
+        "request",
+        (request) =>
+          new URL(request.url()).pathname === "/api/hang/new-document",
+      );
+      try {
+        await page.goto(`${url}/?xhr=/api/hang/new-document`);
+        const newRequest = await newRequested;
+        for (const tracker of trackers) {
+          await expect
+            .poll(() => tracker.snapshot().includes(oldRequest))
+            .toBe(false);
+          expect(await tracker.drain(30)).toEqual([newRequest]);
+        }
+      } finally {
+        page.off("request", deliverOldRequest);
+      }
+    },
+  );
+
+  lifecycleTest(
     "keeps pending XHRs across history and hash navigation",
     { tag: ["@release", "@workspace"] },
     async ({ lifecycle: { page, trackers, startXhr } }) => {

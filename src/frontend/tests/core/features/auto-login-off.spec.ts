@@ -40,8 +40,6 @@ test(
         writable: true,
         configurable: true,
       });
-
-      sessionStorage.setItem("testMockAutoLogin", "true");
     });
 
     const randomName = Math.random().toString(36).substring(5);

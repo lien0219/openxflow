@@ -33,6 +33,38 @@ branches also request the complete main CI job set instead of only checking
 the last push. This catches more issues early without guaranteeing that
 PR-only permissions, base-branch changes, or external services cannot fail.
 
+For frontend changes, run the complete local checks from `src/frontend` before
+the next push. In PowerShell:
+
+```powershell
+$env:CI='true'
+npm run check:i18n
+npm run test:i18n-checker
+npm run test:e2e-utilities
+npx --no-install tsc --noEmit --pretty false
+npm test -- --ci --coverage --watchAll=false --maxWorkers=2
+npm run build
+```
+
+This includes accessibility unit tests as well as the ordinary Jest suites.
+Run affected Playwright scenarios separately against an isolated test database;
+unit tests and a successful build do not replace browser integration checks.
+Keep the CI run for the current commit running to completion before evaluating
+its result: pushing another commit cancels the previous branch run, leaving
+its shard reports incomplete.
+
+For form tests, type short values when individual keystrokes are relevant.
+Use awaited `user.paste()` after focusing or clearing the field for long URLs,
+tokens, and configuration text. Keep the saved-value assertions. A timed-out
+`user.type()` can continue dispatching keys into the following test, so fix the
+input sequence before adding retries or increasing the suite timeout.
+
+For manual-login browser tests, use `mockAutoLoginDisabled` and
+`submitLoginAndRequireSuccess`, then wait for authenticated page content before
+cleanup or navigation. Keep temporary forced-login flags out of init scripts:
+those scripts rerun on every document and can reintroduce redirects after a
+successful login. Cover reloads as well as the initial sign-in.
+
 ### Contributing to upstream Langflow
 
 1. Fork the [Langflow GitHub repository](https://github.com/langflow-ai/langflow).

@@ -30,8 +30,6 @@ test(
         writable: true,
         configurable: true,
       });
-
-      sessionStorage.setItem("testMockAutoLogin", "true");
     });
 
     await page.goto("/flows");
