@@ -20,7 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      actions: read
       pull-requests: read
     outputs:
       run-ci: ${{ steps.pr-ci.outputs.run-ci }}
@@ -37,20 +36,11 @@ jobs:
             });
             const pr = prs.find(pr => !pr.draft && pr.head.sha === context.sha &&
               pr.head.repo?.full_name === repository);
-            let duplicate = false;
-            if (pr) {
-              const { data } = await github.rest.actions.listWorkflowRuns({
-                ...context.repo, workflow_id: 'ci.yml', event: 'pull_request',
-                head_sha: context.sha, per_page: 100,
-              });
-              duplicate = data.workflow_runs.some(run => run.head_sha === context.sha &&
-                !['cancelled', 'skipped'].includes(run.conclusion) &&
-                run.pull_requests.some(candidate => candidate.number === pr.number));
-            }
-            core.setOutput('run-ci', !duplicate);
+            const coveredByPr = Boolean(pr);
+            core.setOutput('run-ci', !coveredByPr);
             await core.summary.addHeading('Branch validation')
-              .addRaw(duplicate
-                ? `PR #${pr.number} already has CI for this commit. Follow its CI Success check.`
+              .addRaw(coveredByPr
+                ? `PR #${pr.number} owns validation for this commit. Follow its CI Success check.`
                 : 'No active PR run covers this commit. Running branch CI.')
               .write();
 

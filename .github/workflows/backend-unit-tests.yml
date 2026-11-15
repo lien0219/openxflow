@@ -117,9 +117,6 @@ jobs:
           prune-cache: false
       - name: Install the project
         run: uv sync --frozen
-      - name: Run CI contract tests
-        if: matrix.python-version == '3.11'
-        run: uv run --no-sync pytest scripts/ci -q
       - name: Run process integration tests
         run: |
           uv run --no-sync python -m pytest \

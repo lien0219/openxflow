@@ -2,10 +2,9 @@
 
 Every branch push starts `branch-ci.yml`, including commits made without an
 open PR. It calls the same change-aware `ci.yml` used by PRs. If an open,
-non-draft PR already has a CI run for the exact commit, the branch workflow
-points to that validation in its summary and avoids running it twice. A missing,
-cancelled or skipped PR run does not suppress branch validation. An event race
-may start both runs; it must never leave a commit without validation.
+non-draft PR owns the exact commit, the branch workflow points to the PR's
+validation and does not start a second full CI run. Failed or cancelled PR jobs
+can be rerun from the PR without creating a duplicate branch suite.
 
 PR CI handles opening, updates, reopening, becoming ready, and label changes.
 Newer commits cancel older runs. `CI / CI Success` keeps its existing name and
