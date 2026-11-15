@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import ast
 import re
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
+from packaging.specifiers import SpecifierSet
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -27,6 +35,38 @@ def test_object_storage_uses_a_stable_pr_checkout_ref() -> None:
     )
 
     assert checkout["with"]["ref"] == "${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}"
+
+
+@pytest.mark.parametrize("path", ["ci.yml", "python_test.yml", "backend-unit-tests.yml"])
+def test_default_python_matrices_match_package_support(path: str) -> None:
+    workflow_path = ROOT / ".github/workflows" / path
+    workflow = _load(str(workflow_path.relative_to(ROOT)))
+    package_paths = ("pyproject.toml", "src/backend/base/pyproject.toml", "src/lfx/pyproject.toml")
+    supported = [
+        SpecifierSet(tomllib.loads((ROOT / package).read_text(encoding="utf-8"))["project"]["requires-python"])
+        for package in package_paths
+    ]
+    defaults = [
+        event["inputs"]["python-versions"]["default"]
+        for event in workflow["on"].values()
+        if isinstance(event, dict) and "python-versions" in event.get("inputs", {})
+    ]
+    # Include expression fallbacks used when a caller omits the input.
+    defaults.extend(re.findall(r"inputs\.python-versions \|\| '([^']+)'", workflow_path.read_text(encoding="utf-8")))
+    assert defaults
+    for default in defaults:
+        versions = ast.literal_eval(default)
+        assert versions
+        assert all(version in spec for version in versions for spec in supported), (path, versions)
+
+
+def test_lfx_historical_tags_come_from_the_source_repository() -> None:
+    workflow = _load(".github/workflows/python_test.yml")
+    fetch = next(
+        step for step in workflow["jobs"]["lfx-tests"]["steps"] if step.get("name") == "Fetch source release tags"
+    )
+    assert "https://github.com/langflow-ai/langflow.git" in fetch["run"]
+    assert "tag v1.12.6 tag v1.13.0" in fetch["run"]
 
 
 @pytest.mark.parametrize(

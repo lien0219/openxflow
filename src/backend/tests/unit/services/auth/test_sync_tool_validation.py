@@ -1,5 +1,6 @@
 """Synchronous tool checks use database connections owned by their event loop."""
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -19,7 +20,6 @@ from lfx.graph import Graph
 from lfx.io import Output
 from lfx.services.auth.service import AuthService as LFXAuthService
 from sqlalchemy import event, text
-from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel
 
 
@@ -76,8 +76,8 @@ async def validation_db(request, tmp_path, monkeypatch):
     try:
         yield database, auth, user_id, flow_id, node, kind
     finally:
+        database._remove_connection_listener(database.engine)
         await database.engine.dispose()
-        event.remove(Engine, "connect", database.on_connection)
 
 
 @pytest.mark.parametrize("tool_kind", ["generated", "structured", "external"])
@@ -176,11 +176,31 @@ async def test_sync_validation_closes_its_engine_before_its_loop(validation_db, 
     if kind == "memory":
         pytest.skip("In-memory SQLite retains its original engine")
     created = []
+    lifecycles = []
     original_create = database._create_engine
 
     def create():
         engine = original_create()
         created.append(engine)
+        lifecycle = {"opened": [], "closed": [], "disposed": []}
+        lifecycles.append(lifecycle)
+        loop = asyncio.get_running_loop()
+
+        def connected(_connection, record):
+            assert asyncio.get_running_loop() is loop
+            lifecycle["opened"].append(record)
+
+        def closed(_connection, record):
+            assert asyncio.get_running_loop() is loop
+            lifecycle["closed"].append(record)
+
+        def disposed(_engine):
+            assert asyncio.get_running_loop() is loop
+            lifecycle["disposed"].append(True)
+
+        event.listen(engine.sync_engine, "connect", connected)
+        event.listen(engine.sync_engine, "close", closed)
+        event.listen(engine.sync_engine, "engine_disposed", disposed)
         return engine
 
     monkeypatch.setattr(database, "_create_engine", create)
@@ -198,7 +218,12 @@ async def test_sync_validation_closes_its_engine_before_its_loop(validation_db, 
     for _ in range(2):
         auth.run_sync_validation(validate)
     assert len(created) == 2
-    assert all(engine.pool.checkedout() == 0 and engine.pool.checkedin() == 0 for engine in created)
-    assert database.engine.pool.checkedout() == 0
-    assert all(engine.pool.size() == database.engine.pool.size() == 1 for engine in created)
+    for lifecycle in lifecycles:
+        assert lifecycle["opened"]
+        assert lifecycle["closed"] == lifecycle["opened"]
+        assert lifecycle["disposed"] == [True]
+    if kind == "postgres":
+        assert all(engine.pool.checkedout() == 0 and engine.pool.checkedin() == 0 for engine in created)
+        assert database.engine.pool.checkedout() == 0
+        assert all(engine.pool.size() == database.engine.pool.size() == 1 for engine in created)
     await auth.validate_execution_user(user_id)

@@ -433,7 +433,7 @@ async def test_migration_guidance_covers_all_host_processes(client, admin_header
     entry = next(row for row in entries if row["kb_id"] == str(record.id))
     assert entry["error_code"] == "legacy_workers_running"
     assert entry["guidance"] == (
-        "Stop all other Langflow processes on this host, then retry the upgrade. "
+        "Stop all other OpenXFlow processes on this host, then retry the upgrade. "
         "This includes instances using different databases or knowledge directories."
     )
 

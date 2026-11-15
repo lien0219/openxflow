@@ -68,15 +68,16 @@ test(
 
     await page.goto(newUrl);
 
-    // An un-published playground URL redirects to the projects page:
+    // An un-published playground URL redirects to the landing page:
     // PlaygroundPage detects access_type !== "PUBLIC" and navigates to
     // "/". The redirect is client-side and the subsequent app bootstrap
     // can be slow on CI, so wait for the URL to leave /playground/
-    // before asserting the projects page rendered.
+    // before asserting the landing page rendered.
     await page.waitForURL((url) => !url.pathname.startsWith("/playground/"), {
       timeout: TIMEOUTS.long,
     });
-    await expect(page.getByTestId(TID.mainpageTitle)).toBeVisible({
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId("landing-page")).toBeVisible({
       timeout: TIMEOUTS.long,
     });
   },

@@ -246,7 +246,7 @@ async def test_pinned_client_rejects_origin_changes_without_global_variables(tar
     client = LangflowClient(
         server_url="https://local.example", use_env_global_vars=False, pinned_ips={"local.example": ["127.0.0.1"]}
     )
-    with pytest.raises(RuntimeError, match="outside the Langflow server origin"):
+    with pytest.raises(RuntimeError, match="outside the OpenXFlow server origin"):
         await client._check_request_origin(HttpRequest("GET", target))
 
 
@@ -315,7 +315,7 @@ async def test_explicit_credential_headers_are_copied_and_cannot_follow_another_
     loopback = LangflowClient(server_url="https://backend.example", use_env_global_vars=False, auth_headers=headers)
     headers[header_name] = "later-credential"
     assert loopback._headers()[header_name] == "request-credential"
-    with pytest.raises(RuntimeError, match="outside the Langflow server origin"):
+    with pytest.raises(RuntimeError, match="outside the OpenXFlow server origin"):
         await loopback._check_request_origin(HttpRequest("GET", "https://another.example/"))
 
 

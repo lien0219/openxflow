@@ -83,8 +83,10 @@ def test_workspace_security_overrides_enforce_patched_versions() -> None:
     python_311_plus = next(
         requirement for requirement in filelock_requirements if requirement.marker.evaluate({"python_version": "3.11"})
     )
-    _assert_floor(python_310, "3.20.3")
-    _assert_specifier(python_310, "<", "3.20.4")
+    # Python 3.10 retains its compatibility line. The 4.2.1 security fixes
+    # require Python >=3.11; this branch must not be described as fully patched.
+    _assert_floor(python_310, "4.1.0")
+    _assert_specifier(python_310, "<", "4.2.0")
     _assert_floor(python_311_plus, "4.2.1")
     _assert_specifier(python_311_plus, "<", "5.0.0")
 
@@ -157,8 +159,10 @@ def test_filelock_security_markers_cover_every_supported_python() -> None:
             assert len(matches) == 1, (path, minor, matches)
             requirement = matches[0]
             if minor == 10:
-                assert "3.20.3" in requirement.specifier
-                assert "3.20.4" not in requirement.specifier
+                _assert_floor(requirement, "4.1.0")
+                assert "4.1.0" in requirement.specifier
+                assert "4.0.9" not in requirement.specifier
+                assert "4.2.0" not in requirement.specifier
                 assert "4.2.1" not in requirement.specifier
             else:
                 _assert_floor(requirement, "4.2.1")

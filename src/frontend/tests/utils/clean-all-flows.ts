@@ -15,7 +15,6 @@ export const cleanAllFlows = async (page: Page) => {
 
     if (await emptyPageDescription.isVisible().catch(() => false)) return;
 
-    const cardCountBeforeDelete = await dropdownMenu.count();
     await dropdownMenu.first().click();
     await page.getByTestId("btn_delete_dropdown_menu").first().click();
     const [deleteResponse] = await Promise.all([
@@ -27,7 +26,13 @@ export const cleanAllFlows = async (page: Page) => {
       page.getByTestId("btn_delete_delete_confirmation_modal").first().click(),
     ]);
     expect(deleteResponse.ok()).toBe(true);
-    await expect(dropdownMenu).toHaveCount(cardCountBeforeDelete - 1);
+    const deletedFlowIds: string[] = deleteResponse.request().postDataJSON();
+    expect(deletedFlowIds).toHaveLength(1);
+    // A full page stays at 12 cards when the next page fills the vacated slot.
+    // Wait for the deleted identity to disappear before opening the next menu.
+    await expect(
+      page.getByTestId(`flow-name-${deletedFlowIds[0]}`),
+    ).toHaveCount(0);
   }
 
   // The final iteration can delete the last flow and fall out of the loop

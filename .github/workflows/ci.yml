@@ -11,7 +11,7 @@ on:
         description: "Python Versions"
         required: false
         type: string
-        default: "['3.10', '3.11', '3.14', '3.15']"
+        default: "['3.10', '3.11', '3.14']"
       frontend-max-shards:
         description: "Maximum concurrent Playwright shards (1-70)"
         required: false
@@ -57,7 +57,7 @@ on:
         description: "Python Versions"
         required: false
         type: string
-        default: "['3.10', '3.11', '3.14', '3.15']"
+        default: "['3.10', '3.11', '3.14']"
       runs-on:
         description: "Runner to use for the tests"
         required: false
@@ -287,7 +287,7 @@ jobs:
       )
     uses: ./.github/workflows/python_test.yml
     with:
-      python-versions: ${{ inputs.python-versions || '["3.10", "3.11", "3.14", "3.15"]' }}
+      python-versions: ${{ inputs.python-versions || '["3.10", "3.11", "3.14"]' }}
       runs-on: ${{ inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
       ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
     secrets:

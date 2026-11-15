@@ -14,7 +14,7 @@ on:
         description: "(Optional) Python versions to test"
         required: false
         type: string
-        default: "['3.10', '3.11', '3.12', '3.13', '3.14', '3.15']"
+        default: "['3.10', '3.11', '3.12', '3.13', '3.14']"
       ref:
         description: "(Optional) ref to checkout"
         required: false
@@ -35,7 +35,7 @@ on:
         description: "(Optional) Python versions to test"
         required: true
         type: string
-        default: "['3.10', '3.11', '3.12', '3.13', '3.14', '3.15']"
+        default: "['3.10', '3.11', '3.12', '3.13', '3.14']"
       runs-on:
         description: "Runner to use for the tests"
         required: false
@@ -58,7 +58,7 @@ jobs:
   build:
     uses: ./.github/workflows/backend-unit-tests.yml
     with:
-      python-versions: ${{ inputs.python-versions || '["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]' }}
+      python-versions: ${{ inputs.python-versions || '["3.10", "3.11", "3.12", "3.13", "3.14"]' }}
       ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
       runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     secrets:
@@ -85,8 +85,8 @@ jobs:
       fail-fast: false
       matrix:
         # Bound fallback coverage to the oldest supported Python, coverage lane,
-        # newest stable release, and non-blocking preview.
-        python-version: ${{ fromJson(inputs.python-versions || '["3.10", "3.11", "3.14", "3.15"]') }}
+        # and newest supported stable release.
+        python-version: ${{ fromJson(inputs.python-versions || '["3.10", "3.11", "3.14"]') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -174,7 +174,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ${{ fromJson(inputs.python-versions || '["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]') }}
+        python-version: ${{ fromJson(inputs.python-versions || '["3.10", "3.11", "3.12", "3.13", "3.14"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -208,7 +208,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ${{ fromJson(inputs.python-versions || '["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]') }}
+        python-version: ${{ fromJson(inputs.python-versions || '["3.10", "3.11", "3.12", "3.13", "3.14"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -228,7 +228,7 @@ jobs:
         uses: ./.github/actions/setup-python-preview
       # The compatibility tests read historical flows and component indexes from these tags.
       - name: Fetch source release tags
-        run: git fetch --depth=1 --force origin tag v1.12.6 tag v1.13.0
+        run: git fetch --depth=1 --force https://github.com/langflow-ai/langflow.git tag v1.12.6 tag v1.13.0
       - name: Run lfx tests
         run: make lfx_tests
         env:
@@ -263,7 +263,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ${{ fromJson(inputs.python-versions || '["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]') }}
+        python-version: ${{ fromJson(inputs.python-versions || '["3.10", "3.11", "3.12", "3.13", "3.14"]') }}
     steps:
       - name: Check out the code at a specific ref
         uses: actions/checkout@v7
