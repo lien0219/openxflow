@@ -63,7 +63,7 @@ QUARTERS.forEach((label, quarter) => {
         // First iteration: the templates modal is already open from the
         // data-collection step above, so skip the homepage round-trip.
         // Subsequent iterations: navigate back from the previous flow via
-        // chevron-left instead of page.goto("/"). page.goto forces a full SPA
+        // chevron-left instead of page.goto("/flows"). page.goto forces a full SPA
         // bundle re-execution which was the dominant per-iteration cost on
         // Linux CI and pushed shard 38 past its 12-minute attempt budget.
         if (idx > 0) {

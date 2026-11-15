@@ -21,9 +21,85 @@ env:
   NODE_VERSION: "22"
 
 jobs:
+  test-shard:
+    name: Jest shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      CI: "true"
+      JEST_CACHE_DIRECTORY: ${{ github.workspace }}/.jest-cache
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: ./src/frontend/package-lock.json
+
+      - name: Install frontend dependencies from the lockfile
+        working-directory: src/frontend
+        run: npm ci
+
+      - name: Restore Jest transform cache
+        uses: actions/cache@v6
+        continue-on-error: true
+        with:
+          path: ${{ env.JEST_CACHE_DIRECTORY }}
+          key: jest-${{ runner.os }}-node-${{ env.NODE_VERSION }}-${{ hashFiles('src/frontend/package-lock.json', 'src/frontend/jest.config.js', 'src/frontend/transform-import-meta.js', 'src/frontend/tsconfig.json') }}-${{ matrix.shard }}-${{ github.sha }}
+          restore-keys: |
+            jest-${{ runner.os }}-node-${{ env.NODE_VERSION }}-${{ hashFiles('src/frontend/package-lock.json', 'src/frontend/jest.config.js', 'src/frontend/transform-import-meta.js', 'src/frontend/tsconfig.json') }}-${{ matrix.shard }}-
+
+      - name: Run i18n Extraction and Parity Check
+        if: matrix.shard == 1
+        working-directory: src/frontend
+        run: npm run check:i18n
+
+      - name: Test the i18n Checker Itself
+        if: matrix.shard == 1
+        working-directory: src/frontend
+        run: npm run test:i18n-checker
+
+      # The four shards are a partition of the complete Jest suite. Keep the
+      # existing a11y exclusion; a11y-unit-tests.yml owns those regression tests.
+      - name: Run Frontend Unit Tests
+        working-directory: src/frontend
+        run: >-
+          npx --no-install jest --ci --coverage --watchAll=false
+          --shard=${{ matrix.shard }}/4 --cacheDirectory="$JEST_CACHE_DIRECTORY"
+          --testPathIgnorePatterns="/node_modules/" "test-utils.tsx" "\.a11y\.test\."
+
+      - name: Retain shard results and raw coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jest-shard-${{ matrix.shard }}
+          overwrite: true
+          path: |
+            src/frontend/coverage/jest/coverage-final.json
+            src/frontend/test-results/junit.xml
+          if-no-files-found: error
+          retention-days: 7
+
+  # Retain the previous check name and artifact contract for branch protection
+  # and CI's combined Jest/Playwright coverage job.
   jest-unit-tests:
     name: Frontend Jest Unit Tests
+    needs: [test-shard]
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: write
@@ -37,35 +113,55 @@ jobs:
 
       - name: Setup Node.js Environment
         uses: actions/setup-node@v7
-        id: setup-node
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-          cache-dependency-path: ./src/frontend/package-lock.json
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
 
-      - name: Run i18n Extraction and Parity Check
+      - name: Install frontend dependencies from the lockfile
         working-directory: src/frontend
-        run: npm run check:i18n
+        run: npm ci
 
-      - name: Test the i18n Checker Itself
+      - name: Check TypeScript
         working-directory: src/frontend
-        run: npm run test:i18n-checker
+        run: npx --no-install tsc --noEmit --pretty false
 
-      - name: Run Frontend Unit Tests
-        run: make test_frontend_ci
+      - name: Download shard results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: jest-shard-*
+          path: jest-shards
+
+      - name: Verify shard results and merge complete coverage
+        working-directory: src/frontend
+        env:
+          SHARD_RESULT: ${{ needs.test-shard.result }}
+        run: |
+          set -euo pipefail
+          mkdir -p coverage/raw coverage/jest
+          for shard in 1 2 3 4; do
+            folder="$GITHUB_WORKSPACE/jest-shards/jest-shard-$shard"
+            test -s "$folder/coverage/jest/coverage-final.json"
+            test -s "$folder/test-results/junit.xml"
+            cp "$folder/coverage/jest/coverage-final.json" "coverage/raw/shard-$shard.json"
+          done
+          test "$SHARD_RESULT" = success
+          npx --no-install nyc merge coverage/raw coverage/jest/coverage-final.json
+          npx --no-install nyc report --temp-dir coverage/jest --report-dir coverage/jest \
+            --reporter=json-summary --reporter=lcov --reporter=html --reporter=text
 
       - name: Publish Jest Test Results
         uses: mikepenz/action-junit-report@v6
-        if: always()
+        if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         with:
-          report_paths: "src/frontend/test-results/junit.xml"
+          report_paths: "jest-shards/**/test-results/junit.xml"
           check_name: "Frontend Unit Test Results"
           fail_on_failure: true
           require_tests: true
 
       - name: Add Jest Coverage PR Comment
         uses: MishaKav/jest-coverage-comment@v1.0.36
-        if: github.event_name == 'pull_request'
+        if: ${{ success() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
         with:
           coverage-summary-path: src/frontend/coverage/jest/coverage-summary.json
           title: Frontend Unit Test Coverage Report
@@ -75,12 +171,11 @@ jobs:
           create-new-comment: false
           hide-summary: false
           junitxml-title: Unit Test Results
-          junitxml-path: src/frontend/test-results/junit.xml
 
       - name: Upload Jest Coverage Artifact
         uses: actions/upload-artifact@v7
-        if: always()
         with:
           name: jest-coverage
+          overwrite: true
           path: src/frontend/coverage/jest
           retention-days: 30

@@ -11,6 +11,6 @@ export function ProtectedPermissionRoute({
   const { canReadRbac, isLoading } = useRbacAccess();
 
   if (isLoading) return <LoadingPage />;
-  if (!canReadRbac) return <CustomNavigate to="/" replace />;
+  if (!canReadRbac) return <CustomNavigate to="/flows" replace />;
   return children;
 }

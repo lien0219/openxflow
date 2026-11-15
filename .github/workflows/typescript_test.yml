@@ -30,6 +30,11 @@ on:
         required: false
         type: string
         default: "tests"
+      max-shards:
+        description: "Maximum Playwright shards (1-70); all selected tests still run"
+        required: false
+        type: number
+        default: 16
       ref:
         description: "(Optional) ref to checkout"
         required: false
@@ -51,6 +56,11 @@ on:
         default: false
   workflow_dispatch:
     inputs:
+      max-shards:
+        description: "Maximum Playwright shards (1-70); all selected tests still run"
+        required: false
+        type: number
+        default: 16
       suites:
         description: "Test suites to run (JSON array)"
         required: false
@@ -124,6 +134,11 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v4
         with:
+          # Use the checkout for PR diffs so reusable callers do not need to
+          # grant pull-requests API permissions to every browser-test job.
+          token: ""
+          base: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && github.ref) || '' }}
+          ref: ${{ github.event_name == 'push' && github.ref || inputs.ref || github.event.pull_request.head.sha || github.sha }}
           filters: .github/changes-filter.yaml
 
       - name: Determine Test Suites from Changes
@@ -236,6 +251,7 @@ jobs:
         env:
           TESTS_FOLDER: ${{ inputs.tests_folder }}
           TEST_GREP: ${{ steps.set-matrix.outputs.test_grep }}
+          MAX_SHARDS: ${{ inputs.max-shards }}
         run: |
           set -euo pipefail
           cd src/frontend
@@ -249,12 +265,12 @@ jobs:
           [[ -z "$TEST_GREP" ]] || command+=(--grep "$TEST_GREP")
           # `--list` prints a "Listing tests:" header and a "Total: N tests in M
           # files" footer, so `wc -l` over-counts and over-shards.  Parse the
-          # footer instead, and treat a zero-match grep as zero tests rather than
-          # letting Playwright's non-zero exit kill the step under `set -e`.
+          # footer instead. A collection error or empty selection must fail
+          # planning: it is not evidence that a test suite ran successfully.
           if ! list_output=$("${command[@]}" --list 2>&1); then
             printf '%s\n' "$list_output"
-            echo "No tests matched grep='$TEST_GREP' in '$TESTS_FOLDER'; using a single shard."
-            TEST_COUNT=0
+            echo "Unable to collect tests for grep='$TEST_GREP' in '$TESTS_FOLDER'." >&2
+            exit 1
           else
             printf '%s\n' "$list_output"
             TEST_COUNT=$(printf '%s\n' "$list_output" \
@@ -264,25 +280,10 @@ jobs:
 
           echo "Total tests to run: $TEST_COUNT"
 
-          # Calculate optimal shard count - 1 shard per 5 tests, min 1, max 70
-          SHARD_COUNT=$(( (TEST_COUNT + 4) / 5 ))
-          if [ $SHARD_COUNT -lt 1 ]; then
-            SHARD_COUNT=1
-          elif [ $SHARD_COUNT -gt 70 ]; then
-            SHARD_COUNT=70
-          fi
-
-          # Create the matrix combinations string
-          MATRIX_COMBINATIONS=""
-          for i in $(seq 1 $SHARD_COUNT); do
-            if [ $i -gt 1 ]; then
-              MATRIX_COMBINATIONS="$MATRIX_COMBINATIONS,"
-            fi
-            MATRIX_COMBINATIONS="$MATRIX_COMBINATIONS{\"shardIndex\": $i, \"shardTotal\": $SHARD_COUNT}"
-          done
-
-          echo "matrix={\"include\":[$MATRIX_COMBINATIONS]}" >> "$GITHUB_OUTPUT"
-          echo "shard_count=$SHARD_COUNT" >> "$GITHUB_OUTPUT"
+          # Twenty tests per runner amortizes dependency and application startup.
+          # Bound ordinary runs to 16 runners; manual/release callers can tune
+          # this up to 70 without changing the selected test set.
+          node ../../scripts/ci/playwright_matrix.mjs "$TEST_COUNT" "${MAX_SHARDS:-16}" >> "$GITHUB_OUTPUT"
 
   setup-and-test:
     name: Playwright Tests - Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
@@ -390,7 +391,7 @@ jobs:
         run: uvx --with 'mcp~=1.28' mcp-proxy --help > /dev/null
 
       - name: Execute Playwright Tests
-        timeout-minutes: 18
+        timeout-minutes: 30
         shell: bash
         env:
           SERVER_LOG: playwright-server-${{ runner.os }}-${{ matrix.shardIndex }}-${{ github.run_attempt }}.log
@@ -416,7 +417,7 @@ jobs:
             WORKERS=1
           fi
 
-          command=("${base_command[@]}" --trace on --shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --workers "$WORKERS" --retries=1)
+          command=("${base_command[@]}" --trace retain-on-failure --shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --workers "$WORKERS" --retries=1)
           printf 'Running:'
           printf ' %q' "${command[@]}"
           printf '\n'

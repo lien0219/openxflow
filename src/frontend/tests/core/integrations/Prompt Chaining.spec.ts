@@ -6,7 +6,7 @@ withEventDeliveryModes(
   "Sequential Tasks Agents",
   { tag: ["@release", "@starter-projects"] },
   async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/flows");
     await openStarterProject(page, "Sequential Tasks Agents");
 
     await page.waitForSelector('[data-testid="canvas_controls_dropdown"]', {

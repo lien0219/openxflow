@@ -31,7 +31,7 @@ async function hideComponentSidebar(page: LangflowPage) {
 }
 
 async function openBlankFlowForA11y(page: LangflowPage) {
-  await page.goto("/");
+  await page.goto("/flows");
   await expect(page.getByTestId(TID.mainpageTitle)).toBeVisible({
     timeout: TIMEOUTS.standard,
   });

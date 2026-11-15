@@ -15,7 +15,7 @@ export const awaitBootstrapTest = async (
 ) => {
   const prepareMainPage = async (shouldGoto: boolean) => {
     if (shouldGoto) {
-      await page.goto("/");
+      await page.goto("/flows");
     }
 
     await page.waitForSelector('[data-testid="mainpage_title"]', {

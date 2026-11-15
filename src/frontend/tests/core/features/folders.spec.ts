@@ -80,7 +80,7 @@ test(
 );
 
 test("add a flow into a folder by drag and drop", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/flows");
 
   await page.waitForSelector("text=New Flow", {
     timeout: 50000,

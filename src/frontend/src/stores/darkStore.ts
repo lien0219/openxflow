@@ -24,8 +24,9 @@ const storedThemePreset = getStoredValue("themePreset");
 
 export const useDarkStore = create<DarkStoreType>((set, get) => ({
   dark: (() => {
-    const stored = getStoredValue("isDark");
-    if (stored !== null) return stored === "true";
+    const preference = getStoredValue("themePreference");
+    if (preference === "light" || preference === "dark")
+      return preference === "dark";
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   })(),
   themePreset: isThemePreset(storedThemePreset)

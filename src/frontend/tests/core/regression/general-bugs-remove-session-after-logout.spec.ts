@@ -34,7 +34,7 @@ test(
       sessionStorage.setItem("testMockAutoLogin", "true");
     });
 
-    await page.goto("/");
+    await page.goto("/flows");
 
     await expect(page.getByRole("button", { name: TEXTS.signIn })).toBeVisible({
       timeout: 30000,

@@ -14,7 +14,7 @@ test(
   { tag: ["@release", "@workspace"] },
   async ({ page }) => {
     const returnToHome = async () => {
-      await page.goto("/");
+      await page.goto("/flows");
       await waitForMainPageReady(page);
       await waitForNewProjectButton(page);
     };

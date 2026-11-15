@@ -336,7 +336,7 @@ test(
 
     // Give the page a real app origin before issuing a synthetic fetch.
     // Relative fetches from about:blank won't emit the request we assert on.
-    await page.goto("/");
+    await page.goto("/flows");
 
     // Since there is no UI for names filter yet, trigger the request directly
     // and verify the query contract.

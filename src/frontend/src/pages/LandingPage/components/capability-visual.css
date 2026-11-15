@@ -1,0 +1,202 @@
+.landing-card-art {
+  position: relative;
+  display: flex;
+  min-height: 160px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 22px;
+  margin: 12px 14px 16px;
+  padding: 24px 14px 18px;
+  border: 1px solid hsl(var(--foreground) / 0.06);
+  border-radius: 16px;
+  background-color: hsl(var(--background) / 0.3);
+  background-image: radial-gradient(
+    hsl(var(--canvas-dot) / 0.3) 0.6px,
+    transparent 0.6px
+  );
+  background-size: 14px 14px;
+  grid-area: art;
+}
+
+.landing-card-art-knowledge {
+  --landing-accent: hsl(var(--accent-blue-foreground));
+}
+
+.landing-card-art-integration {
+  --landing-accent: hsl(var(--accent-emerald-foreground));
+}
+
+.landing-mini-pipeline {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+  align-items: center;
+}
+
+.landing-mini-step {
+  position: relative;
+  min-width: 0;
+}
+
+.landing-mini-node {
+  position: relative;
+  display: flex;
+  min-height: 76px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 13px 4px;
+  border: 1px solid hsl(var(--foreground) / 0.1);
+  border-radius: 12px;
+  background: hsl(var(--background) / 0.86);
+  box-shadow: 0 5px 12px -8px hsl(var(--foreground) / 0.18);
+  transition:
+    border-color 400ms,
+    box-shadow 400ms,
+    transform 400ms;
+}
+
+.landing-mini-node > svg {
+  width: 19px;
+  height: 19px;
+  color: var(--landing-accent);
+}
+
+.landing-mini-node > span {
+  max-width: 100%;
+  color: hsl(var(--foreground) / 0.76);
+  font-size: 9px;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.landing-mini-node > i {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid hsl(var(--background));
+  border-radius: 50%;
+  background: hsl(var(--foreground) / 0.22);
+}
+
+.landing-mini-step[data-active="true"] .landing-mini-node {
+  transform: translateY(-3px);
+  border-color: var(--landing-accent);
+  box-shadow: 0 8px 22px -14px var(--landing-accent);
+}
+
+.landing-mini-step:is([data-active="true"], [data-complete="true"])
+  .landing-mini-node
+  > i {
+  background: var(--landing-accent);
+}
+
+.landing-mini-connector {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 22px;
+  height: 24px;
+  transform: translateY(-50%);
+}
+
+.landing-mini-progress {
+  display: flex;
+  width: 48%;
+  height: 2px;
+  gap: 5px;
+  margin: 0 auto;
+}
+
+.landing-mini-progress > span {
+  flex: 1;
+  border-radius: 2px;
+  background: hsl(var(--foreground) / 0.09);
+  transition: background 400ms;
+}
+
+.landing-mini-progress > [data-active="true"] {
+  background: var(--landing-accent);
+}
+
+.landing-capability-caption {
+  display: flex;
+  min-height: 56px;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: auto;
+  padding: 0 24px 24px;
+  color: var(--landing-soft-ink);
+  font-size: 11px;
+  line-height: 1.7;
+  grid-area: caption;
+}
+
+.landing-caption-dot {
+  position: relative;
+  top: -1px;
+  width: 4px;
+  height: 4px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--landing-accent);
+}
+
+.landing-capability-bridge {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 100%;
+  width: 36px;
+  transform: translateY(-50%);
+}
+
+@media (max-width: 1050px) and (min-width: 801px) {
+  .landing-card-art {
+    margin-right: 10px;
+    margin-left: 10px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .landing-mini-pipeline {
+    gap: 16px;
+  }
+
+  .landing-mini-connector {
+    width: 16px;
+  }
+}
+
+@media (max-width: 800px) {
+  .landing-card-art {
+    margin: 20px;
+  }
+
+  .landing-capability-bridge {
+    top: 100%;
+    left: 50%;
+    width: 28px;
+    transform: rotate(90deg) translateY(-50%);
+    transform-origin: 0 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .landing-card-art {
+    width: calc(100% - 36px);
+    min-height: 150px;
+    margin: 20px 18px 16px;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .landing-capability-caption {
+    width: 100%;
+    min-height: 60px;
+  }
+}

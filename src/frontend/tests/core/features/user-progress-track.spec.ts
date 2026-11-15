@@ -9,7 +9,7 @@ test(
   "admin user can use the empty-state getting-started actions",
   { tag: ["@release", "@api"] },
   async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/flows");
     await gettingStartedActionsTestFn(page);
   },
 );

@@ -62,7 +62,7 @@ export default function AppHeader(): JSX.Element {
       >
         <Button
           unstyled
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/flows")}
           className="mr-1 flex h-8 items-center gap-2 rounded-md px-1"
           data-testid="icon-ChevronLeft"
           aria-label={`${t("header.home")} OpenXFlow`}

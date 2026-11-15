@@ -21,7 +21,7 @@ import { sessionMoreMenu } from "../../utils/playground/sessions";
 async function setupAutoLoginOff(page: Page): Promise<void> {
   await mockAutoLoginDisabled(page);
 
-  await page.goto("/");
+  await page.goto("/flows");
   await expect(page.getByRole("button", { name: TEXTS.signIn })).toBeVisible({
     timeout: TIMEOUTS.standard,
   });

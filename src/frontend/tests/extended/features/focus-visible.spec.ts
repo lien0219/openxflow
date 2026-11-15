@@ -132,7 +132,7 @@ test(
   "canvas controls — add note, zoom, and fit view buttons show focus ring when tabbed to",
   { tag: ["@release", "@workspace"] },
   async ({ page }, testInfo) => {
-    await page.goto("/");
+    await page.goto("/flows");
     await page.waitForLoadState("networkidle");
 
     const controlTestIds = [
@@ -156,7 +156,7 @@ test(
   "dropdown trigger shows focus ring on keyboard focus",
   { tag: ["@release", "@workspace"] },
   async ({ page }, testInfo) => {
-    await page.goto("/");
+    await page.goto("/flows");
     await page.waitForLoadState("networkidle");
 
     // Find any visible button-role element and tab to it

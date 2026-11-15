@@ -35,7 +35,7 @@ export const addNewUserAndLogin = async (page: LangflowPage) => {
   const randomName = Math.random().toString(36).substring(5);
   const randomPassword = Math.random().toString(36).substring(5);
 
-  await page.goto("/");
+  await page.goto("/flows");
 
   await expect(page.getByRole("button", { name: TEXTS.signIn })).toBeVisible({
     timeout: 30000,

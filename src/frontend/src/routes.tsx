@@ -26,6 +26,7 @@ import { AppAuthenticatedPage } from "./pages/AppAuthenticatedPage";
 import { AppInitPage } from "./pages/AppInitPage";
 import { AppWrapperPage } from "./pages/AppWrapperPage";
 import FlowPage from "./pages/FlowPage";
+import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import FilesPage from "./pages/MainPage/pages/filesPage";
 import HomePage from "./pages/MainPage/pages/homePage";
@@ -75,6 +76,7 @@ const router = createBrowserRouter(
         </ContextWrapper>
       }
     >
+      <Route index element={<LandingPage />} />
       <Route path="" element={<AppInitPage />}>
         <Route path="" element={<AppWrapperPage />}>
           <Route
@@ -88,10 +90,6 @@ const router = createBrowserRouter(
             <Route path="" element={<AppAuthenticatedPage />}>
               <Route path="" element={<CustomDashboardWrapperPage />}>
                 <Route path="" element={<CollectionPage />}>
-                  <Route
-                    index
-                    element={<CustomNavigate replace to={"flows"} />}
-                  />
                   {ENABLE_FILE_MANAGEMENT && (
                     <Route path="assets">
                       <Route

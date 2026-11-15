@@ -12,11 +12,16 @@ on:
         required: false
         type: string
         default: "['3.10', '3.14']"
+      frontend-max-shards:
+        description: "Maximum concurrent Playwright shards (1-70)"
+        required: false
+        type: number
+        default: 16
       frontend-tests-folder:
         description: "Frontend Tests Folder"
         required: false
         type: string
-        default: "tests/core"
+        default: "tests"
       release:
         description: "Release"
         required: false
@@ -34,6 +39,16 @@ on:
         default: "ubuntu-latest"
   workflow_dispatch:
     inputs:
+      run-all-tests:
+        description: "Run the complete CI job set regardless of file changes"
+        required: false
+        type: boolean
+        default: false
+      frontend-max-shards:
+        description: "Maximum concurrent Playwright shards (1-70)"
+        required: false
+        type: number
+        default: 16
       ref:
         description: "(Optional) Ref to checkout"
         required: false
@@ -55,30 +70,16 @@ on:
   pull_request:
     # ready_for_review matters: every job below is gated on the PR not being a draft, so a PR
     # opened as a draft and later marked ready has no run where that gate was ever true.
-    types: [opened, synchronize, labeled, ready_for_review]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
   merge_group:
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ inputs.ref || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  echo-inputs:
-    name: Echo Inputs
-    runs-on: ubuntu-latest
-    steps:
-      - name: Echo inputs
-        run: |
-          echo "Inputs:"
-          echo "  ref: ${{ inputs.ref }}"
-          echo "  python-versions: ${{ inputs.python-versions }}"
-          echo "  frontend-tests-folder: ${{ inputs.frontend-tests-folder }}"
-          echo "  release: ${{ inputs.release }}"
-          echo "  run-all-tests: ${{ inputs.run-all-tests }}"
-          echo "  runs-on: ${{ inputs.runs-on }}"
-
   validate-pr-title:
     name: Validate PR Title
     if: ${{ github.event_name == 'pull_request' }}
@@ -183,25 +184,30 @@ jobs:
     name: Should Run CI
     runs-on: ubuntu-latest
     outputs:
-      should-run-ci: ${{ github.event.pull_request.draft == false || (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'merge_group') }}
-      should-run-tests: ${{ !contains(github.event.pull_request.labels.*.name, 'fast-track') || github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' }}
+      should-run-ci: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+      should-run-tests: ${{ github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'fast-track') || inputs.run-all-tests }}
     steps:
-      #  Do anything just to make the job run
-      - run: echo "Debug CI Condition"
-      - run: echo "Labels -> ${{ join(github.event.pull_request.labels.*.name, ',') }}"
-      - run: echo "IsDraft -> ${{ github.event.pull_request.draft }}"
-      - run: echo "Event name -> ${{ github.event_name }}"
-      - run: echo "Should run ci -> ${{ (github.event.pull_request.draft == false) || (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'merge_group') }}"
-      - run: echo "Should run tests -> ${{ !contains(github.event.pull_request.labels.*.name, 'fast-track') || github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' }}"
+      - name: Summarize CI inputs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUTS_JSON: ${{ toJSON(inputs) }}
+        run: |
+          echo "Event: $EVENT_NAME"
+          echo "$INPUTS_JSON"
 
   path-filter:
     needs: set-ci-condition
     if: ${{ needs.set-ci-condition.outputs.should-run-ci == 'true' && !inputs.run-all-tests }}
     name: Filter Paths
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       python: ${{ steps.filter.outputs.python }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      browser: ${{ steps.filter.outputs.browser }}
+      templates: ${{ steps.filter.outputs.templates }}
       docs: ${{ steps.filter.outputs.docs }}
       frontend-tests: ${{ steps.filter.outputs.frontend-tests }}
       components-changes: ${{ steps.filter.outputs.components-changes }}
@@ -218,6 +224,8 @@ jobs:
         steps.filter.outputs.docs == 'true' &&
         steps.filter.outputs.python != 'true' &&
         steps.filter.outputs.frontend != 'true' &&
+        steps.filter.outputs.browser != 'true' &&
+        steps.filter.outputs.templates != 'true' &&
         steps.filter.outputs['frontend-tests'] != 'true' &&
         steps.filter.outputs['components-changes'] != 'true' &&
         steps.filter.outputs['starter-projects-changes'] != 'true' &&
@@ -238,6 +246,10 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v4
         with:
+          # A branch push compares with its previous head, rather than main.
+          # PR and merge-queue events keep their own base detection.
+          base: ${{ github.event_name == 'push' && github.ref || '' }}
+          ref: ${{ github.event_name == 'push' && github.ref || inputs.ref || github.sha }}
           filters: ./.github/changes-filter.yaml
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -250,9 +262,10 @@ jobs:
       - name: Validate Filter Coverage
         continue-on-error: true
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
         run: |
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          BASE_REF="${{ github.event.pull_request.base.ref || 'main' }}"
           # Ensure base commit is present locally
           git fetch --no-tags --depth=1 origin "$BASE_REF" || true
           git fetch --no-tags --depth=1 origin "$BASE_SHA" || true
@@ -315,7 +328,7 @@ jobs:
       (
         inputs.run-all-tests ||
         (needs.path-filter.result != 'skipped' &&
-        needs.path-filter.outputs.docs-only != 'true')
+        needs.path-filter.outputs.frontend == 'true')
       )
     uses: ./.github/workflows/jest_test.yml
     with:
@@ -333,12 +346,13 @@ jobs:
       (
         inputs.run-all-tests ||
         (needs.path-filter.result != 'skipped' &&
-        needs.path-filter.outputs.docs-only != 'true')
+        needs.path-filter.outputs.browser == 'true')
       )
     uses: ./.github/workflows/typescript_test.yml
     with:
-      tests_folder: ${{ inputs.frontend-tests-folder }}
-      release: ${{ inputs.release || false }}
+      tests_folder: ${{ inputs.frontend-tests-folder || 'tests' }}
+      max-shards: ${{ inputs.frontend-max-shards || 16 }}
+      release: ${{ inputs.release || inputs.run-all-tests || false }}
       runs-on: ${{ inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
       ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
   test-docs-build:
@@ -359,7 +373,7 @@ jobs:
       always() &&
       !cancelled() &&
       needs.set-ci-condition.outputs.should-run-tests == 'true' &&
-      (inputs.run-all-tests || needs.path-filter.outputs.python == 'true' || needs.path-filter.outputs.frontend == 'true')
+      (inputs.run-all-tests || needs.path-filter.outputs.templates == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -388,7 +402,7 @@ jobs:
   test-docker:
     needs: [path-filter, set-ci-condition]
     name: Test Docker Images
-    if: ${{ needs.path-filter.outputs.docker == 'true' && needs.set-ci-condition.outputs.should-run-tests == 'true' }}
+    if: ${{ always() && !cancelled() && needs.set-ci-condition.outputs.should-run-tests == 'true' && (inputs.run-all-tests || needs.path-filter.outputs.docker == 'true') }}
     uses: ./.github/workflows/docker_test.yml
     with:
       ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
@@ -478,7 +492,7 @@ jobs:
       (
         inputs.run-all-tests ||
         (needs.path-filter.result != 'skipped' &&
-        needs.path-filter.outputs.docs-only != 'true')
+        (needs.path-filter.outputs.frontend == 'true' || needs.path-filter.outputs.browser == 'true'))
       )
     runs-on: ubuntu-latest
     steps:

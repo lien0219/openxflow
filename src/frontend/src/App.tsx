@@ -1,5 +1,5 @@
 import "@xyflow/react/dist/style.css";
-import { Suspense, useEffect } from "react";
+import { Suspense, useLayoutEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { LoadingPage } from "./pages/LoadingPage";
 import router from "./routes";
@@ -19,7 +19,7 @@ export default function App() {
     themePreset: state.themePreset,
   }));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const body = document.getElementById("body");
     const root = document.documentElement;
     const presetAppearance =
@@ -30,6 +30,7 @@ export default function App() {
     root.classList.toggle("dark", resolvedDark);
     root.dataset.theme = themePreset;
     root.dataset.appearance = resolvedDark ? "dark" : "light";
+    root.style.colorScheme = resolvedDark ? "dark" : "light";
   }, [dark, themePreset]);
 
   return (

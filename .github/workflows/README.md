@@ -1,3 +1,44 @@
+# OpenXFlow CI
+
+Every branch push starts `branch-ci.yml`, including commits made without an
+open PR. It calls the same change-aware `ci.yml` used by PRs. If an open,
+non-draft PR already has a CI run for the exact commit, the branch workflow
+points to that validation in its summary and avoids running it twice. A missing,
+cancelled or skipped PR run does not suppress branch validation. An event race
+may start both runs; it must never leave a commit without validation.
+
+PR CI handles opening, updates, reopening, becoming ready, and label changes.
+Newer commits cancel older runs. `CI / CI Success` keeps its existing name and
+continues to reject failed/cancelled tests or a missing path-filter decision.
+Branch checks have their own workflow context and do not replace the PR gate.
+
+| Change | CI work selected |
+| --- | --- |
+| Frontend sources, tests, frontend Makefile | Frontend lint, complete Jest suite, matching browser suites |
+| Backend, LFX, bundles, core or SDK | Backend tests; browser suites when application code changes |
+| Template inputs, components or template runtime | Starter-template validation |
+| Docker inputs or packaged application sources | Docker image checks |
+| Documentation | Documentation build |
+
+Jest partitions the existing suite into four shards, checks every shard's JUnit
+and raw coverage output, then merges coverage into the existing `jest-coverage`
+artifact. Its accessibility exclusions are unchanged; the separate component
+accessibility workflow owns those tests. TypeScript and i18n checks remain
+blocking. Dependency installation uses `npm ci`, with a reusable transform cache.
+
+Playwright runs every test in the selected suites, using approximately twenty
+tests per shard and at most sixteen shards by default. Failed-test traces are
+retained; passing-test traces are discarded to reduce report transfer and merge
+cost. Collection failures and incomplete reports still fail CI. For larger
+runners or exhaustive runs, set `frontend-max-shards` in CI (or `max-shards` in
+the reusable browser workflow) to an integer between 1 and 70.
+
+For a full manual Actions run, select **CI → Run workflow → run-all-tests**.
+This bypasses change filtering, selects the release browser suite and includes
+Docker checks. Set `python-versions` to all supported versions when testing the
+full compatibility matrix. Release callers retain their explicit full matrices,
+image verification, vulnerability scans and publication gates.
+
 # OpenXFlow publication boundary
 
 The sole OpenXFlow production publication entry point is

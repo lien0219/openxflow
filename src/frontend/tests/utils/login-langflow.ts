@@ -18,7 +18,7 @@ export async function submitLoginAndRequireSuccess(page: Page): Promise<void> {
 }
 
 export const loginLangflow = async (page: Page) => {
-  await page.goto("/");
+  await page.goto("/flows");
   await page
     .getByPlaceholder(TEXTS.placeholderUsername)
     .fill(TEXTS.authDefaultCredential);

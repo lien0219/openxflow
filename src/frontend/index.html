@@ -4,6 +4,52 @@
     <base href="/" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Resolve the theme before styles and application modules can paint.
+      (() => {
+        const readPreference = (key) => {
+          try {
+            return localStorage.getItem(key);
+          } catch {
+            return null;
+          }
+        };
+        const appearances = {
+          classic: null,
+          nebula: "dark",
+          polar: "light",
+          terminal: "dark",
+          bloom: "light",
+          aurora: "dark",
+        };
+        const storedPreset = readPreference("themePreset");
+        const preset = Object.prototype.hasOwnProperty.call(
+          appearances,
+          storedPreset,
+        )
+          ? storedPreset
+          : "classic";
+        const preference = readPreference("themePreference");
+        const dark =
+          preference === "dark" ||
+          (preference !== "light" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        const appearance = appearances[preset] || (dark ? "dark" : "light");
+        const root = document.documentElement;
+        root.classList.toggle("dark", appearance === "dark");
+        root.dataset.theme = preset;
+        root.dataset.appearance = appearance;
+        root.style.colorScheme = appearance;
+      })();
+    </script>
+    <style>
+      html {
+        background: hsl(var(--background, 0 0% 100%));
+      }
+      html.dark {
+        background: hsl(var(--background, 240 6% 10%));
+      }
+    </style>
     <link rel="icon" href="/favicon.ico" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -18,7 +64,7 @@
     ></script>
     <title>OpenXFlow</title>
   </head>
-  <body id="body" class="dark" style="width: 100%; height: 100%">
+  <body id="body" style="width: 100%; height: 100%">
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div style="width: 100vw; height: 100vh" id="root"></div>
     <script type="module" src="/src/index.tsx"></script>

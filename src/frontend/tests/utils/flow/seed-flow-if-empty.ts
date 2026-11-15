@@ -69,7 +69,7 @@ async function waitForConcurrentSeed(page: Page): Promise<void> {
     )
     .toBe(true);
 
-  await page.goto("/");
+  await page.goto("/flows");
   await expect(page.getByTestId(TID.mainpageTitle)).toBeVisible({
     timeout: TIMEOUTS.standard,
   });
@@ -130,7 +130,7 @@ export async function seedFlowIfEmpty(page: Page): Promise<boolean> {
     ).toBeTruthy();
     await selectStarterTemplate(page, SEEDED_FLOW_NAME);
     await waitForFlowEditorReady(page);
-    await page.goto("/");
+    await page.goto("/flows");
     await expect(page.getByTestId(TID.mainpageTitle)).toBeVisible({
       timeout: TIMEOUTS.standard,
     });

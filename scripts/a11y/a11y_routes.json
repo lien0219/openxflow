@@ -9,6 +9,12 @@
   ],
   "static": [
     {
+      "id": "landing",
+      "path": "/",
+      "surface": "Public homepage",
+      "ready": [{ "testId": "landing-title" }]
+    },
+    {
       "id": "flows",
       "path": "/flows",
       "surface": "Flows list",
@@ -175,11 +181,6 @@
   ],
   "excluded": [
     {
-      "path": "/",
-      "canonical": "/flows",
-      "reason": "Runtime redirect to /flows."
-    },
-    {
       "path": "/all",
       "canonical": "/flows",
       "reason": "Same HomePage surface with type=flows in route source."
@@ -221,8 +222,8 @@
     },
     {
       "path": "*",
-      "canonical": "/flows",
-      "reason": "Fallback redirect chain ends at /flows."
+      "canonical": "/",
+      "reason": "Fallback redirect to the public homepage."
     }
   ]
 }

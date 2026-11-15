@@ -48,7 +48,7 @@ for (const template of TEMPLATES) {
     { tag: ["@release", "@starter-projects"] },
     async ({ page }) => {
       await seedLoopbackProvider(page);
-      await page.goto("/");
+      await page.goto("/flows");
 
       if ((template.open ?? "starter") === "heading") {
         await awaitBootstrapTest(page);

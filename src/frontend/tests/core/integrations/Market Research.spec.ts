@@ -6,7 +6,7 @@ withEventDeliveryModes(
   "Market Research",
   { tag: ["@release", "@starter-projects"] },
   async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/flows");
     await openStarterProject(page, "Market Research");
 
     await page.waitForSelector('[data-testid="canvas_controls_dropdown"]', {

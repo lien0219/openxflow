@@ -75,7 +75,7 @@ test(
   "user should be able to upload a flow or a component",
   { tag: ["@release", "@api", "@workspace"] },
   async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/flows");
     await page.waitForSelector('[data-testid="mainpage_title"]', {
       timeout: 30000,
     });
