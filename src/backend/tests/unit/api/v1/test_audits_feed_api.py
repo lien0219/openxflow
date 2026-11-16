@@ -6,9 +6,11 @@ is windowed around them, so events the login itself records never interfere.
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import json
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
@@ -337,7 +339,9 @@ async def test_the_export_releases_its_connection_between_batches(client, logged
     Asserted on the pool, not on the rows: ``expunge_all()`` runs before the
     scope closes either way, so detached rows prove nothing about whether the
     connection went back. Pool checkout/checkin events also cover SQLite's
-    NullPool, which has no ``checkedout()`` counter.
+    NullPool, which has no ``checkedout()`` counter. Only checkouts from the
+    export context count, including its pool helper tasks; application
+    background readers share the same pool.
     """
     from langflow.services.audit.feed import AuditFeedFilters, iter_feed_batches_per_session
     from langflow.services.deps import get_db_service
@@ -349,15 +353,24 @@ async def test_the_export_releases_its_connection_between_batches(client, logged
     )
     pool = get_db_service().engine.pool
     checked_out = set()
+    exporting = ContextVar("audit_export_connection", default=False)
 
     def checkout(_connection, record, _proxy):
-        checked_out.add(record)
+        if exporting.get():
+            checked_out.add(record)
 
     def checkin(_connection, record):
         checked_out.discard(record)
 
     event.listen(pool, "checkout", checkout)
     event.listen(pool, "checkin", checkin)
+
+    async def another_reader():
+        return await get_db_service().engine.connect()
+
+    # A different application task may keep its own connection across a batch.
+    other_connection = await asyncio.create_task(another_reader())
+    export_token = exporting.set(True)
     batches = 0
     try:
         async for batch in iter_feed_batches_per_session(filters, batch_size=2):
@@ -365,6 +378,8 @@ async def test_the_export_releases_its_connection_between_batches(client, logged
             assert not checked_out, "the walk is holding a connection while the client reads"
             assert all(feed_row.row.action for feed_row in batch), "the rows are still readable"
     finally:
+        exporting.reset(export_token)
+        await other_connection.close()
         event.remove(pool, "checkout", checkout)
         event.remove(pool, "checkin", checkin)
 

@@ -94,6 +94,34 @@ def locked_packages(environment: dict[str, str]) -> dict[str, str]:
     return packages
 
 
+@pytest.mark.parametrize("python", ["3.10.20", "3.11.0", "3.11.4", "3.11.5", "3.14.0"])
+def test_soupsieve_security_floor_preserves_older_interpreters(python: str) -> None:
+    """Patch CSS selector denial of service wherever Soup Sieve 4 supports Python."""
+    environment = {
+        "python_version": ".".join(python.split(".")[:2]),
+        "python_full_version": python,
+        "sys_platform": "linux",
+    }
+    project = tomllib.loads((ROOT / "src/lfx/pyproject.toml").read_text())["project"]
+    requirements = [
+        requirement
+        for value in project["dependencies"]
+        if (requirement := Requirement(value)).name == "soupsieve"
+        and (requirement.marker is None or requirement.marker.evaluate(environment))
+    ]
+    packages = locked_packages(environment)
+    if Version(python) < Version("3.11.5"):
+        assert not requirements
+        assert Version(packages["soupsieve"]) < Version("4.0")
+    else:
+        assert len(requirements) == 1
+        assert "2.9.1" not in requirements[0].specifier
+        assert "3.0.2" not in requirements[0].specifier
+        assert "4.0" in requirements[0].specifier
+        assert "5.0" not in requirements[0].specifier
+        assert Version(packages["soupsieve"]) >= Version("4.0")
+
+
 @pytest.mark.parametrize("python", ["3.10", "3.11", "3.14"])
 @pytest.mark.parametrize("platform", ["linux", "darwin", "win32"])
 def test_fixed_dependencies_resolve_on_every_supported_python_line(python: str, platform: str) -> None:

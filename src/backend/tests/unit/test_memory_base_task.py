@@ -726,6 +726,8 @@ async def ingestion_job_store(tmp_path, monkeypatch):
             yield session
 
     monkeypatch.setattr("langflow.services.jobs.service.session_scope", job_session)
+    monkeypatch.setattr("langflow.services.memory_base.task.session_scope", job_session)
+    monkeypatch.setattr("langflow.services.memory_base.task._is_postgres", AsyncMock(return_value=False))
     try:
         yield JobService()
     finally:
@@ -763,6 +765,7 @@ class TestIngestMemoryTaskEdgeCases:
 
         backend = AsyncMock()
         with (
+            patch("langflow.services.memory_base.task._read_live_session_id", AsyncMock(return_value=uuid.uuid4())),
             patch("langflow.services.memory_base.task._read_live_cursor", AsyncMock(return_value=None)),
             patch(
                 "langflow.services.memory_base.task._fetch_pending_messages",
