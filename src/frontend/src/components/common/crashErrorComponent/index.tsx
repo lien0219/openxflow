@@ -1,5 +1,6 @@
 import { XCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import type { crashComponentPropsType } from "../../../types/components";
 import { Button } from "../../ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "../../ui/card";
@@ -29,24 +30,26 @@ export default function CrashErrorComponent({
               </div>
             </CardHeader>
 
-            <CardContent className="grid">
-              <div>
-                <p>
-                  {t("crash.descriptionBefore")}{" "}
-                  <a
-                    href="https://github.com/lien0219/openxflow/issues"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium hover:underline"
-                  >
-                    {t("crash.githubIssues")}
-                  </a>{" "}
-                  {t("crash.descriptionAfter")}
-                  <br></br>
-                  {t("crash.thankYou")}
-                </p>
-              </div>
-            </CardContent>
+            {ENABLE_EXTERNAL_LINKS && (
+              <CardContent className="grid">
+                <div>
+                  <p>
+                    {t("crash.descriptionBefore")}{" "}
+                    <a
+                      href="https://github.com/lien0219/openxflow/issues"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium hover:underline"
+                    >
+                      {t("crash.githubIssues")}
+                    </a>{" "}
+                    {t("crash.descriptionAfter")}
+                    <br></br>
+                    {t("crash.thankYou")}
+                  </p>
+                </div>
+              </CardContent>
+            )}
 
             <CardFooter>
               <div className="m-auto mt-4 flex justify-center">
@@ -54,15 +57,17 @@ export default function CrashErrorComponent({
                   {t("crash.restartButton")}
                 </Button>
 
-                <Button className="ml-3" variant="outline" asChild>
-                  <a
-                    href="https://github.com/lien0219/openxflow/issues/new"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {t("crash.reportButton")}
-                  </a>
-                </Button>
+                {ENABLE_EXTERNAL_LINKS && (
+                  <Button className="ml-3" variant="outline" asChild>
+                    <a
+                      href="https://github.com/lien0219/openxflow/issues/new"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {t("crash.reportButton")}
+                    </a>
+                  </Button>
+                )}
               </div>
             </CardFooter>
           </Card>

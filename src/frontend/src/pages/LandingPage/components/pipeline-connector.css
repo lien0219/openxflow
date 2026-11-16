@@ -1,0 +1,82 @@
+.landing-pipeline-connector {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 40px;
+  color: var(--landing-accent);
+  pointer-events: none;
+}
+
+.landing-pipeline-connector > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.landing-pipeline-connector path {
+  fill: none;
+  stroke: currentColor;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-pipeline-track {
+  opacity: 0.22;
+  stroke-width: 1;
+}
+
+.landing-pipeline-halo,
+.landing-pipeline-current {
+  stroke-dasharray: 7 22;
+  stroke-linecap: round;
+  animation: landing-pipeline-stream 1.5s linear infinite;
+}
+
+.landing-pipeline-halo {
+  opacity: 0.13;
+  stroke-width: 7;
+}
+
+.landing-pipeline-current {
+  opacity: 0.9;
+  stroke-width: 1.6;
+}
+
+.landing-pipeline-connector[data-active="false"]
+  :is(.landing-pipeline-current, .landing-pipeline-halo) {
+  opacity: 0;
+}
+
+.landing-pipeline-port {
+  position: absolute;
+  top: calc(50% - 3px);
+  left: -3px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: hsl(var(--background));
+}
+
+.landing-pipeline-port-end {
+  right: -3px;
+  left: auto;
+}
+
+[data-motion="paused"] .landing-pipeline-connector path,
+[data-motion="static"] .landing-pipeline-connector path {
+  animation-play-state: paused;
+}
+
+@keyframes landing-pipeline-stream {
+  to {
+    stroke-dashoffset: -58;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-pipeline-current,
+  .landing-pipeline-halo {
+    animation: none;
+  }
+}

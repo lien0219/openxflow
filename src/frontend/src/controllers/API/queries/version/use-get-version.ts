@@ -9,6 +9,7 @@ interface versionQueryResponse {
   version: string;
   package: string;
   main_version: string;
+  image_version?: string | null;
 }
 
 export const useGetVersionQuery: useQueryFunctionType<
@@ -23,8 +24,9 @@ export const useGetVersionQuery: useQueryFunctionType<
 
   const responseFn = async () => {
     const { data } = await getVersionFn();
-    const refreshVersion = useDarkStore.getState().refreshVersion;
+    const { refreshVersion, refreshImageVersion } = useDarkStore.getState();
     refreshVersion(data.version);
+    refreshImageVersion(data.image_version?.trim() || null);
 
     customRefreshLatestVersion(data.main_version);
 

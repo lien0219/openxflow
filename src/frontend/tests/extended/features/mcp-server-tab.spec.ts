@@ -211,11 +211,9 @@ test(
     );
     expect(sseUrlMatchLinux).not.toBeNull();
 
-    // Verify setup guide link
-    await expect(page.getByText("setup guide")).toBeVisible();
-    await expect(page.getByText("setup guide")).toHaveAttribute(
-      "href",
-      "https://github.com/lien0219/openxflow#readme",
+    // OpenXFlow hides external documentation links in this panel.
+    await expect(page.getByRole("link", { name: "setup guide" })).toHaveCount(
+      0,
     );
 
     // Create a new flow with MCP component

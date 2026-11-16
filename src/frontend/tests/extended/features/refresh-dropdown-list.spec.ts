@@ -5,7 +5,7 @@ test(
   "refresh dropdown list",
   { tag: ["@release", "@components"] },
   async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/flows");
     await awaitBootstrapTest(page);
 
     await page.getByTestId("side_nav_options_all-templates").click();

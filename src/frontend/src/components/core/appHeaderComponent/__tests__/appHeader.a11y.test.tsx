@@ -1,7 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { axe } from "@/utils/a11y-test";
 import AppHeader from "../index";
+
+const mockNavigate = jest.fn();
 
 // Mock heavy children — this suite only asserts the header shell semantics
 // (landmark + notification bell) owned by AppHeader itself.
@@ -30,7 +32,7 @@ jest.mock("@/customization/components/custom-org-selector", () => ({
   CustomOrgSelector: () => null,
 }));
 jest.mock("@/customization/hooks/use-custom-navigate", () => ({
-  useCustomNavigate: () => jest.fn(),
+  useCustomNavigate: () => mockNavigate,
 }));
 jest.mock("../components/FlowMenu", () => ({
   __esModule: true,
@@ -45,6 +47,18 @@ const renderHeader = () =>
   );
 
 describe("AppHeader accessibility", () => {
+  beforeEach(() => {
+    mockNavigate.mockClear();
+  });
+
+  it("returns to the workspace when the app logo is clicked", () => {
+    renderHeader();
+
+    fireEvent.click(screen.getByTestId("icon-ChevronLeft"));
+
+    expect(mockNavigate).toHaveBeenCalledWith("/flows");
+  });
+
   it("should_render_header_with_notification_button", () => {
     renderHeader();
 

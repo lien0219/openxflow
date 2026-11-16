@@ -57,7 +57,7 @@ jest.mock("@/utils/utils", () => ({
 }));
 
 describe("HelpDropdownView", () => {
-  it("calls provided handlers for each menu item", () => {
+  it("keeps local help actions and hides external links", () => {
     const onOpenChange = jest.fn();
     const onToggleHelperLines = jest.fn();
     const navigateTo = jest.fn();
@@ -79,16 +79,17 @@ describe("HelpDropdownView", () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId("canvas_controls_dropdown_docs"));
-    expect(openLink).toHaveBeenCalledWith("https://docs");
+    expect(
+      screen.queryByTestId("canvas_controls_dropdown_docs"),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("canvas_controls_dropdown_shortcuts"));
     expect(navigateTo).toHaveBeenCalledWith("/settings/shortcuts");
 
-    fireEvent.click(
-      screen.getByTestId("canvas_controls_dropdown_report_a_bug"),
-    );
-    expect(openLink).toHaveBeenCalledWith("https://bugs");
+    expect(
+      screen.queryByTestId("canvas_controls_dropdown_report_a_bug"),
+    ).not.toBeInTheDocument();
+    expect(openLink).not.toHaveBeenCalled();
 
     expect(
       screen.queryByTestId("canvas_controls_dropdown_get_langflow_desktop"),

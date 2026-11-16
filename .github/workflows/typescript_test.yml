@@ -30,6 +30,11 @@ on:
         required: false
         type: string
         default: "tests"
+      max-shards:
+        description: "Maximum Playwright shards (1-70); all selected tests still run"
+        required: false
+        type: number
+        default: 16
       ref:
         description: "(Optional) ref to checkout"
         required: false
@@ -38,7 +43,7 @@ on:
         description: "Runner to use for the tests"
         required: false
         type: string
-        default: "ubuntu-latest"
+        default: "ubuntu-24.04"
       run_live_provider_smoke:
         description: "Run the isolated live-provider smoke suite."
         required: false
@@ -51,6 +56,11 @@ on:
         default: false
   workflow_dispatch:
     inputs:
+      max-shards:
+        description: "Maximum Playwright shards (1-70); all selected tests still run"
+        required: false
+        type: number
+        default: 16
       suites:
         description: "Test suites to run (JSON array)"
         required: false
@@ -71,11 +81,11 @@ on:
         required: false
         type: choice
         options:
-          - ubuntu-latest
+          - ubuntu-24.04
           - windows-latest
           - self-hosted
           - '["self-hosted", "linux", "ARM64", "langflow-ai-arm64-40gb-ephemeral"]'
-        default: ubuntu-latest
+        default: ubuntu-24.04
       run_live_provider_smoke:
         description: "Run the isolated live-provider smoke suite."
         required: false
@@ -100,13 +110,15 @@ env:
   # — "Path Validation Error ... no cache is being saved" on every job, so no
   # shard ever hit the cache and all 70 re-downloaded Chromium every run.
   PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/ms-playwright
-  PLAYWRIGHT_VERSION: "1.60.0"
+  PLAYWRIGHT_VERSION: "1.64.1"
   LANGFLOW_FEATURE_WXO_DEPLOYMENTS: "true"
 
+# Keep the browser runners pinned to the reviewed Ubuntu image. Normalize legacy
+# callers that pass ubuntu-latest while preserving Windows and self-hosted runners.
 jobs:
   determine-test-suite:
     name: Determine Test Suites and Shard Distribution
-    runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
+    runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || (inputs['runs-on'] == 'ubuntu-latest' && 'ubuntu-24.04') || inputs['runs-on'] || (github.event.inputs['runs-on'] == 'ubuntu-latest' && 'ubuntu-24.04') || github.event.inputs['runs-on'] || 'ubuntu-24.04' }}
     outputs:
       matrix: ${{ steps.setup-matrix.outputs.matrix }}
       shard_count: ${{ steps.setup-matrix.outputs.shard_count }}
@@ -122,6 +134,11 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v4
         with:
+          # Use the checkout for PR diffs so reusable callers do not need to
+          # grant pull-requests API permissions to every browser-test job.
+          token: ""
+          base: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && github.ref) || '' }}
+          ref: ${{ github.event_name == 'push' && github.ref || inputs.ref || github.event.pull_request.head.sha || github.sha }}
           filters: .github/changes-filter.yaml
 
       - name: Determine Test Suites from Changes
@@ -234,6 +251,7 @@ jobs:
         env:
           TESTS_FOLDER: ${{ inputs.tests_folder }}
           TEST_GREP: ${{ steps.set-matrix.outputs.test_grep }}
+          MAX_SHARDS: ${{ inputs.max-shards }}
         run: |
           set -euo pipefail
           cd src/frontend
@@ -247,12 +265,12 @@ jobs:
           [[ -z "$TEST_GREP" ]] || command+=(--grep "$TEST_GREP")
           # `--list` prints a "Listing tests:" header and a "Total: N tests in M
           # files" footer, so `wc -l` over-counts and over-shards.  Parse the
-          # footer instead, and treat a zero-match grep as zero tests rather than
-          # letting Playwright's non-zero exit kill the step under `set -e`.
+          # footer instead. A collection error or empty selection must fail
+          # planning: it is not evidence that a test suite ran successfully.
           if ! list_output=$("${command[@]}" --list 2>&1); then
             printf '%s\n' "$list_output"
-            echo "No tests matched grep='$TEST_GREP' in '$TESTS_FOLDER'; using a single shard."
-            TEST_COUNT=0
+            echo "Unable to collect tests for grep='$TEST_GREP' in '$TESTS_FOLDER'." >&2
+            exit 1
           else
             printf '%s\n' "$list_output"
             TEST_COUNT=$(printf '%s\n' "$list_output" \
@@ -262,29 +280,14 @@ jobs:
 
           echo "Total tests to run: $TEST_COUNT"
 
-          # Calculate optimal shard count - 1 shard per 5 tests, min 1, max 70
-          SHARD_COUNT=$(( (TEST_COUNT + 4) / 5 ))
-          if [ $SHARD_COUNT -lt 1 ]; then
-            SHARD_COUNT=1
-          elif [ $SHARD_COUNT -gt 70 ]; then
-            SHARD_COUNT=70
-          fi
-
-          # Create the matrix combinations string
-          MATRIX_COMBINATIONS=""
-          for i in $(seq 1 $SHARD_COUNT); do
-            if [ $i -gt 1 ]; then
-              MATRIX_COMBINATIONS="$MATRIX_COMBINATIONS,"
-            fi
-            MATRIX_COMBINATIONS="$MATRIX_COMBINATIONS{\"shardIndex\": $i, \"shardTotal\": $SHARD_COUNT}"
-          done
-
-          echo "matrix={\"include\":[$MATRIX_COMBINATIONS]}" >> "$GITHUB_OUTPUT"
-          echo "shard_count=$SHARD_COUNT" >> "$GITHUB_OUTPUT"
+          # Twenty tests per runner amortizes dependency and application startup.
+          # Bound ordinary runs to 16 runners; manual/release callers can tune
+          # this up to 70 without changing the selected test set.
+          node ../../scripts/ci/playwright_matrix.mjs "$TEST_COUNT" "${MAX_SHARDS:-16}" >> "$GITHUB_OUTPUT"
 
   setup-and-test:
     name: Playwright Tests - Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
-    runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
+    runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || (inputs['runs-on'] == 'ubuntu-latest' && 'ubuntu-24.04') || inputs['runs-on'] || (github.event.inputs['runs-on'] == 'ubuntu-latest' && 'ubuntu-24.04') || github.event.inputs['runs-on'] || 'ubuntu-24.04' }}
     if: ${{ needs.determine-test-suite.outputs.test_grep != '' }}
     needs: determine-test-suite
     # Without this the job inherits GitHub's 6-hour ceiling: a hung setup step
@@ -388,7 +391,7 @@ jobs:
         run: uvx --with 'mcp~=1.28' mcp-proxy --help > /dev/null
 
       - name: Execute Playwright Tests
-        timeout-minutes: 18
+        timeout-minutes: 30
         shell: bash
         env:
           SERVER_LOG: playwright-server-${{ runner.os }}-${{ matrix.shardIndex }}-${{ github.run_attempt }}.log
@@ -414,7 +417,7 @@ jobs:
             WORKERS=1
           fi
 
-          command=("${base_command[@]}" --trace on --shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --workers "$WORKERS" --retries=1)
+          command=("${base_command[@]}" --trace retain-on-failure --shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --workers "$WORKERS" --retries=1)
           printf 'Running:'
           printf ' %q' "${command[@]}"
           printf '\n'
@@ -460,7 +463,7 @@ jobs:
   report-gate:
     name: Validate Playwright reports
     needs: [determine-test-suite, setup-and-test]
-    runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || inputs['runs-on'] || github.event.inputs['runs-on'] || 'ubuntu-latest' }}
+    runs-on: ${{ (inputs['runs-on'] && startsWith(format('{0}', inputs['runs-on']), '[') && fromJSON(inputs['runs-on'])) || (inputs['runs-on'] == 'ubuntu-latest' && 'ubuntu-24.04') || inputs['runs-on'] || (github.event.inputs['runs-on'] == 'ubuntu-latest' && 'ubuntu-24.04') || github.event.inputs['runs-on'] || 'ubuntu-24.04' }}
     if: ${{ always() && needs.determine-test-suite.outputs.test_grep != '' }}
     continue-on-error: ${{ inputs.runs-on == 'windows-latest' }}
     outputs:
@@ -490,7 +493,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: all-blob-reports-raw
-          pattern: blob-report-${{ runner.os }}-*-attempt-*
+          pattern: blob-report-${{ runner.os }}-*-of-${{ needs.determine-test-suite.outputs.shard_count }}-attempt-*
 
       - name: Check report count, merge, and validate
         id: validate
@@ -523,10 +526,16 @@ jobs:
           # descending, and keep the first row per shard so the newest attempt
           # wins. Avoids associative arrays, which need bash 4+ (macOS ships 3.2).
           manifest=$(mktemp)
+          zip_count=$(find "$raw_dir" -type f -name '*.zip' | wc -l | tr -d ' ')
           find "$raw_dir" -type f -name '*.zip' -print | while IFS= read -r zip; do
             artifact=$(basename "$(dirname "$zip")")
             fields=$(printf '%s\n' "$artifact" \
               | sed -nE 's/.*-([0-9]+)-of-[0-9]+-attempt-([0-9]+)$/\1 \2/p')
+            # download-artifact flattens a single matching artifact. Its pattern
+            # above fixes the total; accept only the sole ZIP for a one-shard run.
+            if [[ -z "$fields" && "$EXPECTED_REPORTS" == "1" && "$zip_count" == "1" && "$(dirname "$zip")" == "$raw_dir" ]]; then
+              fields="1 0"
+            fi
             if [[ -z "$fields" ]]; then
               echo "Ignoring unrecognized blob report artifact: $artifact" >&2
               continue
@@ -551,7 +560,11 @@ jobs:
           rm -rf "$report_dir"
           mkdir -p "$report_dir"
           while IFS=$'\t' read -r shard attempt zip; do
-            echo "Shard $shard <- attempt $attempt"
+            if [[ "$attempt" == "0" ]]; then
+              echo "Shard $shard <- flattened singleton download"
+            else
+              echo "Shard $shard <- attempt $attempt"
+            fi
             cp "$zip" "$report_dir/"
           done < "$manifest"
 
@@ -588,7 +601,7 @@ jobs:
   live-provider-smoke:
     name: Live provider smoke tests
     if: ${{ inputs.run_live_provider_smoke }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     env:
       LANGFLOW_DEACTIVATE_TRACING: "true"
@@ -632,7 +645,7 @@ jobs:
   live-store-smoke:
     name: Live Store UI tests
     if: ${{ inputs.run_live_store_smoke }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
       - name: Checkout repository

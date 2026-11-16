@@ -122,6 +122,11 @@ describe("EmptyPageCommunity - Create first flow behavior", () => {
     expect(
       screen.queryByTestId("empty_page_discord_button"),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("empty_page_github_button"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Documentation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Report an Issue")).not.toBeInTheDocument();
   });
 
   it("should_open_existing_file_picker_when_import_flow_clicked", () => {

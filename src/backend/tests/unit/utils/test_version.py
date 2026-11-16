@@ -2,6 +2,7 @@ from unittest.mock import Mock, patch
 
 import httpx
 import pytest
+from langflow.utils import version as version_utils
 from langflow.utils.version import (
     _compute_non_prerelease_version,
     _get_version_info,
@@ -374,12 +375,64 @@ class TestFetchLatestVersion:
 class TestGetVersionInfoFunction:
     """Test cases for get_version_info function."""
 
-    @patch("langflow.utils.version.VERSION_INFO")
-    def test_get_version_info_returns_version_info(self, mock_version_info):
-        """Test that get_version_info returns VERSION_INFO."""
+    def test_get_version_info_returns_version_info(self):
+        """Package and image version metadata stay separate."""
         mock_version_info = {"version": "1.0.0", "main_version": "1.0.0", "package": "OpenXFlow"}
 
-        with patch("langflow.utils.version.VERSION_INFO", mock_version_info):
+        with (
+            patch("langflow.utils.version.VERSION_INFO", mock_version_info),
+            patch("langflow.utils.version.get_image_version", return_value=None),
+        ):
             result = get_version_info()
 
-            assert result == mock_version_info
+            assert result == {**mock_version_info, "image_version": None}
+
+
+class TestImageVersion:
+    def test_runtime_image_version_preserves_package_metadata(self, monkeypatch):
+        monkeypatch.setenv("OPENXFLOW_VERSION", "0.4.2")
+        package_info = {"version": "1.13.0", "main_version": "1.13.0", "package": "OpenXFlow"}
+
+        with patch("langflow.utils.version.VERSION_INFO", package_info):
+            result = get_version_info()
+
+        assert result == {**package_info, "image_version": "0.4.2"}
+        assert package_info == {"version": "1.13.0", "main_version": "1.13.0", "package": "OpenXFlow"}
+
+    def test_source_checkout_uses_checked_in_image_version(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("OPENXFLOW_VERSION", raising=False)
+        monkeypatch.setattr(version_utils, "__file__", str(tmp_path / "src/backend/base/langflow/utils/version.py"))
+        version_file = tmp_path / "deploy/IMAGE_VERSION"
+        version_file.parent.mkdir()
+        version_file.write_text("0.3.1\n", encoding="utf-8")
+
+        assert version_utils.get_image_version() == "0.3.1"
+
+    def test_runtime_image_version_takes_priority_over_checkout(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENXFLOW_VERSION", " 0.4.2 ")
+        monkeypatch.setattr(version_utils, "__file__", str(tmp_path / "src/backend/base/langflow/utils/version.py"))
+        version_file = tmp_path / "deploy/IMAGE_VERSION"
+        version_file.parent.mkdir()
+        version_file.write_text("0.3.1\n", encoding="utf-8")
+
+        assert version_utils.get_image_version() == "0.4.2"
+
+    def test_installed_package_ignores_unrelated_ancestor_version_file(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("OPENXFLOW_VERSION", raising=False)
+        monkeypatch.setattr(version_utils, "__file__", str(tmp_path / "lib/site-packages/langflow/utils/version.py"))
+        version_file = tmp_path / "deploy/IMAGE_VERSION"
+        version_file.parent.mkdir()
+        version_file.write_text("9.9.9\n", encoding="utf-8")
+
+        assert version_utils.get_image_version() is None
+
+    @pytest.mark.parametrize("contents", [None, "\n"])
+    def test_missing_or_empty_checkout_version_is_optional(self, monkeypatch, tmp_path, contents):
+        monkeypatch.setenv("OPENXFLOW_VERSION", "")
+        monkeypatch.setattr(version_utils, "__file__", str(tmp_path / "src/backend/base/langflow/utils/version.py"))
+        if contents is not None:
+            version_file = tmp_path / "deploy/IMAGE_VERSION"
+            version_file.parent.mkdir()
+            version_file.write_text(contents, encoding="utf-8")
+
+        assert version_utils.get_image_version() is None

@@ -1,4 +1,6 @@
+import os
 from importlib import metadata
+from pathlib import Path
 
 import httpx
 from packaging import version as pkg_version
@@ -90,5 +92,20 @@ def fetch_latest_version(package_name: str, *, include_prerelease: bool) -> str 
         return None
 
 
+def get_image_version() -> str | None:
+    """Resolve the image release separately from Python package compatibility."""
+    if image_version := os.getenv("OPENXFLOW_VERSION", "").strip():
+        return image_version
+
+    source_file = Path(__file__).resolve()
+    # Wheels do not carry the repository's deployment metadata.
+    if source_file.parts[-6:] != ("src", "backend", "base", "langflow", "utils", "version.py"):
+        return None
+    try:
+        return (source_file.parents[5] / "deploy" / "IMAGE_VERSION").read_text(encoding="utf-8").strip() or None
+    except (OSError, UnicodeError):
+        return None
+
+
 def get_version_info():
-    return VERSION_INFO
+    return {**VERSION_INFO, "image_version": get_image_version()}

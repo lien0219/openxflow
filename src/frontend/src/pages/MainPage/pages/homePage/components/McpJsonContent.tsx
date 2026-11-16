@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs-button";
 import { DOCS_URL } from "@/constants/constants";
 import type { MCPTransport } from "@/controllers/API/queries/mcp/use-patch-install-mcp";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import { cn } from "@/utils/utils";
 import {
   createSyntaxHighlighterStyle,
@@ -191,18 +192,20 @@ export const McpJsonContent = ({
           {mcpJson}
         </SyntaxHighlighter>
       </div>
-      <div className="px-2 text-mmd text-muted-foreground">
-        {t("mcpJson.addConfigHint")}{" "}
-        <a
-          href={DOCS_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="text-accent-pink-foreground"
-        >
-          {t("mcpJson.setupGuide")}
-        </a>
-        .
-      </div>
+      {ENABLE_EXTERNAL_LINKS && (
+        <div className="px-2 text-mmd text-muted-foreground">
+          {t("mcpJson.addConfigHint")}{" "}
+          <a
+            href={DOCS_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent-pink-foreground"
+          >
+            {t("mcpJson.setupGuide")}
+          </a>
+          .
+        </div>
+      )}
     </>
   );
 };

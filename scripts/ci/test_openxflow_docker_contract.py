@@ -4,10 +4,32 @@ import re
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "docker" / "build_and_push.Dockerfile"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "openxflow-production-release.yml"
+
+
+def test_image_security_pins_satisfy_workspace_constraints() -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    constraints = {
+        requirement.name: requirement
+        for declaration in project["tool"]["uv"]["constraint-dependencies"]
+        if (requirement := Requirement(declaration)).marker is None
+    }
+    source = DOCKERFILE.read_text(encoding="utf-8")
+    pins = re.findall(r'"(joserfc|oauthlib|pyasn1|pypdf)==([^"]+)"', source)
+    assert len(pins) == 12  # Each of the three Python builders applies all four pins.
+    for name, version in pins:
+        requirement = constraints.get(name)
+        if requirement is not None:
+            assert version in requirement.specifier, (name, version, str(requirement))
 
 
 def test_product_version_is_independent_and_strictly_seeded() -> None:
@@ -140,34 +162,39 @@ def test_brotli_lock_constraints_include_the_security_fix() -> None:
 
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     overrides = project["tool"]["uv"]["override-dependencies"]
-    assert "brotli>=1.2.1,<2.0.0; platform_python_implementation == 'CPython'" in overrides
+
+    def assert_brotli_floor(declarations: list[str]) -> None:
+        brotli = next(Requirement(value) for value in declarations if Requirement(value).name == "brotli")
+        assert brotli.marker is None or brotli.marker.evaluate({"platform_python_implementation": "CPython"})
+        assert "1.2.0" not in brotli.specifier
+        assert "1.2.1" in brotli.specifier
+        assert "2.0.0" not in brotli.specifier
+
+    assert_brotli_floor(overrides)
     assert "brotlicffi>=1.2.1.0,<2.0.0; platform_python_implementation != 'CPython'" in overrides
 
     base = tomllib.loads((REPO_ROOT / "src/backend/base/pyproject.toml").read_text(encoding="utf-8"))
     assert "ddgs>=9.0.0" in base["project"]["optional-dependencies"]["duckduckgo"]
-    assert (
-        "brotli>=1.2.1,<2.0.0; platform_python_implementation == 'CPython'"
-        in base["project"]["optional-dependencies"]["duckduckgo"]
-    )
+    assert_brotli_floor(base["project"]["optional-dependencies"]["duckduckgo"])
     assert (
         "brotlicffi>=1.2.1.0,<2.0.0; platform_python_implementation != 'CPython'"
         in base["project"]["optional-dependencies"]["duckduckgo"]
     )
 
     bundle = tomllib.loads((REPO_ROOT / "src/bundles/duckduckgo/pyproject.toml").read_text(encoding="utf-8"))
-    assert "brotli>=1.2.1,<2.0.0; platform_python_implementation == 'CPython'" in bundle["project"]["dependencies"]
+    assert_brotli_floor(bundle["project"]["dependencies"])
     assert (
         "brotlicffi>=1.2.1.0,<2.0.0; platform_python_implementation != 'CPython'" in bundle["project"]["dependencies"]
     )
 
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
     httpx = next(package for package in lock["package"] if package["name"] == "httpx")
-    assert {
+    decoder_markers = {
         dependency["name"]: dependency.get("marker") for dependency in httpx["optional-dependencies"]["brotli"]
-    } == {
-        "brotli": "platform_python_implementation == 'CPython'",
-        "brotlicffi": "platform_python_implementation != 'CPython'",
     }
+    assert set(decoder_markers) == {"brotli", "brotlicffi"}
+    assert decoder_markers["brotli"] in {None, "platform_python_implementation == 'CPython'"}
+    assert decoder_markers["brotlicffi"] == "platform_python_implementation != 'CPython'"
     assert {
         package["name"]: package["version"]
         for package in lock["package"]

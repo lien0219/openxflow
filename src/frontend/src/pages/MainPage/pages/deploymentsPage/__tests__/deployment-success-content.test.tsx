@@ -11,7 +11,7 @@ jest.mock(
 );
 
 describe("DeploymentSuccessContent", () => {
-  it("renders success copy and provider link", () => {
+  it("renders success copy without an external provider link", () => {
     render(
       <DeploymentSuccessContent
         deploymentName="My Agent"
@@ -27,11 +27,8 @@ describe("DeploymentSuccessContent", () => {
       screen.getByText("Deployed to watsonx Orchestrate as draft"),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /watsonx Orchestrate/i }),
-    ).toHaveAttribute(
-      "href",
-      "https://www.ibm.com/products/watsonx-orchestrate",
-    );
+      screen.queryByRole("link", { name: /watsonx Orchestrate/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows test button and calls handler", async () => {

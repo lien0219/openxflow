@@ -142,13 +142,10 @@ describe("McpJsonContent", () => {
     expect(screen.getByTestId("tab-wsl")).toBeInTheDocument();
   });
 
-  it("renders setup guide link", () => {
+  it("hides the external setup guide", () => {
     render(<McpJsonContent {...defaultProps} />);
-    const link = screen.getByText("setup guide").closest("a");
-    expect(link).toHaveAttribute(
-      "href",
-      "https://github.com/lien0219/openxflow#readme",
-    );
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.queryByText("setup guide")).not.toBeInTheDocument();
   });
 
   it("renders with selected platform", () => {

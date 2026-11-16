@@ -24,8 +24,9 @@ const storedThemePreset = getStoredValue("themePreset");
 
 export const useDarkStore = create<DarkStoreType>((set, get) => ({
   dark: (() => {
-    const stored = getStoredValue("isDark");
-    if (stored !== null) return stored === "true";
+    const preference = getStoredValue("themePreference");
+    if (preference === "light" || preference === "dark")
+      return preference === "dark";
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   })(),
   themePreset: isThemePreset(storedThemePreset)
@@ -33,6 +34,7 @@ export const useDarkStore = create<DarkStoreType>((set, get) => ({
     : DEFAULT_THEME_PRESET,
   stars: startedStars,
   version: "",
+  imageVersion: null,
   latestVersion: "",
   refreshLatestVersion: (v: string) => {
     set(() => ({ latestVersion: v }));
@@ -47,6 +49,9 @@ export const useDarkStore = create<DarkStoreType>((set, get) => ({
   },
   refreshVersion: (v) => {
     set(() => ({ version: v }));
+  },
+  refreshImageVersion: (v) => {
+    set(() => ({ imageVersion: v }));
   },
   refreshStars: () => {
     if (import.meta.env.CI) {

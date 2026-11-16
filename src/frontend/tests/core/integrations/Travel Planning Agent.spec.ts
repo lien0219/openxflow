@@ -12,7 +12,7 @@ withEventDeliveryModes(
   { tag: ["@release", "@starter-projects"] },
   async ({ page }) => {
     await seedLoopbackProvider(page);
-    await page.goto("/");
+    await page.goto("/flows");
     await awaitBootstrapTest(page);
 
     await page.getByTestId("side_nav_options_all-templates").click();

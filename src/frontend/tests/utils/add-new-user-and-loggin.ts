@@ -1,41 +1,18 @@
 import { expect } from "../fixtures";
 import { createActiveUserViaApi } from "./auth/manage-users-via-api";
+import { mockAutoLoginDisabled } from "./auth/mock-auto-login-disabled";
 import { TEXTS } from "./constants/texts";
 import { waitForNewProjectButton } from "./flow/new-project-flow";
+import { submitLoginAndRequireSuccess } from "./login-langflow";
 import type { LangflowPage } from "./types";
 
 export const addNewUserAndLogin = async (page: LangflowPage) => {
-  await page.route("**/api/v1/auto_login", (route) => {
-    route.fulfill({
-      status: 403,
-      contentType: "application/json",
-      body: JSON.stringify({
-        detail: {
-          message: "Auto login is disabled.",
-          auto_login: false,
-        },
-      }),
-    });
-  });
-
-  await page.addInitScript(() => {
-    window.process = window.process || {};
-
-    const newEnv = { ...window.process.env, LANGFLOW_AUTO_LOGIN: "false" };
-
-    Object.defineProperty(window.process, "env", {
-      value: newEnv,
-      writable: true,
-      configurable: true,
-    });
-
-    sessionStorage.setItem("testMockAutoLogin", "true");
-  });
+  await mockAutoLoginDisabled(page);
 
   const randomName = Math.random().toString(36).substring(5);
   const randomPassword = Math.random().toString(36).substring(5);
 
-  await page.goto("/");
+  await page.goto("/flows");
 
   await expect(page.getByRole("button", { name: TEXTS.signIn })).toBeVisible({
     timeout: 30000,
@@ -52,7 +29,7 @@ export const addNewUserAndLogin = async (page: LangflowPage) => {
     sessionStorage.removeItem("testMockAutoLogin");
   });
 
-  await page.getByRole("button", { name: TEXTS.signIn }).click();
+  await submitLoginAndRequireSuccess(page);
 
   // Wait for any loading text to disappear before checking the homepage:
   // mainpage_title only renders after the homepage data finishes loading,
@@ -97,15 +74,14 @@ export const addNewUserAndLogin = async (page: LangflowPage) => {
   await page.getByPlaceholder(TEXTS.placeholderUsername).fill(randomName);
   await page.getByPlaceholder(TEXTS.placeholderPassword).fill(randomPassword);
 
-  await page.getByRole("button", { name: TEXTS.signIn }).click();
-
   await page.evaluate(() => {
     sessionStorage.removeItem("testMockAutoLogin");
   });
 
-  // Wait for any loading text to disappear
-  await page.waitForSelector('text="Loading"', {
-    state: "hidden",
+  await submitLoginAndRequireSuccess(page);
+  // The absence of Loading can precede login completion. Wait for the
+  // authenticated home page before a caller starts cleanup or reloads.
+  await page.waitForSelector('[data-testid="mainpage_title"]', {
     timeout: 30000,
   });
 };

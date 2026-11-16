@@ -1,10 +1,17 @@
 name: CI Scripts Tests
 
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit to validate when called from branch CI"
+        required: false
+        type: string
   pull_request:
     paths:
       - "scripts/ci/**"
       - ".github/workflows/**"
+      - ".github/changes-filter.yaml"
       - ".github/CODEOWNERS"
       - "design/dedicated-integrations/**"
       - "design/dedicated-integrations-triggers/**"
@@ -14,7 +21,14 @@ on:
       - ".github/workflows/store_pytest_durations.yml"
       - ".github/workflows/test-coverage-advisor.yml"
       - ".github/workflows/release.yml"
+      - ".github/workflows/docker-build-v2.yml"
       - "pyproject.toml"
+      - "uv.lock"
+      - "docker/**"
+      - "src/lfx/pyproject.toml"
+      - "src/backend/base/pyproject.toml"
+      - "scripts/build_component_index.py"
+      - "src/lfx/src/lfx/_assets/component_index.json"
       - "src/bundles/*/pyproject.toml"
       - "src/bundles/*/src/*/**/capabilities.v1.json"
       - "src/bundles/lfx-bundles/src/lfx_bundles/*/__init__.py"
@@ -93,14 +107,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
+      - name: Set up Node.js for workflow planning tests
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
       - name: Install dependencies
         run: pip install jsonschema orjson packaging pytest pytest-xdist pytest-rerunfailures pytest-timeout pyyaml requests
 
       - name: Run CI script tests
+        env:
+          PYTHONPATH: scripts/ci
         run: python -m pytest scripts/ci/ -v

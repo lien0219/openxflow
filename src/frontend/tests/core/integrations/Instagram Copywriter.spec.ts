@@ -5,7 +5,7 @@ test(
   "Instagram Copywriter",
   { tag: ["@release", "@starter-projects"] },
   async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/flows");
     await openStarterProject(page, "Instagram Copywriter");
 
     await page.waitForSelector('[data-testid="canvas_controls_dropdown"]', {

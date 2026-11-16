@@ -1,5 +1,4 @@
-import { BrowserContext, Page } from "playwright/test";
-import { GITHUB_URL } from "../../../src/constants/constants";
+import { Page } from "playwright/test";
 import { expect, test } from "../../fixtures";
 import { addNewUserAndLogin } from "../../utils/add-new-user-and-loggin";
 import { cleanAllFlows } from "../../utils/clean-all-flows";
@@ -9,25 +8,22 @@ import { openTemplatesModal } from "../../utils/flow/new-project-flow";
 test(
   "admin user can use the empty-state getting-started actions",
   { tag: ["@release", "@api"] },
-  async ({ page, context }) => {
-    await page.goto("/");
-    await gettingStartedActionsTestFn(page, context);
+  async ({ page }) => {
+    await page.goto("/flows");
+    await gettingStartedActionsTestFn(page);
   },
 );
 
 test(
   "normal user can use the empty-state getting-started actions",
   { tag: ["@release", "@api"] },
-  async ({ page, context }) => {
+  async ({ page }) => {
     await addNewUserAndLogin(page);
-    await gettingStartedActionsTestFn(page, context);
+    await gettingStartedActionsTestFn(page);
   },
 );
 
-async function gettingStartedActionsTestFn(
-  page: Page,
-  context: BrowserContext,
-) {
+async function gettingStartedActionsTestFn(page: Page) {
   // Wait for any loading text to disappear
   await page.waitForSelector('text="Loading"', {
     state: "hidden",
@@ -40,25 +36,13 @@ async function gettingStartedActionsTestFn(
   await expect(page.getByTestId("new_project_btn_empty_page")).toBeVisible();
   await expect(page.getByTestId("mainpage_title").last()).toBeVisible();
   await expect(page.getByTestId("empty_page_description")).toBeVisible();
-  await expect(page.getByTestId("empty_page_github_button")).toBeVisible();
+  await expect(page.getByTestId("empty_page_github_button")).toHaveCount(0);
   await expect(page.getByTestId("empty_page_discord_button")).toHaveCount(0);
   await expect(page.getByTestId("empty_page_drag_and_drop_text")).toBeVisible();
   await expect(page.getByTestId("get_started_progress_title")).toHaveCount(0);
   await expect(page.getByTestId("get_started_progress_percentage")).toHaveCount(
     0,
   );
-
-  await context.route(`${GITHUB_URL}**`, (route) =>
-    route.fulfill({ status: 200, contentType: "text/html", body: "" }),
-  );
-  const pagePromiseGithub = context.waitForEvent("page");
-  await page.getByTestId("empty_page_github_button").click();
-
-  const newPageGithub = await pagePromiseGithub;
-  await newPageGithub.waitForLoadState("domcontentloaded");
-  await expect(newPageGithub).toHaveURL(GITHUB_URL);
-
-  await newPageGithub.close();
 
   // OpenXFlow's current empty state uses direct actions rather than the legacy
   // percentage progress widget. Exercise the create-flow action itself.
@@ -76,9 +60,9 @@ async function gettingStartedActionsTestFn(
     timeout: 100000,
   });
 
-  // One of the three equally weighted checklist actions is complete.
+  // Creating a flow completes the local checklist; social steps are hidden.
   await expect(page.getByTestId("get_started_progress_percentage")).toHaveText(
-    "33%",
+    "100%",
   );
   await expect(page.getByTestId("search-store-input")).toBeVisible();
 

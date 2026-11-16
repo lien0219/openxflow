@@ -1,9 +1,8 @@
 import { AccountMenuCommunityLinks } from "@/components/core/appHeaderComponent/components/AccountMenu/community-links";
+import { ENABLE_SOCIAL_LINKS } from "@/customization/feature-flags";
 
-// Distributions that should not promote the open-source community replace this
-// seam with one that renders nothing.
 export function CustomAccountMenuCommunityLinks() {
-  return <AccountMenuCommunityLinks />;
+  return ENABLE_SOCIAL_LINKS ? <AccountMenuCommunityLinks /> : null;
 }
 
 export default CustomAccountMenuCommunityLinks;

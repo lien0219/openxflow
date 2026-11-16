@@ -7,7 +7,10 @@ import ThemeButtons from "@/components/core/appHeaderComponent/components/ThemeB
 import { useDeleteSession } from "@/controllers/API/queries/messages/use-delete-sessions";
 import { useGetMessageHistory } from "@/controllers/API/queries/messages/use-get-message-history";
 import { useGetSessionsFromFlowQuery } from "@/controllers/API/queries/messages/use-get-sessions-from-flow";
-import { ENABLE_PUBLISH } from "@/customization/feature-flags";
+import {
+  ENABLE_EXTERNAL_LINKS,
+  ENABLE_PUBLISH,
+} from "@/customization/feature-flags";
 import { track } from "@/customization/utils/analytics";
 import { customOpenNewTab } from "@/customization/utils/custom-open-new-tab";
 import { LangflowButtonRedirectTarget } from "@/customization/utils/urls";
@@ -311,6 +314,7 @@ export default function IOModal({
   const showPublishOptions = playgroundPage && ENABLE_PUBLISH;
 
   const LangflowButtonClick = () => {
+    if (!ENABLE_EXTERNAL_LINKS) return;
     track("LangflowButtonClick");
     customOpenNewTab(LangflowButtonRedirectTarget());
   };
@@ -441,25 +445,29 @@ export default function IOModal({
                 )}
                 {sidebarOpen && showPublishOptions && (
                   <div className="absolute bottom-2 left-0 flex w-full flex-col gap-8 border-t border-border px-2 py-4 transition-all">
-                    <div className="flex items-center justify-between px-2">
-                      <div className="text-sm">{t("modal.io.theme")}</div>
+                    <div className="flex flex-col gap-3 px-2">
+                      <div className="text-sm font-medium">
+                        {t("modal.io.theme")}
+                      </div>
                       <ThemeButtons />
                     </div>
-                    <Button
-                      onClick={LangflowButtonClick}
-                      variant="primary"
-                      className="w-full !rounded-xl shadow-lg"
-                    >
-                      <LangflowLogoColor aria-hidden="true" />
-                      <div className="text-sm">
-                        {t("modal.io.builtWithLangflow")}
-                      </div>
-                    </Button>
+                    {ENABLE_EXTERNAL_LINKS && (
+                      <Button
+                        onClick={LangflowButtonClick}
+                        variant="primary"
+                        className="w-full !rounded-xl shadow-lg"
+                      >
+                        <LangflowLogoColor aria-hidden="true" />
+                        <div className="text-sm">
+                          {t("modal.io.builtWithLangflow")}
+                        </div>
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
             </div>
-            {!sidebarOpen && showPublishOptions && (
+            {!sidebarOpen && showPublishOptions && ENABLE_EXTERNAL_LINKS && (
               <div className="absolute bottom-6 left-4 hidden transition-all md:block">
                 <ShadTooltip
                   styleClasses="z-50"

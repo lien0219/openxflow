@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import React from "react";
 import { StepperModalFooter } from "../StepperModalFooter";
 
 const baseProps = {
@@ -135,7 +134,7 @@ describe("StepperModalFooter", () => {
   });
 
   describe("Help section", () => {
-    it("renders a link when helpHref is provided", () => {
+    it("hides external help links", () => {
       render(
         <StepperModalFooter
           {...baseProps}
@@ -143,9 +142,9 @@ describe("StepperModalFooter", () => {
           helpLabel="Docs"
         />,
       );
-      const link = screen.getByRole("link", { name: /Docs/i });
-      expect(link).toHaveAttribute("href", "https://docs.example.com");
-      expect(link).toHaveAttribute("target", "_blank");
+      expect(
+        screen.queryByRole("link", { name: /Docs/i }),
+      ).not.toBeInTheDocument();
     });
 
     it("renders a button when onHelp is provided and fires onHelp when clicked", async () => {

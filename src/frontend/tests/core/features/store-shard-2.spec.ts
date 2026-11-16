@@ -16,7 +16,7 @@ test(
       dotenv.config({ path: path.resolve(__dirname, "../../.env") });
     }
 
-    await page.goto("/");
+    await page.goto("/flows");
     await page.waitForTimeout(1000);
 
     await page.getByTestId("button-store").click();

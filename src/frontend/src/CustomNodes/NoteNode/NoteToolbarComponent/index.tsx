@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/popover";
 import { Select, SelectTrigger } from "@/components/ui/select";
 import { COLOR_OPTIONS } from "@/constants/constants";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import { customOpenNewTab } from "@/customization/utils/custom-open-new-tab";
 import useAlertStore from "@/stores/alertStore";
 import useFlowStore from "@/stores/flowStore";
@@ -51,6 +52,7 @@ const NoteToolbarComponent = memo(function NoteToolbarComponent({
 
   /** Opens documentation URL or shows notice if unavailable */
   const openDocs = useCallback(() => {
+    if (!ENABLE_EXTERNAL_LINKS) return;
     if (data.node?.documentation) {
       return customOpenNewTab(data.node.documentation);
     }

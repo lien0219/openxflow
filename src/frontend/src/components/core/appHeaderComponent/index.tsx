@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import AlertDropdown from "@/alerts/alertDropDown";
-import LangflowLogo from "@/assets/LangflowLogo.svg?react";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import ModelProviderCount from "@/components/common/modelProviderCountComponent";
 import ShadTooltip from "@/components/common/shadTooltipComponent";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import CustomAccountMenu from "@/customization/components/custom-AccountMenu";
+import CustomHeaderLogo from "@/customization/components/custom-header-logo";
 import CustomLangflowCounts from "@/customization/components/custom-langflow-counts";
 import { CustomOrgSelector } from "@/customization/components/custom-org-selector";
+import { ENABLE_SOCIAL_LINKS } from "@/customization/feature-flags";
 import { useCustomNavigate } from "@/customization/hooks/use-custom-navigate";
 import useTheme from "@/customization/hooks/use-custom-theme";
 import useAlertStore from "@/stores/alertStore";
@@ -61,13 +62,13 @@ export default function AppHeader(): JSX.Element {
       >
         <Button
           unstyled
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/flows")}
           className="mr-1 flex h-8 items-center gap-2 rounded-md px-1"
           data-testid="icon-ChevronLeft"
           aria-label={`${t("header.home")} OpenXFlow`}
           title={t("header.home")}
         >
-          <LangflowLogo className="h-5 w-5" aria-hidden="true" />
+          <CustomHeaderLogo className="h-5 w-5" />
           <span className="whitespace-nowrap text-sm font-semibold text-foreground">
             OpenXFlow
           </span>
@@ -86,9 +87,11 @@ export default function AppHeader(): JSX.Element {
         data-testid="header_right_section_wrapper"
       >
         {false && <ModelProviderCount />}
-        <div className="hidden pr-2 whitespace-nowrap lg:inline-flex lg:items-center">
-          <CustomLangflowCounts />
-        </div>
+        {ENABLE_SOCIAL_LINKS && (
+          <div className="hidden pr-2 whitespace-nowrap lg:inline-flex lg:items-center">
+            <CustomLangflowCounts />
+          </div>
+        )}
         <AlertDropdown
           notificationRef={notificationContentRef}
           onClose={() => setActiveState(null)}

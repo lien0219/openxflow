@@ -85,7 +85,7 @@ export const ThemeButtons = () => {
 
   return (
     <div className="flex w-full flex-col gap-3" data-testid="theme-controls">
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-2">
         {PRESETS.map((preset) => {
           const selected = themePreset === preset.id;
           return (
@@ -95,43 +95,39 @@ export const ThemeButtons = () => {
               type="button"
               onClick={() => setThemePreset(preset.id)}
               className={cn(
-                "group relative overflow-hidden rounded-xl border p-2.5 text-left transition-all duration-200",
+                "group relative flex min-w-0 items-center gap-2 rounded-lg border p-2.5 text-left transition-colors",
                 selected
                   ? "border-primary/70 bg-accent shadow-sm"
-                  : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm",
+                  : "border-control bg-card hover:border-primary/50 hover:bg-accent/50",
               )}
               aria-pressed={selected}
               data-testid={`theme_preset_${preset.id}`}
             >
               <span
-                className="mb-2 block h-8 w-full rounded-lg border border-white/15 shadow-inner"
+                className="block h-9 w-9 shrink-0 rounded-md border border-border shadow-inner"
                 style={{ background: preset.swatch }}
                 aria-hidden="true"
               />
-              <span className="flex min-w-0 items-end justify-between gap-2">
-                <span className="min-w-0">
-                  <span className="block truncate text-xs font-semibold text-foreground">
-                    {preset.label}
-                  </span>
-                  <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
-                    {isChinese ? preset.shortLabel.zh : preset.shortLabel.en}
-                  </span>
+              <span className="min-w-0 flex-1 pr-2">
+                <span className="block break-words text-xs font-semibold leading-4 text-foreground">
+                  {preset.label}
                 </span>
+                <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
+                  {isChinese ? preset.shortLabel.zh : preset.shortLabel.en}
+                </span>
+              </span>
+              {selected && (
                 <span
-                  className={cn(
-                    "mb-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all",
-                    selected
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background/70 text-transparent group-hover:text-muted-foreground",
-                  )}
+                  className="absolute right-1.5 top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                  aria-hidden="true"
                 >
                   <ForwardedIconComponent
                     name="Check"
-                    className="h-3 w-3"
+                    className="h-2.5 w-2.5"
                     strokeWidth={2.5}
                   />
                 </span>
-              </span>
+              )}
             </Button>
           );
         })}
@@ -146,7 +142,7 @@ export const ThemeButtons = () => {
         </div>
         <div
           className={cn(
-            "grid grid-cols-3 rounded-xl border border-border bg-muted/55 p-1",
+            "grid grid-cols-3 gap-1 rounded-lg border border-control bg-muted/55 p-1",
             appearanceDisabled && "cursor-not-allowed opacity-55",
           )}
           title={appearanceDisabled ? classicOnlyMessage : undefined}
@@ -162,7 +158,7 @@ export const ThemeButtons = () => {
                 disabled={appearanceDisabled}
                 onClick={() => handleAppearanceChange(option.id)}
                 className={cn(
-                  "flex h-8 items-center justify-center gap-1 rounded-lg px-2 text-xs transition-all",
+                  "flex h-9 min-w-0 items-center justify-center gap-1 rounded-md px-1.5 text-xs transition-colors",
                   appearanceDisabled
                     ? "pointer-events-none text-muted-foreground"
                     : selected
@@ -176,10 +172,10 @@ export const ThemeButtons = () => {
               >
                 <ForwardedIconComponent
                   name={option.icon}
-                  className="h-3.5 w-3.5"
+                  className="h-3.5 w-3.5 shrink-0"
                   strokeWidth={2}
                 />
-                <span className="hidden 2xl:inline">{label}</span>
+                <span className="whitespace-nowrap">{label}</span>
               </Button>
             );
           })}

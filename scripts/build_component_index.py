@@ -11,6 +11,74 @@ import sys
 from pathlib import Path
 
 import orjson
+from packaging.markers import Marker
+from packaging.utils import canonicalize_name
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
+LOCK_PATH = Path(__file__).resolve().parents[1] / "uv.lock"
+# Match the Linux/Python 3.13 generator job rather than the developer's host.
+INDEX_ENVIRONMENT = {
+    "implementation_name": "cpython",
+    "implementation_version": "3.13.0",
+    "os_name": "posix",
+    "platform_machine": "x86_64",
+    "platform_python_implementation": "CPython",
+    "platform_release": "",
+    "platform_system": "Linux",
+    "platform_version": "",
+    "python_full_version": "3.13.0",
+    "python_version": "3.13",
+    "sys_platform": "linux",
+}
+IMPORT_DISTRIBUTIONS = {
+    "a2a": "a2a-sdk",
+    "bs4": "beautifulsoup4",
+    "googleapiclient": "google-api-python-client",
+    "yaml": "pyyaml",
+}
+
+
+def _locked_dependency_versions() -> dict[str, str]:
+    """Read canonical index metadata without importing optional dependencies."""
+    packages = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))["package"]
+    versions = {}
+    for package in packages:
+        # Workspace packages are not third-party installed dependencies.
+        if "registry" not in package.get("source", {}):
+            continue
+        markers = package.get("resolution-markers", [])
+        if markers and not any(Marker(marker).evaluate(INDEX_ENVIRONMENT) for marker in markers):
+            continue
+        name = canonicalize_name(package["name"])
+        version = package["version"]
+        if name in versions and versions[name] != version:
+            msg = f"Ambiguous component-index dependency in uv.lock: {name}"
+            raise ValueError(msg)
+        versions[name] = version
+    return versions
+
+
+def _pin_dependency_versions(metadata: dict, versions: dict[str, str]) -> dict:
+    """Copy dependency metadata and replace host-specific installed versions."""
+    metadata = dict(metadata)
+    if isinstance(info := metadata.get("dependencies"), dict):
+        metadata["dependencies"] = {
+            **info,
+            "dependencies": [
+                {
+                    **dependency,
+                    "version": versions.get(
+                        canonicalize_name(IMPORT_DISTRIBUTIONS.get(dependency["name"], dependency["name"]))
+                    ),
+                }
+                for dependency in info.get("dependencies", [])
+            ],
+        }
+    return metadata
 
 
 async def _load_components_for_index() -> dict:
@@ -109,6 +177,7 @@ def build_component_index() -> dict:
 
     modules_dict, components_count = _import_components()
     current_version = _get_lfx_version()
+    locked_versions = _locked_dependency_versions()
 
     # Convert modules_dict to entries format and sort for determinism
     # Sort by category name (top_level) to ensure consistent ordering
@@ -121,7 +190,7 @@ def build_component_index() -> dict:
         for comp_name in sorted(components_dict.keys()):
             # Make defensive copies to avoid mutating the original component object
             component = dict(components_dict[comp_name])
-            component["metadata"] = dict(component.get("metadata", {}))
+            component["metadata"] = _pin_dependency_versions(component.get("metadata", {}), locked_versions)
 
             sorted_components[comp_name] = component
 
@@ -183,7 +252,7 @@ def main():
     # Pretty-print for readable git diffs and resolvable merge conflicts
     print(f"\nWriting formatted index to {output_path}")
     json_bytes = orjson.dumps(index, option=orjson.OPT_SORT_KEYS | orjson.OPT_INDENT_2)
-    output_path.write_text(json_bytes.decode("utf-8") + "\n", encoding="utf-8")
+    output_path.write_bytes(json_bytes + b"\n")
 
     print("\nIndex successfully written!")
     print(f"  Version: {index['version']}")

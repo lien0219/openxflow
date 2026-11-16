@@ -172,7 +172,7 @@ describe("MemoryKnowledgeBaseSection", () => {
       />,
     );
     expect(
-      screen.getByText(/Stop the other OpenXFlow instance/),
+      screen.getByText(/Stop all other OpenXFlow processes on this host/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /retry upgrade/i }),
@@ -218,7 +218,7 @@ describe("MemoryKnowledgeBaseSection", () => {
     expect(screen.getByText("No chunks yet")).toBeInTheDocument();
   });
 
-  it("shows learn more link in empty state with correct href", () => {
+  it("hides the external learn more link in the empty state", () => {
     const props = {
       ...makeBaseProps(),
       docsData: { total: 0, sessions: [], documents: [] },
@@ -226,15 +226,9 @@ describe("MemoryKnowledgeBaseSection", () => {
     };
     render(<MemoryKnowledgeBaseSection {...props} />);
 
-    const link = screen.getByRole("link", {
-      name: /learn more about memory bases/i,
-    });
-    expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute(
-      "href",
-      "https://github.com/lien0219/openxflow#readme",
-    );
-    expect(link).toHaveAttribute("target", "_blank");
+    expect(
+      screen.queryByRole("link", { name: /learn more about memory bases/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows tooltip description for the Memory Base heading", () => {
@@ -244,14 +238,11 @@ describe("MemoryKnowledgeBaseSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows read the docs link in Memory Base heading tooltip", () => {
+  it("hides the external docs link in the Memory Base heading tooltip", () => {
     render(<MemoryKnowledgeBaseSection {...makeBaseProps()} />);
-    const links = screen.getAllByRole("link", { name: /read the docs/i });
-    expect(links[0]).toHaveAttribute(
-      "href",
-      "https://github.com/lien0219/openxflow#readme",
-    );
-    expect(links[0]).toHaveAttribute("target", "_blank");
+    expect(
+      screen.queryByRole("link", { name: /read the docs/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows tooltip description for the chunks count", () => {

@@ -8,6 +8,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import { useShortcutsStore } from "@/stores/shortcuts";
 import ToolbarSelectItem from "../toolbarSelectItem";
 
@@ -147,18 +148,20 @@ export function ToolbarMoreMenu({
           </SelectItem>
         )}
 
-        <SelectItem
-          variant="plain"
-          value={"documentation"}
-          disabled={documentation === ""}
-        >
-          <ToolbarSelectItem
-            shortcut={shortcuts.find((obj) => obj.name === "Docs")?.shortcut!}
-            value={t("nodeToolbar.docs")}
-            icon={"FileText"}
-            dataTestId="docs-button-modal"
-          />
-        </SelectItem>
+        {ENABLE_EXTERNAL_LINKS && (
+          <SelectItem
+            variant="plain"
+            value={"documentation"}
+            disabled={documentation === ""}
+          >
+            <ToolbarSelectItem
+              shortcut={shortcuts.find((obj) => obj.name === "Docs")?.shortcut!}
+              value={t("nodeToolbar.docs")}
+              icon={"FileText"}
+              dataTestId="docs-button-modal"
+            />
+          </SelectItem>
+        )}
 
         <SelectItem
           variant="plain"

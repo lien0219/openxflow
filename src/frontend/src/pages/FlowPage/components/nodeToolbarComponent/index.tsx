@@ -7,6 +7,7 @@ import useHandleOnNewValue from "@/CustomNodes/hooks/use-handle-new-value";
 import useHandleNodeClass from "@/CustomNodes/hooks/use-handle-node-class";
 import { usePostTemplateValue } from "@/controllers/API/queries/nodes/use-post-template-value";
 import { usePostRetrieveVertexOrder } from "@/controllers/API/queries/vertex";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import { customOpenNewTab } from "@/customization/utils/custom-open-new-tab";
 import useAddFlow from "@/hooks/flows/use-add-flow";
 import type { APIClassType } from "@/types/api";
@@ -212,6 +213,7 @@ const NodeToolbarComponent = memo(
     }, [isSaved, data.id, flowComponent, addFlow]);
 
     const openDocs = useCallback(() => {
+      if (!ENABLE_EXTERNAL_LINKS) return;
       if (data.node?.documentation) {
         return customOpenNewTab(data.node.documentation);
       }

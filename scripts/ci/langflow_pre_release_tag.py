@@ -89,7 +89,11 @@ def main() -> None:
         action="store_true",
         help="Print only the next rc number instead of the full version.",
     )
-    args = parser.parse_args()
+    # Python 3.11's regular parse_args rejects a positional value that follows
+    # an option when the final positional uses nargs="*". Release workflows use
+    # both `VERSION --print-rc-number -` and `VERSION - --print-rc-number`;
+    # parse_intermixed_args keeps both forms valid across supported Pythons.
+    args = parser.parse_intermixed_args()
 
     released_versions = _read_released_versions(args.released_versions)
     if args.print_rc_number:

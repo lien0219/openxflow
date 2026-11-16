@@ -48,7 +48,7 @@ test.describe("Invalid JSON Upload Error Handling", () => {
       await awaitBootstrapTest(page);
 
       // Navigate to main page
-      await page.goto("/");
+      await page.goto("/flows");
       await page.waitForSelector('[data-testid="mainpage_title"]', {
         timeout: 30000,
       });
@@ -89,7 +89,7 @@ test.describe("Invalid JSON Upload Error Handling", () => {
       await awaitBootstrapTest(page);
 
       // Navigate to main page
-      await page.goto("/");
+      await page.goto("/flows");
       await page.waitForSelector('[data-testid="mainpage_title"]', {
         timeout: 30000,
       });

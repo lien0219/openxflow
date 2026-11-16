@@ -143,7 +143,7 @@ describe("HelpDropdown", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it("opens docs in new tab and navigates to shortcuts", () => {
+  it("hides external docs and keeps navigation to shortcuts", () => {
     const mockNavigate = jest.fn();
     (useNavigate as unknown as jest.Mock).mockReturnValue(mockNavigate);
 
@@ -153,11 +153,10 @@ describe("HelpDropdown", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByTestId("canvas_controls_dropdown_docs"));
-    expect(window.open).toHaveBeenCalledWith(
-      "https://github.com/lien0219/openxflow#readme",
-      "_blank",
-    );
+    expect(
+      screen.queryByTestId("canvas_controls_dropdown_docs"),
+    ).not.toBeInTheDocument();
+    expect(window.open).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTestId("canvas_controls_dropdown_shortcuts"));
     expect(mockNavigate).toHaveBeenCalledWith("/settings/shortcuts");

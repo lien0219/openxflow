@@ -9,7 +9,7 @@ withEventDeliveryModes(
   { tag: ["@release", "@starter-projects"] },
   async ({ page }) => {
     await seedLoopbackProvider(page);
-    await page.goto("/");
+    await page.goto("/flows");
     await openStarterProject(page, "Content Aggregator");
 
     await page.waitForSelector('[data-testid="canvas_controls_dropdown"]', {

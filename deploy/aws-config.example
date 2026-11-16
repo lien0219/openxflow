@@ -1,0 +1,4 @@
+# Optional path-style addressing for S3-compatible object stores.
+[default]
+s3 =
+    addressing_style = path

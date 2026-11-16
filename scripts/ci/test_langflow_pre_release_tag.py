@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent))
 import langflow_pre_release_tag as pr
 
@@ -37,10 +39,17 @@ def test_shared_rc_number_floor_does_not_regress_existing_higher_rc():
     assert pr.create_tag("1.10.1", ["1.10.1rc5"], rc_number=1) == "1.10.1rc6"
 
 
-def test_cli_reads_released_versions_from_stdin():
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["langflow_pre_release_tag.py", "1.10.1", "--print-rc-number", "-"],
+        ["langflow_pre_release_tag.py", "1.10.1", "-", "--print-rc-number"],
+    ],
+)
+def test_cli_reads_released_versions_from_stdin(argv: list[str]):
     output = io.StringIO()
     with (
-        mock.patch.object(sys, "argv", ["langflow_pre_release_tag.py", "1.10.1", "--print-rc-number", "-"]),
+        mock.patch.object(sys, "argv", argv),
         mock.patch.object(sys, "stdin", io.StringIO("1.10.1rc0\n1.11.0.dev15\n")),
         contextlib.redirect_stdout(output),
     ):

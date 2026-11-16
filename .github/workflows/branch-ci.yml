@@ -1,0 +1,68 @@
+name: Branch CI
+
+on:
+  push:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+# Use a different group from the reusable CI workflow: a caller must never
+# cancel its own callee. New branch commits supersede older branch runs.
+concurrency:
+  group: branch-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Check existing PR validation
+    if: github.event.deleted != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      run-ci: ${{ steps.pr-ci.outputs.run-ci }}
+    steps:
+      - uses: actions/github-script@v8
+        id: pr-ci
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const repository = `${context.repo.owner}/${context.repo.repo}`;
+            const prs = await github.paginate(github.rest.pulls.list, {
+              ...context.repo, state: 'open',
+              head: `${context.repo.owner}:${branch}`, per_page: 100,
+            });
+            const pr = prs.find(pr => !pr.draft && pr.head.sha === context.sha &&
+              pr.head.repo?.full_name === repository);
+            const coveredByPr = Boolean(pr);
+            core.setOutput('run-ci', !coveredByPr);
+            await core.summary.addHeading('Branch validation')
+              .addRaw(coveredByPr
+                ? `PR #${pr.number} owns validation for this commit. Follow its CI Success check.`
+                : 'No active PR run covers this commit. Running branch CI.')
+              .write();
+
+  ci:
+    name: Validate branch
+    needs: plan
+    if: needs.plan.outputs.run-ci == 'true'
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ github.sha }}
+      # Upstream integrations need the complete job set, even after a small follow-up fix.
+      run-all-tests: ${{ startsWith(github.ref, 'refs/heads/sync/') }}
+    secrets: inherit # pragma: allowlist secret
+
+  ci-scripts:
+    name: PR preflight scripts
+    needs: plan
+    if: needs.plan.outputs.run-ci == 'true'
+    uses: ./.github/workflows/ci-scripts-test.yml
+    with:
+      ref: ${{ github.sha }}

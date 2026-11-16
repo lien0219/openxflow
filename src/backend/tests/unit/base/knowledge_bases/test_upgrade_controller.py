@@ -89,7 +89,9 @@ async def installation(tmp_path, monkeypatch):
         "cwd": tmp_path,
         "port": port,
         "stop_timeout": 0.5,
-        "readiness_timeout": 8,
+        # Shared CI runners can take longer than eight seconds to schedule the
+        # replacement interpreter and expose its listener under full-suite load.
+        "readiness_timeout": 30,
         "external_restarts_disabled": True,
     }
     process_iter = psutil.process_iter

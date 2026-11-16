@@ -89,7 +89,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           type={type}
           placeholder={placeholder}
           className={cn(
-            "nopan nodelete nodrag noflow primary-input !placeholder-transparent",
+            "peer nopan nodelete nodrag noflow primary-input !placeholder-transparent",
             icon && "pl-9",
             resolvedEndIcon && "pr-9",
             icon ? inputClassName : className,
@@ -97,12 +97,12 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           {...props}
         />
+        {/* Autofill can update the DOM before React receives a change event. */}
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute top-1/2 -translate-y-1/2 pl-px text-placeholder-foreground",
+            "pointer-events-none absolute top-1/2 -translate-y-1/2 pl-px text-placeholder-foreground peer-autofill:hidden peer-[:not(:placeholder-shown)]:hidden",
             icon ? "left-9" : "left-3",
-            props.value && "hidden",
           )}
         >
           {placeholder}

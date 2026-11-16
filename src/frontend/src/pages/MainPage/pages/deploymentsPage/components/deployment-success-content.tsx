@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Button } from "@/components/ui/button";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 
 interface DeploymentSuccessContentProps {
   deploymentName?: string;
@@ -36,18 +37,20 @@ export default function DeploymentSuccessContent({
         </p>
       </div>
 
-      <div className="flex items-center gap-1 font-sans text-sm font-normal text-muted-foreground">
-        <span>{t("deployments.publishDraftToLive")}</span>
-        <a
-          href={providerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline"
-        >
-          {providerName}
-          <ForwardedIconComponent name="ArrowUpRight" className="h-4 w-4" />
-        </a>
-      </div>
+      {ENABLE_EXTERNAL_LINKS && (
+        <div className="flex items-center gap-1 font-sans text-sm font-normal text-muted-foreground">
+          <span>{t("deployments.publishDraftToLive")}</span>
+          <a
+            href={providerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline"
+          >
+            {providerName}
+            <ForwardedIconComponent name="ArrowUpRight" className="h-4 w-4" />
+          </a>
+        </div>
+      )}
 
       {showTestButton && deploymentName && (
         <Button

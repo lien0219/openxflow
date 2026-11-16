@@ -232,14 +232,12 @@ describe("IOModal (playground) accessibility", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides the sidebar-open 'Built with OpenXFlow' logo from assistive tech", () => {
+  it("hides the sidebar-open external branding action", () => {
     renderPlayground();
 
-    // Sidebar-open variant: the button has a visible text label, but its
-    // decorative logo SVG must still be aria-hidden so AT doesn't announce
-    // an unnamed <svg> inside a named button.
-    const openVariantLogo = screen.getAllByTestId("langflow-logo-color")[0];
-    expect(openVariantLogo).toHaveAttribute("aria-hidden", "true");
+    expect(
+      screen.queryByRole("button", { name: "Built with OpenXFlow" }),
+    ).not.toBeInTheDocument();
   });
 
   it("flips the toggle's aria-label to 'Show sidebar' once collapsed", () => {
@@ -255,20 +253,14 @@ describe("IOModal (playground) accessibility", () => {
     ).toBeInTheDocument();
   });
 
-  it("names the collapsed-sidebar 'Built with OpenXFlow' button and hides its icon", () => {
+  it("hides the collapsed-sidebar external branding action", () => {
     renderPlayground();
 
     fireEvent.click(screen.getByRole("button", { name: "Hide sidebar" }));
 
-    const collapsedButton = screen.getByRole("button", {
-      name: "Built with OpenXFlow",
-    });
-    expect(collapsedButton).toBeInTheDocument();
-
-    const icon = collapsedButton.querySelector(
-      '[data-testid="langflow-logo-color"]',
-    );
-    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect(
+      screen.queryByRole("button", { name: "Built with OpenXFlow" }),
+    ).not.toBeInTheDocument();
   });
 
   it("has no detectable axe violations with the sidebar collapsed", async () => {

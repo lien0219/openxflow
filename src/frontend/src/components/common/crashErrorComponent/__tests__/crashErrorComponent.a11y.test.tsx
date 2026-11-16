@@ -39,18 +39,10 @@ describe("CrashErrorComponent accessibility", () => {
     );
   });
 
-  // The report action used to be a <button> nested inside an <a href>, which
-  // is a nested-interactive violation and gives the anchor no reachable name
-  // of its own (WCAG 4.1.2).
-  it("should_render_the_report_action_as_a_single_link", () => {
+  it("should_hide_external_report_links", () => {
     renderCrashScreen();
 
-    const report = screen.getByRole("link", { name: /report on github/i });
-    expect(report).toHaveAttribute(
-      "href",
-      "https://github.com/lien0219/openxflow/issues/new",
-    );
-    expect(report.querySelector("button")).toBeNull();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /report on github/i }),
     ).not.toBeInTheDocument();

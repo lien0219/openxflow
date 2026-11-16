@@ -1,0 +1,50 @@
+.landing-particle-water {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.8;
+  color: hsl(var(--accent-blue));
+  pointer-events: none;
+  mask-image: linear-gradient(
+    180deg,
+    transparent 25%,
+    black 48%,
+    black 88%,
+    transparent
+  );
+}
+
+:root[data-appearance="dark"] .landing-particle-water {
+  opacity: 0.9;
+  color: hsl(var(--accent-blue-foreground));
+}
+
+.landing-particle-ambient,
+:root[data-appearance="dark"] .landing-particle-ambient {
+  opacity: 0.8;
+  mask-image: none;
+}
+
+.landing-particle-pipeline,
+:root[data-appearance="dark"] .landing-particle-pipeline {
+  opacity: 0.3;
+  mask-image: linear-gradient(transparent, black 24%, black 80%, transparent);
+}
+
+@media (max-width: 480px) {
+  .landing-particle-water,
+  :root[data-appearance="dark"] .landing-particle-water {
+    opacity: 0.6;
+  }
+
+  .landing-particle-ambient,
+  :root[data-appearance="dark"] .landing-particle-ambient {
+    opacity: 0.4;
+  }
+
+  .landing-particle-pipeline,
+  :root[data-appearance="dark"] .landing-particle-pipeline {
+    opacity: 0.3;
+  }
+}

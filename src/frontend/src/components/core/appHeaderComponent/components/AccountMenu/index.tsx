@@ -5,7 +5,10 @@ import { CustomAccountMenuCommunityLinks } from "@/customization/components/cust
 import { CustomAccountMenuNavigationItems } from "@/customization/components/custom-account-menu-navigation-items";
 import { CustomHeaderMenuItemsTitle } from "@/customization/components/custom-header-menu-items-title";
 import { CustomProfileIcon } from "@/customization/components/custom-profile-icon";
-import { ENABLE_DATASTAX_LANGFLOW } from "@/customization/feature-flags";
+import {
+  ENABLE_DATASTAX_LANGFLOW,
+  ENABLE_EXTERNAL_LINKS,
+} from "@/customization/feature-flags";
 import { useCustomNavigate } from "@/customization/hooks/use-custom-navigate";
 import useAuthStore from "@/stores/authStore";
 import { useDarkStore } from "@/stores/darkStore";
@@ -23,7 +26,10 @@ import ThemeButtons from "../ThemeButtons";
 export const AccountMenu = () => {
   const { t } = useTranslation();
   const version = useDarkStore((state) => state.version);
+  const imageVersion = useDarkStore((state) => state.imageVersion);
   const latestVersion = useDarkStore((state) => state.latestVersion);
+  const displayVersion = imageVersion || version;
+  const showPackageStatus = !imageVersion && Boolean(version && latestVersion);
   const navigate = useCustomNavigate();
   const { mutate: mutationLogout } = useLogout();
   const hideLogoutButton = useUtilityStore((state) => state.hideLogoutButton);
@@ -52,30 +58,41 @@ export const AccountMenu = () => {
           <CustomProfileIcon />
         </div>
       </HeaderMenuToggle>
-      <HeaderMenuItems position="right" classNameSize="w-[272px]">
+      <HeaderMenuItems
+        position="right"
+        classNameSize="w-[360px] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-5rem)] overflow-y-auto"
+      >
         <div className="divide-y divide-foreground/10">
           <CustomHeaderMenuItemsTitle />
           <div>
-            <div className="h-[44px] items-center px-4 pt-3">
-              <div className="flex items-center justify-between">
+            <div className="px-4 py-3">
+              <div className="flex items-start justify-between gap-4">
                 <span
                   data-testid="menu_version_button"
                   id="menu_version_button"
-                  className="text-sm"
+                  className="shrink-0 text-sm"
                 >
                   {t("account.version")}
                 </span>
                 <div
                   className={cn(
-                    "float-right text-xs",
-                    isLatestVersion && "text-accent-emerald-foreground",
-                    !isLatestVersion && "text-accent-amber-foreground",
+                    "min-w-0 break-words text-right text-xs",
+                    showPackageStatus &&
+                      (isLatestVersion
+                        ? "text-accent-emerald-foreground"
+                        : "text-accent-amber-foreground"),
                   )}
+                  title={displayVersion}
                 >
-                  {version}{" "}
-                  {isLatestVersion
-                    ? t("account.latest")
-                    : t("account.updateAvailable")}
+                  {displayVersion}
+                  {showPackageStatus && (
+                    <>
+                      {" "}
+                      {isLatestVersion
+                        ? t("account.latest")
+                        : t("account.updateAvailable")}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -85,23 +102,23 @@ export const AccountMenu = () => {
             <CustomAccountMenuNavigationItems
               onNavigate={(path) => navigate(path)}
             />
-            <HeaderMenuItemLink
-              newPage
-              href={ENABLE_DATASTAX_LANGFLOW ? DATASTAX_DOCS_URL : DOCS_URL}
-            >
-              <span data-testid="menu_docs_button" id="menu_docs_button">
-                {t("account.docs")}
-              </span>
-            </HeaderMenuItemLink>
+            {ENABLE_EXTERNAL_LINKS && (
+              <HeaderMenuItemLink
+                newPage
+                href={ENABLE_DATASTAX_LANGFLOW ? DATASTAX_DOCS_URL : DOCS_URL}
+              >
+                <span data-testid="menu_docs_button" id="menu_docs_button">
+                  {t("account.docs")}
+                </span>
+              </HeaderMenuItemLink>
+            )}
           </div>
 
           <CustomAccountMenuCommunityLinks />
 
-          <div className="flex items-center justify-between px-4 py-[6.5px] text-sm">
-            <span className="">{t("account.theme")}</span>
-            <div className="relative top-[1px] float-right">
-              <ThemeButtons />
-            </div>
+          <div className="space-y-3 px-4 py-4 text-sm">
+            <div className="font-medium">{t("account.theme")}</div>
+            <ThemeButtons />
           </div>
 
           {!autoLogin && !hideLogoutButton && (

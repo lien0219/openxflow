@@ -41,7 +41,7 @@ async function seatPeople(
   browser: Browser,
   count: number,
 ): Promise<{ flowId: string; people: Person[]; contexts: BrowserContext[] }> {
-  await page.goto("/");
+  await page.goto("/flows");
   await expect
     .poll(
       async () =>

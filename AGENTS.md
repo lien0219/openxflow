@@ -233,6 +233,27 @@ changes:
 - Reference any issues fixed (e.g., `Fixes #1234`)
 - Ensure all tests pass before submitting
 
+### OpenXFlow PR Readiness Contract
+
+- Target `develop` for feature, fix, and upstream-sync PRs. Release validated
+  changes from `develop` to `main`; keep `official` dedicated to upstream code.
+- A green incremental push run is not full PR validation. Upstream `sync/**`
+  branches must use the complete CI job set before opening a PR.
+- Run CI script tests when changing workflows, Dockerfiles, dependency pins,
+  lockfiles, or generated component metadata. Branch and PR checks must share
+  the same CI-script workflow and test command.
+- Keep generated component dependency versions based on `uv.lock`, not on
+  which optional packages happen to be installed on Windows or Linux.
+  Regenerate the index and its integrity hash together; never edit the hash
+  alone or disable the generated-file diff check.
+- Report the tested commit, target branch, commands, and passed/skipped/not-run
+  checks in the PR. Windows checks do not replace Linux generator validation.
+- Preserve security assertions and runtime protections when updating tests.
+  Fix stale expectations alongside dependency updates; do not skip failing
+  tests or lower security pins to make CI green.
+- Do not stage, commit, push, merge, or change branch protection without the
+  user's authorization. See `CONTRIBUTING.md` for the local preflight commands.
+
 ## Documentation
 
 Documentation uses Docusaurus and lives in `docs/`:

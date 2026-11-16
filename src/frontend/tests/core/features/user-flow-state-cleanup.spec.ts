@@ -42,7 +42,6 @@ test(
         writable: true,
         configurable: true,
       });
-      sessionStorage.setItem("testMockAutoLogin", "true");
     });
 
     // Create random usernames, passwords and flow names for the test
@@ -51,7 +50,7 @@ test(
     const userAFlowName = "flow_a_" + crypto.randomUUID().substring(0, 8);
 
     // Log in as admin and create test user
-    await page.goto("/");
+    await page.goto("/flows");
     await expect(page.getByRole("button", { name: TEXTS.signIn })).toBeVisible({
       timeout: 30000,
     });

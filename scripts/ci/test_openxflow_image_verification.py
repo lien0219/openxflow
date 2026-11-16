@@ -128,7 +128,7 @@ def test_release_image_profiles_install_current_security_fixes() -> None:
             "FROM ${PYTHON_IMAGE} AS runtime", 1
         )[0],
     }
-    patched = ("joserfc==1.7.5", "oauthlib==4.0.1", "pyasn1==0.6.5", "pypdf==6.21.4")
+    patched = ("joserfc==1.7.6", "oauthlib==4.0.1", "pyasn1==0.6.5", "pypdf==6.21.4")
     for profile, stage in profiles.items():
         for requirement in patched:
             assert f'"{requirement}"' in stage, f"{profile} missing {requirement}"

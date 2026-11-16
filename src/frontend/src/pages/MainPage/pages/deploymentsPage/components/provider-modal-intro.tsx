@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Badge } from "@/components/ui/badge";
+import { ENABLE_EXTERNAL_LINKS } from "@/customization/feature-flags";
 import { decorateWxoUrl } from "@/utils/decorate-wxo-url";
 import type { ProviderAccount } from "../types";
 
@@ -24,39 +25,41 @@ export default function ProviderModalIntro({
           Beta
         </Badge>
       </div>
-      <p className="text-sm text-muted-foreground">
-        {provider ? (
-          t("deployments.updateEnvironmentDescription")
-        ) : (
-          <>
-            {t("deployments.wxoConfigureCredentials")}{" "}
-            <a
-              href={decorateWxoUrl(
-                "https://www.ibm.com/products/watsonx-orchestrate#pricing",
-                "signup-pricing",
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-primary hover:underline"
-            >
-              {t("deployments.wxoSignUp")}
-            </a>
-            . {t("deployments.wxoAlreadyHaveAccount")}{" "}
-            <a
-              href={decorateWxoUrl(
-                "https://www.ibm.com/docs/en/watsonx/watson-orchestrate/base?topic=api-getting-started",
-                "docs-credentials",
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-primary hover:underline"
-            >
-              {t("deployments.wxoFindCredentials")}
-            </a>
-            .
-          </>
-        )}
-      </p>
+      {(provider || ENABLE_EXTERNAL_LINKS) && (
+        <p className="text-sm text-muted-foreground">
+          {provider ? (
+            t("deployments.updateEnvironmentDescription")
+          ) : (
+            <>
+              {t("deployments.wxoConfigureCredentials")}{" "}
+              <a
+                href={decorateWxoUrl(
+                  "https://www.ibm.com/products/watsonx-orchestrate#pricing",
+                  "signup-pricing",
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary hover:underline"
+              >
+                {t("deployments.wxoSignUp")}
+              </a>
+              . {t("deployments.wxoAlreadyHaveAccount")}{" "}
+              <a
+                href={decorateWxoUrl(
+                  "https://www.ibm.com/docs/en/watsonx/watson-orchestrate/base?topic=api-getting-started",
+                  "docs-credentials",
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary hover:underline"
+              >
+                {t("deployments.wxoFindCredentials")}
+              </a>
+              .
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }

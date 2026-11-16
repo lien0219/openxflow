@@ -70,6 +70,10 @@ def test_get_llm_supports_legacy_deepseek_chat_selection():
         patch(
             "lfx.utils.ssrf_httpx.ssrf_protected_openai_clients_for_url",
             return_value={"http_client": MagicMock(), "http_async_client": MagicMock()},
+        ) as protected_clients,
+        patch(
+            "lfx.base.models.unified_models.instantiation.ssrf_protected_openai_clients_for_url",
+            new=protected_clients,
         ),
     ):
         get_llm([{"name": "deepseek-chat", "provider": "DeepSeek", "metadata": {}}], user_id="test-user")
@@ -123,6 +127,10 @@ def test_get_llm_uses_provider_key_and_local_base_url(
         patch(
             "lfx.utils.ssrf_httpx.ssrf_protected_openai_clients_for_url",
             return_value={"http_client": MagicMock(), "http_async_client": MagicMock()},
+        ) as protected_clients,
+        patch(
+            "lfx.base.models.unified_models.instantiation.ssrf_protected_openai_clients_for_url",
+            new=protected_clients,
         ),
     ):
         get_llm(
