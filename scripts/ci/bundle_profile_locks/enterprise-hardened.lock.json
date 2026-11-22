@@ -108,9 +108,9 @@
       "providers": [
         "lfx-modurelay"
       ],
-      "requested": ">=0.1.0,<1.0.0",
-      "requirement": "lfx-modurelay==0.1.0",
-      "resolved_version": "0.1.0"
+      "requested": ">=0.1.1,<1.0.0",
+      "requirement": "lfx-modurelay==0.1.1",
+      "resolved_version": "0.1.1"
     },
     {
       "distribution": "lfx-ollama",
@@ -190,7 +190,7 @@
     "https://pypi.org/simple"
   ],
   "profile": "enterprise-hardened",
-  "profile_digest": "sha256:ab4cb146cf9a8263",
+  "profile_digest": "sha256:927873ca2e0604ce",
   "providers": [
     "lfx-amazon",
     "lfx-anthropic",
