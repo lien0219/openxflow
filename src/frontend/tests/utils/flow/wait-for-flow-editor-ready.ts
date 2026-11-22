@@ -28,12 +28,33 @@ export async function waitForFlowEditorReady(page: Page): Promise<void> {
     "true",
     { timeout: TIMEOUTS.standard },
   );
-  const catalogEntry = page.locator('[data-testid$="_draggable"]').first();
+  const catalogEntry = page
+    .locator('[data-testid$="_draggable"]:visible')
+    .first();
   if (!(await catalogEntry.isVisible().catch(() => false))) {
-    const firstCategory = page.locator('[data-testid^="disclosure-"]').first();
-    await expect(firstCategory).toBeVisible({ timeout: TIMEOUTS.standard });
-    if ((await firstCategory.getAttribute("aria-expanded")) !== "true") {
-      await firstCategory.click();
+    // Component creation leaves the last search term in the sidebar. Clear it
+    // before looking through categories so readiness does not depend on the
+    // previous component that a test happened to add.
+    await sidebarSearchInput.fill("");
+
+    const categories = page.locator('[data-testid^="disclosure-"]');
+    await expect(categories.first()).toBeVisible({
+      timeout: TIMEOUTS.standard,
+    });
+
+    for (let index = 0; index < (await categories.count()); index += 1) {
+      const category = categories.nth(index);
+      if (!(await category.isVisible().catch(() => false))) {
+        continue;
+      }
+
+      if ((await category.getAttribute("aria-expanded")) !== "true") {
+        await category.click();
+      }
+
+      if (await catalogEntry.isVisible().catch(() => false)) {
+        break;
+      }
     }
   }
   await expect(catalogEntry).toBeVisible({ timeout: TIMEOUTS.standard });
