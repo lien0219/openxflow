@@ -1,4 +1,7 @@
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
+
+ModelType = Literal["llm", "embeddings", "gateway"]
+MODEL_TYPES = ("llm", "embeddings", "gateway")
 
 
 class ModelMetadata(TypedDict, total=False):
@@ -14,7 +17,9 @@ class ModelMetadata(TypedDict, total=False):
     not_supported: bool  # Whether model is not supported or deprecated (defaults to False)
     deprecated: bool  # Whether model is deprecated (defaults to False)
     default: bool  # Whether model is a default/recommended option (defaults to False)
-    model_type: str  # Type of model (defaults to "llm" or "embeddings")
+    model_type: str  # Selector type: llm, embeddings or gateway
+    vision: bool
+    endpoint: str
     # Optional release date as a Unix epoch (seconds). Populated by live
     # fetches (OpenRouter ``created`` field) and by the models.dev override
     # (``release_date`` parsed as YYYY-MM-DD). Drives newest-first sorting in

@@ -306,11 +306,14 @@ const ProviderConfigurationForm = ({
                         : undefined
                     }
                     data-testid={`provider-variable-input-${variable.variable_key}`}
-                    placeholder={getPlaceholder(
-                      variable.variable_name,
-                      selectedProvider.provider,
-                      t,
-                    )}
+                    placeholder={
+                      variable.default_value ??
+                      getPlaceholder(
+                        variable.variable_name,
+                        selectedProvider.provider,
+                        t,
+                      )
+                    }
                     value={
                       isConfigured &&
                       variable.is_secret &&

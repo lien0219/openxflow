@@ -42,6 +42,7 @@ dependencies = [
     "lfx-oracle>=0.3.1,<1.0.0",
     "lfx-vllm>=0.2.0,<1.0.0",
     "lfx-openai-compatible>=0.2.0,<1.0.0",
+    "lfx-modurelay>=0.1.0,<1.0.0",
     "lfx-google>=0.3.6,<1.0.0",
     "lfx-microsoft>=0.1.4,<1.0.0",
     "lfx-slack>=0.2.2,<1.0.0",
@@ -123,6 +124,7 @@ lfx-paddle = { workspace = true }
 lfx-vllm = { workspace = true }
 lfx-empiriolabs = { workspace = true }
 lfx-openai-compatible = { workspace = true }
+lfx-modurelay = { workspace = true }
 lfx-exa = { workspace = true }
 lfx-valkey = { workspace = true }
 lfx-google = { workspace = true }
@@ -163,6 +165,7 @@ members = [
     "src/bundles/vllm",
     "src/bundles/empiriolabs",
     "src/bundles/openai-compatible",
+    "src/bundles/modurelay",
     "src/bundles/exa",
     "src/bundles/valkey",
     "src/bundles/google",

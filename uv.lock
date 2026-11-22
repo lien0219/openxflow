@@ -50,6 +50,7 @@ members = [
     "lfx-google",
     "lfx-ibm",
     "lfx-microsoft",
+    "lfx-modurelay",
     "lfx-nextplaid",
     "lfx-ollama",
     "lfx-openai",
@@ -8320,6 +8321,7 @@ dependencies = [
     { name = "lfx-google" },
     { name = "lfx-ibm" },
     { name = "lfx-microsoft" },
+    { name = "lfx-modurelay" },
     { name = "lfx-ollama" },
     { name = "lfx-openai" },
     { name = "lfx-openai-compatible" },
@@ -8462,6 +8464,7 @@ requires-dist = [
     { name = "lfx-google", editable = "src/bundles/google" },
     { name = "lfx-ibm", editable = "src/bundles/ibm" },
     { name = "lfx-microsoft", editable = "src/bundles/microsoft" },
+    { name = "lfx-modurelay", editable = "src/bundles/modurelay" },
     { name = "lfx-nextplaid", marker = "extra == 'bundles'", editable = "src/bundles/nextplaid" },
     { name = "lfx-ollama", editable = "src/bundles/ollama" },
     { name = "lfx-openai", editable = "src/bundles/openai" },
@@ -10814,6 +10817,23 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "lfx", editable = "src/lfx" }]
+
+[[package]]
+name = "lfx-modurelay"
+version = "0.1.0"
+source = { editable = "src/bundles/modurelay" }
+dependencies = [
+    { name = "httpx" },
+    { name = "langchain-openai" },
+    { name = "lfx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.24.0,<1.0.0" },
+    { name = "langchain-openai", specifier = ">=1.1.6" },
+    { name = "lfx", editable = "src/lfx" },
+]
 
 [[package]]
 name = "lfx-nextplaid"

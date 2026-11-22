@@ -103,6 +103,16 @@
       "resolved_version": "0.1.4"
     },
     {
+      "distribution": "lfx-modurelay",
+      "extras": [],
+      "providers": [
+        "lfx-modurelay"
+      ],
+      "requested": ">=0.1.0,<1.0.0",
+      "requirement": "lfx-modurelay==0.1.0",
+      "resolved_version": "0.1.0"
+    },
+    {
       "distribution": "lfx-ollama",
       "extras": [],
       "providers": [
@@ -180,7 +190,7 @@
     "https://pypi.org/simple"
   ],
   "profile": "enterprise-hardened",
-  "profile_digest": "sha256:b4a4f6aba9c1fe2a",
+  "profile_digest": "sha256:ab4cb146cf9a8263",
   "providers": [
     "lfx-amazon",
     "lfx-anthropic",
@@ -191,6 +201,7 @@
     "lfx-google",
     "lfx-ibm",
     "lfx-microsoft",
+    "lfx-modurelay",
     "lfx-ollama",
     "lfx-openai",
     "lfx-openai-compatible",

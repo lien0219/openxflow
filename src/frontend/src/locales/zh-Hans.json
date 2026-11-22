@@ -1,4 +1,6 @@
 {
+  "modelProviders.gatewayModels": "其他模型",
+  "modelProviders.gatewayHint": "图片、音频、视频、重排序及自定义接口请使用 ModuRelay Request 组件。",
   "common.productName": "OpenXFlow",
   "field.required": "必填",
   "accordion.addVariable": "添加变量",

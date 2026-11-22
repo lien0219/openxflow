@@ -17,6 +17,8 @@ export interface ProviderVariable {
   options: string[];
   /** Whether the field should act as a combobox (allow custom input) */
   combobox?: boolean;
+  /** Fallback endpoint shown when no per-user value is configured. */
+  default_value?: string;
 }
 
 /**

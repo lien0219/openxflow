@@ -1,6 +1,7 @@
 const mockVllmIcon = jest.fn();
 const mockOpenRAGIcon = jest.fn();
 const mockFigraniumIcon = jest.fn();
+const mockModuRelayIcon = jest.fn();
 
 jest.mock("@/icons/vLLM", () => ({
   VllmIcon: mockVllmIcon,
@@ -12,6 +13,10 @@ jest.mock("@/icons/OpenRAG", () => ({
 
 jest.mock("@/icons/Figranium", () => ({
   FigraniumIcon: mockFigraniumIcon,
+}));
+
+jest.mock("@/icons/ModuRelay", () => ({
+  ModuRelayIcon: mockModuRelayIcon,
 }));
 
 import { lazyIconsMapping } from "../lazyIconImports";
@@ -33,5 +38,12 @@ describe("lazyIconsMapping", () => {
     const { default: icon } = await lazyIconsMapping.Figranium();
 
     expect(icon).toBe(mockFigraniumIcon);
+  });
+
+  it("loads the ModuRelay provider icon", async () => {
+    expect(lazyIconsMapping).toHaveProperty("ModuRelay");
+    const { default: icon } = await lazyIconsMapping.ModuRelay();
+
+    expect(icon).toBe(mockModuRelayIcon);
   });
 });

@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from lfx.services.model_provider_policy import ModelProviderPolicySnapshot
 
 MODEL_STATUS_KEY_SEPARATOR = "::"
-MODEL_STATUS_TYPES = ("llm", "embeddings")
+MODEL_STATUS_TYPES = ("llm", "embeddings", "gateway")
 
 
 def model_status_key(provider: str, model_name: str, model_type: str | None = None) -> str:

@@ -87,7 +87,6 @@ const applyToggleToEnabledModels = (
     };
   }
 
-  const otherType: ModelType = modelType === "llm" ? "embeddings" : "llm";
   const nextTypedProvider = {
     ...typedProvider,
     [modelType]: {
@@ -95,8 +94,9 @@ const applyToggleToEnabledModels = (
       [modelName]: enabled,
     },
   };
-  const flatEnabled =
-    enabled || (nextTypedProvider[otherType]?.[modelName] ?? false);
+  const flatEnabled = Object.values(nextTypedProvider).some(
+    (models) => models?.[modelName] === true,
+  );
 
   return {
     ...data,
@@ -369,12 +369,8 @@ export const useModelToggleQueue = ({
         },
         onSettled: () => {
           clearSentOverlay(togglesToSend);
-          queryClient.invalidateQueries({
-            queryKey: ["useGetEnabledModels"],
-          });
-          queryClient.invalidateQueries({
-            queryKey: ["useGetModelProviders"],
-          });
+          // The shared refresh owns catalog invalidation. Invalidating here
+          // too cancels its first GET and trips the duplicate-request guard.
           refreshAllModelInputs({ silent: true });
         },
       },
@@ -427,13 +423,16 @@ export const useModelToggleQueue = ({
         projectId: batchProjectId,
       });
       clearSentOverlay(togglesToSend);
-      // Invalidate the affected queries inline so callers don't need to
-      // bolt this on. The modal's onClose still triggers
-      // ``refreshAllModelInputs`` afterwards to repopulate per-node
-      // template options, but ``useGetEnabledModels`` consumers no longer
-      // depend on the caller for cache freshness.
-      queryClient.invalidateQueries({ queryKey: ["useGetEnabledModels"] });
-      queryClient.invalidateQueries({ queryKey: ["useGetModelProviders"] });
+      // Mark caches stale here; the close handler owns the next refresh.
+      // Refetching now would immediately repeat the same GET on close.
+      queryClient.invalidateQueries({
+        queryKey: ["useGetEnabledModels"],
+        refetchType: "none",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["useGetModelProviders"],
+        refetchType: "none",
+      });
     } catch (error: unknown) {
       rollbackToggleBatch(togglesToSend, previousData, queryKey, error);
     }
