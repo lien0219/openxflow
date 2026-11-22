@@ -58,6 +58,11 @@ _OPTIONAL_BUNDLE_MODULES.update(
     {f"lfx.components.{category}": "lfx_bundles" for category in _lfx_bundles_shim_categories()}
 )
 
+# Installed bundles can still need optional extras that are absent in CI.
+_OPTIONAL_BUNDLE_COMPONENT_IMPORTS = {
+    "lfx.components.youtube": ("youtube_transcript_api",),
+}
+
 
 def _template_required_bundles(template_data: dict) -> set[str]:
     """Return distributions required by optional-bundle nodes in a template."""
@@ -77,6 +82,17 @@ def _template_unavailable_bundle(template_data: dict) -> str | None:
             import_module(distribution)
         except ImportError:
             return distribution
+
+    for node in template_data.get("data", {}).get("nodes", []):
+        module_path = node.get("data", {}).get("node", {}).get("metadata", {}).get("module", "")
+        for prefix, dependencies in _OPTIONAL_BUNDLE_COMPONENT_IMPORTS.items():
+            if module_path.startswith(prefix):
+                for dependency in dependencies:
+                    try:
+                        import_module(dependency)
+                    except ModuleNotFoundError:
+                        return dependency
+
     return None
 
 
@@ -131,6 +147,34 @@ def test_direct_optional_bundle_detection(bundle_module):
     }
 
     assert _template_required_bundles(template_data) == {bundle_module}
+
+
+def test_optional_bundle_component_extra_detection(monkeypatch):
+    """Detect a missing optional dependency from an installed bundle."""
+    template_data = {
+        "data": {
+            "nodes": [
+                {
+                    "data": {
+                        "node": {
+                            "metadata": {
+                                "module": "lfx.components.youtube.youtube_transcripts.YouTubeTranscriptsComponent",
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+
+    def import_without_youtube_extra(module_name):
+        if module_name == "youtube_transcript_api":
+            raise ModuleNotFoundError(module_name)
+        return object()
+
+    monkeypatch.setitem(globals(), "import_module", import_without_youtube_extra)
+
+    assert _template_unavailable_bundle(template_data) == "youtube_transcript_api"
 
 
 @pytest.fixture(autouse=True)
