@@ -364,15 +364,16 @@ describe("refreshAllModelInputs", () => {
     // biome-ignore lint/suspicious/noExplicitAny: legacy
     await refreshAllModelInputs(mockQueryClient as any);
 
-    expect(mockQueryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["useGetModelProviders"],
-    });
-    expect(mockQueryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["useGetEnabledModels"],
-    });
-    expect(mockQueryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["useGetProviderVariables"],
-    });
+    for (const queryKey of [
+      "useGetModelProviders",
+      "useGetEnabledModels",
+      "useGetProviderVariables",
+    ]) {
+      expect(mockQueryClient.invalidateQueries).toHaveBeenCalledWith(
+        { queryKey: [queryKey] },
+        { cancelRefetch: false },
+      );
+    }
   });
 
   it("should not invalidate cache when queryClient is not provided", async () => {
@@ -622,6 +623,41 @@ describe("refreshAllModelInputs", () => {
 
     // Second call should be queued and run after first completes (2 total calls)
     expect(api.post).toHaveBeenCalledTimes(2);
+  });
+
+  it("joins catalog requests already started by a mutation instead of cancelling and repeating them", async () => {
+    const { QueryClient, QueryObserver } = jest.requireActual(
+      "@tanstack/react-query",
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const queryKey = ["useGetModelProviders"];
+    const finishRequests: Array<() => void> = [];
+    const queryFn = jest.fn(
+      () =>
+        new Promise((resolve) => {
+          finishRequests.push(() => resolve([]));
+        }),
+    );
+    client.setQueryData(queryKey, []);
+    const observer = new QueryObserver(client, {
+      queryKey,
+      queryFn,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    mockNodes = [];
+    try {
+      const mutationRefresh = client.invalidateQueries({ queryKey });
+      const modelRefresh = refreshAllModelInputs(client, { silent: true });
+      finishRequests.forEach((finish) => finish());
+      await Promise.all([mutationRefresh, modelRefresh]);
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribe();
+      client.clear();
+    }
   });
 
   it("discards a deferred response after the active flow scope changes", async () => {

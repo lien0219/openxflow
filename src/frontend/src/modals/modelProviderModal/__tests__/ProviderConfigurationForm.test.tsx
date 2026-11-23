@@ -104,6 +104,29 @@ describe("ProviderConfigurationForm disclosure", () => {
     expect(screen.getByLabelText(/Project ID/)).toBeVisible();
   });
 
+  it("shows the ModuRelay default URL while keeping an optional override empty", () => {
+    renderForm({
+      selectedProvider: { provider: "ModuRelay", is_enabled: false },
+      providerVariables: [
+        { ...apiKeyVariable, variable_key: "MODURELAY_API_KEY" },
+        {
+          ...projectVariable,
+          variable_name: "Base URL",
+          variable_key: "MODURELAY_BASE_URL",
+          required: false,
+          default_value: "https://ai.zhihengxiangyu.com",
+        },
+      ],
+    });
+
+    const endpoint = screen.getByLabelText(/Base URL/);
+    expect(endpoint).toHaveAttribute(
+      "placeholder",
+      "https://ai.zhihengxiangyu.com",
+    );
+    expect(endpoint).toHaveValue("");
+  });
+
   it("should retain unsaved values when configuration is collapsed and reopened", async () => {
     const user = userEvent.setup();
     render(<ConfigurationHarness />);

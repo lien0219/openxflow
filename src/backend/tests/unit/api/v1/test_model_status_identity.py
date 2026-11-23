@@ -74,6 +74,30 @@ def test_foundry_seed_default_stays_explicitly_enabled():
     assert explicitly_enabled_models == {"Azure AI Foundry::gpt-4o-mini"}
 
 
+@pytest.mark.parametrize("provider", ["OpenAI", "ModuRelay"])
+def test_explicit_enable_survives_a_changed_live_catalog_default(provider):
+    enabled = set()
+    _update_model_sets(
+        [ModelStatusUpdate(provider=provider, model_id="live-model", model_type="llm", enabled=True)],
+        set(),
+        enabled,
+        {f"{provider}::llm::live-model": True},
+    )
+    assert model_status_contains(enabled, provider, "live-model", model_type="llm")
+
+
+def test_gateway_model_enable_has_its_own_typed_identity():
+    enabled = set()
+    _update_model_sets(
+        [ModelStatusUpdate(provider="ModuRelay", model_id="custom-media", model_type="gateway", enabled=True)],
+        set(),
+        enabled,
+        {},
+    )
+    assert enabled == {"ModuRelay::gateway::custom-media"}
+    assert not model_status_contains(enabled, "ModuRelay", "custom-media", model_type="llm")
+
+
 def test_typed_default_flags_do_not_cross_model_types():
     provider = "OpenAI"
     model_name = "shared-name"
@@ -114,7 +138,7 @@ def test_typed_default_flags_do_not_cross_model_types():
         flags,
     )
 
-    assert llm_enabled == set()
+    assert llm_enabled == {model_status_key(provider, model_name, model_type="llm")}
     assert embedding_enabled == {model_status_key(provider, model_name, model_type="embeddings")}
 
 

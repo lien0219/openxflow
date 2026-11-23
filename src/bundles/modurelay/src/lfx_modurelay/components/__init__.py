@@ -1,0 +1,1 @@
+"""ModuRelay component namespace."""

@@ -149,6 +149,14 @@
           ]
         },
         {
+          "distribution": "lfx-modurelay",
+          "extras": [],
+          "version": ">=0.1.1,<1.0.0",
+          "providers": [
+            "lfx-modurelay"
+          ]
+        },
+        {
           "distribution": "lfx-slack",
           "extras": [],
           "version": ">=0.2.2,<1.0.0",

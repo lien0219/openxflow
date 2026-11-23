@@ -1,4 +1,6 @@
 {
+  "modelProviders.gatewayModels": "Outros modelos",
+  "modelProviders.gatewayHint": "Use ModuRelay Request para imagens, áudio, vídeo, reclassificação ou operações de API personalizadas.",
   "common.productName": "OpenXFlow",
   "field.required": "Obrigatório",
   "accordion.addVariable": "Incluir variável",

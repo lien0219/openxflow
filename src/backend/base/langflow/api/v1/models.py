@@ -5,7 +5,7 @@ from collections.abc import Collection
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from lfx.base.models.model_metadata import EXPLICIT_ENABLE_ONLY_PROVIDERS, LIVE_MODEL_PROVIDERS
+from lfx.base.models.model_metadata import EXPLICIT_ENABLE_ONLY_PROVIDERS, LIVE_MODEL_PROVIDERS, MODEL_TYPES, ModelType
 from lfx.base.models.model_utils import inject_custom_enabled_models, replace_with_live_models
 from lfx.base.models.provider_registry import (
     get_provider_descriptor,
@@ -152,7 +152,7 @@ class ModelStatusUpdate(BaseModel):
     provider: str
     model_id: str
     enabled: bool
-    model_type: Literal["llm", "embeddings"] | None = None
+    model_type: ModelType | None = None
 
     @field_validator("model_id", "provider")
     @classmethod
@@ -765,7 +765,7 @@ def _build_model_default_flags(
             legacy_key = model_status_key(provider, model_name)
             # OR defaults across typed rows sharing a provider/name identity.
             is_default_model[legacy_key] = is_default_model.get(legacy_key, False) or is_default
-            if model_type in {"llm", "embeddings"}:
+            if model_type in MODEL_TYPES:
                 is_default_model[model_status_key(provider, model_name, model_type)] = is_default
 
     return is_default_model
@@ -791,7 +791,7 @@ def _build_model_types_by_identity(
             if not isinstance(model_name, str):
                 continue
             model_type = model.get("metadata", {}).get("model_type", "llm")
-            if model_type not in {"llm", "embeddings"}:
+            if model_type not in MODEL_TYPES:
                 continue
             identity = model_status_key(provider, model_name)
             model_types_by_identity.setdefault(identity, set()).add(model_type)
@@ -826,7 +826,7 @@ def _update_model_sets(
     updates: list[ModelStatusUpdate],
     disabled_models: set[str],
     explicitly_enabled_models: set[str],
-    is_default_model: dict[str, bool],
+    is_default_model: dict[str, bool],  # noqa: ARG001 - retained for callers with catalog snapshots
     model_types_by_identity: dict[str, set[str]] | None = None,
 ) -> None:
     """Update disabled and enabled model sets based on user requests.
@@ -865,16 +865,12 @@ def _update_model_sets(
             _discard_typed_status_variants(explicitly_enabled_models, update.provider, update.model_id)
             status_key = legacy_key
 
-        model_is_default = is_default_model.get(status_key, is_default_model.get(legacy_key, False))
-
         if update.enabled:
             # User wants to enable the model
             disabled_models.discard(status_key)
-            # Foundry seed defaults are suggestions; keep them explicitly enabled.
-            if update.provider in EXPLICIT_ENABLE_ONLY_PROVIDERS or not model_is_default:
-                explicitly_enabled_models.add(status_key)
-            else:
-                explicitly_enabled_models.discard(status_key)
+            # Preserve user intent even if a subsequent live catalog changes
+            # default flags or orders its models differently from the seed list.
+            explicitly_enabled_models.add(status_key)
         else:
             # User wants to disable the model
             disabled_models.add(status_key)
@@ -1012,7 +1008,7 @@ async def _get_enabled_models_result(
             is_not_supported = metadata.get("not_supported", False)
             is_default = metadata.get("default", False)
             model_type = metadata.get("model_type", "llm")
-            if model_type not in {"llm", "embeddings"}:
+            if model_type not in MODEL_TYPES:
                 model_type = "llm"
 
             # Foundry requires explicit enable; seed defaults are not auto-on.

@@ -1037,7 +1037,7 @@ describe("useModelToggleQueue", () => {
       expect(mutationCalls).toHaveLength(0);
     });
 
-    it("invalidates useGetEnabledModels on success without relying on the caller", async () => {
+    it("marks catalogs stale on success and leaves refetching to the close handler", async () => {
       const { result } = renderHook(() =>
         useModelToggleQueue({ providerName: "OpenAI" }),
       );
@@ -1057,13 +1057,14 @@ describe("useModelToggleQueue", () => {
         await result.current.flushPendingChanges();
       });
 
-      // The async flush must invalidate the enabled-models cache itself —
-      // callers should not have to remember to invalidate downstream.
+      // Closing triggers the shared refresh; avoid an earlier duplicate GET.
       expect(trackingQueryClient.invalidateQueries).toHaveBeenCalledWith({
         queryKey: ["useGetEnabledModels"],
+        refetchType: "none",
       });
       expect(trackingQueryClient.invalidateQueries).toHaveBeenCalledWith({
         queryKey: ["useGetModelProviders"],
+        refetchType: "none",
       });
     });
   });

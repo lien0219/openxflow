@@ -1,0 +1,56 @@
+{
+  "bundles": [
+    {
+      "base_version": "1.2.9",
+      "changed_files": [
+        "src/bundles/lfx-bundles/src/lfx_bundles/codeagents/starter_projects/Structured Data Analysis Agent.json"
+      ],
+      "directory": "lfx-bundles",
+      "errors": [
+        "lfx-bundles: releasable source changed but version remains 1.2.9; run python scripts/ci/bundle_release_plan.py update --base-ref origin/main"
+      ],
+      "name": "lfx-bundles",
+      "source_changed": true,
+      "version": "1.2.9",
+      "version_changed": false
+    },
+    {
+      "base_version": null,
+      "changed_files": [
+        "src/bundles/modurelay/README.md",
+        "src/bundles/modurelay/pyproject.toml",
+        "src/bundles/modurelay/src/lfx_modurelay/__init__.py",
+        "src/bundles/modurelay/src/lfx_modurelay/components/__init__.py",
+        "src/bundles/modurelay/src/lfx_modurelay/components/modurelay/__init__.py",
+        "src/bundles/modurelay/src/lfx_modurelay/components/modurelay/request.py",
+        "src/bundles/modurelay/src/lfx_modurelay/discovery.py",
+        "src/bundles/modurelay/src/lfx_modurelay/extension.json",
+        "src/bundles/modurelay/tests/test_modurelay_provider.py",
+        "src/bundles/modurelay/tests/test_modurelay_request.py"
+      ],
+      "directory": "modurelay",
+      "errors": [],
+      "name": "lfx-modurelay",
+      "source_changed": true,
+      "version": "0.1.0",
+      "version_changed": true
+    },
+    {
+      "base_version": "0.2.3",
+      "changed_files": [
+        "src/bundles/nextplaid/pyproject.toml",
+        "src/bundles/nextplaid/src/lfx_nextplaid/components/nextplaid/nextplaid.py",
+        "src/bundles/nextplaid/src/lfx_nextplaid/extension.json",
+        "src/bundles/nextplaid/tests/test_nextplaid_component.py"
+      ],
+      "directory": "nextplaid",
+      "errors": [],
+      "name": "lfx-nextplaid",
+      "source_changed": true,
+      "version": "0.2.4",
+      "version_changed": true
+    }
+  ],
+  "schema_version": 1,
+  "status": "invalid"
+}

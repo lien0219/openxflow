@@ -316,6 +316,7 @@ _PROVIDER_VARIABLE_KEYS: frozenset[str] = frozenset(
         "combobox",
         "component_metadata",
         "description",
+        "default_value",
         "header_name",
         "is_header",
         "is_list",
@@ -448,6 +449,13 @@ class ProviderManifestEntry(BaseModel):
                 if not isinstance(variable, dict):
                     continue
                 langchain_param = variable.get("langchain_param")
+                if "default_value" in variable and (
+                    variable.get("is_secret")
+                    or not isinstance(variable["default_value"], str)
+                    or langchain_param != "base_url"
+                ):
+                    msg = "provider variable default_value is only supported for non-secret base_url strings"
+                    raise ValueError(msg)
                 if langchain_param == "base_url":
                     unknown_keys = sorted(set(variable) - _PROVIDER_VARIABLE_KEYS)
                     if unknown_keys:

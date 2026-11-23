@@ -1,4 +1,6 @@
 {
+  "modelProviders.gatewayModels": "기타 모델",
+  "modelProviders.gatewayHint": "이미지, 오디오, 비디오, 재순위 지정 또는 사용자 지정 API 작업에는 ModuRelay Request를 사용하세요.",
   "common.productName": "OpenXFlow",
   "storeApiKey.title": "OpenXFlow Store",
   "storeApiKey.description": "Manage access to the OpenXFlow Store.",

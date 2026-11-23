@@ -105,6 +105,28 @@ describe("ModelSelection", () => {
   });
 
   describe("Rendering", () => {
+    it("renders and toggles media models with a gateway identity", async () => {
+      const user = userEvent.setup();
+      const toggle = jest.fn();
+      render(
+        <ModelSelection
+          {...defaultProps}
+          providerName="ModuRelay"
+          onModelToggle={toggle}
+          availableModels={[
+            {
+              model_name: "custom-video",
+              metadata: { model_type: "gateway", icon: "Plug" },
+            },
+          ]}
+        />,
+      );
+      expect(screen.getByText("custom-video")).toBeVisible();
+      const section = screen.getByTestId("gateway-models-section");
+      await user.click(within(section).getByRole("switch"));
+      expect(toggle).toHaveBeenCalledWith("custom-video", true, "gateway");
+    });
+
     it("loads model state with configuration authorization", () => {
       render(
         <ModelSelection

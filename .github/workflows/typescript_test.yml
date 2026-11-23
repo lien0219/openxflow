@@ -112,6 +112,11 @@ env:
   PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/ms-playwright
   PLAYWRIGHT_VERSION: "1.64.1"
   LANGFLOW_FEATURE_WXO_DEPLOYMENTS: "true"
+  # Playwright owns the browser lifecycle here. IBM accessibility scans receive
+  # Playwright pages directly, so npm must not download separate Puppeteer or
+  # Selenium browser binaries during dependency installation.
+  PUPPETEER_SKIP_DOWNLOAD: "true"
+  CHROMEDRIVER_SKIP_DOWNLOAD: "true"
 
 # Keep the browser runners pinned to the reviewed Ubuntu image. Normalize legacy
 # callers that pass ubuntu-latest while preserving Windows and self-hosted runners.

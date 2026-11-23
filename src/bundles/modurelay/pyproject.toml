@@ -1,0 +1,26 @@
+[project]
+name = "lfx-modurelay"
+version = "0.1.1"
+description = "ModuRelay live model provider and gateway components for OpenXFlow."
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+license = { text = "MIT" }
+dependencies = [
+    "lfx>=1.13.0.dev0,<2.0.0",
+    "langchain-openai>=1.1.6",
+    "httpx>=0.24.0,<1.0.0",
+]
+
+[project.entry-points."langflow.extensions"]
+lfx-modurelay = "lfx_modurelay"
+
+[build-system]
+requires = ["hatchling==1.31.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lfx_modurelay"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/lfx_modurelay", "README.md", "pyproject.toml"]
+

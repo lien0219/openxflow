@@ -1,4 +1,6 @@
 {
+  "modelProviders.gatewayModels": "Other models",
+  "modelProviders.gatewayHint": "Use ModuRelay Request for image, audio, video, reranking or custom API operations.",
   "common.productName": "OpenXFlow",
   "field.required": "required",
   "crash.title": "Sorry, we found an unexpected error!",

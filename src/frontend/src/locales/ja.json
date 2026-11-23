@@ -1,4 +1,6 @@
 {
+  "modelProviders.gatewayModels": "その他のモデル",
+  "modelProviders.gatewayHint": "画像、音声、動画、再ランキング、カスタム API の操作には ModuRelay Request を使用してください。",
   "common.productName": "OpenXFlow",
   "field.required": "必須",
   "accordion.addVariable": "変数の追加",

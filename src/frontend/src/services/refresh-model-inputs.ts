@@ -64,15 +64,20 @@ export async function refreshAllModelInputs(
     const folderId = useFlowsManagerStore.getState().currentFlow?.folder_id;
 
     if (queryClient) {
-      await queryClient.invalidateQueries({
-        queryKey: ["useGetModelProviders"],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["useGetEnabledModels"],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["useGetProviderVariables"],
-      });
+      // Mutation callbacks may have started these requests already. Join them
+      // so a second invalidation does not cancel and immediately repeat a GET.
+      await queryClient.invalidateQueries(
+        { queryKey: ["useGetModelProviders"] },
+        { cancelRefetch: false },
+      );
+      await queryClient.invalidateQueries(
+        { queryKey: ["useGetEnabledModels"] },
+        { cancelRefetch: false },
+      );
+      await queryClient.invalidateQueries(
+        { queryKey: ["useGetProviderVariables"] },
+        { cancelRefetch: false },
+      );
     }
 
     const nodesWithModelFields = allNodes.filter(isModelNode);

@@ -2,14 +2,14 @@
   "application": {
     "distribution": "langflow",
     "requested": ">=1.13.0,<1.14.0",
-    "requirement": "langflow==1.13.2",
-    "resolved_version": "1.13.2"
+    "requirement": "langflow==1.13.3",
+    "resolved_version": "1.13.3"
   },
   "bundle_api": {
     "distribution": "lfx",
     "requested": ">=1.13.0.dev0,<1.14.0",
-    "requirement": "lfx==1.13.2",
-    "resolved_version": "1.13.2"
+    "requirement": "lfx==1.13.3",
+    "resolved_version": "1.13.3"
   },
   "bundles": [
     {
@@ -103,6 +103,16 @@
       "resolved_version": "0.1.4"
     },
     {
+      "distribution": "lfx-modurelay",
+      "extras": [],
+      "providers": [
+        "lfx-modurelay"
+      ],
+      "requested": ">=0.1.1,<1.0.0",
+      "requirement": "lfx-modurelay==0.1.1",
+      "resolved_version": "0.1.1"
+    },
+    {
       "distribution": "lfx-ollama",
       "extras": [],
       "providers": [
@@ -180,7 +190,7 @@
     "https://pypi.org/simple"
   ],
   "profile": "enterprise-hardened",
-  "profile_digest": "sha256:b4a4f6aba9c1fe2a",
+  "profile_digest": "sha256:927873ca2e0604ce",
   "providers": [
     "lfx-amazon",
     "lfx-anthropic",
@@ -191,6 +201,7 @@
     "lfx-google",
     "lfx-ibm",
     "lfx-microsoft",
+    "lfx-modurelay",
     "lfx-ollama",
     "lfx-openai",
     "lfx-openai-compatible",

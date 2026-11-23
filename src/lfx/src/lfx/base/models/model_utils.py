@@ -14,6 +14,7 @@ from lfx.base.models.model_metadata import (
     CONDITIONAL_LIVE_MODEL_PROVIDERS,
     EXPLICIT_ENABLE_ONLY_PROVIDERS,
     LIVE_MODEL_PROVIDERS,
+    MODEL_PROVIDER_METADATA,
     create_model_metadata,
 )
 from lfx.base.models.watsonx_constants import (
@@ -1303,7 +1304,7 @@ def replace_with_live_models(
         provider_models: List of provider dicts (same shape as get_unified_models_detailed output).
         user_id: Current user ID for credential lookup.
         enabled_providers: Set/list of provider names that are currently enabled/configured.
-        model_type: ``"llm"``, ``"embeddings"``, or ``None`` (fetch both and concatenate).
+        model_type: Requested selector type, or ``None`` to fetch every supported type.
         provider_metadata: Optional dict of extra provider metadata to merge into the entry.
 
     Returns:
@@ -1316,7 +1317,10 @@ def replace_with_live_models(
         if provider not in enabled_providers:
             continue
 
-        if model_type is None:
+        metadata = (provider_metadata or {}).get(provider, MODEL_PROVIDER_METADATA.get(provider, {}))
+        if model_type is None and metadata.get("live_discovery_all_types"):
+            live_models = get_live_models_for_provider(user_id, provider, "all")
+        elif model_type is None:
             live_llm = get_live_models_for_provider(user_id, provider, "llm")
             live_emb = get_live_models_for_provider(user_id, provider, "embeddings")
             live_models = live_llm + live_emb

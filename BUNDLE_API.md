@@ -224,6 +224,11 @@ the deserialize half is covered by
 
 ## Changelog
 
+- **Provider manifest base URL defaults (2026-11-22).** Provider variable
+  manifests accept an optional `default_value` for non-secret `base_url`
+  strings. Other variable types and secret values remain unsupported, and
+  `BUNDLE_API_VERSION` remains `1`.
+
 - **Portable extension paths.** Bundle and integration capability-manifest paths
   reject absolute, drive-qualified, and parent-traversal paths using both Windows
   and POSIX syntax, independent of the host platform. Editable-install discovery

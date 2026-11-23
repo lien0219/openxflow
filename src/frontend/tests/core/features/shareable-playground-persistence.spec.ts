@@ -52,9 +52,7 @@ test(
 
     await setupAutoLoginOff(page);
     const { url: playgroundUrl, playgroundPage } =
-      await publishBasicPromptingAndOpenShareablePlayground(page, context, {
-        skipBootstrap: true,
-      });
+      await publishBasicPromptingAndOpenShareablePlayground(page, context);
     await playgroundPage.close();
 
     await page.goto(playgroundUrl);
@@ -91,9 +89,7 @@ test(
 
     await setupAutoLoginOff(page);
     const { url: playgroundUrl, playgroundPage } =
-      await publishBasicPromptingAndOpenShareablePlayground(page, context, {
-        skipBootstrap: true,
-      });
+      await publishBasicPromptingAndOpenShareablePlayground(page, context);
     await playgroundPage.close();
 
     await page.goto(playgroundUrl);
@@ -122,9 +118,7 @@ test(
 
     await setupAutoLoginOff(page);
     const { url: playgroundUrl, playgroundPage } =
-      await publishBasicPromptingAndOpenShareablePlayground(page, context, {
-        skipBootstrap: true,
-      });
+      await publishBasicPromptingAndOpenShareablePlayground(page, context);
     await playgroundPage.close();
 
     await page.goto(playgroundUrl);
@@ -170,9 +164,7 @@ test(
 
     await setupAutoLoginOff(page);
     const { url: playgroundUrl, playgroundPage } =
-      await publishBasicPromptingAndOpenShareablePlayground(page, context, {
-        skipBootstrap: true,
-      });
+      await publishBasicPromptingAndOpenShareablePlayground(page, context);
     await playgroundPage.close();
 
     await page.goto(playgroundUrl);

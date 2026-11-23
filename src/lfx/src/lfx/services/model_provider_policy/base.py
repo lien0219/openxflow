@@ -85,7 +85,7 @@ class ModelProviderPolicyPurpose(str, Enum):
 # original home) pulls service dependencies this stable contract module must
 # not load. A drift guard in the unified-model tests keeps the mirrors equal.
 MODEL_POLICY_KEY_SEPARATOR = "::"
-MODEL_POLICY_KEY_TYPES = ("llm", "embeddings")
+MODEL_POLICY_KEY_TYPES = ("llm", "embeddings", "gateway")
 
 
 def normalize_blocked_model_key(key: str) -> str:

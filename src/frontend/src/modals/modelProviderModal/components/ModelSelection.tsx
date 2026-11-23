@@ -370,6 +370,10 @@ const ModelSelection = ({
             ),
         )
       : [];
+  const gatewayModels = modelsWithCustomDeployments.filter(
+    (model) =>
+      model.metadata?.model_type === "gateway" && matchesModelQuery(model),
+  );
   const canAddCustomDeployment = addableDeploymentTypes.length > 0;
 
   const partitionDeprecated = (models: Model[]): [Model[], Model[]] => {
@@ -491,13 +495,18 @@ const ModelSelection = ({
   const noModelsAvailable =
     (modelType === "llm" && llmAvailableCount === 0) ||
     (modelType === "embeddings" && embeddingAvailableCount === 0) ||
+    (modelType === "gateway" &&
+      !modelsWithCustomDeployments.some(
+        (model) => model.metadata?.model_type === "gateway",
+      )) ||
     (modelType === "all" && modelsWithCustomDeployments.length === 0);
 
   const noModelsMatchQuery =
     !noModelsAvailable &&
     trimmedModelQueryLower.length > 0 &&
     llmModels.length === 0 &&
-    embeddingModels.length === 0;
+    embeddingModels.length === 0 &&
+    gatewayModels.length === 0;
 
   const showSearchInput =
     supportsCustomDeployments ||
@@ -674,12 +683,28 @@ const ModelSelection = ({
                 embeddingModels,
                 "embeddings",
               )}
+              {gatewayModels.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t("modelProviders.gatewayHint")}
+                </p>
+              )}
+              {renderModelSection(
+                t("modelProviders.gatewayModels"),
+                gatewayModels,
+                "gateway",
+              )}
             </>
           ) : modelType === "llm" ? (
             renderModelSection(
               t("modelProviders.languageModels"),
               llmModels,
               "llm",
+            )
+          ) : modelType === "gateway" ? (
+            renderModelSection(
+              t("modelProviders.gatewayModels"),
+              gatewayModels,
+              "gateway",
             )
           ) : (
             renderModelSection(

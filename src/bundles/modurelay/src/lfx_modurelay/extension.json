@@ -1,0 +1,92 @@
+{
+  "$schema": "https://schemas.langflow.org/extension/v1.json",
+  "id": "lfx-modurelay",
+  "version": "0.1.1",
+  "name": "ModuRelay",
+  "description": "ModuRelay live models and gateway API requests.",
+  "lfx": {
+    "compat": [
+      "1"
+    ]
+  },
+  "bundles": [
+    {
+      "name": "modurelay",
+      "path": "components/modurelay"
+    }
+  ],
+  "providers": [
+    {
+      "name": "ModuRelay",
+      "provider_id": "modurelay",
+      "metadata": {
+        "icon": "ModuRelay",
+        "max_tokens_field_name": "max_tokens",
+        "base_url": "https://ai.zhihengxiangyu.com/v1",
+        "live_discovery_all_types": true,
+        "variables": [
+          {
+            "variable_name": "API Key",
+            "variable_key": "MODURELAY_API_KEY",
+            "required": true,
+            "is_secret": true,
+            "is_list": false,
+            "options": [],
+            "langchain_param": "api_key",
+            "component_metadata": {
+              "mapping_field": "api_key",
+              "required": false,
+              "advanced": true,
+              "info": "Uses the ModuRelay API key configured in Model Providers."
+            }
+          },
+          {
+            "variable_name": "Base URL",
+            "variable_key": "MODURELAY_BASE_URL",
+            "required": false,
+            "is_secret": false,
+            "is_list": false,
+            "options": [],
+            "langchain_param": "base_url",
+            "base_url_suffix": "/v1",
+            "default_value": "https://ai.zhihengxiangyu.com"
+          }
+        ],
+        "api_docs_url": "https://ai.zhihengxiangyu.com",
+        "mapping": {
+          "model_class": "ChatOpenAI",
+          "model_param": "model"
+        },
+        "embedding_kwargs": {
+          "check_embedding_ctx_length": false
+        }
+      },
+      "model_class": {
+        "module": "langchain_openai",
+        "attr": "ChatOpenAI"
+      },
+      "embedding": {
+        "class_name": "OpenAIEmbeddings",
+        "module": "langchain_openai",
+        "attr": "OpenAIEmbeddings",
+        "param_mapping_key": "ModuRelay",
+        "param_mapping": {
+          "model": "model",
+          "api_key": "api_key",
+          "api_base": "base_url",
+          "dimensions": "dimensions",
+          "chunk_size": "chunk_size",
+          "request_timeout": "timeout",
+          "max_retries": "max_retries",
+          "show_progress_bar": "show_progress_bar",
+          "model_kwargs": "model_kwargs"
+        }
+      },
+      "api_key_required": true,
+      "live": true,
+      "live_discovery": "lfx_modurelay.discovery:fetch_live_modurelay_models",
+      "validator": "lfx_modurelay.discovery:validate_modurelay_credentials"
+    }
+  ]
+}
+

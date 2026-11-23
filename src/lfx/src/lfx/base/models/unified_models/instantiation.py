@@ -66,7 +66,10 @@ def _apply_registered_provider_connection(provider: str, user_id: UUID | str | N
         if var.get("is_secret"):
             continue
         variable_key = var.get("variable_key")
-        value = provider_vars.get(variable_key) or _env_if_allowed(variable_key)
+        langchain_param = var.get("langchain_param")
+        value = kwargs.get(langchain_param) or provider_vars.get(variable_key) or _env_if_allowed(variable_key)
+        if not value:
+            value = var.get("default_value")
         if not value:
             continue
         if var.get("is_header"):
@@ -74,8 +77,7 @@ def _apply_registered_provider_connection(provider: str, user_id: UUID | str | N
             if header_name:
                 default_headers[header_name] = value
             continue
-        langchain_param = var.get("langchain_param")
-        if not langchain_param or kwargs.get(langchain_param):
+        if not langchain_param:
             continue
         if langchain_param == "base_url":
             value = transform_localhost_url(value)
@@ -464,9 +466,11 @@ def get_llm(
                 default_headers[header_name] = value
         if default_headers:
             kwargs["default_headers"] = default_headers
-    elif provider_param_mapping.get("model_class") == "ChatOpenAI" and (
-        provider_meta := model_provider_metadata.get(provider, {})
-    ).get("base_url"):
+    elif (
+        not is_registered(provider)
+        and provider_param_mapping.get("model_class") == "ChatOpenAI"
+        and (provider_meta := model_provider_metadata.get(provider, {})).get("base_url")
+    ):
         # OpenAI-compatible providers keep their credentials and endpoints
         # isolated by metadata. The node-level URL takes precedence, followed
         # by the user's encrypted global variable, the allowed environment
@@ -508,6 +512,8 @@ def get_llm(
     elif is_registered(provider):
         # Bundle-contributed provider: apply its declared connection variables
         # (base_url, attribution headers, etc.) generically from its metadata.
+        if openai_compatible_base_url:
+            kwargs["base_url"] = openai_compatible_base_url
         _apply_registered_provider_connection(provider, user_id, kwargs)
         if kwargs.get("base_url"):
             connection_url_param = "base_url"
@@ -748,7 +754,7 @@ def _compose_embedding_kwargs(
                 _env_if_allowed("OPENAI_API_BASE")
             )
 
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, Any] = dict(model_provider_metadata.get(provider, {}).get("embedding_kwargs", {}))
     connection_url_param: str | None = None
     if provider == "OpenAI Compatible" and embedding_class_name == "OpenAIEmbeddings":
         # Non-OpenAI servers expect strings and commonly reject the token-ID
@@ -842,14 +848,6 @@ def _compose_embedding_kwargs(
         connection_url_param = param_mapping["base_url"]
         kwargs[connection_url_param] = base_url_value
 
-    # Bundle-contributed provider: apply its declared connection variables
-    # (e.g. an OpenAI-compatible base_url) generically from its metadata. Runs
-    # before the optional-params loop so an explicit api_base still wins.
-    if is_registered(provider):
-        _apply_registered_provider_connection(provider, user_id, kwargs)
-        if kwargs.get("base_url"):
-            connection_url_param = "base_url"
-
     for param_name, param_value in optional_params.items():
         if param_value is None:
             continue
@@ -866,6 +864,13 @@ def _compose_embedding_kwargs(
             kwargs[param_mapping[param_name]] = param_value
             if param_name == "api_base":
                 connection_url_param = param_mapping[param_name]
+
+    # Resolve registered connection defaults after explicit overrides so both
+    # configured and per-node endpoints receive the same API-root normalization.
+    if is_registered(provider):
+        _apply_registered_provider_connection(provider, user_id, kwargs)
+        if kwargs.get("base_url"):
+            connection_url_param = "base_url"
 
     # Apply Foundry endpoint last so a blank component api_base cannot wipe it.
     if provider == "Azure AI Foundry" and "api_base" in param_mapping:
